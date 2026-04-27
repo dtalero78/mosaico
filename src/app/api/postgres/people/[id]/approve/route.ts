@@ -17,8 +17,13 @@ interface ApproveResult {
 /**
  * Approve a single person: update PEOPLE, create ACADEMICA, send WhatsApp.
  * Reusable for both titular and beneficiario approval.
+ * @param inicioContrato - titular's consent date to copy to beneficiarios (null = skip)
  */
-async function approveOnePerson(personId: string, contrato: string | null): Promise<ApproveResult> {
+async function approveOnePerson(
+  personId: string,
+  contrato: string | null,
+  inicioContrato: string | null = null
+): Promise<ApproveResult> {
   const person = await queryOne(
     `SELECT * FROM "PEOPLE" WHERE "_id" = $1`,
     [personId]
@@ -28,7 +33,6 @@ async function approveOnePerson(personId: string, contrato: string | null): Prom
   // Skip if already approved
   if (person.aprobacion === 'Aprobado') {
     console.log(`ℹ️ [Approve] ${person.primerNombre} ya está aprobado, saltando`);
-    // Still return info so caller knows
     const existingAcademic = await queryOne(
       `SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = $1 LIMIT 1`,
       [person.numeroId]
@@ -48,11 +52,25 @@ async function approveOnePerson(personId: string, contrato: string | null): Prom
   // Use provided contrato or person's own
   const effectiveContrato = contrato || person.contrato;
 
-  // Update PEOPLE.aprobacion = 'Aprobado' (+ copy contrato for beneficiarios without one)
-  if (person.tipoUsuario === 'BENEFICIARIO' && effectiveContrato && !person.contrato) {
+  // Update PEOPLE.aprobacion = 'Aprobado'
+  // For BENEFICIARIO: also copy contrato (if missing) and inicioContrato from titular
+  if (person.tipoUsuario === 'BENEFICIARIO') {
+    const extraFields = [];
+    const extraValues: any[] = [];
+
+    if (effectiveContrato && !person.contrato) {
+      extraFields.push(`"contrato" = $${extraValues.length + 2}`);
+      extraValues.push(effectiveContrato);
+    }
+    if (inicioContrato) {
+      extraFields.push(`"inicioContrato" = $${extraValues.length + 2}`);
+      extraValues.push(inicioContrato);
+    }
+
+    const setClause = extraFields.length > 0 ? `, ${extraFields.join(', ')}` : '';
     await query(
-      `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "contrato" = $1, "_updatedDate" = NOW() WHERE "_id" = $2`,
-      [effectiveContrato, personId]
+      `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado'${setClause}, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      [personId, ...extraValues]
     );
   } else {
     await query(
@@ -161,9 +179,9 @@ export const POST = handlerWithAuth(async (
 ) => {
   const personId = params.id;
 
-  // Get person to determine type
+  // Get person to determine type (include inicioContrato for propagation to beneficiarios)
   const person = await queryOne(
-    `SELECT "_id", "tipoUsuario", "contrato", "aprobacion", "primerNombre", "primerApellido" FROM "PEOPLE" WHERE "_id" = $1`,
+    `SELECT "_id", "tipoUsuario", "contrato", "aprobacion", "primerNombre", "primerApellido", "inicioContrato" FROM "PEOPLE" WHERE "_id" = $1`,
     [personId]
   );
   if (!person) throw new NotFoundError('Person', personId);
@@ -187,7 +205,8 @@ export const POST = handlerWithAuth(async (
       [contrato]
     );
 
-    console.log(`👥 [Approve] Titular aprobado. Beneficiarios pendientes encontrados: ${pendingBeneficiaries.length}`);
+    const titularInicioContrato = person.inicioContrato || null;
+    console.log(`👥 [Approve] Titular aprobado. Beneficiarios pendientes encontrados: ${pendingBeneficiaries.length}. inicioContrato a propagar: ${titularInicioContrato}`);
     console.log(`👥 [Approve] IDs de beneficiarios:`, pendingBeneficiaries.map((b: any) => b._id));
 
     const beneficiaryResults: ApproveResult[] = [];
@@ -195,7 +214,7 @@ export const POST = handlerWithAuth(async (
       const ben = pendingBeneficiaries[i];
       console.log(`👤 [Approve] Procesando beneficiario ${i + 1}/${pendingBeneficiaries.length}: ${ben._id}`);
       try {
-        const result = await approveOnePerson(ben._id, contrato);
+        const result = await approveOnePerson(ben._id, contrato, titularInicioContrato);
         console.log(`👤 [Approve] Beneficiario ${i + 1} resultado: aprobado=${result.academicCreated}, whatsapp=${result.whatsappSent}, error=${result.whatsappError}`);
         beneficiaryResults.push(result);
       } catch (err: any) {
@@ -231,21 +250,34 @@ export const POST = handlerWithAuth(async (
     });
   }
 
-  // ─── BENEFICIARIO: auto-approve titular if not already approved ───
+  // ─── BENEFICIARIO: copy inicioContrato from titular + auto-approve titular if pending ───
   let titularAutoApproved = false;
   if (person.tipoUsuario === 'BENEFICIARIO' && contrato) {
     const titular = await queryOne(
-      `SELECT "_id", "aprobacion" FROM "PEOPLE"
+      `SELECT "_id", "aprobacion", "inicioContrato" FROM "PEOPLE"
        WHERE "contrato" = $1 AND "tipoUsuario" = 'TITULAR' LIMIT 1`,
       [contrato]
     );
-    if (titular && titular.aprobacion !== 'Aprobado') {
-      await query(
-        `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "_updatedDate" = NOW() WHERE "_id" = $1`,
-        [titular._id]
-      );
-      titularAutoApproved = true;
-      console.log(`✅ [Approve] Titular auto-aprobado: ${titular._id}`);
+
+    if (titular) {
+      // Propagate inicioContrato from titular to this beneficiario
+      if (titular.inicioContrato && !mainResult.whatsappError?.includes('Ya estaba aprobado')) {
+        await query(
+          `UPDATE "PEOPLE" SET "inicioContrato" = $1, "_updatedDate" = NOW() WHERE "_id" = $2`,
+          [titular.inicioContrato, personId]
+        );
+        console.log(`✅ [Approve] inicioContrato propagado al beneficiario: ${titular.inicioContrato}`);
+      }
+
+      // Auto-approve titular if still pending
+      if (titular.aprobacion !== 'Aprobado') {
+        await query(
+          `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "_updatedDate" = NOW() WHERE "_id" = $1`,
+          [titular._id]
+        );
+        titularAutoApproved = true;
+        console.log(`✅ [Approve] Titular auto-aprobado: ${titular._id}`);
+      }
     }
   }
 
