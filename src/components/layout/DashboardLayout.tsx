@@ -104,7 +104,7 @@ const getNavigation = (userEmail: string) => [
       },
       {
         name: 'Estadísticas', isSubmenu: true, children: [
-          { name: 'General',  href: '/dashboard/informes/estadisticas',         newTab: true },
+          { name: 'Niveles',  href: '/dashboard/informes/estadisticas',         newTab: true },
           { name: 'Horarios', href: '/dashboard/informes/estadisticas/horarios', newTab: true },
         ]
       },
