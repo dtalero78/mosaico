@@ -64,17 +64,36 @@ export default function ActualizarVideosSesionesPage() {
   // ── Upload MP4 ──────────────────────────────────────────────────────────────
   const handleUpload = async (nivelCode: string, step: string, file: File) => {
     if (!file.type.startsWith('video/')) { toast.error('Solo archivos de video'); return }
-    const key = `${nivelCode}|${step}`
-    setUploading(key)
+    const uploadKey = `${nivelCode}|${step}`
+    setUploading(uploadKey)
     try {
-      const fd = new FormData()
-      fd.append('nivel', nivelCode)
-      fd.append('step',  step)
-      fd.append('file',  file)
-      const r = await fetch('/api/admin/videos/sesiones', { method: 'POST', body: fd })
-      const d = await r.json()
-      if (!d.success) throw new Error(d.error || 'Error')
-      toast.success('Video subido')
+      // Step 1 — get presigned PUT URL from server
+      const presignRes = await fetch('/api/admin/videos/sesiones/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nivel: nivelCode, step, contentType: file.type || 'video/mp4' }),
+      })
+      const presignData = await presignRes.json()
+      if (!presignData.success) throw new Error(presignData.error || 'Error al generar URL')
+
+      // Step 2 — upload directly to DO Spaces (no server timeout)
+      const uploadRes = await fetch(presignData.presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'video/mp4' },
+        body: file,
+      })
+      if (!uploadRes.ok) throw new Error(`Error al subir a Spaces: ${uploadRes.status}`)
+
+      // Step 3 — confirm upload, update NIVELES.videoUrl
+      const confirmRes = await fetch('/api/admin/videos/sesiones', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nivel: nivelCode, step, key: presignData.key }),
+      })
+      const confirmData = await confirmRes.json()
+      if (!confirmData.success) throw new Error(confirmData.error || 'Error al confirmar')
+
+      toast.success('Video subido correctamente')
       await loadSteps(nivelCode)
     } catch (e: any) { toast.error(e.message || 'Error al subir') }
     finally { setUploading(null) }

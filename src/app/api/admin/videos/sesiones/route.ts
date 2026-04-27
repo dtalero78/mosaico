@@ -141,6 +141,31 @@ export async function POST(request: Request) {
   }
 }
 
+// ── PATCH — confirm direct upload (presigned URL flow) ───────────────────────
+
+export async function PATCH(request: Request) {
+  try {
+    const session = await requireAdmin(request)
+    if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    const { nivel, step, key } = await request.json()
+    if (!nivel || !step || !key) {
+      return NextResponse.json({ error: 'nivel, step y key son requeridos' }, { status: 400 })
+    }
+
+    await query(
+      `UPDATE "NIVELES" SET "videoUrl" = $1, "_updatedDate" = NOW()
+       WHERE "code" = $2 AND "step" = $3`,
+      [key, nivel, step]
+    )
+
+    return NextResponse.json({ success: true, videoUrl: key })
+  } catch (e: any) {
+    console.error('[admin/videos/sesiones PATCH]', e)
+    return NextResponse.json({ error: e.message || 'Error al confirmar video' }, { status: 500 })
+  }
+}
+
 // ── DELETE ────────────────────────────────────────────────────────────────────
 
 export async function DELETE(request: Request) {
