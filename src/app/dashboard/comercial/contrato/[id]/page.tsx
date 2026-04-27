@@ -642,24 +642,14 @@ export default function ContratoDetailPage() {
               <button
                 onClick={openContractPreview}
                 disabled={loadingTemplate}
-                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium disabled:opacity-50"
               >
                 <EyeIcon className="h-4 w-4" />
                 {loadingTemplate ? 'Cargando...' : 'Ver Contrato'}
               </button>
-              {!consentStatus?.hasConsent && (
-                <button
-                  onClick={autoApproveConsent}
-                  disabled={approvingConsent}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
-                >
-                  <ShieldCheckIcon className="h-4 w-4" />
-                  {approvingConsent ? 'Aprobando...' : 'Auto-Aprobar Consentimiento'}
-                </button>
-              )}
               <button
                 onClick={openDocsModal}
-                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-md hover:bg-emerald-200 text-sm font-medium"
               >
                 <PaperClipIcon className="h-4 w-4" />
                 Subir documentación
@@ -691,6 +681,17 @@ export default function ContratoDetailPage() {
                     {saving ? 'Guardando...' : 'Guardar Cambios'}
                   </button>
                 </>
+              )}
+              {!consentStatus?.hasConsent && (
+                <button
+                  type="button"
+                  onClick={autoApproveConsent}
+                  disabled={approvingConsent}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+                >
+                  <ShieldCheckIcon className="h-4 w-4" />
+                  {approvingConsent ? 'Aprobando...' : 'Auto-Aprobar Consentimiento'}
+                </button>
               )}
             </div>
           </div>
@@ -902,6 +903,8 @@ export default function ContratoDetailPage() {
                       </p>
                     </div>
                     <button
+                      type="button"
+                      title="Cerrar"
                       onClick={() => setShowContractModal(false)}
                       className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
                     >
@@ -1015,7 +1018,7 @@ export default function ContratoDetailPage() {
                     <PaperClipIcon className="h-5 w-5 text-gray-500" />
                     Documentación del contrato
                   </h2>
-                  <button onClick={() => setShowDocsModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <button type="button" title="Cerrar" onClick={() => setShowDocsModal(false)} className="text-gray-400 hover:text-gray-600">
                     <XMarkIcon className="h-5 w-5" />
                   </button>
                 </div>
