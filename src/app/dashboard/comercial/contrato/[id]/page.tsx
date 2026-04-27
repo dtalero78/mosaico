@@ -246,6 +246,7 @@ export default function ContratoDetailPage() {
   // Consent status
   const [consentStatus, setConsentStatus] = useState<ConsentDisplay | null>(null)
   const [approvingConsent, setApprovingConsent] = useState(false)
+  const [showAutoApproveModal, setShowAutoApproveModal] = useState(false)
 
   const loadConsentStatus = useCallback(async () => {
     try {
@@ -463,15 +464,15 @@ export default function ContratoDetailPage() {
     }
   }
 
-  // Auto-approve consent
-  const autoApproveConsent = async () => {
-    if (!window.confirm('Aprobar consentimiento automaticamente?\n\nEsto registrara el consentimiento declarativo sin verificacion OTP del cliente.')) {
-      return
-    }
+  // Auto-approve consent — shows warning modal first
+  const autoApproveConsent = () => setShowAutoApproveModal(true)
+
+  const confirmAutoApprove = async () => {
+    setShowAutoApproveModal(false)
     try {
       setApprovingConsent(true)
       await api.post(`/api/consent/${titularId}/auto-approve`)
-      toast.success('Consentimiento aprobado automaticamente')
+      toast.success('Consentimiento aprobado automáticamente')
       await loadConsentStatus()
     } catch (err) {
       handleApiError(err, 'Error aprobando consentimiento')
@@ -1106,6 +1107,61 @@ export default function ContratoDetailPage() {
           </div>
         )}
       </PermissionGuard>
+
+      {/* ── Auto-Aprobar Consentimiento — Modal de advertencia ── */}
+      {showAutoApproveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+            {/* Header rojo */}
+            <div className="bg-red-600 px-6 py-4 flex items-center gap-3">
+              <div className="flex-shrink-0 bg-white bg-opacity-20 rounded-full p-2">
+                <ShieldCheckIcon className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white uppercase tracking-wide">⚠️ ADVERTENCIA</h2>
+                <p className="text-red-100 text-sm">Acción restringida — Área de Tecnología</p>
+              </div>
+            </div>
+
+            {/* Cuerpo */}
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 leading-relaxed">
+                <p className="font-semibold mb-2">Este proceso es de uso exclusivo del Área de Tecnología.</p>
+                <p>
+                  La auto-aprobación de consentimiento omite la verificación OTP del cliente y genera
+                  registros de auditoría que quedan grabados con su identificación, fecha, hora
+                  y número de contrato.
+                </p>
+              </div>
+              <p className="text-gray-700 text-sm">
+                Para continuar, debe contar con autorización expresa del <strong>Área de Tecnología</strong>.
+                Si no la tiene, haga clic en <strong>No, cancelar</strong>.
+              </p>
+              <p className="text-gray-500 text-xs">
+                Contrato: <span className="font-mono font-semibold">{titular?.contrato || '—'}</span>
+              </p>
+            </div>
+
+            {/* Acciones */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAutoApproveModal(false)}
+                className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 text-sm font-medium"
+              >
+                No, cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmAutoApprove}
+                className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold"
+              >
+                Sí, tengo autorización — Continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   )
 }
