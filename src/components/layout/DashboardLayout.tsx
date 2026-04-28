@@ -132,8 +132,9 @@ const getNavigation = (userEmail: string) => [
           { name: 'Pac-Man Data Flow', href: '/game-pacman.html', external: true },
         ],
       },
-      { name: 'Actualizar Videos', href: '/admin/actualizar-videos', newTab: true },
-      { name: 'Clear Historic',    href: '/admin/clear-historic',   newTab: true },
+      { name: 'Actualizar Videos',  href: '/admin/actualizar-videos',   newTab: true },
+      { name: 'Clear Historic',     href: '/admin/clear-historic',     newTab: true },
+      { name: 'Edición Contrato',   href: '/admin/edicion-contrato',   newTab: true },
     ],
   },
 ]
