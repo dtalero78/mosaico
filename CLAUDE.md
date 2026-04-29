@@ -1566,6 +1566,7 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `e9c2580` | fix: campos Número ID en Crear Contrato — solo letras mayúsculas y números, sin espacios ni guiones; `onKeyDown` bloquea caracteres inválidos, `onChange` limpia copy-paste y fuerza mayúsculas; aplica a Titular (paso 2) y Beneficiarios (paso 7) |
 | `6af2533` | fix: campo Vigencia en Crear Contrato — `type="number"` min=1 max=12; `onKeyDown` bloquea letras/símbolos, `onChange` limpia copy-paste con regex, `onBlur` corrige valores fuera de rango; bloqueo aplica solo a ese campo |
 | `908a4fb` | feat: calcular `finalContrato` automáticamente al crear contrato — `finalContrato = hoy + vigencia meses`; se graba en TITULAR y todos los BENEFICIARIOS en el mismo INSERT; si `vigencia = 0` queda NULL |
 | `2e6afa9` | feat: auto-aprobar consentimiento genera y sube PDF al Drive — mismo flujo que Enviar PDF (API2PDF → bsl-utilidades) pero sin envío WhatsApp; errores de PDF son no-bloqueantes (el consentimiento se guarda igual) |
