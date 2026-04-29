@@ -333,12 +333,25 @@ export async function changeStep(
   // Try ACADEMICA first (the /student/[id] page uses ACADEMICA _id)
   const academic = await AcademicaRepository.findByAnyId(id);
 
-  // Fall back to PEOPLE if not found in ACADEMICA
-  const person = academic
-    ? (academic.numeroId ? await PeopleRepository.findByIdOrNumeroId(academic.numeroId) : null)
-    : await PeopleRepository.findByIdOrNumeroId(id);
+  // Resolve PEOPLE record — only BENEFICIARIO should be updated.
+  // Priority: academic.usuarioId (direct _id link) → findBeneficiarioByNumeroId → fallback
+  let person: any = null;
+  if (academic) {
+    if (academic.usuarioId) {
+      const candidate = await PeopleRepository.findById(academic.usuarioId);
+      if (candidate && (candidate as any).tipoUsuario === 'BENEFICIARIO') {
+        person = candidate;
+      }
+    }
+    if (!person && academic.numeroId) {
+      person = await PeopleRepository.findBeneficiarioByNumeroId(academic.numeroId);
+    }
+  } else {
+    // No ACADEMICA record — fall back to direct PEOPLE lookup
+    person = await PeopleRepository.findByIdOrNumeroId(id);
+  }
 
-  const numeroId = academic?.numeroId || person?.numeroId;
+  const numeroId = academic?.numeroId || (person as any)?.numeroId;
   if (!academic && !person) throw new NotFoundError('Student', id);
 
   // Look up the nivel info for this step
