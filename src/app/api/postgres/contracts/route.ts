@@ -43,6 +43,15 @@ export const POST = handlerWithAuth(async (request) => {
   // Generate contract number server-side to avoid race conditions
   const contrato = await generateContractNumber(titular.plataforma);
 
+  // Calculate finalContrato = today + vigencia months
+  const vigenciaMeses = parseInt(financial?.vigencia || '0', 10);
+  const fechaInicio = new Date();
+  const fechaFinal = new Date(fechaInicio);
+  if (vigenciaMeses > 0) {
+    fechaFinal.setMonth(fechaFinal.getMonth() + vigenciaMeses);
+  }
+  const finalContrato = vigenciaMeses > 0 ? fechaFinal.toISOString().split('T')[0] : null;
+
   const created: any = { contrato, titular: null, beneficiarios: [] };
 
   // 1. Create TITULAR in PEOPLE
@@ -52,8 +61,8 @@ export const POST = handlerWithAuth(async (request) => {
       "email", "celular", "telefono", "fechaNacimiento", "domicilio", "ciudad",
       "plataforma", "ingresos", "empresa", "cargo", "genero",
       "referenciaUno", "parentezcoRefUno", "telefonoRefUno", "referenciaDos", "parentezcoRefDos", "telefonoRefDos",
-      "asesor", "tipoUsuario", "contrato", "vigencia", "fechaContrato", "origen", "_createdDate", "_updatedDate")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'TITULAR',$25,$26,NOW(),'POSTGRES',NOW(),NOW()) RETURNING *`,
+      "asesor", "tipoUsuario", "contrato", "vigencia", "fechaContrato", "finalContrato", "origen", "_createdDate", "_updatedDate")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'TITULAR',$25,$26,NOW(),$27::date,'POSTGRES',NOW(),NOW()) RETURNING *`,
     [titularId, titular.numeroId, titular.primerNombre, titular.segundoNombre || null,
      titular.primerApellido, titular.segundoApellido || null,
      titular.email || null, titular.celular || null, titular.telefono || null,
@@ -61,7 +70,7 @@ export const POST = handlerWithAuth(async (request) => {
      titular.plataforma || null, titular.ingresos || null, titular.empresa || null, titular.cargo || null, titular.genero || null,
      titular.referenciaUno || null, titular.parentezcoRefUno || null, titular.telRefUno || null,
      titular.referenciaDos || null, titular.parentezcoRefDos || null, titular.telRefDos || null,
-     titular.asesor || null, contrato, financial?.vigencia || null]
+     titular.asesor || null, contrato, financial?.vigencia || null, finalContrato]
   );
   created.titular = titularResult.rows[0];
 
@@ -92,12 +101,12 @@ export const POST = handlerWithAuth(async (request) => {
       `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
         "email", "celular", "fechaNacimiento", "titularId",
         "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
-        "vigencia", "fechaContrato", "origen", "_createdDate", "_updatedDate")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,false,$13,NOW(),'POSTGRES',NOW(),NOW()) RETURNING *`,
+        "vigencia", "fechaContrato", "finalContrato", "origen", "_createdDate", "_updatedDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,false,$13,NOW(),$14::date,'POSTGRES',NOW(),NOW()) RETURNING *`,
       [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
        b.primerApellido, b.segundoApellido || null,
        b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
-       contrato, titular.plataforma || null, financial?.vigencia || null]
+       contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato]
     );
     created.beneficiarios.push(benefResult.rows[0]);
   }
