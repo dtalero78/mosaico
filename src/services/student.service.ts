@@ -245,7 +245,8 @@ export async function autoAdvanceStep(bookingId: string) {
   if (!booking) return null;
 
   const studentId = booking.studentId || booking.idEstudiante;
-  const bookingNivel = booking.nivel;
+  // Normalize nivel: "BN1 - Step 5" (tituloONivel stored as nivel) → "BN1"
+  const bookingNivel = (booking.nivel || '').split(' - ')[0].trim() || booking.nivel;
   const bookingStep = booking.step;
 
   if (!studentId || !bookingNivel || !bookingStep) return null;
@@ -285,7 +286,7 @@ export async function autoAdvanceStep(bookingId: string) {
 
   const isComplete = await isCurrentStepComplete(
     studentId,
-    bookingNivel,
+    student.nivel,   // use student's actual nivel from ACADEMICA for class lookup
     bookingStep,
     overrideStudentId
   );
