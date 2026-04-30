@@ -292,10 +292,18 @@ export async function autoAdvanceStep(bookingId: string) {
   );
   if (!isComplete) return null;
 
-  // Find next step
-  const nextStepName = `Step ${extractStepNum(bookingStep)! + 1}`;
+  // Use getEffectiveStepNumber to find the real target step.
+  // Handles cascading: if Steps 1-4 are all complete, advances directly to Step 5 (Jump).
+  // If all nivel steps are complete (returns 0), falls back to next sequential step (level transition).
+  const { getEffectiveStepNumber } = await import('@/services/student-booking.service');
+  const effectiveStepNum = await getEffectiveStepNumber(studentId, student.nivel);
+
+  const targetStepName = effectiveStepNum > 0
+    ? `Step ${effectiveStepNum}`
+    : `Step ${extractStepNum(bookingStep)! + 1}`; // all nivel steps done → advance to next level
+
   const { NivelesRepository } = await import('@/repositories/niveles.repository');
-  const nextNivelInfo = await NivelesRepository.findByStepName(nextStepName);
+  const nextNivelInfo = await NivelesRepository.findByStepName(targetStepName);
   if (!nextNivelInfo) {
     // No next step — student has completed the entire program (e.g., Step 45).
     // Block platform access by removing their login credentials from USUARIOS_ROLES.
@@ -313,12 +321,12 @@ export async function autoAdvanceStep(bookingId: string) {
     };
   }
 
-  await changeStep(studentId, nextStepName);
+  await changeStep(studentId, targetStepName);
 
   return {
     advanced: true,
     from: { nivel: bookingNivel, step: bookingStep },
-    to: { nivel: nextNivelInfo.code, step: nextStepName },
+    to: { nivel: nextNivelInfo.code, step: targetStepName },
   };
 }
 
