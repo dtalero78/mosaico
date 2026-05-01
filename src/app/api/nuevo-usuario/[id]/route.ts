@@ -12,8 +12,10 @@ async function ensureColumns() {
     await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "detallesPersonales" TEXT`, []);
     await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "hobbies" TEXT`, []);
     await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "foto" TEXT`, []);
+    await query(`ALTER TABLE "USUARIOS_ROLES" ADD COLUMN IF NOT EXISTS "numeroId" VARCHAR(50)`, []);
+    await query(`ALTER TABLE "USUARIOS_ROLES" ADD COLUMN IF NOT EXISTS "contrato" VARCHAR(50)`, []);
     migrationDone = true;
-    console.log('✅ [NuevoUsuario] Columnas verificadas en ACADEMICA');
+    console.log('✅ [NuevoUsuario] Columnas verificadas en ACADEMICA y USUARIOS_ROLES');
   } catch (err: any) {
     console.error('⚠️ [NuevoUsuario] Error verificando columnas:', err.message);
   }
@@ -150,7 +152,7 @@ export const POST = handler(async (
   // Get ACADEMICA record
   const student = await queryOne(
     `SELECT "_id", "numeroId", "primerNombre", "primerApellido", "celular",
-            "nivel", "step", "plataforma", "usuarioId"
+            "nivel", "step", "plataforma", "usuarioId", "contrato"
      FROM "ACADEMICA" WHERE "_id" = $1`,
     [academicId]
   );
@@ -174,12 +176,12 @@ export const POST = handler(async (
   const nombreCompleto = [student.primerNombre, student.primerApellido].filter(Boolean).join(' ');
   const usuarioId = ids.person();
   await query(
-    `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "_createdDate", "_updatedDate")
-     VALUES ($1, $2, $3, $4, 'ESTUDIANTE', true, NOW(), NOW())
-     ON CONFLICT ("email") DO UPDATE SET "password" = $3, "nombre" = $4, "_updatedDate" = NOW()`,
-    [usuarioId, normalizedEmail, clave.trim(), nombreCompleto]
+    `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numeroId", "contrato", "_createdDate", "_updatedDate")
+     VALUES ($1, $2, $3, $4, 'ESTUDIANTE', true, $5, $6, NOW(), NOW())
+     ON CONFLICT ("email") DO UPDATE SET "password" = $3, "nombre" = $4, "numeroId" = $5, "contrato" = $6, "_updatedDate" = NOW()`,
+    [usuarioId, normalizedEmail, clave.trim(), nombreCompleto, (student as any).numeroId || null, (student as any).contrato || null]
   );
-  console.log(`✅ [NuevoUsuario] USUARIOS_ROLES creado para ${normalizedEmail} (ESTUDIANTE)`);
+  console.log(`✅ [NuevoUsuario] USUARIOS_ROLES creado para ${normalizedEmail} (ESTUDIANTE, numeroId=${(student as any).numeroId}, contrato=${(student as any).contrato})`);
 
   // Create WELCOME booking if event selected
   let bookingCreated = false;
