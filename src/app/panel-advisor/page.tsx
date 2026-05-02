@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import EventDetailModal from '@/components/academic/EventDetailModal'
 import {
@@ -51,6 +52,7 @@ interface BookItem {
 function PanelAdvisorContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { data: session } = useSession()
 
   // States
   const [advisor, setAdvisor] = useState<Advisor | null>(null)
@@ -68,8 +70,10 @@ function PanelAdvisorContent() {
   const [books, setBooks] = useState<BookItem[]>([])
   const [booksLoading, setBooksLoading] = useState(false)
 
-  // Get email from URL query params
-  const advisorEmail = searchParams.get('email')
+  // Get email from URL params; fall back to session email for logged-in ADVISORs
+  const advisorEmail = searchParams.get('email') || (
+    (session?.user as any)?.role === 'ADVISOR' ? session?.user?.email ?? null : null
+  )
 
   // Load advisor data
   useEffect(() => {

@@ -85,7 +85,9 @@ export default function ActualizarDatosPage() {
       if (!saveData.success) throw new Error(saveData.error || 'Error al guardar')
 
       toast.success('¡Perfil actualizado exitosamente! Redirigiendo...')
-      setTimeout(() => router.push('/panel-advisor'), 1500)
+      // Redirect to personal advisor panel using the new email
+      const newEmail = email.trim().toLowerCase()
+      setTimeout(() => router.push(`/panel-advisor?email=${encodeURIComponent(newEmail)}`), 1500)
     } catch (err: any) {
       toast.error(err.message || 'Error al actualizar el perfil')
     } finally {
