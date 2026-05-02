@@ -2,7 +2,6 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query, queryOne } from '@/lib/postgres';
 import { ValidationError, NotFoundError } from '@/lib/errors';
-import bcrypt from 'bcryptjs';
 
 const ALPHANUMERIC = /^[a-zA-Z0-9]+$/;
 const EMAIL_REGEX   = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -57,7 +56,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   if (!advisor) throw new NotFoundError('Advisor', sessionEmail);
 
   // ── Hash password ─────────────────────────────────────────────────────────
-  const hashedPassword = await bcrypt.hash(cleanPass, 10);
+  // Save password as plain text (system supports both bcrypt and plain text — auth-postgres.ts)
+  const hashedPassword = cleanPass;
 
   // ── Update USUARIOS_ROLES ─────────────────────────────────────────────────
   await query(
