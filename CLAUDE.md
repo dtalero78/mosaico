@@ -1570,6 +1570,7 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `eb5e03c` | feat: foto advisor en Lista de Advisors — componente `AdvisorAvatar` carga presigned URL lazy por advisor; fallback a iniciales si sin foto; usa `GET /api/postgres/materials/presigned` existente |
 | `28ab4a4` | fix: actualizar-datos advisor — clave se guarda en texto plano (sin bcrypt); sistema soporta ambos formatos en auth |
 | `113ad95` | fix: `by-email` advisor incluye `fotoAdvisor` y `domicilioadvisor` en SELECT — el panel-advisor ahora puede mostrar la foto del advisor |
 | `bd2e1dd` | fix: actualizar-datos advisor — toggle ver/ocultar clave; celular solo dígitos sin + ni espacios; photo-presign usa ID real del advisor desde sesión (no Date.now) |
