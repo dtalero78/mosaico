@@ -70,28 +70,10 @@ export async function middleware(request: NextRequest) {
     }
 
     // Rutas que siempre están permitidas (búsqueda de personas/estudiantes, panel de advisor)
+    // Nota: la redirección de ADVISOR a /actualizar-datos se maneja en el Server Layout
+    // de /panel-advisor para evitar importar pg en el Edge Runtime del middleware.
     const alwaysAllowedRoutes = ['/person', '/student', '/sesion', '/advisor', '/panel-advisor', '/panel-estudiante'];
     if (alwaysAllowedRoutes.some(route => pathname.startsWith(route))) {
-      // ADVISOR: redirect to profile update if perfilActualizado is null
-      if (
-        userRole === 'ADVISOR' &&
-        pathname.startsWith('/panel-advisor') &&
-        !pathname.startsWith('/panel-advisor/actualizar-datos')
-      ) {
-        try {
-          const { queryOne: mwQuery } = await import('@/lib/postgres');
-          const ur = await mwQuery<{ perfilActualizado: string | null }>(
-            `SELECT "perfilActualizado" FROM "USUARIOS_ROLES" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
-            [token.email as string]
-          );
-          if (ur && ur.perfilActualizado === null) {
-            console.log(`🔄 [Middleware] ADVISOR sin perfilActualizado → /panel-advisor/actualizar-datos`);
-            return NextResponse.redirect(new URL('/panel-advisor/actualizar-datos', request.url));
-          }
-        } catch (err) {
-          console.warn('⚠️ [Middleware] No se pudo verificar perfilActualizado:', err);
-        }
-      }
       console.log(`✅ [Middleware] Access granted to ${pathname} (always allowed route)`);
       return noCacheNext();
     }
