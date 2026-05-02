@@ -3,23 +3,32 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { spacesClient, SPACES_BUCKET } from '@/lib/spaces';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { ValidationError } from '@/lib/errors';
+import { ValidationError, NotFoundError } from '@/lib/errors';
+import { queryOne } from '@/lib/postgres';
 
 /**
  * POST /api/postgres/advisors/photo-presign
  *
  * Returns a presigned PUT URL so the advisor can upload their photo
- * directly to DO Spaces (fotosAdvisors/) without routing through the server.
+ * directly to DO Spaces (fotosAdvisors/{advisorId}.ext).
+ * Resolves advisorId from session email — client doesn't need to send it.
  *
- * Body: { advisorId, contentType }
+ * Body: { contentType }
  */
-export const POST = handlerWithAuth(async (request) => {
-  const { advisorId, contentType } = await request.json();
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
+  const { contentType } = await request.json();
+  const sessionEmail = session.user?.email;
+  if (!sessionEmail) throw new ValidationError('No se encontró email en la sesión');
 
-  if (!advisorId) throw new ValidationError('advisorId es requerido');
+  // Resolve real advisor _id from session email
+  const advisor = await queryOne<{ _id: string }>(
+    `SELECT "_id" FROM "ADVISORS" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
+    [sessionEmail]
+  );
+  if (!advisor) throw new NotFoundError('Advisor', sessionEmail);
 
   const ext = (contentType || 'image/jpeg').split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
-  const key = `fotosAdvisors/${advisorId}.${ext}`;
+  const key = `fotosAdvisors/${advisor._id}.${ext}`;
 
   const command = new PutObjectCommand({
     Bucket: SPACES_BUCKET,

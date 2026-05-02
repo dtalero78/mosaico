@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { UserCircleIcon, CameraIcon } from '@heroicons/react/24/outline'
+import { UserCircleIcon, CameraIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
 const ALPHANUMERIC = /^[a-zA-Z0-9]+$/
@@ -13,6 +13,8 @@ export default function ActualizarDatosPage() {
   const [email,     setEmail]     = useState('')
   const [numberId,  setNumberId]  = useState('')
   const [password,  setPassword]  = useState('')
+  const [showPass,  setShowPass]  = useState(false)
+  const [showPass2, setShowPass2] = useState(false)
   const [password2, setPassword2] = useState('')
   const [celular,   setCelular]   = useState('')
   const [domicilio, setDomicilio] = useState('')
@@ -39,6 +41,7 @@ export default function ActualizarDatosPage() {
     if (/\s/.test(password)) return 'La clave no puede contener espacios'
     if (password !== password2) return 'Las claves no coinciden'
     if (!celular.trim())   return 'El celular es requerido'
+    if (!/^\d+$/.test(celular.trim())) return 'El celular solo debe contener números (sin + ni espacios)'
     if (!domicilio.trim()) return 'El domicilio es requerido'
     if (!fotoFile)         return 'La foto es requerida'
     return null
@@ -55,7 +58,7 @@ export default function ActualizarDatosPage() {
       const presignRes = await fetch('/api/postgres/advisors/photo-presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ advisorId: Date.now().toString(), contentType: fotoFile!.type }),
+        body: JSON.stringify({ contentType: fotoFile!.type }),
       })
       const presignData = await presignRes.json()
       if (!presignData.success) throw new Error(presignData.error || 'Error al generar URL de foto')
@@ -151,12 +154,20 @@ export default function ActualizarDatosPage() {
               placeholder="12345678K" />
           </div>
 
-          {/* Celular */}
+          {/* Celular — solo dígitos */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Celular *</label>
-            <input type="text" value={celular} onChange={e => setCelular(e.target.value)}
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Celular * <span className="text-xs text-gray-400">(solo números, sin + ni espacios)</span>
+            </label>
+            <input type="tel" value={celular}
+              onKeyDown={e => {
+                if (!/^\d$/.test(e.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key)) {
+                  e.preventDefault()
+                }
+              }}
+              onChange={e => setCelular(e.target.value.replace(/[^\d]/g, ''))}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="+56 9 1234 5678" />
+              placeholder="56912345678" />
           </div>
 
           {/* Domicilio */}
@@ -170,23 +181,35 @@ export default function ActualizarDatosPage() {
           {/* Clave */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Clave * <span className="text-xs text-gray-400">(letras, números y caracteres especiales, 6–10)</span>
+              Clave * <span className="text-xs text-gray-400">(6–10 caracteres)</span>
             </label>
-            <input type="password" value={password}
-              onChange={e => { if (e.target.value.length <= 10) setPassword(e.target.value) }}
-              maxLength={10}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Mínimo 6 caracteres" />
+            <div className="relative">
+              <input type={showPass ? 'text' : 'password'} value={password}
+                onChange={e => { if (e.target.value.length <= 10) setPassword(e.target.value) }}
+                maxLength={10}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Mínimo 6 caracteres" />
+              <button type="button" onClick={() => setShowPass(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showPass ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
 
           {/* Confirmar clave */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Clave *</label>
-            <input type="password" value={password2}
-              onChange={e => { if (e.target.value.length <= 10) setPassword2(e.target.value) }}
-              maxLength={10}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Repita la clave" />
+            <div className="relative">
+              <input type={showPass2 ? 'text' : 'password'} value={password2}
+                onChange={e => { if (e.target.value.length <= 10) setPassword2(e.target.value) }}
+                maxLength={10}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Repita la clave" />
+              <button type="button" onClick={() => setShowPass2(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showPass2 ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
 
           <button type="submit" disabled={saving}
