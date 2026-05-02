@@ -11,7 +11,8 @@ export const GET = handlerWithAuth(async (_req, ctx) => {
   const decodedEmail = decodeURIComponent(ctx.params.email);
 
   const result = await query(
-    `SELECT "_id", "email", "primerNombre", "primerApellido", "nombreCompleto", "zoom", "activo"
+    `SELECT "_id", "email", "primerNombre", "primerApellido", "nombreCompleto",
+            "zoom", "activo", "fotoAdvisor", "domicilioadvisor"
      FROM "ADVISORS"
      WHERE "email" = $1`,
     [decodedEmail]
