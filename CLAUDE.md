@@ -1355,6 +1355,7 @@ interface ConsentData {
 | Contrato Público | `/contrato/[id]` | **Public** (no auth) |
 | Nuevo Advisor | `/nuevo-advisor` | **Public** (no auth) |
 | Panel Advisor | `/panel-advisor` | ADVISOR role |
+| Actualización de Datos | `/panel-advisor/actualizar-datos` | ADVISOR role (solo si `perfilActualizado IS NULL`) |
 | Panel Estudiante | `/panel-estudiante` | ESTUDIANTE role |
 | Actividad Complementaria | `/panel-estudiante/actividades-complementarias` | ESTUDIANTE role |
 | Subir Lote | `/subir-lote` | SUPER_ADMIN only |
