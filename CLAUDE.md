@@ -1355,7 +1355,7 @@ interface ConsentData {
 | Contrato Público | `/contrato/[id]` | **Public** (no auth) |
 | Nuevo Advisor | `/nuevo-advisor` | **Public** (no auth) |
 | Panel Advisor | `/panel-advisor` | ADVISOR role |
-| Actualización de Datos | `/panel-advisor/actualizar-datos` | ADVISOR role (solo si `perfilActualizado IS NULL`) |
+| Actualización de Datos | `/advisor-setup` | ADVISOR role (solo si `perfilActualizado IS NULL`) |
 | Panel Estudiante | `/panel-estudiante` | ESTUDIANTE role |
 | Actividad Complementaria | `/panel-estudiante/actividades-complementarias` | ESTUDIANTE role |
 | Subir Lote | `/subir-lote` | SUPER_ADMIN only |
@@ -1570,6 +1570,15 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `28ab4a4` | fix: actualizar-datos advisor — clave se guarda en texto plano (sin bcrypt); sistema soporta ambos formatos en auth |
+| `113ad95` | fix: `by-email` advisor incluye `fotoAdvisor` y `domicilioadvisor` en SELECT — el panel-advisor ahora puede mostrar la foto del advisor |
+| `bd2e1dd` | fix: actualizar-datos advisor — toggle ver/ocultar clave; celular solo dígitos sin + ni espacios; photo-presign usa ID real del advisor desde sesión (no Date.now) |
+| `e04d47b` | feat: mostrar foto del advisor en panel — avatar circular junto al saludo; presigned endpoint acepta `fotosAdvisors/` además de `materials/` |
+| `3d6ef5a` | fix: panel-advisor usa email de sesión cuando rol=ADVISOR y no hay email en URL; advisor-setup redirige con email al completar |
+| `2eccc62` | fix: clave en actualizar-datos permite letras, números y caracteres especiales (sin espacios); elimina restricción alfanumérica en frontend y backend |
+| `b9a794e` | fix: mover actualizar-datos a `/advisor-setup` para evitar loop de redirect — layout aplica solo a `/panel-advisor/*`; `/advisor-setup` está fuera del layout |
+| `618425a` | fix: mover verificación `perfilActualizado` del middleware al Server Layout — middleware Edge Runtime no puede importar `pg`; layout.tsx corre en Node.js |
+| `a8b04df` | feat: pantalla Actualización de Datos para advisors (`/advisor-setup`) — campos: email, numeroId, clave (6-10 sin espacios), celular, domicilio, foto (DO Spaces `fotosAdvisors/`); `USUARIOS_ROLES.perfilActualizado` controla si debe mostrar; reutilizable para otros roles vía Server Layout |
 | `240906a` | fix: `StudentProgress` (admin) muestra nombres de clubs en columna Clubs — agrega `clubNombres` a interfaz `StepProgress` y los renderiza bajo el contador `2/1` (ej: TRAINING, GRAMMAR); columna Diagnóstico sin cambios |
 | `03b6415` | fix: `changeStep` actualiza PEOPLE solo en BENEFICIARIOS — prioridad: `academic.usuarioId` (link directo al `_id` de PEOPLE) → `findBeneficiarioByNumeroId` (filtra `tipoUsuario=BENEFICIARIO`); evita actualizar TITULAR cuando comparte `numeroId` con el beneficiario |
 | `a31e101` | feat: `autoAdvanceStep` usa `getEffectiveStepNumber` para avance en cascada — al completar steps normales (1-4) avanza directamente al Jump step (5) sin importar el orden; si todos los steps del nivel están completos (devuelve 0) avanza al siguiente nivel; PEOPLE y ACADEMICA actualizados en ambos casos |
