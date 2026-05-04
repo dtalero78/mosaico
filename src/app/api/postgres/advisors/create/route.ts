@@ -23,8 +23,9 @@ export const POST = handler(async (request: Request) => {
 
   const nombreCompleto = [primerNombre, primerApellido].map(s => s.trim()).join(' ');
 
+  const advisorId = ids.advisor();
   const advisor = await AdvisorRepository.create({
-    _id: ids.advisor(),
+    _id: advisorId,
     primerNombre: primerNombre.trim(),
     primerApellido: primerApellido.trim(),
     nombreCompleto,
@@ -32,15 +33,17 @@ export const POST = handler(async (request: Request) => {
     zoom: body.zoom?.trim() || undefined,
     telefono: body.telefono?.trim() || undefined,
     pais: body.pais?.trim() || undefined,
+    domicilio: body.domicilio?.trim() || undefined,
+    fotoAdvisor: body.fotoKey?.trim() || undefined,
   });
 
   // Also create USUARIOS_ROLES entry so the advisor can log in
   const password = body.clave?.trim() || 'LGS2026';
   await queryOne(
-    `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "_createdDate", "_updatedDate")
-     VALUES ($1, $2, $3, $4, 'ADVISOR', true, NOW(), NOW())
+    `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numberid", "_createdDate", "_updatedDate")
+     VALUES ($1, $2, $3, $4, 'ADVISOR', true, $5, NOW(), NOW())
      ON CONFLICT ("email") DO NOTHING`,
-    [ids.advisor(), email.trim().toLowerCase(), password, nombreCompleto]
+    [ids.advisor(), email.trim().toLowerCase(), password, nombreCompleto, body.numeroId?.trim().toUpperCase() || null]
   );
 
   return successResponse({ advisor, message: 'Advisor creado exitosamente' });
