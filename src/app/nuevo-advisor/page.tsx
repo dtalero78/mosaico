@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { CameraIcon, UserCircleIcon } from '@heroicons/react/24/outline'
+import { CameraIcon, UserCircleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 
 const PAISES = [
   'Colombia', 'Mexico', 'Argentina', 'Chile', 'Peru', 'Ecuador', 'Venezuela',
@@ -35,6 +35,8 @@ export default function NuevoAdvisorPage() {
   const [submitting, setSubmitting] = useState(false)
   const [done,       setDone]       = useState(false)
   const [apiError,   setApiError]   = useState<string | null>(null)
+
+  const [showPass, setShowPass] = useState(false)
 
   // Photo states
   const [fotoFile,    setFotoFile]    = useState<File | null>(null)
@@ -220,9 +222,26 @@ export default function NuevoAdvisorPage() {
               <Field label="Email" value={form.email}
                 onChange={v => updateField('email', v)} error={errors.email}
                 placeholder="advisor@email.com" type="email" required />
-              <Field label="Contraseña" value={form.clave}
-                onChange={v => updateField('clave', v)} error={errors.clave}
-                placeholder="Mínimo 4 caracteres" type="password" required />
+              {/* Contraseña con toggle ver/ocultar */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Contraseña <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    value={form.clave}
+                    onChange={e => updateField('clave', e.target.value)}
+                    placeholder="Mínimo 4 caracteres"
+                    className={`w-full px-3 py-2.5 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${errors.clave ? 'border-red-400' : 'border-gray-300'}`}
+                  />
+                  <button type="button" onClick={() => setShowPass(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showPass ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                  </button>
+                </div>
+                {errors.clave && <p className="text-red-500 text-xs mt-1">{errors.clave}</p>}
+              </div>
               <Field label="Teléfono" value={form.telefono}
                 onChange={v => updateField('telefono', v.replace(/[^\d]/g, ''))}
                 error={errors.telefono} placeholder="Ej: 56912345678"
