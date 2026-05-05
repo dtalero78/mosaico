@@ -322,6 +322,7 @@ export async function resolveStudentFromSession(session: Session) {
     effectiveStep, // First incomplete step (used for display in header/card)
     nivelParalelo,
     stepParalelo,
+    foto: academica?.foto ?? (base as any).foto ?? null, // photo from ACADEMICA
   };
 }
 
