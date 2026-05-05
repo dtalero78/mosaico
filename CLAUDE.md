@@ -1572,6 +1572,7 @@ export interface Person {
 |---|---|
 | `c899502` | fix: `findUpcomingByStudentId` usa `COALESCE(c."step", ab."step")` — card azul del panel-estudiante muestra nombre completo del step (ej: "F1 - TRAINING - Step 32"); revierte "Next Club" a "NEXT SESSION" |
 | `317cb71` | fix: panel-estudiante — título del card azul muestra "Next Club" o "Next Session" (revertido) según el tipo real del próximo evento (antes era siempre "Next Session" hardcodeado) |
+| `b1dc7d0` | feat: `/nuevo-usuario` captura `domicilio`, `ciudad`, `fechaNacimiento` y foto (presigned → `lgs-bucket/fotos/`) — actualiza PEOPLE (domicilio, ciudad, fechaNacimiento, edad, email), ACADEMICA (fechaNacimiento, edad, foto), USUARIOS_ROLES (celular, numberid, contrato); foto vía presigned URL sin timeout |
 | `6f36d0a` | fix: Envío Mensajes y Crear Rol movidos bajo submenú Usuarios en Mantenimiento |
 | `619d72a` | feat: sidebar Mantenimiento — nuevo grupo 'Material' (Actualizar Videos) y 'Usuarios' (Clear Historic, Edición Contrato, Envío Mensajes, Crear Rol) |
 | `aad66e1` | fix: `resolveStudentFromSession` expone `foto` desde ACADEMICA en el profile — `StudentHeader` puede mostrar la foto del estudiante |
