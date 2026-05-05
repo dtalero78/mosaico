@@ -1572,6 +1572,7 @@ export interface Person {
 |---|---|
 | `c899502` | fix: `findUpcomingByStudentId` usa `COALESCE(c."step", ab."step")` — card azul del panel-estudiante muestra nombre completo del step (ej: "F1 - TRAINING - Step 32"); revierte "Next Club" a "NEXT SESSION" |
 | `317cb71` | fix: panel-estudiante — título del card azul muestra "Next Club" o "Next Session" (revertido) según el tipo real del próximo evento (antes era siempre "Next Session" hardcodeado) |
+| `aad66e1` | fix: `resolveStudentFromSession` expone `foto` desde ACADEMICA en el profile — `StudentHeader` puede mostrar la foto del estudiante |
 | `4842356` | feat: `StudentHeader` rediseñado — avatar circular con foto de DO Spaces o iniciales del nombre; subtítulo "Panel de gestión para Usuarios"; nivel/step a la derecha; diseño responsivo (móvil compacto, desktop completo) |
 | `0677295` | feat: captura `fechaNacimiento` en `/nuevo-advisor` (paso 3) y `/advisor-setup` — campo DATE en ADVISORS; guarda via `create` y `update-profile`; incluido en `ADVISOR_COLUMNS` |
 | `5adcfec` | feat: agregar columna `fechaNacimiento` (DATE) a ADVISORS — creada en producción e incluida en ADVISOR_COLUMNS |
