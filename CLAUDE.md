@@ -1572,6 +1572,8 @@ export interface Person {
 |---|---|
 | `c899502` | fix: `findUpcomingByStudentId` usa `COALESCE(c."step", ab."step")` — card azul del panel-estudiante muestra nombre completo del step (ej: "F1 - TRAINING - Step 32"); revierte "Next Club" a "NEXT SESSION" |
 | `317cb71` | fix: panel-estudiante — título del card azul muestra "Next Club" o "Next Session" (revertido) según el tipo real del próximo evento (antes era siempre "Next Session" hardcodeado) |
+| `0677295` | feat: captura `fechaNacimiento` en `/nuevo-advisor` (paso 3) y `/advisor-setup` — campo DATE en ADVISORS; guarda via `create` y `update-profile`; incluido en `ADVISOR_COLUMNS` |
+| `5adcfec` | feat: agregar columna `fechaNacimiento` (DATE) a ADVISORS — creada en producción e incluida en ADVISOR_COLUMNS |
 | `2b2b670` | feat: informe Asistencia Usuario (`/dashboard/informes/usuarios`) — busca beneficiario por `numeroId`, filtros fecha/nivel, tabla fecha/tipo/advisor/nivel/step/asistió/participó/noAprobo (sin Zoom), CSV exportable, mensaje cuando no hay agendamientos; API `GET /api/postgres/reports/asistencia/usuario` |
 | `22e8555` | fix: `/nuevo-advisor` — toggle ver/ocultar contraseña igual que `advisor-setup` |
 | `5d0e0d2` | feat: `/nuevo-advisor` agrega campos `numeroId` y `domicilio` (paso 1) y foto (paso 3 antes del link Zoom); endpoint público `photo-presign-public` para upload sin auth; `create` guarda `fotoAdvisor`, `domicilioadvisor` y `numberid` en ADVISORS/USUARIOS_ROLES |
