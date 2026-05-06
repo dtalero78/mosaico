@@ -1584,6 +1584,7 @@ export interface Person {
 | `4842356` | feat: `StudentHeader` rediseñado — avatar circular con foto de DO Spaces o iniciales del nombre; subtítulo "Panel de gestión para Usuarios"; nivel/step a la derecha; diseño responsivo (móvil compacto, desktop completo) |
 | `0677295` | feat: captura `fechaNacimiento` en `/nuevo-advisor` (paso 3) y `/advisor-setup` — campo DATE en ADVISORS; guarda via `create` y `update-profile`; incluido en `ADVISOR_COLUMNS` |
 | `5adcfec` | feat: agregar columna `fechaNacimiento` (DATE) a ADVISORS — creada en producción e incluida en ADVISOR_COLUMNS |
+| `4e3bbef` | feat: InfoAcademic User (`/dashboard/informes/infoacademic-user`) — reporte ejecutivo con KPIs, distribución semanal, progreso programa ESS→F3, heatmap 52 semanas, tabla detalle; print/PDF con logo + watermark + `@media print`; sidebar Informes → InfoAcademic User |
 | `2b2b670` | feat: informe Asistencia Usuario (`/dashboard/informes/usuarios`) — busca beneficiario por `numeroId`, filtros fecha/nivel, tabla fecha/tipo/advisor/nivel/step/asistió/participó/noAprobo (sin Zoom), CSV exportable, mensaje cuando no hay agendamientos; API `GET /api/postgres/reports/asistencia/usuario` |
 | `22e8555` | fix: `/nuevo-advisor` — toggle ver/ocultar contraseña igual que `advisor-setup` |
 | `5d0e0d2` | feat: `/nuevo-advisor` agrega campos `numeroId` y `domicilio` (paso 1) y foto (paso 3 antes del link Zoom); endpoint público `photo-presign-public` para upload sin auth; `create` guarda `fotoAdvisor`, `domicilioadvisor` y `numberid` en ADVISORS/USUARIOS_ROLES |
