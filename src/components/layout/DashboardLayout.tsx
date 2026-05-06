@@ -96,6 +96,7 @@ const getNavigation = (userEmail: string) => [
         ]
       },
       { name: 'Usuarios', href: '/dashboard/informes/usuarios', newTab: true },
+      { name: 'InfoAcademic User', href: '/dashboard/informes/infoacademic-user', newTab: true },
       { name: 'Contratos', href: '/dashboard/informes/contratos', newTab: true },
       {
         name: 'Planta', isSubmenu: true, children: [
