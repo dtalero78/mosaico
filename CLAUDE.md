@@ -1572,6 +1572,7 @@ export interface Person {
 |---|---|
 | `c899502` | fix: `findUpcomingByStudentId` usa `COALESCE(c."step", ab."step")` — card azul del panel-estudiante muestra nombre completo del step (ej: "F1 - TRAINING - Step 32"); revierte "Next Club" a "NEXT SESSION" |
 | `317cb71` | fix: panel-estudiante — título del card azul muestra "Next Club" o "Next Session" (revertido) según el tipo real del próximo evento (antes era siempre "Next Session" hardcodeado) |
+| `4e0cbf5` | fix: informe X País — JOIN con ACADEMICA para resolver `plataforma` cuando `booking.plataforma` es null; elimina "Sin plataforma" en bookings PANEL_EST/POSTGRES/COMP; `bookEvent` acepta y propaga `plataforma` del estudiante |
 | `dfe2795` | fix: verificación de celular en forgot-password solicita número completo con indicativo (sin signos, solo dígitos) en vez de últimos 4 |
 | `a7722cb` | feat: flujo "¿Olvidaste tu contraseña?" — 4 pasos con modales en login: (1) verificar email en ACADEMICA+USUARIOS_ROLES, (2) últimos 4 del ID + celular → OTP WhatsApp, (3) código OTP, (4) nueva contraseña (6-10 chars, toggle ver/ocultar); modal "datos no coinciden" → redirect login; actualiza USUARIOS_ROLES.password y ACADEMICA.clave |
 | `b1dc7d0` | feat: `/nuevo-usuario` captura `domicilio`, `ciudad`, `fechaNacimiento` y foto (presigned → `lgs-bucket/fotos/`) — actualiza PEOPLE (domicilio, ciudad, fechaNacimiento, edad, email), ACADEMICA (fechaNacimiento, edad, foto), USUARIOS_ROLES (celular, numberid, contrato); foto vía presigned URL sin timeout |
