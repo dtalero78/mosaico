@@ -1572,6 +1572,7 @@ export interface Person {
 |---|---|
 | `c899502` | fix: `findUpcomingByStudentId` usa `COALESCE(c."step", ab."step")` — card azul del panel-estudiante muestra nombre completo del step (ej: "F1 - TRAINING - Step 32"); revierte "Next Club" a "NEXT SESSION" |
 | `317cb71` | fix: panel-estudiante — título del card azul muestra "Next Club" o "Next Session" (revertido) según el tipo real del próximo evento (antes era siempre "Next Session" hardcodeado) |
+| `1698929` | fix: forgot-password — comparación de celular flexible: acepta con o sin indicativo de país (`57XXXXXXXXXX` vs `XXXXXXXXXX`); el masking siempre muestra 8 asteriscos sin importar la longitud |
 | `e705911` | feat: pantalla Actualización de Datos para estudiantes (`/student-setup`) — campos: email, celular, fechaNacimiento, domicilio, ciudad, contraseña (opcional), foto; botón "Más tarde" no marca `perfilActualizado` (vuelve a preguntar en el siguiente login); `reutilizable via Server Layout` |
 | `4e0cbf5` | fix: informe X País — JOIN con ACADEMICA para resolver `plataforma` cuando `booking.plataforma` es null; elimina "Sin plataforma" en bookings PANEL_EST/POSTGRES/COMP; `bookEvent` acepta y propaga `plataforma` del estudiante |
 | `dfe2795` | fix: verificación de celular en forgot-password solicita número completo con indicativo (sin signos, solo dígitos) en vez de últimos 4 |
