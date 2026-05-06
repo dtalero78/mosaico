@@ -34,9 +34,14 @@ export const POST = handler(async (request) => {
   const storedId = (academica.numeroId || '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
   const idMatches = storedId.endsWith(cleanId);
 
-  // Verify full phone number (strip non-digits from stored, compare with input)
+  // Verify phone — flexible: stored may or may not include country code
+  // Accept if stored ends with input OR input ends with stored (handles 57XXXXXXXXXX vs XXXXXXXXXX)
   const storedPhone = (academica.celular || '').replace(/\D/g, '');
-  const phoneMatches = storedPhone !== '' && storedPhone === cleanPhone;
+  const phoneMatches = storedPhone !== '' && cleanPhone !== '' && (
+    storedPhone === cleanPhone ||
+    storedPhone.endsWith(cleanPhone) ||
+    cleanPhone.endsWith(storedPhone)
+  );
 
   if (!idMatches || !phoneMatches) {
     // Return mismatch — client will show modal
