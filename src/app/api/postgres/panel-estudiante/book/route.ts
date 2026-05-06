@@ -21,6 +21,7 @@ export const POST = handlerWithAuth(async (request, context, session) => {
       celular: student.celular || '',
       nivel: student.nivel,
       step: student.step,
+      plataforma: (student as any).plataforma || '',
     },
     eventId
   );

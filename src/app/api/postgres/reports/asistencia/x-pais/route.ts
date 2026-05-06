@@ -10,11 +10,11 @@ const STEP_EXTRACT = `
   CAST(
     NULLIF(
       REGEXP_REPLACE(
-        COALESCE("nombreEvento", "step", ''),
+        COALESCE(b."nombreEvento", b."step", ''),
         '^.*[Ss]tep\\s+([0-9]+).*$',
         '\\1'
       ),
-      COALESCE("nombreEvento", "step", '')
+      COALESCE(b."nombreEvento", b."step", '')
     ) AS INTEGER
   )
 `
@@ -44,13 +44,15 @@ export const GET = handler(async (request: Request) => {
     AND "fechaEvento" < ($2::date + INTERVAL '1 day')
   `
 
+  // JOIN ACADEMICA to resolve plataforma when booking.plataforma is null
   const BASE_SELECT = `
     SELECT
-      COALESCE("plataforma", 'Sin plataforma') AS plataforma,
+      COALESCE(b."plataforma", a."plataforma", 'Sin plataforma') AS plataforma,
       COUNT(*)::int AS total,
-      COALESCE(SUM(CASE WHEN "asistencia" = true OR "asistio" = true THEN 1 ELSE 0 END), 0)::int AS asistieron,
-      COALESCE(SUM(CASE WHEN "cancelo" = true THEN 1 ELSE 0 END), 0)::int AS cancelaron
-    FROM "ACADEMICA_BOOKINGS"
+      COALESCE(SUM(CASE WHEN b."asistencia" = true OR b."asistio" = true THEN 1 ELSE 0 END), 0)::int AS asistieron,
+      COALESCE(SUM(CASE WHEN b."cancelo" = true THEN 1 ELSE 0 END), 0)::int AS cancelaron
+    FROM "ACADEMICA_BOOKINGS" b
+    LEFT JOIN "ACADEMICA" a ON a."_id" = COALESCE(b."studentId", b."idEstudiante")
   `
 
   const [sesPorPlat, jmpPorPlat, trPorPlat, clPorPlat, welPorPlat, compPorPlat] = await Promise.all([
@@ -58,76 +60,77 @@ export const GET = handler(async (request: Request) => {
     // ── SESIONES: SESSION + step 0-45 excluyendo múltiplos de 5 ──────────
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE ${dateWhere}
-        AND COALESCE("tipo", "tipoEvento") = 'SESSION'
-        AND COALESCE("nombreEvento", "step", '') ~* 'step\\s+[0-9]+'
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+        AND COALESCE(b."tipo", b."tipoEvento") = 'SESSION'
+        AND COALESCE(b."nombreEvento", b."step", '') ~* 'step\\s+[0-9]+'
         AND ${STEP_EXTRACT} BETWEEN 0 AND 45
         AND (${STEP_EXTRACT} = 0 OR ${STEP_EXTRACT} % 5 != 0)
-      GROUP BY COALESCE("plataforma", 'Sin plataforma')
+      GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
       ORDER BY total DESC
     `, p), []),
 
     // ── JUMPS: SESSION + step múltiplo de 5 ──────────────────────────────
     safeQuery(() => queryMany<any>(`
       SELECT
-        COALESCE("plataforma", 'Sin plataforma') AS plataforma,
+        COALESCE(b."plataforma", a."plataforma", 'Sin plataforma') AS plataforma,
         COUNT(*)::int AS total,
-        COALESCE(SUM(CASE WHEN "asistencia" = true OR "asistio" = true THEN 1 ELSE 0 END), 0)::int AS asistieron,
-        COALESCE(SUM(CASE WHEN "cancelo" = true THEN 1 ELSE 0 END), 0)::int AS cancelaron,
+        COALESCE(SUM(CASE WHEN b."asistencia" = true OR b."asistio" = true THEN 1 ELSE 0 END), 0)::int AS asistieron,
+        COALESCE(SUM(CASE WHEN b."cancelo" = true THEN 1 ELSE 0 END), 0)::int AS cancelaron,
         COALESCE(SUM(CASE WHEN
-          ("asistencia" = true OR "asistio" = true)
-          AND "participacion" = true
-          AND ("noAprobo" IS DISTINCT FROM true)
+          (b."asistencia" = true OR b."asistio" = true)
+          AND b."participacion" = true
+          AND (b."noAprobo" IS DISTINCT FROM true)
         THEN 1 ELSE 0 END), 0)::int AS aprobaron,
         COALESCE(SUM(CASE WHEN
-          ("asistencia" = true OR "asistio" = true)
-          AND "noAprobo" = true
+          (b."asistencia" = true OR b."asistio" = true)
+          AND b."noAprobo" = true
         THEN 1 ELSE 0 END), 0)::int AS "noAprobaron"
-      FROM "ACADEMICA_BOOKINGS"
-      WHERE ${dateWhere}
-        AND COALESCE("tipo", "tipoEvento") = 'SESSION'
-        AND COALESCE("nombreEvento", "step", '') ~* 'step\\s+[0-9]+'
+      FROM "ACADEMICA_BOOKINGS" b
+      LEFT JOIN "ACADEMICA" a ON a."_id" = COALESCE(b."studentId", b."idEstudiante")
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+        AND COALESCE(b."tipo", b."tipoEvento") = 'SESSION'
+        AND COALESCE(b."nombreEvento", b."step", '') ~* 'step\\s+[0-9]+'
         AND ${STEP_EXTRACT} BETWEEN 1 AND 45
         AND ${STEP_EXTRACT} % 5 = 0
-      GROUP BY COALESCE("plataforma", 'Sin plataforma')
+      GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
       ORDER BY total DESC
     `, p), []),
 
     // ── TRAINING: CLUB + nombre empieza con TRAINING…Step ────────────────
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE ${dateWhere}
-        AND COALESCE("tipo", "tipoEvento") = 'CLUB'
-        AND COALESCE("nombreEvento", "step", '') ~* '^TRAINING.*Step'
-      GROUP BY COALESCE("plataforma", 'Sin plataforma')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+        AND COALESCE(b."tipo", b."tipoEvento") = 'CLUB'
+        AND COALESCE(b."nombreEvento", b."step", '') ~* '^TRAINING.*Step'
+      GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
       ORDER BY total DESC
     `, p), []),
 
     // ── CLUBES: CLUB + GRAMMAR/LISTENING/KARAOKE/PRONUNCIATION/CONVERSATION
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE ${dateWhere}
-        AND COALESCE("tipo", "tipoEvento") = 'CLUB'
-        AND COALESCE("nombreEvento", "step", '') ~* '^(GRAMMAR|LISTENING|KARAOKE|PRONUNCIATION|CONVERSATION).*Step'
-      GROUP BY COALESCE("plataforma", 'Sin plataforma')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+        AND COALESCE(b."tipo", b."tipoEvento") = 'CLUB'
+        AND COALESCE(b."nombreEvento", b."step", '') ~* '^(GRAMMAR|LISTENING|KARAOKE|PRONUNCIATION|CONVERSATION).*Step'
+      GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
       ORDER BY total DESC
     `, p), []),
 
     // ── WELCOME: nivel = WELCOME ──────────────────────────────────────────
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE ${dateWhere}
-        AND COALESCE("nivel", '') = 'WELCOME'
-      GROUP BY COALESCE("plataforma", 'Sin plataforma')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+        AND COALESCE(b."nivel", '') = 'WELCOME'
+      GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
       ORDER BY total DESC
     `, p), []),
 
     // ── COMPLEMENTARIAS: tipoEvento = COMPLEMENTARIA ─────────────────────
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE ${dateWhere}
-        AND COALESCE("tipo", "tipoEvento") = 'COMPLEMENTARIA'
-      GROUP BY COALESCE("plataforma", 'Sin plataforma')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+        AND COALESCE(b."tipo", b."tipoEvento") = 'COMPLEMENTARIA'
+      GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
       ORDER BY total DESC
     `, p), []),
   ])

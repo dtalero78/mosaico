@@ -264,6 +264,7 @@ export async function bookEvent(
     celular?: string;
     nivel?: string;
     step?: string;
+    plataforma?: string;
   },
   eventId: string
 ) {
