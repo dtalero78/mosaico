@@ -578,6 +578,33 @@ class BookingRepositoryClass extends BaseRepository {
       [bookingId]
     );
   }
+
+  /**
+   * Count bookings for a student in a specific nivel (for Inicializar Nivel confirmation).
+   */
+  async countByNivelAndStudent(academicaId: string, nivel: string): Promise<number> {
+    const result = await query(
+      `SELECT COUNT(*) AS total FROM "ACADEMICA_BOOKINGS"
+       WHERE ("idEstudiante" = $1 OR "studentId" = $1)
+         AND "nivel" = $2`,
+      [academicaId, nivel]
+    );
+    return parseInt(result.rows[0]?.total || '0', 10);
+  }
+
+  /**
+   * Delete all bookings for a student in a specific nivel (Inicializar Nivel).
+   * Returns the number of deleted rows.
+   */
+  async deleteByNivelAndStudent(academicaId: string, nivel: string): Promise<number> {
+    const result = await query(
+      `DELETE FROM "ACADEMICA_BOOKINGS"
+       WHERE ("idEstudiante" = $1 OR "studentId" = $1)
+         AND "nivel" = $2`,
+      [academicaId, nivel]
+    );
+    return result.rowCount ?? 0;
+  }
 }
 
 export const BookingRepository = new BookingRepositoryClass();

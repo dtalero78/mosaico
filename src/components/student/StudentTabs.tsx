@@ -12,6 +12,7 @@ import StudentWhatsApp from './StudentWhatsApp'
 import StudentComments from './StudentComments'
 import StudentProgress from './StudentProgress'
 import StudentChangeStep from './StudentChangeStep'
+import StudentInicializarNivel from './StudentInicializarNivel'
 
 interface StudentTabsProps {
   student: Student
@@ -33,6 +34,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   const [showAcademicSubmenu, setShowAcademicSubmenu] = useState(false)
   const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null)
   const [showChangeStepModal, setShowChangeStepModal] = useState(false)
+  const [showInicializarModal, setShowInicializarModal] = useState(false)
   const { hasPermission, hasAnyPermission } = usePermissions()
 
   // Control de acceso: usuario necesita al menos uno de los permisos de Steps para ver el botón
@@ -47,6 +49,9 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   // Control de acceso: permiso para cambiar step
   const canChangeStep = hasPermission(StudentPermission.ASIGNAR_STEP)
 
+  // Control de acceso: permiso para inicializar nivel
+  const canInicializarNivel = hasPermission(StudentPermission.INICIALIZAR_NIVEL)
+
   // Filtrar submenu académico basado en permisos
   const academicSubmenu = [
     { id: 'attendance', name: 'Tabla de Asistencia', icon: '📋' },
@@ -54,6 +59,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     { id: 'schedule', name: 'Agendar Nueva Clase', icon: '📅' },
     ...(canAccessSteps ? [{ id: 'steps', name: 'Gestión de Steps', icon: '📊' }] : []),
     ...(canChangeStep ? [{ id: 'change-step', name: 'Cambiar Step', icon: '👣' }] : []),
+    ...(canInicializarNivel ? [{ id: 'inicializar-nivel', name: 'Inicializar Nivel', icon: '🔄' }] : []),
   ]
 
   // Debug: Log student data
@@ -139,7 +145,13 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
                           <button
                             key={item.id}
                             onClick={() => {
-                              // Si es "change-step", abrir modal en lugar de cambiar vista
+                              // Si es "change-step" o "inicializar-nivel", abrir modal en lugar de cambiar vista
+                              if (item.id === 'inicializar-nivel') {
+                                setShowInicializarModal(true)
+                                setShowAcademicSubmenu(false)
+                                if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
+                                return
+                              }
                               if (item.id === 'change-step') {
                                 setShowChangeStepModal(true)
                                 setShowAcademicSubmenu(false)
@@ -210,6 +222,16 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
             // Recargar la página para actualizar los datos
             window.location.reload()
           }}
+        />
+      )}
+
+      {/* Modal Inicializar Nivel */}
+      {showInicializarModal && (
+        <StudentInicializarNivel
+          studentId={student._id}
+          studentName={`${student.primerNombre} ${student.primerApellido}`}
+          onClose={() => setShowInicializarModal(false)}
+          onSuccess={() => window.location.reload()}
         />
       )}
     </div>

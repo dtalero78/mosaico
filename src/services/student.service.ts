@@ -391,3 +391,98 @@ export async function changeStep(
     updatedFields: fieldNames,
   };
 }
+
+/**
+ * GET preflight for Inicializar Nivel:
+ * Returns eligibility status, first step of current nivel, and booking count to delete.
+ */
+export async function getInicializarNivelInfo(academicaId: string) {
+  const academic = await AcademicaRepository.findByAnyIdOrThrow(academicaId);
+  const { done, data } = await AcademicaRepository.getInicializarNivelStatus(academicaId);
+
+  const nivel = academic.nivel;
+  if (!nivel) throw new ValidationError('El estudiante no tiene nivel asignado');
+
+  // Get first step of current nivel from NIVELES (lowest numeric step)
+  const firstStepRow = await queryOne<{ step: string }>(
+    `SELECT "step" FROM "NIVELES"
+     WHERE "code" = $1 AND "step" IS NOT NULL AND "step" != 'WELCOME' AND "step" != 'Step 0'
+     ORDER BY CAST(NULLIF(REGEXP_REPLACE("step", '[^0-9]', '', 'g'), '') AS INTEGER) ASC NULLS LAST
+     LIMIT 1`,
+    [nivel]
+  );
+  const firstStep = firstStepRow?.step || null;
+
+  const bookingCount = await BookingRepository.countByNivelAndStudent(academicaId, nivel);
+
+  return {
+    done,
+    auditData: done ? data?.inicianivel : null,
+    nivel,
+    stepActual: academic.step,
+    firstStep,
+    bookingCount,
+  };
+}
+
+/**
+ * Execute Inicializar Nivel:
+ * 1. Deletes all bookings for current nivel
+ * 2. Resets step to firstStep in ACADEMICA + PEOPLE
+ * 3. Writes audit record
+ */
+export async function inicializarNivel(
+  academicaId: string,
+  motivo: string,
+  autorizadoPor: string,
+  realizadoPor: string
+) {
+  const { done, nivel, stepActual, firstStep, bookingCount } = await getInicializarNivelInfo(academicaId);
+
+  if (done) throw new ValidationError('Este proceso solo puede realizarse una vez por estudiante');
+  if (!firstStep) throw new ValidationError(`No se encontró el primer step del nivel ${nivel}`);
+
+  const academic = await AcademicaRepository.findByAnyIdOrThrow(academicaId);
+  const ahora = new Date().toISOString();
+
+  const auditData = {
+    fecha: ahora,
+    motivo,
+    autorizadoPor,
+    realizadoPor,
+    nivel,
+    stepAnterior: stepActual,
+    stepNuevo: firstStep,
+    bookingsEliminados: bookingCount,
+  };
+
+  // 1. Delete bookings for current nivel
+  const deleted = await BookingRepository.deleteByNivelAndStudent(academicaId, nivel);
+
+  // 2. Reset step in ACADEMICA + write audit
+  await AcademicaRepository.resetNivel(academicaId, firstStep, auditData);
+
+  // 3. Sync PEOPLE (by numeroId, prefer BENEFICIARIO)
+  if (academic.numeroId) {
+    await queryOne(
+      `UPDATE "PEOPLE" SET "step" = $1, "_updatedDate" = NOW()
+       WHERE "numeroId" = $2
+       ORDER BY CASE WHEN "tipoUsuario" = 'BENEFICIARIO' THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [firstStep, academic.numeroId]
+    ).catch(() => null);
+    // PostgreSQL doesn't support ORDER BY on UPDATE directly — use subquery
+    await query(
+      `UPDATE "PEOPLE" SET "step" = $1, "_updatedDate" = NOW()
+       WHERE "_id" = (
+         SELECT "_id" FROM "PEOPLE"
+         WHERE "numeroId" = $2
+         ORDER BY CASE WHEN "tipoUsuario" = 'BENEFICIARIO' THEN 0 ELSE 1 END
+         LIMIT 1
+       )`,
+      [firstStep, academic.numeroId]
+    );
+  }
+
+  return { nivel, stepAnterior: stepActual, stepNuevo: firstStep, bookingsEliminados: deleted, auditData };
+}
