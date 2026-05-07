@@ -12,7 +12,9 @@
       "Bash(git commit -m 'feat: sidebar Informes — filtrar sub-grupos por permiso individual *)",
       "Bash(git commit -m 'fix: actualizar-material — agregar nota de auditoría en subtítulo *)",
       "Bash(git commit -m 'fix: tabla asistencia — resolver nombre del advisor en servidor \\(JOIN ADVISORS\\) en vez de mapa client-side *)",
-      "Bash(git commit -m 'docs: actualizar CLAUDE.md — fix advisor '\\\\''Cargando...'\\\\'' en tabla asistencia \\(8d2e309\\) *)"
+      "Bash(git commit -m 'docs: actualizar CLAUDE.md — fix advisor '\\\\''Cargando...'\\\\'' en tabla asistencia \\(8d2e309\\) *)",
+      "Bash(git commit -m 'feat: Clear Historic — auditoría obligatoria y proceso solo una vez *)",
+      "Bash(git commit -m 'docs: actualizar CLAUDE.md — Clear Historic auditoría \\(5187e0b\\) e Inicializar Nivel ESS/WELCOME/DONE \\(9980581\\) *)"
     ]
   }
 }
