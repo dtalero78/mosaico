@@ -1,7 +1,14 @@
 import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
-import { queryOne, queryMany } from '@/lib/postgres'
+import { query, queryOne, queryMany } from '@/lib/postgres'
 import { ForbiddenError, ValidationError } from '@/lib/errors'
+
+async function ensureClearHistoricColumns() {
+  try {
+    await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "chkclrhistoric" INTEGER`, [])
+    await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "clrhistoric" JSONB`, [])
+  } catch { /* ignore */ }
+}
 
 /** Run a count query — returns 0 on any error (missing table, missing column, etc.) */
 async function safeCount(sql: string, params: any[]): Promise<number> {
@@ -42,10 +49,11 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
   }
 
   // ── ACADEMICA ────────────────────────────────────────────────────────
-  let academicaRows: { _id: string; nivel: string; step: string }[] = []
+  await ensureClearHistoricColumns()
+  let academicaRows: { _id: string; nivel: string; step: string; chkclrhistoric?: number; clrhistoric?: any }[] = []
   try {
     academicaRows = await queryMany(
-      `SELECT "_id", "nivel", "step"
+      `SELECT "_id", "nivel", "step", "chkclrhistoric", "clrhistoric"
        FROM "ACADEMICA"
        WHERE "numeroId" = $1`,
       [numeroId]
@@ -82,6 +90,12 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
 
   const academicaIds = academicaRows.map(r => r._id)
 
+  // Check if clear historic already done (any academica record has chkclrhistoric >= 1)
+  const alreadyDone = academicaRows.some(r => r.chkclrhistoric && r.chkclrhistoric >= 1)
+  const previousAudit = alreadyDone
+    ? (academicaRows.find(r => r.clrhistoric)?.clrhistoric ?? null)
+    : null
+
   // ── Counts (safe — 0 on error) ───────────────────────────────────────
   const bookingsCount = await safeCount(
     `SELECT COUNT(*)::text AS count
@@ -116,6 +130,8 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     nombreCompleto,
     numeroId,
     academicaIds,
+    alreadyDone,
+    previousAudit,
     counts: {
       bookings: bookingsCount,
       complementaria: complementariaCount,

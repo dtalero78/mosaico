@@ -1,6 +1,6 @@
 import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
-import { queryOne } from '@/lib/postgres'
+import { query, queryOne } from '@/lib/postgres'
 import { ForbiddenError, ValidationError } from '@/lib/errors'
 
 /** Run a DELETE CTE and return the deleted count, or 0 if the table doesn't exist */
@@ -22,14 +22,24 @@ export const DELETE = handlerWithAuth(async (req, _ctx, session) => {
   }
 
   const body = await req.json()
-  const { academicaIds, numeroId } = body as { academicaIds?: string[]; numeroId?: string }
+  const { academicaIds, numeroId, motivo, autorizadoPor } = body as {
+    academicaIds?: string[]
+    numeroId?: string
+    motivo?: string
+    autorizadoPor?: string
+  }
 
-  if (!academicaIds || academicaIds.length === 0) {
-    throw new ValidationError('academicaIds es requerido')
-  }
-  if (!numeroId) {
-    throw new ValidationError('numeroId es requerido')
-  }
+  if (!academicaIds || academicaIds.length === 0) throw new ValidationError('academicaIds es requerido')
+  if (!numeroId) throw new ValidationError('numeroId es requerido')
+  if (!motivo?.trim()) throw new ValidationError('El motivo es requerido')
+  if (!autorizadoPor?.trim()) throw new ValidationError('El autorizante es requerido')
+
+  // Validate chkclrhistoric — only allow once
+  const alreadyRow = await queryOne<{ chkclrhistoric: number }>(
+    `SELECT "chkclrhistoric" FROM "ACADEMICA" WHERE "_id" = ANY($1::text[]) AND "chkclrhistoric" >= 1 LIMIT 1`,
+    [academicaIds]
+  ).catch(() => null)
+  if (alreadyRow) throw new ValidationError('Este proceso ya fue ejecutado para este estudiante y solo puede realizarse una vez')
 
   // Delete ACADEMICA_BOOKINGS (excluding WELCOME records)
   const bookingsDeleted = await safeDelete(
@@ -65,6 +75,25 @@ export const DELETE = handlerWithAuth(async (req, _ctx, session) => {
     ) SELECT COUNT(*)::text AS count FROM del`,
     [academicaIds]
   )
+
+  // Write audit to ACADEMICA (chkclrhistoric=1, clrhistoric=JSONB)
+  const auditData = {
+    fecha: new Date().toISOString(),
+    motivo: motivo.trim(),
+    autorizadoPor: autorizadoPor.trim(),
+    realizadoPor: (session.user as any).name || session.user?.email || 'Sistema',
+    bookingsEliminados: bookingsDeleted,
+    complementariasEliminadas: complementariaDeleted,
+    stepOverridesEliminados: stepOverridesDeleted,
+  }
+  await query(
+    `UPDATE "ACADEMICA"
+     SET "chkclrhistoric" = 1,
+         "clrhistoric"    = $1::jsonb,
+         "_updatedDate"   = NOW()
+     WHERE "_id" = ANY($2::text[])`,
+    [JSON.stringify(auditData), academicaIds]
+  ).catch(e => console.warn('[clear-historic] audit write error:', e.message))
 
   return successResponse({
     deleted: {

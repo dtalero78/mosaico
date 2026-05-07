@@ -22,6 +22,8 @@ interface LookupResult {
   nombreCompleto?: string
   numeroId?: string
   academicaIds?: string[]
+  alreadyDone?: boolean
+  previousAudit?: any
   counts?: {
     bookings: number
     complementaria: number
@@ -34,6 +36,8 @@ type StudentStep =
   | 'searching'
   | 'not_found'
   | 'found'
+  | 'blocked'
+  | 'audit'
   | 'confirm1'
   | 'confirm2'
   | 'deleting'
@@ -53,6 +57,9 @@ export default function ClearHistoricPage() {
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null)
   const [deletedCounts, setDeletedCounts] = useState<DeletedCounts | null>(null)
   const [progress, setProgress] = useState(0)
+  const [motivo, setMotivo] = useState('')
+  const [autorizadoPor, setAutorizadoPor] = useState('')
+  const [auditError, setAuditError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   function resetStudent() {
@@ -61,6 +68,9 @@ export default function ClearHistoricPage() {
     setLookupResult(null)
     setDeletedCounts(null)
     setProgress(0)
+    setMotivo('')
+    setAutorizadoPor('')
+    setAuditError('')
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
@@ -74,7 +84,9 @@ export default function ClearHistoricPage() {
       if (!res.ok) throw new Error(data.details || data.error || 'Error al buscar')
       const result: LookupResult = data.data ?? data
       setLookupResult(result)
-      setStep(result.found ? 'found' : 'not_found')
+      if (!result.found)          setStep('not_found')
+      else if (result.alreadyDone) setStep('blocked')
+      else                         setStep('found')
     } catch (err: any) {
       toast.error(err.message || 'Error inesperado')
       setStep('idle')
@@ -104,6 +116,8 @@ export default function ClearHistoricPage() {
         body: JSON.stringify({
           academicaIds: lookupResult.academicaIds,
           numeroId: lookupResult.numeroId,
+          motivo,
+          autorizadoPor,
         }),
       })
       await tick(80)
@@ -213,8 +227,39 @@ export default function ClearHistoricPage() {
             </div>
           )}
 
+          {/* Blocked — ya fue ejecutado */}
+          {step === 'blocked' && lookupResult?.found && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+              <div className="flex items-start gap-3">
+                <ExclamationTriangleIcon className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Proceso no disponible</p>
+                  <p className="text-sm text-amber-700 mt-0.5">
+                    El historial de <strong>{lookupResult.nombreCompleto}</strong> ya fue limpiado anteriormente.
+                    Este proceso solo puede realizarse <strong>una vez</strong> por estudiante.
+                  </p>
+                </div>
+              </div>
+              {lookupResult.previousAudit && (
+                <div className="bg-white rounded-lg p-3 border border-amber-100 text-xs text-gray-600 space-y-1">
+                  <p><span className="font-medium">Fecha:</span> {new Date(lookupResult.previousAudit.fecha).toLocaleString('es-CO')}</p>
+                  <p><span className="font-medium">Motivo:</span> {lookupResult.previousAudit.motivo}</p>
+                  <p><span className="font-medium">Autorizado por:</span> {lookupResult.previousAudit.autorizadoPor}</p>
+                  <p><span className="font-medium">Realizado por:</span> {lookupResult.previousAudit.realizadoPor}</p>
+                  <p><span className="font-medium">Bookings eliminados:</span> {lookupResult.previousAudit.bookingsEliminados}</p>
+                  <p><span className="font-medium">Complementarias eliminadas:</span> {lookupResult.previousAudit.complementariasEliminadas}</p>
+                  <p><span className="font-medium">Step Overrides eliminados:</span> {lookupResult.previousAudit.stepOverridesEliminados}</p>
+                </div>
+              )}
+              <button type="button" onClick={resetStudent}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                Nueva búsqueda
+              </button>
+            </div>
+          )}
+
           {/* Found — counts */}
-          {(step === 'found' || step === 'confirm1' || step === 'confirm2') && lookupResult?.found && (
+          {(step === 'found' || step === 'audit' || step === 'confirm1' || step === 'confirm2') && lookupResult?.found && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
               <div className="flex items-center gap-2">
                 <CheckCircleIcon className="h-5 w-5 text-blue-500" />
@@ -249,7 +294,7 @@ export default function ClearHistoricPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setStep('confirm1')}
+                    onClick={() => { setAuditError(''); setStep('audit') }}
                     className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
                   >
                     <TrashIcon className="h-4 w-4" />
@@ -307,6 +352,66 @@ export default function ClearHistoricPage() {
         </div>
 
       </div>
+
+      {/* Audit modal — captura motivo + autorizadoPor */}
+      {step === 'audit' && lookupResult?.found && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <ExclamationTriangleIcon className="h-6 w-6 text-orange-500" />
+              <h2 className="text-lg font-bold text-gray-900">Datos de auditoría</h2>
+            </div>
+            <p className="text-sm text-gray-600">
+              Complete los datos requeridos para continuar con la limpieza de historial.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Motivo de la limpieza *
+                </label>
+                <textarea
+                  value={motivo}
+                  onChange={e => setMotivo(e.target.value)}
+                  rows={3}
+                  placeholder="Describa el motivo por el cual se limpia el historial..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Autorizado por *
+                </label>
+                <input
+                  type="text"
+                  value={autorizadoPor}
+                  onChange={e => setAutorizadoPor(e.target.value)}
+                  placeholder="Nombre completo de quien autoriza"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+              <div className="bg-gray-50 rounded-lg p-2 text-xs text-gray-500">
+                <span className="font-medium">Fecha y hora:</span>{' '}
+                {new Date().toLocaleString('es-CO')} (se registra al confirmar)
+              </div>
+            </div>
+            {auditError && <p className="text-sm text-red-600">{auditError}</p>}
+            <div className="flex gap-3 justify-end">
+              <button type="button" onClick={() => setStep('found')}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                Atrás
+              </button>
+              <button type="button" onClick={() => {
+                if (!motivo.trim()) { setAuditError('El motivo es requerido'); return }
+                if (!autorizadoPor.trim()) { setAuditError('El autorizante es requerido'); return }
+                setAuditError(''); setStep('confirm1')
+              }}
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700">
+                Ver resumen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation modal — paso 1 */}
       {step === 'confirm1' && lookupResult?.found && (
