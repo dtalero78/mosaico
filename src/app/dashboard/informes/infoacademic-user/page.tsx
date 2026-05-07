@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { exportToExcel } from '@/lib/export-excel'
 import { useSession } from 'next-auth/react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList
 } from 'recharts'
 import { MagnifyingGlassIcon, PrinterIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 
@@ -17,19 +17,40 @@ const NIVEL_COLORS: Record<string,string> = {
   F1:'#f97316',  F2:'#ec4899', F3:'#84cc16',
 }
 
+// ── ISO week → Monday date ─────────────────────────────────────────────────
+function isoWeekToMonday(weekStr: string): Date {
+  const [yearStr, wStr] = weekStr.split('-W')
+  const year = parseInt(yearStr), week = parseInt(wStr)
+  const jan4 = new Date(year, 0, 4)
+  const dow = jan4.getDay() || 7
+  const monday = new Date(jan4)
+  monday.setDate(jan4.getDate() - (dow - 1) + (week - 1) * 7)
+  return monday
+}
+
+function weekLabel(semana: string): string {
+  const d = isoWeekToMonday(semana)
+  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+}
+
 // ── Heatmap helpers ────────────────────────────────────────────────────────
-function HeatmapCell({ count, max }: { count: number; max: number }) {
+function HeatmapCell({ count, max, date }: { count: number; max: number; date: string }) {
   const intensity = max > 0 ? count / max : 0
   const bg = intensity === 0 ? '#f3f4f6'
     : intensity < 0.25 ? '#bfdbfe'
     : intensity < 0.5  ? '#60a5fa'
     : intensity < 0.75 ? '#3b82f6'
     : '#1d4ed8'
+  const label = date
+    ? `${new Date(date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}: ${count} agendamiento(s)`
+    : `${count} agendamientos`
   return (
-    <div title={`${count} agendamientos`}
+    <div title={label}
       style={{ backgroundColor: bg, width: 12, height: 12, borderRadius: 2, margin: 1 }} />
   )
 }
+
+const DAY_LABELS = ['L','M','X','J','V','S','D']
 
 export default function InfoAcademicUserPage() {
   const { data: session } = useSession()
@@ -85,6 +106,12 @@ export default function InfoAcademicUserPage() {
   }
 
   const heatmapMax = data ? Math.max(...(data.heatmap || []).map((h: any) => h.count), 1) : 1
+
+  // Distribución semanal con etiqueta legible y total por semana
+  const distribucionWithLabel = (data?.distribucionSemanal || []).map((d: any) => {
+    const total = NIVEL_ORDER.reduce((s: number, nv: string) => s + (d[nv] || 0), 0)
+    return { ...d, semanaLabel: weekLabel(d.semana), __total__: 0, __totalVal__: total }
+  })
 
   // Build heatmap weeks grid (last 52 weeks)
   const heatmapGrid = (() => {
@@ -289,18 +316,48 @@ export default function InfoAcademicUserPage() {
                 Distribución por Semana — Últimos 3 meses
               </h3>
               <p className="text-xs text-gray-400 mb-4">Agendamientos semanales por nivel</p>
-              {data.distribucionSemanal.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={data.distribucionSemanal} margin={{ top:4, right:12, bottom:0, left:0 }}>
+              {distribucionWithLabel.length > 0 ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={distribucionWithLabel} margin={{ top:20, right:12, bottom:0, left:0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                    <XAxis dataKey="semana" tick={{ fontSize: 10, fill:'#9ca3af' }} />
-                    <YAxis tick={{ fontSize: 10, fill:'#9ca3af' }} width={30} />
-                    <Tooltip />
+                    <XAxis dataKey="semanaLabel" tick={{ fontSize: 10, fill:'#9ca3af' }} />
+                    <YAxis tick={{ fontSize: 10, fill:'#9ca3af' }} width={28} allowDecimals={false} />
+                    <Tooltip
+                      formatter={(value: any, name: string) => [value, name]}
+                      labelFormatter={(label: string, payload: any[]) => {
+                        if (!payload?.length) return label
+                        const semana = payload[0]?.payload?.semana || ''
+                        return `${label}  (${semana})`
+                      }}
+                    />
                     <Legend />
                     {NIVEL_ORDER.filter(nv =>
-                      data.distribucionSemanal.some((d: any) => d[nv])
-                    ).map(nv => (
-                      <Bar key={nv} dataKey={nv} stackId="a" fill={NIVEL_COLORS[nv] || '#9ca3af'} maxBarSize={30} />
+                      distribucionWithLabel.some((d: any) => d[nv])
+                    ).map((nv, idx, arr) => (
+                      <Bar key={nv} dataKey={nv} stackId="a" fill={NIVEL_COLORS[nv] || '#9ca3af'} maxBarSize={36}>
+                        {idx === arr.length - 1 && (
+                          <LabelList
+                            content={(props: any) => {
+                              const { x, y, width, index } = props
+                              const total = distribucionWithLabel[index]?.__totalVal__ || 0
+                              if (!total) return null
+                              return (
+                                <text
+                                  key={index}
+                                  x={(x || 0) + (width || 0) / 2}
+                                  y={(y || 0) - 5}
+                                  textAnchor="middle"
+                                  fontSize={10}
+                                  fontWeight={600}
+                                  fill="#374151"
+                                >
+                                  {total}
+                                </text>
+                              )
+                            }}
+                          />
+                        )}
+                      </Bar>
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
@@ -314,31 +371,44 @@ export default function InfoAcademicUserPage() {
               <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-1">Progreso del Programa</h3>
               <p className="text-xs text-gray-400 mb-5">Avance por nivel · basado en 12 meses total</p>
               <div className="space-y-3">
-                {data.progresaPrograma.map((p: any) => (
-                  <div key={p.nivel} className="flex items-center gap-3">
-                    <span className="text-xs font-semibold w-8 flex-shrink-0" style={{ color: NIVEL_COLORS[p.nivel] || '#6b7280' }}>
-                      {p.nivel}
-                    </span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden relative">
-                      <div className="h-5 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
-                        style={{
-                          width: p.pct > 0 ? `${Math.max(p.pct, 3)}%` : '0%',
-                          backgroundColor: NIVEL_COLORS[p.nivel] || '#9ca3af',
-                        }}>
-                        {p.pct > 15 && <span className="text-white text-xs font-semibold">{p.pct}%</span>}
+                {data.progresaPrograma.map((p: any) => {
+                  const barPct = Math.min(p.pct, 100)
+                  const displayPct = p.pct
+                  return (
+                    <div key={p.nivel} className="flex items-center gap-3">
+                      <span className="text-xs font-semibold w-8 flex-shrink-0" style={{ color: NIVEL_COLORS[p.nivel] || '#6b7280' }}>
+                        {p.nivel}
+                      </span>
+                      <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden relative">
+                        <div className="h-5 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                          style={{
+                            width: barPct > 0 ? `${Math.max(barPct, 3)}%` : '0%',
+                            backgroundColor: NIVEL_COLORS[p.nivel] || '#9ca3af',
+                          }}>
+                          {barPct > 18 && (
+                            <span className="text-white text-xs font-semibold">{displayPct}%</span>
+                          )}
+                        </div>
+                        {barPct <= 18 && barPct > 0 && (
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-700">{displayPct}%</span>
+                        )}
                       </div>
-                      {p.pct <= 15 && p.pct > 0 && (
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-700">{p.pct}%</span>
-                      )}
+                      <div className="text-xs text-gray-500 w-52 flex-shrink-0">
+                        {p.hasData ? (
+                          <span>
+                            <span className="font-medium text-gray-700">{p.sesionesEfectivas}</span> ses
+                            <span className="mx-1 text-gray-300">·</span>
+                            <span className="font-medium text-gray-700">{p.completedSteps}/{p.totalSteps}</span> steps
+                            <span className="mx-1 text-gray-300">·</span>
+                            <span className="font-medium text-gray-700">{p.diasEnNivel}</span> días
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">Sin datos</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 w-36 flex-shrink-0">
-                      {p.hasData
-                        ? `${p.completedSteps}/${p.totalSteps} steps · ${p.diasEnNivel}d`
-                        : <span className="text-gray-300">Sin datos</span>
-                      }
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
               <div className="mt-4 pt-3 border-t border-gray-100 flex gap-6 text-xs text-gray-500">
                 <span>Nivel más agendado: <strong className="text-gray-700">{data.nivelMasAgendado}</strong></span>
@@ -353,18 +423,55 @@ export default function InfoAcademicUserPage() {
               <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-1">Mapa de Calor — Actividad</h3>
               <p className="text-xs text-gray-400 mb-4">Últimas 52 semanas · cada celda = 1 día</p>
               <div className="overflow-x-auto">
-                <div className="flex gap-0.5">
-                  {heatmapGrid.map((week, wi) => (
-                    <div key={wi} className="flex flex-col gap-0.5">
-                      {week.days.map((day, di) => (
-                        <HeatmapCell key={di} count={day.count} max={heatmapMax} />
+                <div className="flex gap-0">
+                  {/* Columna etiquetas días */}
+                  <div className="flex flex-col mr-1" style={{ marginTop: 18 }}>
+                    {DAY_LABELS.map((d, i) => (
+                      <div key={i} style={{ width: 14, height: 14, display: 'flex', alignItems: 'center' }}>
+                        {[0, 2, 4].includes(i) && (
+                          <span style={{ fontSize: 9, color: '#9ca3af', lineHeight: 1 }}>{d}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Semanas: mes encima + celdas */}
+                  <div>
+                    {/* Fila etiquetas de mes */}
+                    <div className="flex gap-0.5 mb-0.5" style={{ height: 16 }}>
+                      {heatmapGrid.map((week, wi) => {
+                        const mon = new Date(week.week + 'T12:00:00')
+                        const prevMon = wi > 0 ? new Date(heatmapGrid[wi - 1].week + 'T12:00:00') : null
+                        const showMonth = !prevMon || mon.getMonth() !== prevMon.getMonth()
+                        return (
+                          <div key={wi} style={{ width: 14, flexShrink: 0 }}>
+                            {showMonth && (
+                              <span style={{ fontSize: 9, color: '#6b7280', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                                {mon.toLocaleDateString('es-CO', { month: 'short' })}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Celdas */}
+                    <div className="flex gap-0.5">
+                      {heatmapGrid.map((week, wi) => (
+                        <div key={wi} className="flex flex-col gap-0.5">
+                          {week.days.map((day, di) => (
+                            <HeatmapCell key={di} count={day.count} max={heatmapMax} date={day.date} />
+                          ))}
+                        </div>
                       ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
+
+                {/* Leyenda */}
                 <div className="flex items-center gap-2 mt-3 text-xs text-gray-400">
                   <span>Menos</span>
-                  {['#f3f4f6','#bfdbfe','#60a5fa','#3b82f6','#1d4ed8'].map((c,i) => (
+                  {['#f3f4f6','#bfdbfe','#60a5fa','#3b82f6','#1d4ed8'].map((c, i) => (
                     <div key={i} style={{ backgroundColor: c, width: 12, height: 12, borderRadius: 2 }} />
                   ))}
                   <span>Más</span>

@@ -142,7 +142,11 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
 
     const pct = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0
 
-    return { nivel: nv, totalSteps, completedSteps, diasEnNivel, pct, hasData: nivelBookings.length > 0 }
+    return {
+      nivel: nv, totalSteps, completedSteps, diasEnNivel, pct,
+      sesionesEfectivas: nivelBookings.length,
+      hasData: nivelBookings.length > 0,
+    }
   })
 
   // ── Heatmap — bookings grouped by date ─────────────────────────────────
