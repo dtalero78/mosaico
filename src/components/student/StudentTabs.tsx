@@ -13,6 +13,7 @@ import StudentComments from './StudentComments'
 import StudentProgress from './StudentProgress'
 import StudentChangeStep from './StudentChangeStep'
 import StudentInicializarNivel from './StudentInicializarNivel'
+import StudentCambioStepAuditado from './StudentCambioStepAuditado'
 
 interface StudentTabsProps {
   student: Student
@@ -35,6 +36,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null)
   const [showChangeStepModal, setShowChangeStepModal] = useState(false)
   const [showInicializarModal, setShowInicializarModal] = useState(false)
+  const [showCambioStepAuditadoModal, setShowCambioStepAuditadoModal] = useState(false)
   const { hasPermission, hasAnyPermission } = usePermissions()
 
   // Control de acceso: usuario necesita al menos uno de los permisos de Steps para ver el botón
@@ -58,7 +60,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     ...(canAccessProgress ? [{ id: 'progress', name: '¿Cómo voy?', icon: '📈' }] : []),
     { id: 'schedule', name: 'Agendar Nueva Clase', icon: '📅' },
     ...(canAccessSteps ? [{ id: 'steps', name: 'Gestión de Steps', icon: '📊' }] : []),
-    ...(canChangeStep ? [{ id: 'change-step', name: 'Cambiar Step', icon: '👣' }] : []),
+    ...(canChangeStep ? [{ id: 'cambio-step-auditado', name: 'Cambiar Step', icon: '👣' }] : []),
     ...(canInicializarNivel ? [{ id: 'inicializar-nivel', name: 'Inicializar Nivel', icon: '🔄' }] : []),
   ]
 
@@ -152,6 +154,12 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
                                 if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
                                 return
                               }
+                              if (item.id === 'cambio-step-auditado') {
+                                setShowCambioStepAuditadoModal(true)
+                                setShowAcademicSubmenu(false)
+                                if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
+                                return
+                              }
                               if (item.id === 'change-step') {
                                 setShowChangeStepModal(true)
                                 setShowAcademicSubmenu(false)
@@ -231,6 +239,18 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
           studentId={student._id}
           studentName={`${student.primerNombre} ${student.primerApellido}`}
           onClose={() => setShowInicializarModal(false)}
+          onSuccess={() => window.location.reload()}
+        />
+      )}
+
+      {/* Modal Cambio Step Auditado */}
+      {showCambioStepAuditadoModal && (
+        <StudentCambioStepAuditado
+          studentId={student._id}
+          studentName={`${student.primerNombre} ${student.primerApellido}`}
+          currentStep={student.step || 'Sin step'}
+          currentNivel={student.nivel || 'Sin nivel'}
+          onClose={() => setShowCambioStepAuditadoModal(false)}
           onSuccess={() => window.location.reload()}
         />
       )}

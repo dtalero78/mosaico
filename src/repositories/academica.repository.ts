@@ -195,6 +195,30 @@ class AcademicaRepositoryClass extends BaseRepository {
   }
 
   /**
+   * Ensure cambioStepHistory column exists (idempotent).
+   */
+  async ensureCambioStepHistoryColumn() {
+    const { query: q } = await import('@/lib/postgres');
+    await q(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "cambioStepHistory" JSONB`, []);
+  }
+
+  /**
+   * Append an audit entry to ACADEMICA.cambioStepHistory.
+   */
+  async saveCambioStepHistory(academicaId: string, entry: Record<string, any>) {
+    await this.ensureCambioStepHistoryColumn();
+    const { queryOne: qOne } = await import('@/lib/postgres');
+    return qOne(
+      `UPDATE "ACADEMICA"
+       SET "cambioStepHistory" = COALESCE("cambioStepHistory", '[]'::jsonb) || $1::jsonb,
+           "_updatedDate" = NOW()
+       WHERE "_id" = $2
+       RETURNING "_id", "nivel", "step", "cambioStepHistory"`,
+      [JSON.stringify([entry]), academicaId]
+    );
+  }
+
+  /**
    * Ensure inicianivel/checkinicianivel columns exist (idempotent).
    * Called once before the first use of Inicializar Nivel.
    */
