@@ -37,7 +37,9 @@
       "Bash(git commit -m 'feat: tarjetas Tab Contrato con datos reales de ACADEMICA *)",
       "Bash(git commit -m 'docs: actualizar CLAUDE.md — tarjetas audit Tab Contrato \\(29bdf7c\\) *)",
       "Bash(git commit -m 'fix: Cambiar Step — corregir formato step enviado a los endpoints *)",
-      "Bash(git commit -m 'docs: actualizar CLAUDE.md — fix Step Step N en Cambiar Step \\(ead90d4\\) *)"
+      "Bash(git commit -m 'docs: actualizar CLAUDE.md — fix Step Step N en Cambiar Step \\(ead90d4\\) *)",
+      "Bash(git commit -m 'fix: student-setup — boton '\\\\''Mas tarde'\\\\'' no navegaba por cache RSC del layout *)",
+      "Bash(git commit -m 'docs: actualizar CLAUDE.md — fix student-setup Mas tarde loop \\(6d282ac\\) *)"
     ]
   }
 }
