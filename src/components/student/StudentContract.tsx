@@ -362,8 +362,8 @@ export default function StudentContract({ student, contratoFinalizado = false }:
 
         <p className="text-sm text-gray-700 leading-relaxed">
           El titular del contrato{' '}
-          <strong className="text-gray-900">
-            {titularNombre || 'Patricio Donoso'}
+          <strong className={titularNombre ? 'text-gray-900' : 'text-gray-400 italic'}>
+            {titularNombre || 'SIN TITULAR'}
           </strong>{' '}
           es el responsable financiero de la educación de{' '}
           <strong className="text-gray-900 uppercase">
