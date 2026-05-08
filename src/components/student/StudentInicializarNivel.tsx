@@ -78,7 +78,7 @@ export default function StudentInicializarNivel({ studentId, studentName, onClos
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <ExclamationTriangleIcon className="w-5 h-5 text-orange-500" />
-            <h2 className="text-base font-semibold text-gray-900">Inicializar Nivel</h2>
+            <h2 className="text-base font-semibold text-gray-900">Reiniciar Nivel</h2>
           </div>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <XMarkIcon className="w-5 h-5" />
@@ -100,7 +100,7 @@ export default function StudentInicializarNivel({ studentId, studentName, onClos
                 <div>
                   <p className="font-semibold text-amber-800">Nivel no permitido</p>
                   <p className="text-sm text-amber-700 mt-1">
-                    El proceso <strong>Inicializar Nivel</strong> no está disponible para estudiantes en nivel{' '}
+                    El proceso <strong>Reiniciar Nivel</strong> no está disponible para estudiantes en nivel{' '}
                     <strong className="uppercase">{info.nivel}</strong>.
                   </p>
                   <p className="text-sm text-amber-600 mt-2">

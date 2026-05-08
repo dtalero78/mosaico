@@ -319,7 +319,7 @@ export default function StudentContract({ student, contratoFinalizado = false }:
         />
       </div>
 
-      {/* ── Fila 2: 3 tarjetas (Diagnóstico | Inicialización | Borrado) ── */}
+      {/* ── Fila 2: 3 tarjetas (Diagnóstico | Reiniciar Nivel | Borrado) ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <PlaceholderCard
           icon={ChartBarIcon}
@@ -330,7 +330,7 @@ export default function StudentContract({ student, contratoFinalizado = false }:
         />
         <PlaceholderCard
           icon={ArrowPathIcon}
-          title="Inicialización Nivel"
+          title="Reiniciar Nivel"
           iconColor="text-orange-600"
           bgColor="bg-orange-50"
           borderColor="border-orange-200"
