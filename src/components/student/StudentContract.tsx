@@ -132,6 +132,7 @@ export default function StudentContract({ student, contratoFinalizado = false }:
   const [showExtensionHistory, setShowExtensionHistory] = useState(false)
   const [agendamientos, setAgendamientos] = useState<UltimosAgendamientos | null>(null)
   const [loadingAgend, setLoadingAgend] = useState(true)
+  const [titularNombre, setTitularNombre] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -144,6 +145,24 @@ export default function StudentContract({ student, contratoFinalizado = false }:
     }
     load()
   }, [student._id])
+
+  // Cargar nombre del titular desde PEOPLE usando titularId o contrato
+  useEffect(() => {
+    const loadTitular = async () => {
+      const titularId = (student as any).titularId
+      if (!titularId) return
+      try {
+        const res = await fetch(`/api/postgres/people/${titularId}`)
+        const json = await res.json()
+        if (json.success && json.person) {
+          const p = json.person
+          const nombre = [p.primerNombre, p.primerApellido].filter(Boolean).join(' ')
+          if (nombre) setTitularNombre(nombre)
+        }
+      } catch { /* silencioso */ }
+    }
+    loadTitular()
+  }, [(student as any).titularId])
 
   const handleExtendVigencia = async () => {
     if (!nuevaFechaFinal) {
@@ -323,6 +342,60 @@ export default function StudentContract({ student, contratoFinalizado = false }:
               />
             </div>
           )}
+        </div>
+      </div>
+
+      {/* ── Tarjeta: Relación con el Estudiante ────────────────────────── */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+          Relación con el Estudiante
+        </h3>
+
+        {/* Texto principal */}
+        <p className="text-sm text-gray-700 leading-relaxed">
+          El titular del contrato{' '}
+          <strong className="text-gray-900">
+            {titularNombre || 'Patricio Donoso'}
+          </strong>{' '}
+          es el responsable financiero de la educación de{' '}
+          <strong className="text-gray-900 uppercase">
+            {student.primerNombre} {student.primerApellido}
+          </strong>.
+        </p>
+
+        {/* Datos del contrato */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-gray-50 rounded-lg px-4 py-3">
+            <p className="text-xs font-medium text-gray-500 mb-0.5">Contrato</p>
+            <p className="text-sm font-semibold text-gray-900">{student.contrato || '—'}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg px-4 py-3">
+            <p className="text-xs font-medium text-gray-500 mb-0.5">Fecha inicial</p>
+            <p className="text-sm font-semibold text-gray-900">
+              {(student as any).fechaContrato
+                ? new Date((student as any).fechaContrato).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                : '—'}
+            </p>
+          </div>
+          <div className="bg-gray-50 rounded-lg px-4 py-3">
+            <p className="text-xs font-medium text-gray-500 mb-0.5">Vigencia (fecha final)</p>
+            <p className={`text-sm font-semibold ${
+              student.finalContrato
+                ? (new Date(student.finalContrato) < new Date() ? 'text-red-600' : 'text-gray-900')
+                : 'text-gray-900'
+            }`}>
+              {student.finalContrato
+                ? new Date(student.finalContrato).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                : '—'}
+            </p>
+          </div>
+          <div className="bg-gray-50 rounded-lg px-4 py-3">
+            <p className="text-xs font-medium text-gray-500 mb-0.5">Beneficiario</p>
+            <p className="text-sm font-semibold text-gray-900 uppercase">
+              {student.primerNombre} {student.primerApellido}
+            </p>
+            <p className="text-xs text-gray-500">ID: {student.numeroId}</p>
+          </div>
         </div>
       </div>
 
