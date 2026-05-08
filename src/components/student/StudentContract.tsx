@@ -146,23 +146,39 @@ export default function StudentContract({ student, contratoFinalizado = false }:
     load()
   }, [student._id])
 
-  // Cargar nombre del titular desde PEOPLE usando titularId o contrato
+  // Cargar nombre del titular: 1° por titularId, 2° por contrato (fallback para datos Wix)
   useEffect(() => {
     const loadTitular = async () => {
+      // Intento 1: titularId directo (PEOPLE _id)
       const titularId = (student as any).titularId
-      if (!titularId) return
-      try {
-        const res = await fetch(`/api/postgres/people/${titularId}`)
-        const json = await res.json()
-        if (json.success && json.person) {
-          const p = json.person
-          const nombre = [p.primerNombre, p.primerApellido].filter(Boolean).join(' ')
-          if (nombre) setTitularNombre(nombre)
-        }
-      } catch { /* silencioso */ }
+      if (titularId) {
+        try {
+          const res = await fetch(`/api/postgres/people/${titularId}`)
+          const json = await res.json()
+          if (json.success && json.person) {
+            const p = json.person
+            const nombre = [p.primerNombre, p.primerApellido].filter(Boolean).join(' ')
+            if (nombre) { setTitularNombre(nombre); return }
+          }
+        } catch { /* continuar con intento 2 */ }
+      }
+
+      // Intento 2: buscar TITULAR por número de contrato (fallback datos Wix)
+      if (student.contrato) {
+        try {
+          const res = await fetch(`/api/postgres/contracts/search?pattern=${encodeURIComponent(student.contrato)}&exact=true`)
+          const json = await res.json()
+          const contract = json.contracts?.[0]
+          if (contract?.titular) {
+            const t = contract.titular
+            const nombre = [t.primerNombre, t.primerApellido].filter(Boolean).join(' ')
+            if (nombre) setTitularNombre(nombre)
+          }
+        } catch { /* silencioso — usará fallback */ }
+      }
     }
     loadTitular()
-  }, [(student as any).titularId])
+  }, [(student as any).titularId, student.contrato])
 
   const handleExtendVigencia = async () => {
     if (!nuevaFechaFinal) {
