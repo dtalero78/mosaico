@@ -27,7 +27,9 @@
       "Bash(git commit -m 'fix: SUPER_ADMIN y ADMIN pueden extender vigencia aunque contrato esté Finalizado *)",
       "Bash(git commit -m 'fix: Días restantes en Extensión de Vigencia — vigencia llega como string desde API \\(COALESCE ::text cast\\); usa Number\\(\\) en vez de typeof === '\\\\''number'\\\\'' *)",
       "Bash(git commit -m 'fix: Extender Vigencia habilitado para cualquier rol con permiso EXTENDER_VIGENCIA sin restriccion contratoFinalizado; fix TS errors canOnHold/vigencia *)",
-      "Bash(git commit -m 'docs: actualizar CLAUDE.md — permisos Extender Vigencia, usePermissions SUPER_ADMIN, fix dias restantes \\(ff150a6, 4b0efbf, f3a16ca, d1ab7b3, 223e457\\) *)"
+      "Bash(git commit -m 'docs: actualizar CLAUDE.md — permisos Extender Vigencia, usePermissions SUPER_ADMIN, fix dias restantes \\(ff150a6, 4b0efbf, f3a16ca, d1ab7b3, 223e457\\) *)",
+      "Bash(git commit -m 'feat: Cambio Step Auditado — modal 3 pasos con auditoría en ACADEMICA y comentario en PEOPLE *)",
+      "Bash(git commit -m 'docs: actualizar CLAUDE.md — Cambio Step Auditado \\(cc7f449\\) *)"
     ]
   }
 }
