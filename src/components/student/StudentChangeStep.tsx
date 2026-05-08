@@ -53,9 +53,10 @@ export default function StudentChangeStep({
           data.niveles.forEach((nivel: any) => {
             if (nivel.steps && Array.isArray(nivel.steps)) {
               nivel.steps.forEach((step: string) => {
-                if (!allSteps.find(s => s.value === step)) {
-                  const numero = step.replace(/[^0-9]/g, '');
-                  allSteps.push({ label: `${nivel.code} — ${step}`, value: step, numero });
+                // value = número puro (ej: "35") — el endpoint PUT /step agrega "Step " automáticamente
+                const numero = step.replace(/[^0-9]/g, '');
+                if (numero && !allSteps.find(s => s.numero === numero)) {
+                  allSteps.push({ label: `${nivel.code} — ${step}`, value: numero, numero });
                 }
               });
             }
@@ -88,17 +89,18 @@ export default function StudentChangeStep({
       let response: Response;
 
       if (auditMode) {
-        // ── Modo auditado: guarda auditoría + comentario ──────────────────
+        // ── Modo auditado: envía nombre completo "Step N" al endpoint auditado
+        // que llama changeStep() directamente (sin prefijo adicional)
         response = await fetch(
           `/api/postgres/students/${encodeURIComponent(studentId)}/cambio-step-auditado`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ newStep: selectedStep, motivo, autorizadoPor, comentario }),
+            body: JSON.stringify({ newStep: `Step ${selectedStep}`, motivo, autorizadoPor, comentario }),
           }
         );
       } else {
-        // ── Modo simple: igual que antes ──────────────────────────────────
+        // ── Modo simple: envía solo el número; el endpoint PUT /step agrega "Step " automáticamente
         response = await fetch(
           `/api/postgres/students/${encodeURIComponent(studentId)}/step`,
           {
