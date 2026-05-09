@@ -1570,6 +1570,7 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `ab1bb23` | feat: panel-estudiante — botón **Perfil** en navbar (después de Instructivos); modal muestra avatar con foto/iniciales, nombre completo, badge nivel/step y campos: numeroId, email, celular, fechaNacimiento, domicilio, ciudad, plataforma; icono `UserCircleIcon` |
 | `55ea3a4` | fix: Reiniciar Nivel — agrega comentario a `PEOPLE.comentarios` con `areaRemitente='Académico'` / `areaDestinatario='General'` al ejecutar `inicializarNivel()`; mismo patrón que Cambio Step Auditado; texto: `[Reiniciar Nivel] {nivel}, {stepAnterior} → {stepNuevo}. {motivo}. Autorizado por: {autorizadoPor}` |
 | `f90c5dc` | fix: deshabilitar redirección student-setup — `panel-estudiante/layout.tsx` reducido a pass-through; estudiantes acceden directamente al panel sin solicitud de actualización de datos al login |
 | `2c96056` | feat: sidebar Mantenimiento — ahora visible para roles con `MantenimientoPermission` (ej: `MIGRAR_CONTRATO`); SUPER_ADMIN no se ve afectado (sale en primer check); no-SUPER_ADMIN con permiso ve solo los ítems que tiene permiso (Migrar Contrato); resto de Mantenimiento (Permisos, Avisos, Juegos, Material) permanece SUPER_ADMIN only |
