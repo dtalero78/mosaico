@@ -38,8 +38,7 @@ type StudentStep =
   | 'found'
   | 'blocked'
   | 'audit'
-  | 'confirm1'
-  | 'confirm2'
+  | 'confirm'
   | 'deleting'
   | 'done'
 
@@ -128,7 +127,7 @@ export default function ClearHistoricPage() {
       setStep('done')
     } catch (err: any) {
       toast.error(err.message || 'Error inesperado')
-      setStep('found')
+      setStep('confirm')
       setProgress(0)
     }
   }
@@ -259,7 +258,7 @@ export default function ClearHistoricPage() {
           )}
 
           {/* Found — counts */}
-          {(step === 'found' || step === 'audit' || step === 'confirm1' || step === 'confirm2') && lookupResult?.found && (
+          {(step === 'found' || step === 'audit' || step === 'confirm') && lookupResult?.found && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
               <div className="flex items-center gap-2">
                 <CheckCircleIcon className="h-5 w-5 text-blue-500" />
@@ -403,7 +402,7 @@ export default function ClearHistoricPage() {
               <button type="button" onClick={() => {
                 if (!motivo.trim()) { setAuditError('El motivo es requerido'); return }
                 if (!autorizadoPor.trim()) { setAuditError('El autorizante es requerido'); return }
-                setAuditError(''); setStep('confirm1')
+                setAuditError(''); setStep('confirm')
               }}
                 className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700">
                 Ver resumen
@@ -413,70 +412,45 @@ export default function ClearHistoricPage() {
         </div>
       )}
 
-      {/* Confirmation modal — paso 1 */}
-      {step === 'confirm1' && lookupResult?.found && (
+      {/* Resumen y confirmación final — mismo estilo que Reiniciar Nivel */}
+      {step === 'confirm' && lookupResult?.found && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center gap-3">
               <ExclamationTriangleIcon className="h-6 w-6 text-red-500" />
-              <h2 className="text-lg font-bold text-gray-900">¿Está seguro?</h2>
+              <h2 className="text-lg font-bold text-gray-900">Resumen de la acción</h2>
             </div>
-            <p className="text-sm text-gray-600">
-              Está a punto de borrar el historial académico de:
-            </p>
-            <div className="bg-gray-50 rounded-lg p-3 text-sm">
-              <p className="font-semibold text-gray-900">{lookupResult.nombreCompleto}</p>
-              <p className="text-gray-500">N° Documento: {lookupResult.numeroId}</p>
-            </div>
-            <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
-              Se eliminarán <strong>{totalCount}</strong> registros en total.
-              Esta acción es <strong>irreversible</strong>.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setStep('found')}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                No, cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep('confirm2')}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-              >
-                Sí, continuar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Confirmation modal — paso 2 final */}
-      {step === 'confirm2' && lookupResult?.found && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <ExclamationTriangleIcon className="h-6 w-6 text-red-500" />
-              <h2 className="text-lg font-bold text-gray-900">Confirmación final</h2>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2 text-sm">
+              <p className="font-semibold text-gray-800 text-base">Borrado Histórico</p>
+              <div className="space-y-1 text-gray-700">
+                <p>👤 Estudiante: <strong>{lookupResult.nombreCompleto}</strong></p>
+                <p>🪪 N° Documento: <strong>{lookupResult.numeroId}</strong></p>
+                <p>🗑 Bookings a eliminar: <strong className="text-red-600">{lookupResult.counts?.bookings ?? 0}</strong></p>
+                <p>📋 Complementarias a eliminar: <strong className="text-red-600">{lookupResult.counts?.complementaria ?? 0}</strong></p>
+                <p>🔧 Step Overrides a eliminar: <strong className="text-red-600">{lookupResult.counts?.stepOverrides ?? 0}</strong></p>
+                <p>📝 Motivo: {motivo}</p>
+                <p>✅ Autorizado por: {autorizadoPor}</p>
+              </div>
             </div>
-            <p className="text-sm text-red-700 bg-red-50 p-3 rounded-lg">
-              Se dispone a <strong>borrar el registro académico</strong> del usuario:{' '}
-              <strong>{lookupResult.nombreCompleto}</strong> (ID: {lookupResult.numeroId}).
-              Esta operación no se puede deshacer.
-            </p>
-            <div className="flex gap-3 justify-end">
+
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+              <strong>¡Atención!</strong> Esta acción es <strong>irreversible</strong> y no podrá repetirse.
+              ¿Confirma que desea continuar?
+            </div>
+
+            <div className="flex justify-between">
               <button
                 type="button"
-                onClick={() => setStep('found')}
+                onClick={() => setStep('audit')}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                Cancelar
+                Atrás
               </button>
               <button
                 type="button"
                 onClick={handleDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-700 rounded-lg hover:bg-red-800"
+                className="px-5 py-2 text-sm font-medium text-white bg-red-700 rounded-lg hover:bg-red-800"
               >
                 Confirmar y borrar
               </button>

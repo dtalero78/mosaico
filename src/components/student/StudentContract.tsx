@@ -405,14 +405,14 @@ export default function StudentContract({ student, contratoFinalizado = false }:
             </div>
           ) : (
             <div className="bg-white/80 rounded-lg px-3 py-2 text-xs space-y-1">
-              <p className="font-medium text-gray-800">
-                Bookings: <strong>{auditData.clrhistoric.bookingsEliminados}</strong>
-                {auditData.clrhistoric.complementariasEliminadas > 0 && (
-                  <span className="ml-2">· Compl: <strong>{auditData.clrhistoric.complementariasEliminadas}</strong></span>
-                )}
-                {auditData.clrhistoric.stepOverridesEliminados > 0 && (
-                  <span className="ml-2">· Overrides: <strong>{auditData.clrhistoric.stepOverridesEliminados}</strong></span>
-                )}
+              <p className="text-gray-600">
+                Bookings eliminados: <strong>{auditData.clrhistoric.bookingsEliminados ?? 0}</strong>
+              </p>
+              <p className="text-gray-600">
+                Complementarias eliminadas: <strong>{auditData.clrhistoric.complementariasEliminadas ?? 0}</strong>
+              </p>
+              <p className="text-gray-600">
+                Step Overrides eliminados: <strong>{auditData.clrhistoric.stepOverridesEliminados ?? 0}</strong>
               </p>
               <p className="text-gray-600 flex items-center gap-1">
                 <UserCircleIcon className="w-3 h-3" /> {auditData.clrhistoric.autorizadoPor || '—'}

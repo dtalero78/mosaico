@@ -2,6 +2,7 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { query, queryOne } from '@/lib/postgres'
 import { ForbiddenError, ValidationError } from '@/lib/errors'
+import { PeopleRepository } from '@/repositories/people.repository'
 
 /** Run a DELETE CTE and return the deleted count, or 0 if the table doesn't exist */
 async function safeDelete(sql: string, params: any[]): Promise<number> {
@@ -94,6 +95,20 @@ export const DELETE = handlerWithAuth(async (req, _ctx, session) => {
      WHERE "_id" = ANY($2::text[])`,
     [JSON.stringify(auditData), academicaIds]
   ).catch(e => console.warn('[clear-historic] audit write error:', e.message))
+
+  // Agregar comentario a PEOPLE.comentarios (Académico → General)
+  const person = await PeopleRepository.findBeneficiarioByNumeroId(numeroId).catch(() => null)
+  if (person) {
+    const commentObj = {
+      id: `comment_${Date.now()}`,
+      texto: `[Borrado Histórico] Bookings: ${bookingsDeleted}, Complementarias: ${complementariaDeleted}, Step Overrides: ${stepOverridesDeleted}. ${motivo.trim()}. Autorizado por: ${autorizadoPor.trim()}`,
+      usuario: auditData.realizadoPor,
+      fecha: auditData.fecha,
+      areaRemitente: 'Académico',
+      areaDestinatario: 'General',
+    }
+    await PeopleRepository.appendComment(person._id, JSON.stringify(commentObj)).catch(() => null)
+  }
 
   return successResponse({
     deleted: {
