@@ -1570,6 +1570,7 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `f90c5dc` | fix: deshabilitar redirección student-setup — `panel-estudiante/layout.tsx` reducido a pass-through; estudiantes acceden directamente al panel sin solicitud de actualización de datos al login |
 | `2c96056` | feat: sidebar Mantenimiento — ahora visible para roles con `MantenimientoPermission` (ej: `MIGRAR_CONTRATO`); SUPER_ADMIN no se ve afectado (sale en primer check); no-SUPER_ADMIN con permiso ve solo los ítems que tiene permiso (Migrar Contrato); resto de Mantenimiento (Permisos, Avisos, Juegos, Material) permanece SUPER_ADMIN only |
 | `6d282ac` | fix: student-setup — botón "Más tarde" quedaba en loop porque `router.push()` reutilizaba respuesta RSC cacheada del redirect del layout; cambiado a `window.location.href` para forzar request HTTP fresco con la cookie `student_setup_skipped=1`; agrega estado visual "Redirigiendo..." |
 | `ead90d4` | fix: Cambiar Step — corregir "Step Step N" error; `PUT /step` espera número puro y agrega "Step " internamente (`Step ${newStep}`); modo simple envía `"35"`, modo auditado envía `"Step 35"` a `/cambio-step-auditado` que llama `changeStep()` directamente sin prefijo adicional |
