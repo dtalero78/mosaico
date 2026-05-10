@@ -220,7 +220,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
   }
 
   // ── Charts ────────────────────────────────────────────────────────────────
-  const charts = {
+  const charts: Record<string, unknown> = {
     eventosPorTipo:        groupBy(rows, r => r.tipoDerivado),
     clubsPorTipo:          buildClubsPorTipo(rows),
     eventosPorNivel:       groupBy(rows, r => r.nivel || 'Sin nivel'),
@@ -228,6 +228,22 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
     asistenciaVsInscritos: buildTimeSeries(rows),
     rankingAdvisors:       groupBy(rows, r => r.advisorNombre),
     heatmapDiaHora:        buildHeatmap(rows),
+  }
+
+  // Split TRAINING vs CLUB for training-clubs report
+  if (reportType === 'training-clubs') {
+    const tRows = rows.filter(r => r.tipoDerivado === 'TRAINING')
+    const cRows = rows.filter(r => r.tipoDerivado === 'CLUB')
+    charts.trainingPorNivel        = groupBy(tRows, r => r.nivel || 'Sin nivel')
+    charts.trainingPorHora         = buildHoraChart(tRows)
+    charts.trainingAsistencia      = buildTimeSeries(tRows)
+    charts.clubesPorNivel          = groupBy(cRows, r => r.nivel || 'Sin nivel')
+    charts.clubesPorHora           = buildHoraChart(cRows)
+    charts.clubesAsistencia        = buildTimeSeries(cRows)
+    charts.rankingAdvisorsTraining = groupBy(tRows, r => r.advisorNombre)
+    charts.rankingAdvisorsClub     = groupBy(cRows, r => r.advisorNombre)
+    charts.heatmapTraining         = buildHeatmap(tRows)
+    charts.heatmapClub             = buildHeatmap(cRows)
   }
 
   // ── Table ─────────────────────────────────────────────────────────────────

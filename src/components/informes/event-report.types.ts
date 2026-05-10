@@ -24,13 +24,26 @@ export interface TimeSeriesPoint  { fecha: string; inscritos: number; asistentes
 export interface HeatmapPoint     { dia: string; hora: string; total: number }
 
 export interface ChartsData {
+  // Globales (todos los reportes)
   eventosPorTipo:        ChartPoint[]
-  clubsPorTipo:          ChartPoint[]   // breakdown by club sub-type (Listening, Grammar, etc.)
+  clubsPorTipo:          ChartPoint[]
   eventosPorNivel:       ChartPoint[]
   eventosPorHora:        ChartPoint[]
   asistenciaVsInscritos: TimeSeriesPoint[]
   rankingAdvisors:       ChartPoint[]
   heatmapDiaHora:        HeatmapPoint[]
+
+  // Split TRAINING vs CLUB (solo training-clubs)
+  trainingPorNivel?:        ChartPoint[]
+  trainingPorHora?:         ChartPoint[]
+  trainingAsistencia?:      TimeSeriesPoint[]
+  clubesPorNivel?:          ChartPoint[]
+  clubesPorHora?:           ChartPoint[]
+  clubesAsistencia?:        TimeSeriesPoint[]
+  rankingAdvisorsTraining?: ChartPoint[]
+  rankingAdvisorsClub?:     ChartPoint[]
+  heatmapTraining?:         HeatmapPoint[]
+  heatmapClub?:             HeatmapPoint[]
 }
 
 export interface TableRow {
