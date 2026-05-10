@@ -108,24 +108,49 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
-      {/* 1a. Training-Clubs: Training total */}
-      {config.tiposPermitidos.includes('TRAINING') && config.tiposPermitidos.includes('CLUB') ? (
+      {/* 1. Sessions-Jumps: tarjeta separada por tipo */}
+      {config.tiposPermitidos.includes('SESSION') && config.tiposPermitidos.includes('JUMP') ? (
+        <>
+          {['SESSION', 'JUMP'].map(tipo => {
+            const total = charts.eventosPorTipo.find(e => e.name === tipo)?.total ?? 0
+            const label = tipo === 'SESSION' ? 'Sessions' : 'Jumps'
+            return (
+              <ChartCard key={tipo} title={label}>
+                {total === 0
+                  ? <p className="text-sm text-gray-400 text-center py-8">Sin datos</p>
+                  : (
+                    <div className="flex flex-col items-center justify-center h-48 gap-2">
+                      <span className="text-6xl font-bold" style={{ color: TYPE_COLORS[tipo] }}>
+                        {total.toLocaleString()}
+                      </span>
+                      <span className="text-sm text-gray-500 font-medium uppercase tracking-wide">
+                        eventos {label}
+                      </span>
+                    </div>
+                  )
+                }
+              </ChartCard>
+            )
+          })}
+        </>
+
+      /* 1b. Training-Clubs: Training total + Clubes por tipo */
+      ) : config.tiposPermitidos.includes('TRAINING') && config.tiposPermitidos.includes('CLUB') ? (
         <>
           <ChartCard title="Training Sessions">
             {(() => {
-              const trainingTotal = charts.eventosPorTipo.find(e => e.name === 'TRAINING')?.total ?? 0
-              return trainingTotal === 0
+              const total = charts.eventosPorTipo.find(e => e.name === 'TRAINING')?.total ?? 0
+              return total === 0
                 ? <p className="text-sm text-gray-400 text-center py-8">Sin datos</p>
                 : (
                   <div className="flex flex-col items-center justify-center h-48 gap-2">
-                    <span className="text-6xl font-bold" style={{ color: TYPE_COLORS.TRAINING }}>{trainingTotal.toLocaleString()}</span>
+                    <span className="text-6xl font-bold" style={{ color: TYPE_COLORS.TRAINING }}>{total.toLocaleString()}</span>
                     <span className="text-sm text-gray-500 font-medium uppercase tracking-wide">eventos Training</span>
                   </div>
                 )
             })()}
           </ChartCard>
 
-          {/* 1b. Clubes por Tipo */}
           <ChartCard title="Clubes por Tipo">
             {noData(charts.clubsPorTipo) ?? (
               <ResponsiveContainer width="100%" height={Math.max(180, charts.clubsPorTipo.length * 32)}>
@@ -142,8 +167,9 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
             )}
           </ChartCard>
         </>
+
       ) : (
-        /* 1. Eventos por Tipo — para sessions-jumps y welcome */
+        /* 1c. Welcome y otros: gráfico combinado */
         <ChartCard title="Eventos por Tipo">
           {noData(charts.eventosPorTipo) ?? (
             <ResponsiveContainer width="100%" height={200}>
