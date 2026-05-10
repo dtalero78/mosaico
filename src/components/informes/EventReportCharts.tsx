@@ -127,7 +127,9 @@ function RankingChart({ data }: { data: ChartPoint[] }) {
 // ── Heatmap ───────────────────────────────────────────────────────────────────
 const DAYS_ORDER = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
-const PALETTE = [
+type PaletteEntry = { bg: string; text: string }
+
+const PALETTE_BLUE: PaletteEntry[] = [
   { bg: '#e0f2fe', text: '#0369a1' },
   { bg: '#7dd3fc', text: '#0c4a6e' },
   { bg: '#0ea5e9', text: '#ffffff' },
@@ -135,7 +137,31 @@ const PALETTE = [
   { bg: '#0c4a6e', text: '#ffffff' },
 ]
 
-function HeatmapGrid({ data }: { data: HeatmapPoint[] }) {
+const PALETTE_RED: PaletteEntry[] = [
+  { bg: '#fee2e2', text: '#b91c1c' },
+  { bg: '#fca5a5', text: '#7f1d1d' },
+  { bg: '#ef4444', text: '#ffffff' },
+  { bg: '#b91c1c', text: '#ffffff' },
+  { bg: '#7f1d1d', text: '#ffffff' },
+]
+
+const PALETTE_ORANGE: PaletteEntry[] = [
+  { bg: '#ffedd5', text: '#c2410c' },
+  { bg: '#fdba74', text: '#7c2d12' },
+  { bg: '#f97316', text: '#ffffff' },
+  { bg: '#c2410c', text: '#ffffff' },
+  { bg: '#7c2d12', text: '#ffffff' },
+]
+
+const PALETTE_GREEN: PaletteEntry[] = [
+  { bg: '#dcfce7', text: '#15803d' },
+  { bg: '#86efac', text: '#14532d' },
+  { bg: '#22c55e', text: '#ffffff' },
+  { bg: '#15803d', text: '#ffffff' },
+  { bg: '#14532d', text: '#ffffff' },
+]
+
+function HeatmapGrid({ data, palette = PALETTE_BLUE }: { data: HeatmapPoint[]; palette?: PaletteEntry[] }) {
   if (!data.length) return <p className="text-sm text-gray-400 text-center py-8">Sin datos</p>
   const dias  = DAYS_ORDER.filter(d => data.some(r => r.dia === d))
   const horas = [...new Set(data.map(r => r.hora))].sort()
@@ -145,7 +171,7 @@ function HeatmapGrid({ data }: { data: HeatmapPoint[] }) {
   const getCell = (val: number) => {
     if (val === 0) return { bg: '#f8fafc', text: 'transparent' }
     const idx = Math.min(Math.ceil((val / maxVal) * 5) - 1, 4)
-    return { bg: PALETTE[idx].bg, text: PALETTE[idx].text }
+    return { bg: palette[idx].bg, text: palette[idx].text }
   }
   return (
     <div className="overflow-x-auto">
@@ -334,11 +360,11 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
         {/* ── FILA 4: Heatmaps ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ChartCard title="Heatmap Training — Día vs Hora" accent={tColor}>
-            <HeatmapGrid data={charts.heatmapTraining ?? []} />
+            <HeatmapGrid data={charts.heatmapTraining ?? []} palette={PALETTE_ORANGE} />
           </ChartCard>
 
           <ChartCard title="Heatmap Clubes — Día vs Hora" accent={cColor}>
-            <HeatmapGrid data={charts.heatmapClub ?? []} />
+            <HeatmapGrid data={charts.heatmapClub ?? []} palette={PALETTE_GREEN} />
           </ChartCard>
         </div>
 
@@ -439,8 +465,13 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
           <RankingChart data={charts.rankingAdvisorsJumps ?? []} />
         </ChartCard>
 
-        <ChartCard title="Heatmap — Día vs Hora">
-          <HeatmapGrid data={charts.heatmapDiaHora} />
+        {/* Heatmaps separados: Sessions (azul) y Jumps (rojo) */}
+        <ChartCard title="Heatmap Sessions — Día vs Hora" accent={sColor}>
+          <HeatmapGrid data={charts.heatmapSesiones ?? []} palette={PALETTE_BLUE} />
+        </ChartCard>
+
+        <ChartCard title="Heatmap Jumps — Día vs Hora" accent={jColor}>
+          <HeatmapGrid data={charts.heatmapJumps ?? []} palette={PALETTE_RED} />
         </ChartCard>
       </div>
     )

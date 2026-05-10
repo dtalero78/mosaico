@@ -242,6 +242,8 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
     charts.jumpsAsistencia         = buildTimeSeries(jRows)
     charts.rankingAdvisorsSesiones = groupBy(sRows, r => r.advisorNombre)
     charts.rankingAdvisorsJumps    = groupBy(jRows, r => r.advisorNombre)
+    charts.heatmapSesiones         = buildHeatmap(sRows)
+    charts.heatmapJumps            = buildHeatmap(jRows)
   }
 
   // Split TRAINING vs CLUB for training-clubs report
