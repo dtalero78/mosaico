@@ -80,12 +80,9 @@ const getNavigation = (userEmail: string) => [
       },
       {
         name: 'Programación', isSubmenu: true, children: [
-          { name: 'Sesiones', href: '/dashboard/informes/sesiones/programadas', newTab: true },
-          { name: 'Clubes', href: '/dashboard/informes/sesiones/clubes', newTab: true },
-          { name: 'Welcome', href: '/dashboard/informes/sesiones/welcome', newTab: true },
-          { name: 'Calendario Sesiones – Jumps', href: '/dashboard/informes/sesiones/calendario-sesiones-jumps', newTab: true },
-          { name: 'Calendario Training – Clubs', href: '/dashboard/informes/sesiones/calendario-training-clubs', newTab: true },
-          { name: 'Calendario – Welcome',        href: '/dashboard/informes/sesiones/calendario-welcome',        newTab: true },
+          { name: 'Sesiones - Jumps',  href: '/dashboard/informes/sesiones/calendario-sesiones-jumps', newTab: true },
+          { name: 'Training - Clubs',  href: '/dashboard/informes/sesiones/calendario-training-clubs', newTab: true },
+          { name: 'Welcome',           href: '/dashboard/informes/sesiones/calendario-welcome',        newTab: true },
         ]
       },
       {
@@ -212,10 +209,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/informes/asistencia/complementarias': [InformesPermission.ASISTENCIA],
     '/dashboard/informes/asistencia/welcome-session': [InformesPermission.ASISTENCIA],
     '/dashboard/informes/asistencia/x-pais': [InformesPermission.ASISTENCIA],
-    '/dashboard/informes/sesiones/programadas': [InformesPermission.PROGRAMACION],
-    '/dashboard/informes/sesiones/advisor': [InformesPermission.PROGRAMACION],
-    '/dashboard/informes/sesiones/clubes': [InformesPermission.PROGRAMACION],
-    '/dashboard/informes/sesiones/welcome': [InformesPermission.PROGRAMACION],
     '/dashboard/informes/sesiones/calendario-sesiones-jumps': [InformesPermission.PROGRAMACION],
     '/dashboard/informes/sesiones/calendario-training-clubs': [InformesPermission.PROGRAMACION],
     '/dashboard/informes/sesiones/calendario-welcome':        [InformesPermission.PROGRAMACION],
