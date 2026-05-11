@@ -1570,6 +1570,8 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `56dc24d` | fix: `updateEvent` — al editar un evento CLUB, el regex extraía solo el número del step descartando el prefijo (`"TRAINING - Step 3"` → `"Step 3"`), lo que se propagaba a `ACADEMICA_BOOKINGS.step` y hacía que `isTrainingClub()` fallara. Fix: usar `nombreEvento` directamente como `step` (preserva prefijo completo para SESSION y todos los tipos de CLUB) |
+| `1759d6d` | fix: `PersonContact` — `telRefUno`/`telRefDos` no existen en PEOPLE; corregido a `telefonoRefUno`/`telefonoRefDos`; además Referencia Familiar apuntaba a campos de Ref1 en lugar de Ref2 |
 | `76cf422` | feat: sidebar Programación — elimina ítems obsoletos (Sesiones/Clubes/Welcome stub) y sus entradas en pagePermissions + middleware; renombra: `Calendario Sesiones–Jumps`→`Sesiones - Jumps`, `Calendario Training–Clubs`→`Training - Clubs`, `Calendario–Welcome`→`Welcome` |
 | `f6de71d` | feat: Training-Clubs — filas 3-4 reorganizadas: Fila 3: Clubes por Hora · Ranking Training · Ranking Clubes; Fila 4: Donut circular · Heatmap Training (naranja) · Heatmap Clubes (verde) |
 | `10f7301` | feat: heatmaps separados por tipo — Sessions-Jumps: heatmapSesiones (azul) + heatmapJumps (rojo); Training-Clubs: heatmapTraining (naranja) + heatmapClub (verde); `HeatmapGrid` acepta prop `palette`; 4 paletas definidas: BLUE/RED/ORANGE/GREEN |
