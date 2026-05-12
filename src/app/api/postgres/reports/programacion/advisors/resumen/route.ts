@@ -165,7 +165,8 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
       SELECT
         c."_id",
         c."dia",
-        TO_CHAR(c."dia" AT TIME ZONE $3, 'HH24:MI') AS "horaLocal",
+        TO_CHAR(c."dia" AT TIME ZONE $3, 'HH24:MI')      AS "horaLocal",
+        TO_CHAR(c."dia" AT TIME ZONE $3, 'YYYY-MM-DD')   AS "fechaLocal",
         COALESCE(c."nivel", '')                       AS "nivel",
         COALESCE(c."step", '')                        AS "step",
         COALESCE(c."nombreEvento", c."tituloONivel", '') AS "nombreEvento",
@@ -184,7 +185,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
       LEFT JOIN "ACADEMICA_BOOKINGS" b
         ON COALESCE(b."eventoId", b."idEvento") = c."_id"
         AND (b."cancelo" IS NULL OR b."cancelo" = false)
-      WHERE c."dia" BETWEEN $1::date AND ($2::date + interval '1 day')
+      WHERE DATE(c."dia" AT TIME ZONE $3) BETWEEN $1::date AND $2::date
         AND adv."_id" = $4
         ${detailType}
       GROUP BY c."_id", adv."nombreCompleto", adv."_id"
@@ -193,7 +194,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
     const detailRows = await queryMany<any>(detailSql, detailParams)
     sessionDetails = detailRows.map(r => ({
       _id:           r._id,
-      fecha:         r.dia.toString().substring(0, 10),
+      fecha:         r.fechaLocal,
       hora:          r.horaLocal,
       tipoDerivado:  r.tipoDerivado ?? '',
       nivel:         r.nivel,
