@@ -188,7 +188,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
         AND adv."_id" = $4
         ${detailType}
       GROUP BY c."_id", adv."nombreCompleto", adv."_id"
-      ORDER BY c."dia" ASC, c."hora" ASC
+      ORDER BY (c."dia" AT TIME ZONE $3) ASC
     `
     const detailRows = await queryMany<any>(detailSql, detailParams)
     sessionDetails = detailRows.map(r => ({
