@@ -11,5 +11,5 @@ export const GET = handlerWithAuth(async (request, context, session) => {
 
   const studentId = student.academicaId || student._id;
   const result = await checkEligibility(studentId, student.nivel, step);
-  return successResponse(result);
+  return successResponse({ ...result, nivel: student.nivel, step });
 });

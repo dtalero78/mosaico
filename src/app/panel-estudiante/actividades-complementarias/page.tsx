@@ -133,7 +133,9 @@ function ComplementariaContent() {
           <>
             {/* Info Card */}
             {(() => {
-              const remaining = 3 - (eligibility.attemptsUsed || 0)
+              const remaining    = 3 - (eligibility.attemptsUsed || 0)
+              const displayNivel = (eligibility as any)?.nivel || nivel || '—'
+              const displayStep  = (eligibility as any)?.step  || step  || '—'
               return (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
                   <h3 className="text-sm font-semibold text-blue-800 mb-3">
@@ -142,7 +144,7 @@ function ComplementariaContent() {
                   <ul className="text-sm text-blue-700 space-y-2 mb-5">
                     <li>
                       • Antes de presentar la actividad, revisa el material correspondiente al Nivel{' '}
-                      <strong>{nivel || '—'}</strong> y Step <strong>{step || '—'}</strong>
+                      <strong>{displayNivel}</strong> - <strong>{displayStep}</strong>
                     </li>
                     <li>• Basado en el contenido del material se generarán <strong>10 preguntas</strong></li>
                     <li>• Necesitas <strong>80% o más</strong> para aprobar</li>
