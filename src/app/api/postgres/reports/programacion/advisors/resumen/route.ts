@@ -2,7 +2,7 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { queryMany } from '@/lib/postgres'
 
-type TipoFiltro = 'all' | 'sesiones' | 'jumps' | 'training' | 'essential' | 'welcome'
+type TipoFiltro = 'all' | 'sesiones' | 'jumps' | 'training' | 'clubes' | 'essential' | 'welcome'
 
 interface AdvisorRow {
   advisorNombre:  string
@@ -10,6 +10,7 @@ interface AdvisorRow {
   totalSesiones:  number
   totalJumps:     number
   totalTraining:  number
+  totalClubes:    number
   totalEssential: number
   totalWelcome:   number
   totalGeneral:   number
@@ -32,6 +33,10 @@ const TIPO_INFORME_EXPR = `
       OR c."nombreEvento"  ILIKE '%WELCOME%') THEN 'welcome'
     WHEN c."tipo" = 'CLUB'
       AND COALESCE(c."nombreEvento", c."tituloONivel",'') ILIKE 'TRAINING -%' THEN 'training'
+    WHEN c."tipo" = 'CLUB'
+      AND COALESCE(c."nombreEvento", c."tituloONivel",'') NOT ILIKE 'TRAINING -%'
+      AND COALESCE(c."tituloONivel",'') NOT ILIKE '%WELCOME%'
+      AND COALESCE(c."nombreEvento",'')  NOT ILIKE '%WELCOME%' THEN 'clubes'
     WHEN c."tipo" = 'SESSION'
       AND c."nivel" IS DISTINCT FROM 'WELCOME'
       AND c."step" IS NOT NULL
@@ -103,6 +108,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
       COUNT(*) FILTER (WHERE "tipoInforme" = 'sesiones')::int  AS "totalSesiones",
       COUNT(*) FILTER (WHERE "tipoInforme" = 'jumps')::int     AS "totalJumps",
       COUNT(*) FILTER (WHERE "tipoInforme" = 'training')::int  AS "totalTraining",
+      COUNT(*) FILTER (WHERE "tipoInforme" = 'clubes')::int   AS "totalClubes",
       COUNT(*) FILTER (WHERE "tipoInforme" = 'essential')::int AS "totalEssential",
       COUNT(*) FILTER (WHERE "tipoInforme" = 'welcome')::int   AS "totalWelcome",
       COUNT(*)::int                                             AS "totalGeneral",
@@ -121,6 +127,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
     totalSesiones:  rows.reduce((s, r) => s + r.totalSesiones, 0),
     totalJumps:     rows.reduce((s, r) => s + r.totalJumps, 0),
     totalTraining:  rows.reduce((s, r) => s + r.totalTraining, 0),
+    totalClubes:    rows.reduce((s, r) => s + r.totalClubes, 0),
     totalEssential: rows.reduce((s, r) => s + r.totalEssential, 0),
     totalWelcome:   rows.reduce((s, r) => s + r.totalWelcome, 0),
     totalGeneral:   rows.reduce((s, r) => s + r.totalGeneral, 0),
@@ -140,6 +147,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
     sesiones:  r.totalSesiones,
     jumps:     r.totalJumps,
     training:  r.totalTraining,
+    clubes:    r.totalClubes,
     essential: r.totalEssential,
     welcome:   r.totalWelcome,
   }))
@@ -149,6 +157,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
     { name: 'Sesiones',  value: kpis.totalSesiones  },
     { name: 'Jumps',     value: kpis.totalJumps     },
     { name: 'Training',  value: kpis.totalTraining  },
+    { name: 'Clubes',   value: kpis.totalClubes    },
     { name: 'Essential', value: kpis.totalEssential },
     { name: 'Welcome',   value: kpis.totalWelcome   },
   ].filter(d => d.value > 0)

@@ -10,7 +10,7 @@ import { exportToExcel } from '@/lib/export-excel'
 import AdvisorScheduleTable, { type SessionRow } from './AdvisorScheduleTable'
 import AdvisorSessionDetailModal from './AdvisorSessionDetailModal'
 
-type TipoFiltro = 'all' | 'sesiones' | 'jumps' | 'training' | 'essential' | 'welcome'
+type TipoFiltro = 'all' | 'sesiones' | 'jumps' | 'training' | 'clubes' | 'essential' | 'welcome'
 
 interface Advisor { _id: string; nombreCompleto: string }
 
@@ -20,6 +20,7 @@ interface AdvisorRow {
   totalSesiones:  number
   totalJumps:     number
   totalTraining:  number
+  totalClubes:    number
   totalEssential: number
   totalWelcome:   number
   totalGeneral:   number
@@ -30,8 +31,8 @@ interface AdvisorRow {
 interface ReportData {
   kpis: {
     totalSesiones: number; totalJumps: number; totalTraining: number
-    totalEssential: number; totalWelcome: number; totalGeneral: number
-    totalInscritos: number; totalAsistentes: number; pctAsistencia: number
+    totalClubes: number; totalEssential: number; totalWelcome: number
+    totalGeneral: number; totalInscritos: number; totalAsistentes: number; pctAsistencia: number
   }
   charts: {
     stackedByAdvisor: any[]
@@ -47,6 +48,7 @@ const TIPO_OPTIONS: { value: TipoFiltro; label: string }[] = [
   { value: 'sesiones',  label: 'Sesiones'         },
   { value: 'jumps',     label: 'Jumps'            },
   { value: 'training',  label: 'Training'         },
+  { value: 'clubes',    label: 'Clubes'           },
   { value: 'essential', label: 'Essential (ESS)'  },
   { value: 'welcome',   label: 'Welcome'          },
 ]
@@ -55,6 +57,7 @@ const TYPE_COLORS: Record<string, string> = {
   sesiones:  '#3b82f6',
   jumps:     '#ef4444',
   training:  '#f97316',
+  clubes:    '#22c55e',
   essential: '#0ea5e9',
   welcome:   '#a855f7',
 }
@@ -157,6 +160,7 @@ export default function AdvisorResumenReportPage() {
         { header: 'Sesiones',   accessor: r => r.totalSesiones   },
         { header: 'Jumps',      accessor: r => r.totalJumps      },
         { header: 'Training',   accessor: r => r.totalTraining   },
+        { header: 'Clubes',     accessor: r => r.totalClubes     },
         { header: 'Essential',  accessor: r => r.totalEssential  },
         { header: 'Welcome',    accessor: r => r.totalWelcome    },
         { header: 'Total',      accessor: r => r.totalGeneral    },
@@ -251,10 +255,11 @@ export default function AdvisorResumenReportPage() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <KpiCard label="Sesiones"  value={(kpis?.totalSesiones  ?? 0).toLocaleString()} color={TYPE_COLORS.sesiones}  />
             <KpiCard label="Jumps"     value={(kpis?.totalJumps     ?? 0).toLocaleString()} color={TYPE_COLORS.jumps}     />
             <KpiCard label="Training"  value={(kpis?.totalTraining  ?? 0).toLocaleString()} color={TYPE_COLORS.training}  />
+            <KpiCard label="Clubes"    value={(kpis?.totalClubes    ?? 0).toLocaleString()} color={TYPE_COLORS.clubes}    />
             <KpiCard label="Essential" value={(kpis?.totalEssential ?? 0).toLocaleString()} color={TYPE_COLORS.essential} />
             <KpiCard label="Welcome"   value={(kpis?.totalWelcome   ?? 0).toLocaleString()} color={TYPE_COLORS.welcome}   />
           </div>
@@ -285,6 +290,7 @@ export default function AdvisorResumenReportPage() {
                   <Bar dataKey="sesiones"  name="Sesiones"  fill={TYPE_COLORS.sesiones}  stackId="a" />
                   <Bar dataKey="jumps"     name="Jumps"     fill={TYPE_COLORS.jumps}     stackId="a" />
                   <Bar dataKey="training"  name="Training"  fill={TYPE_COLORS.training}  stackId="a" />
+                  <Bar dataKey="clubes"    name="Clubes"    fill={TYPE_COLORS.clubes}    stackId="a" />
                   <Bar dataKey="essential" name="Essential" fill={TYPE_COLORS.essential} stackId="a" />
                   <Bar dataKey="welcome"   name="Welcome"   fill={TYPE_COLORS.welcome}   stackId="a" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -330,7 +336,7 @@ export default function AdvisorResumenReportPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                     <tr>
-                      {['#','Advisor','Sesiones','Jumps','Training','Essential','Welcome','Total','Inscritos','Asistentes','% Asist.'].map(h => (
+                      {['#','Advisor','Sesiones','Jumps','Training','Clubes','Essential','Welcome','Total','Inscritos','Asistentes','% Asist.'].map(h => (
                         <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -346,6 +352,7 @@ export default function AdvisorResumenReportPage() {
                           <td className="px-3 py-2.5 text-center"><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">{row.totalSesiones}</span></td>
                           <td className="px-3 py-2.5 text-center"><span className="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs font-semibold">{row.totalJumps}</span></td>
                           <td className="px-3 py-2.5 text-center"><span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-xs font-semibold">{row.totalTraining}</span></td>
+                          <td className="px-3 py-2.5 text-center"><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">{row.totalClubes}</span></td>
                           <td className="px-3 py-2.5 text-center"><span className="px-2 py-0.5 bg-sky-100 text-sky-600 rounded-full text-xs font-semibold">{row.totalEssential}</span></td>
                           <td className="px-3 py-2.5 text-center"><span className="px-2 py-0.5 bg-purple-100 text-purple-600 rounded-full text-xs font-semibold">{row.totalWelcome}</span></td>
                           <td className="px-3 py-2.5 text-right font-bold text-gray-900">{row.totalGeneral}</td>
