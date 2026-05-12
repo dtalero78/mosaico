@@ -47,6 +47,23 @@ export const GET = handler(async (
   );
   if (!student) throw new NotFoundError('Registro académico', academicId);
 
+  // Fix: some Wix-migrated records have primerNombre = tipoUsuario value ("TITULAR", "BENEFICIARIO")
+  // instead of the real name. Resolve from PEOPLE using numeroId.
+  const TIPO_USUARIO_NAMES = ['TITULAR', 'BENEFICIARIO', 'BENEFICIARIA'];
+  if (student.primerNombre && TIPO_USUARIO_NAMES.includes(student.primerNombre.toUpperCase()) && student.numeroId) {
+    const peopleRecord = await queryOne<{ primerNombre: string; primerApellido: string }>(
+      `SELECT "primerNombre", "primerApellido" FROM "PEOPLE"
+       WHERE "numeroId" = $1
+       ORDER BY CASE WHEN "tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA') THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [student.numeroId]
+    ).catch(() => null);
+    if (peopleRecord?.primerNombre && !TIPO_USUARIO_NAMES.includes(peopleRecord.primerNombre.toUpperCase())) {
+      (student as any).primerNombre  = peopleRecord.primerNombre;
+      (student as any).primerApellido = peopleRecord.primerApellido || student.primerApellido;
+    }
+  }
+
   // Check if already registered (has detallesPersonales or clave)
   const alreadyRegistered = !!(student.clave && student.detallesPersonales);
 
