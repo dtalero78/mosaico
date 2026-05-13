@@ -235,6 +235,37 @@ export async function resolveStudentFromSession(session: Session) {
     }
   }
 
+  // ─── Special niveles auto-promotion at login ───
+  // For students in MASTER/IELS/B2FIRST/TOEFL: check if their special promotion
+  // conditions are met (contract expired or 100 days for IELS/B2FIRST/TOEFL).
+  // If so, promote them to DONE Step 50 and block their login.
+  // This must run BEFORE the generic contract expiration block below.
+  try {
+    const { isSpecialNivel, autoAdvanceSpecialNivel } = await import('@/services/special-nivel.service');
+    const currentNivel = academica?.nivel ?? (base as any).nivel;
+    if (isSpecialNivel(currentNivel) && !((base as any).estadoInactivo)) {
+      const studentForCheck = {
+        _id: academica?._id ?? (base as any)._id,
+        numeroId: academica?.numeroId ?? (base as any).numeroId,
+        email: academica?.email ?? (base as any).email,
+        nivel: currentNivel,
+        step: academica?.step ?? (base as any).step,
+        finalContrato: (base as any).finalContrato,
+        fechaPromocionEspecial: (academica as any)?.fechaPromocionEspecial,
+      };
+      const result = await autoAdvanceSpecialNivel(studentForCheck, null);
+      if (result?.graduated) {
+        console.log(`🎓 [Panel Estudiante] Special nivel ${currentNivel} → DONE: ${result.message}`);
+        // Reflect new state locally so downstream code sees inactivation
+        (base as any).estadoInactivo = true;
+        nivel = 'DONE';
+        step = 'Step 50';
+      }
+    }
+  } catch (err: any) {
+    console.warn('⚠️ [Panel Estudiante] Special nivel check failed:', err.message);
+  }
+
   // Check contract expiration: if finalContrato < today, inactivate student + titular
   const finalContrato = (base as any).finalContrato;
   if (finalContrato && !((base as any).estadoInactivo)) {

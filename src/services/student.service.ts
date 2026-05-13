@@ -12,6 +12,20 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 
+// Ensure ACADEMICA.fechaPromocionEspecial column exists (idempotent, once per server start).
+// Written when student is promoted from F3 Step 45 to MASTER/IELS/B2FIRST/TOEFL;
+// IELS/B2FIRST/TOEFL use it to compute the 100-day auto-promotion to DONE.
+let fechaPromoEnsured = false;
+async function ensureFechaPromocionEspecial() {
+  if (fechaPromoEnsured) return;
+  try {
+    await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "fechaPromocionEspecial" TIMESTAMPTZ`, []);
+    fechaPromoEnsured = true;
+  } catch (err: any) {
+    console.warn('[student.service] ensureFechaPromocionEspecial:', err.message);
+  }
+}
+
 /**
  * Get student profile.
  * Prioritizes ACADEMICA (beneficiaries), falls back to PEOPLE (titulares).
@@ -303,10 +317,21 @@ export async function autoAdvanceStep(bookingId: string) {
 
   // ─── F3 Step 45 (Jump) approved → route to MASTER/IELS/B2FIRST/TOEFL ───
   // After passing F3 Jump, student is promoted to one of 4 special niveles
-  // based on ACADEMICA.pruebainter selection at evaluation time.
+  // based on ACADEMICA.pruebainter selection at evaluation time. We also
+  // write fechaPromocionEspecial = NOW() so IELS/B2FIRST/TOEFL can compute
+  // their 100-day auto-promotion to DONE later.
   if (extractStepNum(bookingStep) === 45 && student.nivel === 'F3') {
     const { resolvePruebaInterTarget } = await import('@/services/special-nivel.service');
     const target = resolvePruebaInterTarget((student as any).pruebainter);
+    await ensureFechaPromocionEspecial();
+    if (student._id) {
+      await query(
+        `UPDATE "ACADEMICA"
+         SET "fechaPromocionEspecial" = NOW(), "_updatedDate" = NOW()
+         WHERE "_id" = $1`,
+        [student._id]
+      ).catch(err => console.warn('[autoAdvanceStep] fechaPromocionEspecial write failed:', err.message));
+    }
     await changeStep(studentId, target.step);
     return {
       advanced: true,
@@ -407,6 +432,23 @@ export async function changeStep(
   const fieldNames = isParallel
     ? { nivelParalelo: nivel, stepParalelo: newStep }
     : { nivel, step: newStep };
+
+  // ─── Block user when target is Step 50 (DONE) ───
+  // Catches both auto-promotion to DONE AND manual admin promotion via "Cambiar Step".
+  // Ensures consistent inactivation in ACADEMICA + PEOPLE + USUARIOS_ROLES.
+  if (newStep === 'Step 50' && nivel === 'DONE') {
+    const studentForBlock = {
+      _id: academic?._id ?? (person as any)?._id,
+      numeroId: numeroId,
+      email: (academic as any)?.email ?? (person as any)?.email,
+      nivel,
+      step: newStep,
+    };
+    const { promoteToDoneAndBlock } = await import('@/services/special-nivel.service');
+    await promoteToDoneAndBlock(studentForBlock, 'manual promotion to Step 50').catch(err =>
+      console.warn('[changeStep] promoteToDoneAndBlock failed:', err.message)
+    );
+  }
 
   return {
     student: updatedPerson || academic,
