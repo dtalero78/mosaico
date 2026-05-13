@@ -7,6 +7,7 @@ import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { queryOne } from './postgres'
+import { isContractExpired } from './contract-expiry'
 
 interface UserRole {
   _id: string
@@ -39,24 +40,32 @@ async function verifyUserPostgres(email: string, password: string) {
       return null;
     }
 
+    // Look up the user's finalContrato from PEOPLE (TITULAR or BENEFICIARIO,
+    // whichever has it). Used both for the inactivity reason check below and
+    // for an in-line expiration guard for students.
+    const peopleRecord = await queryOne<{ finalContrato: string | null; rol?: string }>(
+      `SELECT "finalContrato" FROM "PEOPLE"
+       WHERE LOWER("email") = LOWER($1) AND "finalContrato" IS NOT NULL
+       ORDER BY "finalContrato" DESC LIMIT 1`,
+      [email]
+    );
+    const contractExpired = isContractExpired(peopleRecord?.finalContrato);
+
     if (!user.activo) {
       console.log('⚠️ [PostgreSQL] Usuario inactivo — verificando motivo');
-      // Check if inactivity is due to expired contract
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const peopleRecord = await queryOne<{ finalContrato: string | null }>(
-        `SELECT "finalContrato" FROM "PEOPLE" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
-        [email]
-      );
-      if (peopleRecord?.finalContrato) {
-        const expiry = new Date(peopleRecord.finalContrato);
-        expiry.setHours(0, 0, 0, 0);
-        if (expiry < today) {
-          console.log('⚠️ [PostgreSQL] Contrato vencido:', peopleRecord.finalContrato);
-          throw new Error('EXPIRED');
-        }
+      if (contractExpired) {
+        console.log('⚠️ [PostgreSQL] Contrato vencido:', peopleRecord?.finalContrato);
+        throw new Error('EXPIRED');
       }
       throw new Error('BLOCKED');
+    }
+
+    // Defense in depth: even if USUARIOS_ROLES.activo is still true (e.g. cron
+    // hasn't run yet, or PEOPLE/USUARIOS_ROLES got desynced), block ESTUDIANTE
+    // login when their contract is past the +1 day grace window.
+    if (user.rol === 'ESTUDIANTE' && contractExpired) {
+      console.log('⚠️ [PostgreSQL] Estudiante con contrato vencido (activo aún true):', peopleRecord?.finalContrato);
+      throw new Error('EXPIRED');
     }
 
     console.log('✅ [PostgreSQL] Usuario encontrado:', {

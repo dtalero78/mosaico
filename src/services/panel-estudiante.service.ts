@@ -21,6 +21,7 @@ import { NivelesRepository } from '@/repositories/niveles.repository';
 import { ForbiddenError, NotFoundError } from '@/lib/errors';
 import { generateReport } from '@/services/progress.service';
 import { getEffectiveStepNumber } from '@/services/student-booking.service';
+import { isContractExpired } from '@/lib/contract-expiry';
 
 // One-time migration: ensure fechaInicioESS column exists in ACADEMICA and PEOPLE
 let essMigrationDone = false;
@@ -266,81 +267,77 @@ export async function resolveStudentFromSession(session: Session) {
     console.warn('⚠️ [Panel Estudiante] Special nivel check failed:', err.message);
   }
 
-  // Check contract expiration: if finalContrato < today, inactivate student + titular
+  // Check contract expiration: date-only comparison with +1 day grace
+  // (see src/lib/contract-expiry.ts). Anyone NOT inactive whose finalContrato
+  // is at least 2 calendar days in the past gets inactivated + their contract
+  // members locked out.
   const finalContrato = (base as any).finalContrato;
-  if (finalContrato && !((base as any).estadoInactivo)) {
-    const endDate = new Date(finalContrato);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    endDate.setHours(0, 0, 0, 0);
+  if (!((base as any).estadoInactivo) && isContractExpired(finalContrato)) {
+    console.log(`🔴 [Panel Estudiante] Contrato expirado (${finalContrato}). Inactivando estudiante y titular.`);
 
-    if (endDate < today) {
-      console.log(`🔴 [Panel Estudiante] Contrato expirado (${finalContrato}). Inactivando estudiante y titular.`);
+    // Inactivate this student in PEOPLE
+    await query(
+      `UPDATE "PEOPLE" SET "estadoInactivo" = true, "aprobacion" = 'FINALIZADA', "_updatedDate" = NOW() WHERE "_id" = $1`,
+      [(base as any)._id]
+    );
+    (base as any).estadoInactivo = true;
 
-      // Inactivate this student in PEOPLE
-      await query(
-        `UPDATE "PEOPLE" SET "estadoInactivo" = true, "aprobacion" = 'FINALIZADA', "_updatedDate" = NOW() WHERE "_id" = $1`,
-        [(base as any)._id]
-      );
-      (base as any).estadoInactivo = true;
-
-      // Inactivate this student in ACADEMICA (by numeroId)
-      if ((base as any).numeroId) {
-        try {
-          await query(
-            `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW() WHERE "numeroId" = $1`,
-            [(base as any).numeroId]
-          );
-        } catch (err) {
-          console.warn('⚠️ Could not sync ACADEMICA on contract expiration:', err);
-        }
-      }
-
-      // Block login in USUARIOS_ROLES for this student and all contract members
-      const contrato = (base as any).contrato;
+    // Inactivate this student in ACADEMICA (by numeroId)
+    if ((base as any).numeroId) {
       try {
-        // Block this student's login
-        if ((base as any).email) {
-          await query(
-            `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW() WHERE LOWER("email") = LOWER($1)`,
-            [(base as any).email]
-          );
-        }
-        // Block all contract members' login
-        if (contrato) {
-          await query(
-            `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-             WHERE LOWER("email") IN (
-               SELECT LOWER("email") FROM "PEOPLE" WHERE "contrato" = $1 AND "email" IS NOT NULL
-             )`,
-            [contrato]
-          );
-        }
+        await query(
+          `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW() WHERE "numeroId" = $1`,
+          [(base as any).numeroId]
+        );
       } catch (err) {
-        console.warn('⚠️ Could not sync USUARIOS_ROLES on contract expiration:', err);
+        console.warn('⚠️ Could not sync ACADEMICA on contract expiration:', err);
       }
+    }
 
-      // Inactivate ALL members of this contract in PEOPLE (titular + all beneficiarios)
+    // Block login in USUARIOS_ROLES for this student and all contract members
+    const contrato = (base as any).contrato;
+    try {
+      // Block this student's login
+      if ((base as any).email) {
+        await query(
+          `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW() WHERE LOWER("email") = LOWER($1)`,
+          [(base as any).email]
+        );
+      }
+      // Block all contract members' login
       if (contrato) {
         await query(
-          `UPDATE "PEOPLE"
-           SET "estadoInactivo" = true, "aprobacion" = 'FINALIZADA', "_updatedDate" = NOW()
-           WHERE "contrato" = $1 AND ("estadoInactivo" IS NULL OR "estadoInactivo" = false)`,
+          `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
+           WHERE LOWER("email") IN (
+             SELECT LOWER("email") FROM "PEOPLE" WHERE "contrato" = $1 AND "email" IS NOT NULL
+           )`,
           [contrato]
         );
-        // Inactivate ACADEMICA for all beneficiarios of this contract
-        try {
-          await query(
-            `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW()
-             WHERE "numeroId" IN (
-               SELECT "numeroId" FROM "PEOPLE"
-               WHERE "contrato" = $1 AND "tipoUsuario" = 'BENEFICIARIO' AND "numeroId" IS NOT NULL
-             )`,
-            [contrato]
-          );
-        } catch (err) {
-          console.warn('⚠️ Could not sync ACADEMICA beneficiarios on contract expiration:', err);
-        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not sync USUARIOS_ROLES on contract expiration:', err);
+    }
+
+    // Inactivate ALL members of this contract in PEOPLE (titular + all beneficiarios)
+    if (contrato) {
+      await query(
+        `UPDATE "PEOPLE"
+         SET "estadoInactivo" = true, "aprobacion" = 'FINALIZADA', "_updatedDate" = NOW()
+         WHERE "contrato" = $1 AND ("estadoInactivo" IS NULL OR "estadoInactivo" = false)`,
+        [contrato]
+      );
+      // Inactivate ACADEMICA for all beneficiarios of this contract
+      try {
+        await query(
+          `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW()
+           WHERE "numeroId" IN (
+             SELECT "numeroId" FROM "PEOPLE"
+             WHERE "contrato" = $1 AND "tipoUsuario" = 'BENEFICIARIO' AND "numeroId" IS NOT NULL
+           )`,
+          [contrato]
+        );
+      } catch (err) {
+        console.warn('⚠️ Could not sync ACADEMICA beneficiarios on contract expiration:', err);
       }
     }
   }

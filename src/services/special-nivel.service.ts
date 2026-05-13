@@ -24,6 +24,7 @@
 
 import 'server-only';
 import { query, queryOne } from '@/lib/postgres';
+import { isContractExpired } from '@/lib/contract-expiry';
 
 export const SPECIAL_NIVELES = ['MASTER', 'IELTS', 'B2FIRST', 'TOEFL'] as const;
 export type SpecialNivel = (typeof SPECIAL_NIVELES)[number];
@@ -67,15 +68,6 @@ function daysBetween(from: Date | string, to: Date = new Date()): number {
   d1.setHours(0, 0, 0, 0);
   d2.setHours(0, 0, 0, 0);
   return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function isContractExpired(finalContrato: any): boolean {
-  if (!finalContrato) return false;
-  const end = new Date(finalContrato);
-  const today = new Date();
-  end.setHours(0, 0, 0, 0);
-  today.setHours(0, 0, 0, 0);
-  return end < today;
 }
 
 /**

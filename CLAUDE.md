@@ -589,7 +589,7 @@ La plataforma opera 100% sobre PostgreSQL. Los datos migrados de Wix (marzo 2026
   - `PEOPLE`: Personas (titulares y beneficiarios), contratos, OnHold, consentimiento declarativo, comentarios
     - Campos de consentimiento: `consentimientoDeclarativo` (JSONB), `hashConsentimiento` (text)
     - Campos OnHold: `estadoInactivo`, `fechaOnHold`, `fechaFinOnHold`, `onHoldCount`, `onHoldHistory` (JSONB)
-    - Campos extensión: `finalContrato`, `vigencia`, `extensionCount`, `extensionHistory` (JSONB) — **estos campos viven en PEOPLE, no en ACADEMICA**
+    - Campos extensión: `finalContrato` (DATE puro — sin hora ni TZ), `vigencia`, `extensionCount`, `extensionHistory` (JSONB) — **estos campos viven en PEOPLE, no en ACADEMICA**. Regla de expiración timezone-independent en [`src/lib/contract-expiry.ts`](src/lib/contract-expiry.ts): vencido cuando hoy UTC ≥ `finalContrato + 2` días (gracia +1 día para usuarios en cualquier zona)
     - Campos paralelos: `nivelParalelo`, `stepParalelo` (nullable)
     - Campo comentarios: `comentarios` (JSONB array) — comentarios internos por persona, NO hay tabla COMENTARIOS separada
   - `ACADEMICA`: Registros académicos por estudiante (nivel, step, nivelParalelo, stepParalelo). **No contiene** campos de contrato/extensión/onhold
@@ -1178,14 +1178,17 @@ When a titular's estado is changed to **Contrato nulo**, **Devuelto**, or **Rech
 - Implementation: `src/services/contract.service.ts` (`activateOnHold`, `deactivateOnHold`)
 
 ### By Student Login (Contract Expiration)
-When a student with role ESTUDIANTE loads the panel (`resolveStudentFromSession`):
-- If `finalContrato < today` and student is not already inactive:
-  - Student is marked as `estadoInactivo = true`, `aprobacion = 'FINALIZADA'` in PEOPLE
-  - Student's ACADEMICA record marked as `estadoInactivo = true` (by `numeroId`)
-  - ALL members of the same contract (titular + all beneficiarios) marked as `estadoInactivo = true`, `aprobacion = 'FINALIZADA'` in PEOPLE
-  - All beneficiarios' ACADEMICA records marked as `estadoInactivo = true`
-  - All contract members' `USUARIOS_ROLES.activo` set to `false` (blocks login)
-- Implementation: `src/services/panel-estudiante.service.ts` (resolveStudentFromSession)
+**Expiration rule** (centralized in [`src/lib/contract-expiry.ts`](src/lib/contract-expiry.ts)): a contract with `finalContrato = D` is considered expired only when the server's UTC date is **at least 2 calendar days after `D`** (i.e. fecha pura + 1 día de gracia). This guarantees that no user — Chile, Colombia, Ecuador, Perú, España, Australia, etc. — is blocked while the last day is still ongoing in their local clock. `PEOPLE.finalContrato` is now stored as `DATE` (no time, no TZ).
+
+Two enforcement points (both use the same helper):
+
+1. **Login** (`auth-postgres.ts`): if `USUARIOS_ROLES.activo=false` AND the contract is past the grace window → throws `EXPIRED`. Defense in depth: if `activo=true` but the contract is past the grace window AND the role is `ESTUDIANTE` → also throws `EXPIRED`. This catches the desynced case where the cron/panel hasn't run yet.
+2. **Panel load** (`resolveStudentFromSession`): if `isContractExpired(finalContrato)` is true and the student is not already inactive, runs the full inactivation cascade:
+   - PEOPLE: this student + ALL contract members → `estadoInactivo = true`, `aprobacion = 'FINALIZADA'`
+   - ACADEMICA: this student + all beneficiarios of the contract → `estadoInactivo = true`
+   - USUARIOS_ROLES: this student + all contract members → `activo = false` (blocks login)
+
+The cron `expire-contracts` and the special-nivel `MASTER/IELTS/B2FIRST/TOEFL → DONE` auto-promotion also use the same helper (`CONTRACT_EXPIRED_SQL` in SQL, `isContractExpired` in JS) so the rule is identical everywhere.
 
 ### By Student Login (OnHold Auto-Reactivation)
 When a student with role ESTUDIANTE loads the panel (`resolveStudentFromSession`):
@@ -1570,6 +1573,7 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `local` | fix: **expiración de contratos timezone-independent**. Causa raíz: `PEOPLE.finalContrato` era `timestamptz` con valores almacenados a hora local Bogotá (ej `2026-05-12 19:00 -05` = `2026-05-13 00:00 UTC`); el cast `::date` en server UTC daba el día siguiente y los chequeos de expiración (cron + `panel-estudiante.service.ts` + `auth-postgres.ts` + `special-nivel.service.ts`) nunca veían el contrato como vencido. Fix integral: (1) `scripts/normalize-finalcontrato.js` normalizó 5718 filas a medianoche Bogotá; (2) `scripts/alter-finalcontrato-to-date.js` cambió el tipo de columna a `DATE` puro (sin hora ni TZ) — idempotente, valida tipo actual antes de alterar; (3) nuevo helper `src/lib/contract-expiry.ts` con `isContractExpired(finalContrato)` y `CONTRACT_EXPIRED_SQL('"col"')` que aplican la regla "fecha pura + gracia +1 día": vencido sólo cuando el día UTC es ≥2 días después de `finalContrato`. Esto garantiza que ningún usuario sea bloqueado mientras "todavía sea el último día del contrato" en su zona horaria — Chile, Colombia, Ecuador, Perú, España, Australia o cualquier otra. (4) auth-postgres agrega defensa en profundidad: si `USUARIOS_ROLES.activo=true` pero el contrato está vencido, bloquea login con `EXPIRED` para rol `ESTUDIANTE`. (5) Todos los puntos (cron `expire-contracts`, `panel-estudiante.service.ts`, `special-nivel.service.ts`, `auth-postgres.ts`) ahora usan el mismo helper. Caso DANIEL MARTY (`finalContrato=2026-05-12`, hoy 2026-05-13 UTC): día gracia → puede entrar; 2026-05-14 → bloqueado |
 | `local` | feat: permisos granulares de **exportar/imprimir** en Informes — 8 nuevos códigos en `InformesPermission` (`ASISTENCIA_EXPORTAR`, `PROGRAMACION_EXPORTAR`, `ADVISORS_EXPORTAR`, `USUARIOS_EXPORTAR`, `USUARIOS_IMPRIMIR`, `CONTRATOS_EXPORTAR`, `PLANTA_EXPORTAR`, `ESTADISTICAS_EXPORTAR`). Quedan automáticamente válidos vía `Object.values(InformesPermission)` en `VALID_PERMISSIONS`/`SUPER_ADMIN_PERMISSIONS` y se registran en `PERMISSIONS_CATALOG` (visibles en `/admin/permissions`, sección Informes). Botones gateados con `<PermissionGuard>` en: 5 páginas Asistencia (sesiones-clubes, clubes ×2, complementarias, welcome-session, x-pais → `ASISTENCIA_EXPORTAR`); `EventReportTable`+`EventReportFilters` → `PROGRAMACION_EXPORTAR`; `AdvisorScheduleTable`+`AdvisorScheduleFilters`+`AdvisorResumenReportPage` → `ADVISORS_EXPORTAR`; `usuarios` + `infoacademic-user` (CSV) → `USUARIOS_EXPORTAR`; `infoacademic-user` (Imprimir/PDF) → `USUARIOS_IMPRIMIR`; `estadisticas` + `estadisticas/horarios` → `ESTADISTICAS_EXPORTAR`. SUPER_ADMIN/ADMIN bypassean automáticamente por `PermissionGuard` (`isRole`). Los permisos `CONTRATOS_EXPORTAR`/`PLANTA_EXPORTAR` quedan disponibles aunque esas páginas todavía no tengan botón de export |
 | `a9075c9` | fix: `resumen/route` — `tz` era usada en `detailParams` pero nunca declarada en el handler; causaba `NULL` en `AT TIME ZONE $3` y error 500 al filtrar por advisor |
 | `2f15244` | feat: Advisors Resumen — **modo detalle** al filtrar por advisor: sin advisor → tabla consolidada por advisor; con advisor → sesiones individuales con Fecha/Hora/Tipo/Nivel/Step/Agendados/Asistentes/No Asistieron/% Asistencia + modal de usuarios por sesión. API retorna `sessionDetails[]` adicional cuando `advisorId` presente |

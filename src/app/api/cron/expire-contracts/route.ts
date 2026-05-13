@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/postgres'
+import { CONTRACT_EXPIRED_SQL } from '@/lib/contract-expiry'
 
 const CRON_SECRET = process.env.CRON_SECRET
 
@@ -36,8 +37,7 @@ export async function GET(request: NextRequest) {
       `SELECT * FROM "PEOPLE"
        WHERE "tipoUsuario" = 'BENEFICIARIO'
          AND "estadoInactivo" = false
-         AND "finalContrato" IS NOT NULL
-         AND "finalContrato"::date < CURRENT_DATE
+         AND ${CONTRACT_EXPIRED_SQL('"finalContrato"')}
          AND ("estado" IS NULL OR "estado" != 'FINALIZADA')
        ORDER BY "finalContrato" ASC`
     )
