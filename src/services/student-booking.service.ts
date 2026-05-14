@@ -21,10 +21,19 @@ function extractStepNumber(stepName: string): number | null {
 }
 
 function isExitosaBooking(c: any): boolean {
-  const stepName = c.step || c.nombreEvento || '';
-  const num = extractStepNumber(stepName);
-  const esJump = num !== null && num > 0 && num % 5 === 0;
-  return c.asistio === true || c.asistencia === true || (esJump && c.participacion === true);
+  return c.asistio === true || c.asistencia === true;
+}
+
+/**
+ * Strict approval rule for a Jump booking (Step 5, 10, 15, ...):
+ *   asistencia=true AND participacion=true AND noAprobo!==true AND not cancelled.
+ */
+function aproboElJumpBooking(c: any): boolean {
+  const asistio = c.asistio === true || c.asistencia === true;
+  return asistio
+      && c.participacion === true
+      && c.noAprobo !== true
+      && c.cancelo !== true;
 }
 
 function getClassTypeBooking(c: any): 'SESSION' | 'CLUB' | 'OTHER' {
@@ -88,9 +97,10 @@ export async function getEffectiveStepNumber(
     const esJump = stepNum > 0 && stepNum % 5 === 0;
 
     if (esJump) {
-      const tieneNoAprobo = clasesDelStep.some(c => c.noAprobo === true);
-      const tieneAsistenciaExitosa = clasesDelStep.some(c => isExitosaBooking(c));
-      if (clasesDelStep.length === 0 || tieneNoAprobo || !tieneAsistenciaExitosa) return stepNum;
+      // Jump approved when ANY booking satisfies the strict rule (see aproboElJumpBooking).
+      // Failed attempts (noAprobo=true) on earlier bookings don't block a later success.
+      const aprobado = clasesDelStep.some(c => aproboElJumpBooking(c));
+      if (!aprobado) return stepNum;
     } else {
       const sesionesExitosas = clasesDelStep.filter(c => getClassTypeBooking(c) === 'SESSION' && isExitosaBooking(c)).length;
       // Only TRAINING clubs count toward step completion

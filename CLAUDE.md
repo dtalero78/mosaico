@@ -1452,7 +1452,7 @@ ESS es el **nivel principal de inicio** que se asigna a estudiantes nuevos antes
 - **Opción A**: 2 sesiones exitosas (tipo SESSION) + 1 TRAINING club exitoso del step
 - **Opción B**: 1 sesión exitosa + 1 complementaria aprobada (tipo=COMPLEMENTARIA cuenta como SESSION) + 1 TRAINING club exitoso del step
 - Solo clubs cuyo nombre empieza con `TRAINING -` cuentan. PRONUNCIATION, GRAMMAR, LISTENING y otros clubs NO satisfacen el requisito de club.
-- Una clase es "exitosa" si `asistio === true` OR `asistencia === true` OR `participacion === true`
+- Una clase es "exitosa" si `asistio === true` OR `asistencia === true` (Steps normales NO miran `participacion`)
 - Mensajes diagnósticos según lo que falta:
   - `sesExitosas >= 2, trainingClubs === 0` → "Falta el TRAINING club del step"
   - `sesExitosas === 1, trainingClubs === 0` → "Falta una sesión y el TRAINING club"
@@ -1463,13 +1463,24 @@ ESS es el **nivel principal de inicio** que se asigna a estudiantes nuevos antes
 - **Archivos afectados**: `progress.service.ts` (`isTrainingClub()` helper, `trainingClubsExitosos`), `student.service.ts` (`isCurrentStepComplete`), `student-booking.service.ts` (`getEffectiveStepNumber`)
 
 **2. Jump Steps (5, 10, 15, 20, 25, 30, 35, 40, 45) — múltiplos de 5**
-- Requiere **1 clase con asistencia exitosa** (`asistio/asistencia/participacion = true`) Y `noAprobo !== true`
-- El estudiante **permanece en el Jump Step** si:
-  - No hay clases registradas → "Falta la clase del jump"
-  - El advisor marcó `noAprobo = true` → "No aprobó el jump"
-  - Tiene clase registrada pero no asistió o canceló → "Falta asistir al jump"
-- El step se completa automáticamente cuando el estudiante **asistió exitosamente** y el advisor **no marcó `noAprobo = true`**
-- El advisor solo necesita marcar `noAprobo = true` si el estudiante reprobó; si no marca nada y el estudiante asistió, el step se completa
+
+**Regla de aprobación (estricta, AND)**: el Jump se aprueba cuando **AL MENOS UN booking** del step cumple **todas** estas condiciones simultáneamente:
+- `asistio = true` (o `asistencia = true`)
+- `participacion = true`
+- `noAprobo !== true` (el advisor no marcó como reprobado)
+- `cancelo !== true`
+
+**Múltiples intentos**: si el estudiante reprueba el Jump (intento con `noAprobo=true`), se queda en el step y puede reagendarlo. **Cualquier intento posterior que cumpla las 4 condiciones aprueba el Jump** — los `noAprobo=true` previos NO bloquean intentos exitosos posteriores. La regla evalúa `bookings.some(aproboElJump)`, no `every`.
+
+**Mensajes diagnósticos en orden de prioridad**:
+- Cualquier booking aprobó (los 4 campos OK) → completado, sin mensaje
+- `clasesDelStep.length === 0` → "Falta la clase del jump"
+- Todas canceladas → "Canceló la clase del jump, debe reagendarla"
+- Ninguna asistencia exitosa → "Falta asistir al jump"
+- Asistió pero ninguna con `participacion=true` → "Falta marcar participación en el jump"
+- Asistió y participó pero todos los intentos tienen `noAprobo=true` → "No aprobó el jump"
+
+**Implementación**: helper `aproboElJump(c)` definido en `student.service.ts`, `progress.service.ts` y `student-booking.service.ts`. Steps normales usan la regla previa basada en `asistio || asistencia` (`participacion` NO cuenta para ellos).
 
 **3. Overrides manuales**
 - Tienen **prioridad absoluta** sobre toda la lógica
@@ -1573,6 +1584,7 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `local` | fix: regla de **Jump Step estricta + múltiples intentos**. Causa raíz: el comparador para steps Jump (5, 10, 15…) usaba `clasesDelStep.some(c => c.noAprobo === true)` y bloqueaba la completitud si CUALQUIER booking del step había sido marcado `noAprobo=true`, sin importar si en intentos posteriores el estudiante aprobaba. Caso real: Wilkaris Ramírez (numeroId 32593763) reprobó BN2 Step 10 dos veces y aprobó al cuarto intento — el autoadvance no la promovió y un admin tuvo que cambiar el step manualmente. Fix: nuevo helper `aproboElJump(c)` aplicado en `student.service.ts` (`isCurrentStepComplete`), `progress.service.ts` (diagnóstico "¿Cómo voy?") y `student-booking.service.ts` (`getEffectiveStepNumber`). Regla nueva: Jump aprueba cuando AL MENOS UN booking cumple `(asistio||asistencia)=true AND participacion=true AND noAprobo!==true AND cancelo!==true`. Adicionalmente, `isExitosa` para steps normales ya NO acepta `participacion=true` como señal — solo `asistio||asistencia`. Mensajes diagnósticos del Jump reordenados: aprobado → sin clase → todas canceladas → falta asistir → falta participación → no aprobó. CLAUDE.md actualizado con la nueva regla |
 | `local` | chore: normalizar `PEOPLE.vigencia` anómala con `extensionCount = 0` a `'12'`. `scripts/normalize-vigencia-anomalous-with-zero-extensions.js` corrigió 17 filas con valores como `'3'`, `'4'`, `'193'`, `'312'`, `'350'` que tenían `extensionCount=0` (sin extensión real registrada) — errores de captura sin justificación de negocio. Complementa `normalize-vigencia-without-extensions.js` (que cubrió `extensionCount IS NULL`). Idempotente |
 | `local` | chore: normalizar `PEOPLE.vigencia` con texto/espacios a `'12'`. `scripts/normalize-vigencia-text-to-12.js` reemplazó 97 filas con valores como `'12 meses'`, `'12 '`, `'12 MESES'`, `'13 meses'` (residuos de captura Wix) por la forma canónica `'12'`. Filtra cualquier valor que no sea `^[0-9]+$`. Idempotente |
 | `local` | chore: corregir años desfasados en `PEOPLE.finalContrato`. `scripts/fix-finalcontrato-year-too-high.js` cambió 116 filas con año > 2027 (rango 2028–2052) a año 2026 conservando mes y día — errores de captura de la migración Wix. Idempotente |

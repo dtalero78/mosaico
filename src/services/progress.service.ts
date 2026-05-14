@@ -43,13 +43,24 @@ function isJumpStep(stepName: string): boolean {
 }
 
 /**
- * A class counts as "exitosa" if student attended.
- * participacion only counts for JUMP steps (multiples of 5: Step 5, 10, 15, ..., 45).
+ * A class counts as "exitosa" (used for NORMAL step counting) if the student attended.
+ * Jumps have their own stricter approval rule — see `aproboElJump`.
  */
 function isExitosa(c: any): boolean {
-  const stepName = c.step || c.nombreEvento || '';
-  const esJump = isJumpStep(stepName);
-  return c.asistio === true || c.asistencia === true || (esJump && c.participacion === true);
+  return c.asistio === true || c.asistencia === true;
+}
+
+/**
+ * Strict approval rule for a Jump booking (Step 5, 10, 15, ...):
+ *   asistencia=true AND participacion=true AND noAprobo!==true AND not cancelled.
+ * The student stays in the jump step until ANY one booking meets all four.
+ */
+function aproboElJump(c: any): boolean {
+  const asistio = c.asistio === true || c.asistencia === true;
+  return asistio
+      && c.participacion === true
+      && c.noAprobo !== true
+      && c.cancelo !== true;
 }
 
 /**
@@ -189,30 +200,33 @@ export async function generateReport(studentId: string) {
       completado = false;
       mensaje = 'Marcado como incompleto por administrador';
     } else if (esJump) {
-      // Jump Step rules:
-      // - no classes registered → stays in jump step
-      // - all classes cancelled → stays in jump step
-      // - has class but no exitosa attendance → stays in jump step
-      // - noAprobo = true → stays in jump step
-      // - exitosa attendance AND noAprobo != true → completed
+      // Jump approves only when ANY booking satisfies the strict rule:
+      // asistencia=true AND participacion=true AND noAprobo!==true AND not cancelled.
+      // Previous failed/incomplete attempts do NOT block a later successful one.
+      const aprobado = clasesDelStep.some((c) => aproboElJump(c));
       const clasesNoCancel = clasesDelStep.filter((c) => !c.cancelo);
       const todasCanceladas = clasesDelStep.length > 0 && clasesNoCancel.length === 0;
-      const tieneAsistenciaExitosa = clasesNoCancel.some((c) => isExitosa(c));
+      const algunaAsistio = clasesNoCancel.some((c) => isExitosa(c));
+      const algunaConParticipacion = clasesNoCancel.some((c) => c.participacion === true);
 
-      if (clasesDelStep.length === 0) {
+      if (aprobado) {
+        completado = true;
+      } else if (clasesDelStep.length === 0) {
         completado = false;
         mensaje = 'Falta la clase del jump';
       } else if (todasCanceladas) {
         completado = false;
         mensaje = 'Canceló la clase del jump, debe reagendarla';
-      } else if (tieneNoAprobo) {
-        completado = false;
-        mensaje = 'No aprobó el jump';
-      } else if (!tieneAsistenciaExitosa) {
+      } else if (!algunaAsistio) {
         completado = false;
         mensaje = 'Falta asistir al jump';
+      } else if (!algunaConParticipacion) {
+        completado = false;
+        mensaje = 'Falta marcar participación en el jump';
       } else {
-        completado = true;
+        // asistió + participó pero todos los intentos tienen noAprobo=true
+        completado = false;
+        mensaje = 'No aprobó el jump';
       }
     } else {
       // Normal Step: 2 sesiones exitosas + 1 TRAINING club exitoso
