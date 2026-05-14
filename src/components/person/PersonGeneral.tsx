@@ -8,6 +8,7 @@ import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import { api, handleApiError } from '@/hooks/use-api'
 import toast from 'react-hot-toast'
+import PersonContractViewer from './PersonContractViewer'
 
 interface PersonGeneralProps {
   person: Person
@@ -96,6 +97,9 @@ export default function PersonGeneral({ person }: PersonGeneralProps) {
     <div className="space-y-8">
       {/* Action Buttons */}
       <div className="flex items-center gap-3">
+        <PermissionGuard permission={PersonPermission.VER_CONTRATO}>
+          <PersonContractViewer person={person as any} />
+        </PermissionGuard>
         <PermissionGuard permission={PersonPermission.DESCARGAR_CONTRATO}>
           <button
             onClick={downloadContrato}

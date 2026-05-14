@@ -2,7 +2,6 @@ import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import PersonTabs from '@/components/person/PersonTabs'
-import PersonContractViewer from '@/components/person/PersonContractViewer'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 
@@ -108,25 +107,20 @@ async function PersonContent({ personId }: { personId: string }) {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <PermissionGuard permission={PersonPermission.VER_CONTRATO}>
-                <PersonContractViewer person={personData.person} />
-              </PermissionGuard>
-              <div className="flex items-center space-x-2">
-                <span className="badge badge-info">
-                  {personData.person.tipoUsuario}
+            <div className="flex items-center space-x-2">
+              <span className="badge badge-info">
+                {personData.person.tipoUsuario}
+              </span>
+              {personData.person.aprobacion && (
+                <span className={`badge ${getEstadoBadgeClass(personData.person.aprobacion)}`}>
+                  {personData.person.aprobacion}
                 </span>
-                {personData.person.aprobacion && (
-                  <span className={`badge ${getEstadoBadgeClass(personData.person.aprobacion)}`}>
-                    {personData.person.aprobacion}
-                  </span>
-                )}
-                {personData.person.plataforma && (
-                  <span className="badge badge-success">
-                    {personData.person.plataforma}
-                  </span>
-                )}
-              </div>
+              )}
+              {personData.person.plataforma && (
+                <span className="badge badge-success">
+                  {personData.person.plataforma}
+                </span>
+              )}
             </div>
           </div>
         </div>
