@@ -6,6 +6,7 @@ import { api, ApiError } from '@/hooks/use-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission } from '@/types/permissions'
 import StudentOnHold from './StudentOnHold'
+import UploadDocButton from './UploadDocButton'
 import {
   ChartBarIcon,
   ArrowPathIcon,
@@ -535,15 +536,22 @@ export default function StudentContract({ student, contratoFinalizado = false }:
                 rows={2} placeholder="Motivo de la extensión (opcional)"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-green-500 focus:border-green-500" />
             </div>
-            <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => { setShowExtensionModal(false); setMotivoExtension('') }}
-                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
-                Cancelar
-              </button>
-              <button type="button" onClick={handleExtendVigencia} disabled={isExtendingVigencia}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
-                {isExtendingVigencia ? 'Extendiendo...' : 'Confirmar extensión'}
-              </button>
+            <div className="flex items-center justify-between gap-3">
+              <UploadDocButton
+                peopleId={(student as any).peopleId || student._id}
+                size="sm"
+                label="Agregar Doc."
+              />
+              <div className="flex gap-3">
+                <button type="button" onClick={() => { setShowExtensionModal(false); setMotivoExtension('') }}
+                  className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleExtendVigencia} disabled={isExtendingVigencia}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50">
+                  {isExtendingVigencia ? 'Extendiendo...' : 'Confirmar extensión'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
