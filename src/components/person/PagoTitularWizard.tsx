@@ -341,7 +341,15 @@ export default function PagoTitularWizard({
 
           {/* Plan / Cuota */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <MoneyInput id="plan" label="Plan" value={form.plan} onChange={v => setForm(f => ({ ...f, plan: v }))} />
+            <div>
+              <label htmlFor="plan" className="block text-sm font-medium text-gray-700">Plan</label>
+              <input
+                id="plan" type="number" min={0} step="1" value={form.plan}
+                onChange={e => setForm(f => ({ ...f, plan: e.target.value.replace(/[^0-9]/g, '') }))}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                placeholder="0"
+              />
+            </div>
             <MoneyInput id="vlrTotalProg" label="Valor Total Programado" value={form.vlrTotalProg} onChange={v => setForm(f => ({ ...f, vlrTotalProg: v }))} />
             <div>
               <label htmlFor="numCuota" className="block text-sm font-medium text-gray-700"># Cuota</label>
