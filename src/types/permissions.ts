@@ -19,6 +19,7 @@ export enum Module {
   COMERCIAL = 'COMERCIAL',
   APROBACION = 'APROBACION',
   MANTENIMIENTO = 'MANTENIMIENTO',
+  RECAUDOS = 'RECAUDOS',
 }
 
 /**
@@ -64,6 +65,10 @@ export enum PersonPermission {
   WHATSAPP = 'PERSON.INFO.WHATSAPP',
   ELIMINAR = 'PERSON.INFO.ELIMINAR',
   ASIGNAR_GESTOR_RECAUDO = 'PERSON.FINANCIERA.ASIGNAR_GESTOR_RECAUDO',
+  PAGOS_VER              = 'PERSON.FINANCIERA.PAGOS_VER',
+  PAGOS_REGISTRAR        = 'PERSON.FINANCIERA.PAGOS_REGISTRAR',
+  PAGOS_VALIDAR          = 'PERSON.FINANCIERA.PAGOS_VALIDAR',
+  PAGOS_ELIMINAR         = 'PERSON.FINANCIERA.PAGOS_ELIMINAR',
 
   // Legacy permissions (keeping for backward compatibility)
   ACTIVAR_DESACTIVAR = 'PERSON.ADMIN.ACTIVAR_DESACTIVAR',
@@ -218,6 +223,13 @@ export enum MantenimientoPermission {
 }
 
 /**
+ * Permisos del módulo RECAUDOS (Menú Recaudos)
+ */
+export enum RecaudosPermission {
+  GESTION_VER = 'RECAUDOS.GESTION.VER',
+}
+
+/**
  * Permisos del módulo APROBACION (Menú Aprobación)
  */
 export enum AprobacionPermission {
@@ -249,7 +261,8 @@ export type Permission =
   | ComercialPermission
   | AprobacionPermission
   | MantenimientoPermission
-  | InformesPermission;
+  | InformesPermission
+  | RecaudosPermission;
 
 // ============================================================================
 // INTERFACES

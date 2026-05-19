@@ -16,6 +16,7 @@ import {
   ComercialPermission,
   AprobacionPermission,
   MantenimientoPermission,
+  RecaudosPermission,
 } from '@/types/permissions';
 
 // ============================================================================
@@ -44,6 +45,34 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     section: 'Financiera',
     name: 'Botón "Asignar Ejecutivo de Recaudos"',
     description: 'Botón en la pestaña Financiera del titular para asignar/reasignar el gestor de recaudo (USUARIOS_ROLES con rol RECAUDO_ASIST o RECAUDOS_JEFE). Sin este permiso el botón no aparece y el campo es de solo lectura',
+  },
+  {
+    code: PersonPermission.PAGOS_VER,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Sección "Pagos del Titular"',
+    description: 'Visualizar la lista de pagos registrados en PAGOS_TITULARES para el titular. Sin este permiso la sección no aparece',
+  },
+  {
+    code: PersonPermission.PAGOS_REGISTRAR,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Registrar Pago"',
+    description: 'Wizard de un solo paso para registrar un nuevo pago en PAGOS_TITULARES (fechaPago, valorPagado, descuento, medioPago, número referencia, número factura, documentación, etc.). Soporta auto-guardado en localStorage (TTL 72h)',
+  },
+  {
+    code: PersonPermission.PAGOS_VALIDAR,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Validar Pago"',
+    description: 'Marcar un pago como validado (validado=true, fechaValidacion=hoy, validadoPor=usuario actual). Una vez validado el pago se considera final',
+  },
+  {
+    code: PersonPermission.PAGOS_ELIMINAR,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Eliminar Pago"',
+    description: 'Borrar un registro de PAGOS_TITULARES. Acción irreversible — bloqueada cuando el pago ya está validado',
   },
   {
     code: PersonPermission.VER_DOCUMENTACION,
@@ -778,6 +807,15 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     section: 'Usuarios',
     name: 'Página "Migrar Contrato"',
     description: 'Acceso a migrar contratos existentes creando titular y beneficiarios manualmente con número de contrato predefinido',
+  },
+
+  // ========== RECAUDOS MODULE (Menú Recaudos) ==========
+  {
+    code: RecaudosPermission.GESTION_VER,
+    module: Module.RECAUDOS,
+    section: 'Gestión',
+    name: 'Sub-ítem "Gestión" (sidebar Recaudos)',
+    description: 'Acceso al grupo Recaudos > Gestión en el sidebar. Página de gestión de pagos/recaudos (en construcción)',
   },
 ];
 

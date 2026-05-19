@@ -33,4 +33,5 @@ export const ids = {
   complementaria: () => generateId('cmp'),
   advisor: () => generateId('adv'),
   audit: () => generateId('aud'),
+  payment: () => generateId('pag'),
 };

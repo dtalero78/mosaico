@@ -2,11 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import { CheckBadgeIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { Person, FinancialData } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
 import { api, handleApiError } from '@/hooks/use-api'
+import PagoTitularWizard from './PagoTitularWizard'
 
 interface PersonFinancialProps {
   person: Person
@@ -37,6 +40,53 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [saving, setSaving] = useState(false)
+
+  // Pagos del titular state
+  const { hasPermission } = usePermissions()
+  const canVerPagos = hasPermission(PersonPermission.PAGOS_VER)
+  const [pagos, setPagos] = useState<any[]>([])
+  const [loadingPagos, setLoadingPagos] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; nombre: string } | null>(null)
+
+  const loadPagos = useCallback(async () => {
+    if (!isTitular) return
+    setLoadingPagos(true)
+    try {
+      const data = await api.get<{ pagos: any[] }>(`/api/postgres/pagos-titulares?idPeople=${person._id}`)
+      setPagos(data.pagos || [])
+    } catch (err) {
+      console.warn('[PersonFinancial] No se pudieron cargar pagos:', err)
+    } finally {
+      setLoadingPagos(false)
+    }
+  }, [isTitular, person._id])
+
+  useEffect(() => {
+    if (isTitular && canVerPagos) loadPagos()
+  }, [isTitular, canVerPagos, loadPagos])
+
+  const handleValidarPago = async (id: string) => {
+    try {
+      await api.post(`/api/postgres/pagos-titulares/${id}/validar`, {})
+      toast.success('Pago validado')
+      loadPagos()
+    } catch (err) {
+      handleApiError(err, 'Error al validar pago')
+    }
+  }
+
+  const handleDeletePago = async () => {
+    if (!confirmDelete) return
+    try {
+      await api.delete(`/api/postgres/pagos-titulares/${confirmDelete.id}`)
+      toast.success('Pago eliminado')
+      setConfirmDelete(null)
+      loadPagos()
+    } catch (err) {
+      handleApiError(err, 'Error al eliminar pago')
+    }
+  }
 
   const loadRecaudoUsers = useCallback(async () => {
     setLoadingUsers(true)
@@ -244,6 +294,159 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
           )}
         </div>
       </div>
+
+      {/* ── Pagos del Titular ─────────────────────────────────────────────── */}
+      {isTitular && (
+        <PermissionGuard permission={PersonPermission.PAGOS_VER}>
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">📑 Pagos del Titular</h3>
+              <PermissionGuard permission={PersonPermission.PAGOS_REGISTRAR}>
+                <button
+                  type="button"
+                  onClick={() => setShowWizard(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                >
+                  <PlusIcon className="h-4 w-4" /> Registrar Pago
+                </button>
+              </PermissionGuard>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              {loadingPagos ? (
+                <p className="p-6 text-sm text-gray-400 italic text-center">Cargando pagos…</p>
+              ) : pagos.length === 0 ? (
+                <p className="p-6 text-sm text-gray-400 italic text-center">No hay pagos registrados</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Fecha</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Cuota</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-700">Valor Pagado</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-700">Descuento</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-700">Saldo</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Medio</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700"># Ref / Factura</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-700">Estado</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-700">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {pagos.map((p: any) => {
+                        const fechaPago = p.fechaPago
+                          ? new Date(p.fechaPago).toLocaleDateString('es', { timeZone: 'UTC' })
+                          : '—'
+                        return (
+                          <tr key={p._id} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 text-gray-900">{fechaPago}</td>
+                            <td className="px-3 py-2 text-gray-700">{p.numCuota ?? '—'}</td>
+                            <td className="px-3 py-2 text-right text-gray-900 font-medium">{p.valorPagado ? formatCurrency(p.valorPagado) : '—'}</td>
+                            <td className="px-3 py-2 text-right text-gray-600">{p.descuento ? formatCurrency(p.descuento) : '—'}</td>
+                            <td className="px-3 py-2 text-right text-amber-900 font-medium">{p.saldo != null ? formatCurrency(p.saldo) : '—'}</td>
+                            <td className="px-3 py-2 text-gray-700">{p.medioPago || '—'}</td>
+                            <td className="px-3 py-2 text-gray-700 text-xs">
+                              {p.numeroReferencia ? <div>R: {p.numeroReferencia}</div> : null}
+                              {p.numeroFactura ? <div>F: {p.numeroFactura}</div> : null}
+                              {!p.numeroReferencia && !p.numeroFactura ? '—' : null}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {p.validado ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  <CheckBadgeIcon className="h-3.5 w-3.5" /> Validado
+                                </span>
+                              ) : (
+                                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  Pendiente
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                {!p.validado && (
+                                  <PermissionGuard permission={PersonPermission.PAGOS_VALIDAR}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleValidarPago(p._id)}
+                                      title="Validar pago"
+                                      className="p-1 text-green-600 hover:text-green-800"
+                                    >
+                                      <CheckBadgeIcon className="h-4 w-4" />
+                                    </button>
+                                  </PermissionGuard>
+                                )}
+                                {!p.validado && (
+                                  <PermissionGuard permission={PersonPermission.PAGOS_ELIMINAR}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDelete({ id: p._id, nombre: `cuota ${p.numCuota ?? ''}` })}
+                                      title="Eliminar pago"
+                                      className="p-1 text-red-500 hover:text-red-700"
+                                    >
+                                      <TrashIcon className="h-4 w-4" />
+                                    </button>
+                                  </PermissionGuard>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </PermissionGuard>
+      )}
+
+      {/* ── Wizard Registrar Pago ──────────────────────────────────────────── */}
+      {showWizard && (
+        <PagoTitularWizard
+          isOpen={showWizard}
+          onClose={() => setShowWizard(false)}
+          titular={{
+            _id: person._id,
+            numeroId: person.numeroId,
+            plataforma: person.plataforma,
+            gestorRecaudo: gestorRecaudoId,
+            primerNombre: person.primerNombre,
+            primerApellido: person.primerApellido,
+          }}
+          gestorLabel={currentGestor ? `${currentGestor.nombre} · ${ROLE_LABEL[currentGestor.rol] || currentGestor.rol}` : null}
+          onCreated={loadPagos}
+        />
+      )}
+
+      {/* ── Confirm Delete Pago ────────────────────────────────────────────── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-900">⚠️ Eliminar Pago</h3>
+            <p className="text-sm text-gray-600">
+              ¿Confirmas eliminar este pago ({confirmDelete.nombre})? Esta acción es irreversible.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePago}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal Asignar Ejecutivo de Recaudos ──────────────────────────── */}
       {showAssignModal && (

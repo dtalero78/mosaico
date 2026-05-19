@@ -15,6 +15,7 @@ import {
   ComercialPermission,
   AprobacionPermission,
   MantenimientoPermission,
+  RecaudosPermission,
 } from '@/types/permissions';
 
 // ============================================================================
@@ -33,6 +34,7 @@ const SUPER_ADMIN_PERMISSIONS: Permission[] = [
   ...Object.values(ComercialPermission),
   ...Object.values(AprobacionPermission),
   ...Object.values(MantenimientoPermission),
+  ...Object.values(RecaudosPermission),
 ];
 
 /**

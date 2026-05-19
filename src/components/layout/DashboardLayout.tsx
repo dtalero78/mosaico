@@ -19,11 +19,12 @@ import {
   MegaphoneIcon,
   ChartBarIcon,
   WrenchScrewdriverIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 import SearchBar from '@/components/search/SearchBar'
 import { usePermissions } from '@/hooks/usePermissions'
-import { ServicioPermission, AcademicoPermission, InformesPermission, ComercialPermission, AprobacionPermission, MantenimientoPermission, Permission } from '@/types/permissions'
+import { ServicioPermission, AcademicoPermission, InformesPermission, ComercialPermission, AprobacionPermission, MantenimientoPermission, RecaudosPermission, Permission } from '@/types/permissions'
 
 const getNavigation = (userEmail: string) => [
   {
@@ -70,6 +71,13 @@ const getNavigation = (userEmail: string) => [
     name: 'Aprobación',
     href: '/dashboard/aprobacion',
     icon: ShieldCheckIcon,
+  },
+  {
+    name: 'Recaudos',
+    icon: BanknotesIcon,
+    children: [
+      { name: 'Gestión', href: '/dashboard/recaudos/gestion', newTab: true },
+    ],
   },
   {
     name: 'Informes',
@@ -264,6 +272,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/admin/migrar-contrato': [
       MantenimientoPermission.MIGRAR_CONTRATO,
     ],
+    // Recaudos
+    '/dashboard/recaudos/gestion': [
+      RecaudosPermission.GESTION_VER,
+    ],
     // Aprobación
     '/dashboard/aprobacion': [
       AprobacionPermission.ACTUALIZAR,
@@ -344,6 +356,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       AprobacionPermission.ENVIAR_PDF,
       AprobacionPermission.DESCARGAR,
       AprobacionPermission.APROBACION_AUTONOMA,
+    ],
+    'Recaudos': [
+      RecaudosPermission.GESTION_VER,
     ],
   }
 

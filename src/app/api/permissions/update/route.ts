@@ -6,7 +6,7 @@
 
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { ForbiddenError, ValidationError, NotFoundError } from '@/lib/errors';
-import { Role, PersonPermission, StudentPermission, AcademicoPermission, InformesPermission, ServicioPermission, ComercialPermission, AprobacionPermission, MantenimientoPermission } from '@/types/permissions';
+import { Role, PersonPermission, StudentPermission, AcademicoPermission, InformesPermission, ServicioPermission, ComercialPermission, AprobacionPermission, MantenimientoPermission, RecaudosPermission } from '@/types/permissions';
 import { invalidatePermissionsCache } from '@/config/roles';
 import { RolPermisosRepository } from '@/repositories/roles.repository';
 
@@ -19,6 +19,7 @@ const VALID_PERMISSIONS = new Set<string>([
   ...Object.values(ComercialPermission),
   ...Object.values(AprobacionPermission),
   ...Object.values(MantenimientoPermission),
+  ...Object.values(RecaudosPermission),
 ]);
 
 export const POST = handlerWithAuth(async (req, _ctx, session) => {

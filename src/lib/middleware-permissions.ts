@@ -190,6 +190,11 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
     'MANTENIMIENTO.CONTRATOS.MIGRAR' as Permission,
   ],
 
+  // Recaudos - Gestión
+  '/dashboard/recaudos/gestion': [
+    'RECAUDOS.GESTION.VER' as Permission,
+  ],
+
   // Aprobación
   '/dashboard/aprobacion': [
     'APROBACION.MODIFICAR.ACTUALIZAR' as Permission,
