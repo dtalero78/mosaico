@@ -189,9 +189,14 @@ export async function getAvailableEvents(
     upcoming.map((b: any) => b.eventoId || b.idEvento)
   );
 
-  // Get hours where student already has a booking on this date (same-hour exclusion)
-  const bookedHours = await BookingRepository.findBookedHoursForDate(studentId, date);
-  const bookedHoursSet = new Set(bookedHours);
+  // Get timestamps of student's existing bookings within the same UTC window
+  // as the events being shown. We compare by full ISO timestamp (not just the
+  // hora field) so that a past booking at 00:00 doesn't shadow a future
+  // event also at 00:00 on a different day.
+  const bookedTimestamps = await BookingRepository.findBookedTimestampsInRange(
+    studentId, startDate, endDate
+  );
+  const bookedTimestampsSet = new Set(bookedTimestamps);
 
   // Determine the effective step based on actual progress
   const effectiveStepNum = await getEffectiveStepNumber(studentId, nivel);
@@ -218,8 +223,9 @@ export async function getAvailableEvents(
       return null;
     }
 
-    // Same-hour exclusion: skip events at hours where student already has a booking
-    if (evt.hora && bookedHoursSet.has(evt.hora)) {
+    // Same-moment exclusion: skip events at the exact same UTC timestamp as
+    // an existing booking (prevents double-booking the same hour and day).
+    if (bookedTimestampsSet.has(evtDate.toISOString())) {
       return null;
     }
 

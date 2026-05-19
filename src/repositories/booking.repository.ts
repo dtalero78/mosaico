@@ -577,17 +577,31 @@ class BookingRepositoryClass extends BaseRepository {
   }
 
   /**
-   * Get hours where student already has a booking on a given date
+   * Get timestamps (ISO UTC) of bookings whose event falls within the given
+   * UTC range. Used by the booking flow to prevent the student from booking
+   * two events at the SAME moment in time.
+   *
+   * Why a range and not just a date: a previous version returned only the
+   * time-of-day, which made past bookings at 00:00 block future events at
+   * 00:00 (different day). Comparing full timestamps eliminates that
+   * ambiguity.
    */
-  async findBookedHoursForDate(studentId: string, dateStr: string): Promise<string[]> {
-    const rows = await queryMany<{ hora: string }>(
-      `SELECT DISTINCT "hora" FROM "ACADEMICA_BOOKINGS"
+  async findBookedTimestampsInRange(
+    studentId: string,
+    startISO: string,
+    endISO: string
+  ): Promise<string[]> {
+    const rows = await queryMany<{ ts: string }>(
+      `SELECT "fechaEvento"::text AS ts FROM "ACADEMICA_BOOKINGS"
        WHERE ("idEstudiante" = $1 OR "studentId" = $1)
-         AND DATE("fechaEvento") = $2::date
+         AND "fechaEvento" >= $2::timestamptz
+         AND "fechaEvento" <= $3::timestamptz
          AND "cancelo" = false`,
-      [studentId, dateStr]
+      [studentId, startISO, endISO]
     );
-    return rows.map((r) => r.hora);
+    // Normalize via Date so we can compare with `.toISOString()` of the
+    // candidate event in JS.
+    return rows.map((r) => new Date(r.ts).toISOString());
   }
 
   async cancelBooking(bookingId: string) {
