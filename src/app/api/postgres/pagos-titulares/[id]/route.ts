@@ -26,6 +26,7 @@ export const PATCH = handlerWithAuth(async (req, ctx, session) => {
 
 export const DELETE = handlerWithAuth(async (_req, ctx, session) => {
   await requirePermission(session, PersonPermission.PAGOS_ELIMINAR);
-  await pagosTitularesService.remove(ctx.params.id);
+  const userRole = ((session.user as any)?.role ?? '') as string;
+  await pagosTitularesService.remove(ctx.params.id, userRole);
   return successResponse({ deleted: true });
 });

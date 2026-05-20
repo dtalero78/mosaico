@@ -51,8 +51,11 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   const [saving, setSaving] = useState(false)
 
   // Pagos del titular state
-  const { hasPermission } = usePermissions()
+  const { hasPermission, isRole } = usePermissions()
   const canVerPagos = hasPermission(PersonPermission.PAGOS_VER)
+  // SuperAdmin/Admin ve siempre las acciones (incluso sobre pagos validados),
+  // resto de roles solo ve acciones sobre pagos pendientes.
+  const isAdmin = isRole('SUPER_ADMIN' as any) || isRole('ADMIN' as any)
   const [pagos, setPagos] = useState<any[]>([])
   const [loadingPagos, setLoadingPagos] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
@@ -431,6 +434,9 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                             <td className="px-3 py-2 text-gray-700 text-xs">{p.numeroFactura || '—'}</td>
                             <td className="px-3 py-2 text-right">
                               <div className="flex items-center justify-end gap-1">
+                                {/* Validar: visible si no está validado (cualquier rol con permiso).
+                                    SuperAdmin/Admin también lo ven en validados como referencia,
+                                    pero el botón se deshabilita porque ya está validado. */}
                                 {!p.validado && (
                                   <PermissionGuard permission={PersonPermission.PAGOS_VALIDAR}>
                                     <button
@@ -443,12 +449,14 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                                     </button>
                                   </PermissionGuard>
                                 )}
-                                {!p.validado && (
+                                {/* Eliminar: visible para pagos pendientes (cualquier rol con permiso)
+                                    o siempre para SuperAdmin/Admin (pueden borrar validados también). */}
+                                {(!p.validado || isAdmin) && (
                                   <PermissionGuard permission={PersonPermission.PAGOS_ELIMINAR}>
                                     <button
                                       type="button"
-                                      onClick={() => setConfirmDelete({ id: p._id, nombre: `cuota ${p.numCuota ?? ''}` })}
-                                      title="Eliminar pago"
+                                      onClick={() => setConfirmDelete({ id: p._id, nombre: `cuota ${p.numCuota ?? ''}${p.validado ? ' (validado)' : ''}` })}
+                                      title={p.validado ? 'Eliminar pago validado (acción de admin)' : 'Eliminar pago'}
                                       className="p-1 text-red-500 hover:text-red-700"
                                     >
                                       <TrashIcon className="h-4 w-4" />

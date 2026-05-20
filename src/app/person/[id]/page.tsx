@@ -9,6 +9,9 @@ interface PersonPageProps {
   params: {
     id: string
   }
+  searchParams?: {
+    tab?: string
+  }
 }
 
 // Helper to get base URL for server-side fetch
@@ -21,19 +24,19 @@ function getBaseUrl() {
   return 'http://localhost:3001'
 }
 
-export default async function PersonPage({ params }: PersonPageProps) {
+export default async function PersonPage({ params, searchParams }: PersonPageProps) {
   return (
     <DashboardLayout>
       <PermissionGuard permission={PersonPermission.VER_DOCUMENTACION}>
         <Suspense fallback={<PersonPageLoading />}>
-          <PersonContent personId={params.id} />
+          <PersonContent personId={params.id} initialTab={searchParams?.tab} />
         </Suspense>
       </PermissionGuard>
     </DashboardLayout>
   )
 }
 
-async function PersonContent({ personId }: { personId: string }) {
+async function PersonContent({ personId, initialTab }: { personId: string; initialTab?: string }) {
   try {
     // Call PostgreSQL API endpoint
     const baseUrl = getBaseUrl()
@@ -130,6 +133,7 @@ async function PersonContent({ personId }: { personId: string }) {
           person={personData.person}
           financialData={financialData}
           beneficiaries={beneficiaries}
+          initialTab={initialTab}
         />
       </div>
     )

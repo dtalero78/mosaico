@@ -14,6 +14,8 @@ interface PersonTabsProps {
   person: Person
   financialData?: FinancialData
   beneficiaries: Beneficiary[]
+  /** Tab inicial. Acepta el id interno o un alias amigable de URL (ej. 'financiera' → 'financial'). */
+  initialTab?: string
 }
 
 const tabs = [
@@ -25,8 +27,31 @@ const tabs = [
   { id: 'docs', name: 'Documentación', icon: '📎' },
 ]
 
-export default function PersonTabs({ person, financialData, beneficiaries }: PersonTabsProps) {
-  const [activeTab, setActiveTab] = useState('general')
+// Alias para deep-links desde URL (?tab=financiera, ?tab=admin, etc.)
+const TAB_ALIASES: Record<string, string> = {
+  financiera: 'financial',
+  financial: 'financial',
+  general: 'general',
+  contacto: 'contact',
+  contact: 'contact',
+  administracion: 'admin',
+  administración: 'admin',
+  admin: 'admin',
+  comentarios: 'comments',
+  comments: 'comments',
+  documentacion: 'docs',
+  documentación: 'docs',
+  docs: 'docs',
+}
+
+function resolveInitialTab(initial?: string): string {
+  if (!initial) return 'general'
+  const key = initial.toLowerCase()
+  return TAB_ALIASES[key] || 'general'
+}
+
+export default function PersonTabs({ person, financialData, beneficiaries, initialTab }: PersonTabsProps) {
+  const [activeTab, setActiveTab] = useState(() => resolveInitialTab(initialTab))
 
   const renderTabContent = () => {
     switch (activeTab) {

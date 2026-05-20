@@ -113,6 +113,32 @@ export const pagosTitularesService = {
     return PagosTitularesRepository.findByIdPeople(idPeople);
   },
 
+  /**
+   * Lista paginada para el Centro de Validación de Pagos
+   * (con JOIN PEOPLE, excluye cuota #0).
+   */
+  async listForGestion(opts: {
+    estado?: 'validado' | 'pendiente';
+    fechaDesde?: string | null;
+    fechaHasta?: string | null;
+    search?: string | null;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const pageSize = Math.min(Math.max(1, opts.pageSize ?? 50), 500);
+    const page = Math.max(1, opts.page ?? 1);
+    const offset = (page - 1) * pageSize;
+    const { rows, total } = await PagosTitularesRepository.findAllWithTitular({
+      estado: opts.estado,
+      fechaDesde: opts.fechaDesde ?? null,
+      fechaHasta: opts.fechaHasta ?? null,
+      search: opts.search ?? null,
+      limit: pageSize,
+      offset,
+    });
+    return { pagos: rows, total, page, pageSize };
+  },
+
   async getById(id: string): Promise<PagoTitular> {
     const row = await PagosTitularesRepository.findById(id);
     if (!row) throw new NotFoundError('PAGOS_TITULARES', id);
@@ -199,12 +225,28 @@ export const pagosTitularesService = {
     return updated;
   },
 
-  async remove(id: string): Promise<void> {
+  /**
+   * Elimina un pago.
+   * - Pagos pendientes: cualquier rol con `PAGOS_ELIMINAR` puede borrar.
+   * - Pagos validados: sólo SUPER_ADMIN / ADMIN. Otros roles reciben error
+   *   ("No se puede eliminar un pago validado"). Tras borrar un validado se
+   *   recalcula `FINANCIEROS.saldo`/`cuotasPagadas` para que el monto vuelva
+   *   al saldo.
+   */
+  async remove(id: string, userRole?: string): Promise<void> {
     const existing = await PagosTitularesRepository.findById(id);
     if (!existing) throw new NotFoundError('PAGOS_TITULARES', id);
-    if (existing.validado) {
+
+    const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || userRole === 'admin';
+    if (existing.validado && !isAdmin) {
       throw new ValidationError('No se puede eliminar un pago validado');
     }
+
     await PagosTitularesRepository.deleteById(id);
+
+    // Si el pago borrado estaba validado, hay que recalcular saldo del titular
+    if (existing.validado) {
+      await syncFinancieroSaldo(existing.idPeople);
+    }
   },
 };

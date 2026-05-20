@@ -114,6 +114,79 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
   }
 
   /**
+   * Lista paginada de pagos con datos del titular (JOIN PEOPLE) para el
+   * Centro de Validación de Pagos. Excluye cuota#0 (inscripción auto-validada).
+   *
+   * Filtros opcionales:
+   * - estado: 'validado' | 'pendiente' | undefined (todos)
+   * - fechaDesde / fechaHasta: rango sobre fechaPago (YYYY-MM-DD)
+   * - search: ILIKE sobre primerNombre, primerApellido, segundoApellido del titular
+   */
+  async findAllWithTitular(opts: {
+    estado?: 'validado' | 'pendiente';
+    fechaDesde?: string | null;
+    fechaHasta?: string | null;
+    search?: string | null;
+    limit: number;
+    offset: number;
+  }): Promise<{ rows: any[]; total: number }> {
+    const conds: string[] = [`COALESCE(pt."numCuota", 0) > 0`]; // excluye cuota #0
+    const params: any[] = [];
+    let i = 1;
+
+    if (opts.estado === 'validado') conds.push(`pt."validado" = true`);
+    else if (opts.estado === 'pendiente') conds.push(`pt."validado" = false`);
+
+    if (opts.fechaDesde) { conds.push(`pt."fechaPago" >= $${i}::date`); params.push(opts.fechaDesde); i++; }
+    if (opts.fechaHasta) { conds.push(`pt."fechaPago" <= $${i}::date`); params.push(opts.fechaHasta); i++; }
+
+    if (opts.search && opts.search.trim()) {
+      const term = `%${opts.search.trim()}%`;
+      conds.push(`(
+        p."primerNombre" ILIKE $${i}
+        OR p."primerApellido" ILIKE $${i}
+        OR p."segundoApellido" ILIKE $${i}
+        OR p."contrato" ILIKE $${i}
+        OR p."numeroId" ILIKE $${i}
+      )`);
+      params.push(term); i++;
+    }
+
+    const whereClause = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
+    // Total
+    const totalRow = await queryOne<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
+       FROM "PAGOS_TITULARES" pt
+       JOIN "PEOPLE" p ON p."_id" = pt."idPeople"
+       ${whereClause}`,
+      params
+    );
+    const total = parseInt(totalRow?.total ?? '0', 10) || 0;
+
+    // Página
+    const limitIdx = i; const offsetIdx = i + 1;
+    const rows = await queryMany<any>(
+      `SELECT
+         pt.*,
+         p."primerNombre"    AS titular_primerNombre,
+         p."primerApellido"  AS titular_primerApellido,
+         p."segundoApellido" AS titular_segundoApellido,
+         p."numeroId"        AS titular_numeroId,
+         p."contrato"        AS titular_contrato,
+         p."plataforma"      AS titular_plataforma
+       FROM "PAGOS_TITULARES" pt
+       JOIN "PEOPLE" p ON p."_id" = pt."idPeople"
+       ${whereClause}
+       ORDER BY pt."fechaPago" DESC, pt."_createdDate" DESC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      [...params, opts.limit, opts.offset]
+    );
+
+    return { rows: this.parseMany(rows), total };
+  }
+
+  /**
    * Generic update by id with field whitelist.
    */
   async updateFields(id: string, body: Record<string, any>, allowedFields: string[]) {
