@@ -1,6 +1,21 @@
 import 'server-only';
+import https from 'https';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
+
+// En dev (Node sin CA del sistema, certificados locales rotos, etc.) saltamos
+// la verificación TLS sólo para el cliente de Spaces. En producción se mantiene
+// estricta. Variable opcional DO_SPACES_INSECURE_TLS=1 fuerza el bypass.
+const isProd = process.env.NODE_ENV === 'production';
+const forceInsecure = process.env.DO_SPACES_INSECURE_TLS === '1';
+const skipTlsVerify = forceInsecure || !isProd;
+
+const requestHandler = skipTlsVerify
+  ? new NodeHttpHandler({
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+    })
+  : undefined;
 
 export const spacesClient = new S3Client({
   endpoint: process.env.DO_SPACES_ENDPOINT || 'https://sfo3.digitaloceanspaces.com',
@@ -10,6 +25,7 @@ export const spacesClient = new S3Client({
     secretAccessKey: process.env.DO_SPACES_SECRET || '',
   },
   forcePathStyle: false,
+  ...(requestHandler ? { requestHandler } : {}),
 });
 
 export const SPACES_BUCKET = process.env.DO_SPACES_BUCKET || 'lgs-bucket';

@@ -3,6 +3,15 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
+import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
+
+function parseMoney(v: any): number {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const cleaned = String(v).replace(/\./g, '').replace(',', '.').replace(/[^0-9.\-]/g, '');
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
 
 const CODIGOS_PAIS: Record<string, string> = {
   'Chile': '01',
@@ -32,7 +41,7 @@ async function generateContractNumber(plataforma: string): Promise<string> {
   return `${codigoPais}-${siguiente}-${anoActual}`;
 }
 
-export const POST = handlerWithAuth(async (request) => {
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const { titular, financial, beneficiarios, titularEsBeneficiario } = await request.json();
 
   if (!titular?.plataforma) throw new ValidationError('plataforma is required');
@@ -123,6 +132,79 @@ export const POST = handlerWithAuth(async (request) => {
        financial.fechaPago || null, financial.medioPago || null, financial.vigencia || null]
     );
     created.financiero = finResult.rows[0];
+
+    // 5. Crear registro inicial en PAGOS_TITULARES (cuota #0) — best effort.
+    //    Cuota #0 representa el pago de inscripción realizado al firmar:
+    //      - valorPagado = inscripción (la plata efectivamente recibida)
+    //      - inscripcion = inscripción (etiqueta semántica, redundante con valorPagado)
+    //      - validado    = true (la inscripción se considera validada al crear el contrato)
+    //      - validadoPor / fechaValidacion = sesión actual / hoy
+    //      - gestorRecaudo = USUARIOS_ROLES._id del comercial que crea el contrato
+    //                       (titular.asesor email → _id; fallback session.user.email).
+    //    Si falla NO rompe la creación del contrato (log y se continúa).
+    try {
+      const createdBy = (session.user as any)?.email || 'unknown';
+      const totalPlanNum    = parseMoney(financial.totalPlan);
+      const inscripcionNum  = parseMoney(financial.pagoInscripcion);
+      const saldoNum        = parseMoney(financial.saldo);
+      const valorCuotaNum   = parseMoney(financial.valorCuota);
+
+      // Resolver _id del comercial (asesor) → fallback al email crudo si no se encuentra
+      const comercialEmail = (titular.asesor || createdBy || '').trim().toLowerCase();
+      let comercialId: string | null = null;
+      if (comercialEmail) {
+        const found = await query(
+          `SELECT "_id" FROM "USUARIOS_ROLES" WHERE LOWER("email") = $1 LIMIT 1`,
+          [comercialEmail]
+        );
+        comercialId = found.rows[0]?._id ?? comercialEmail; // _id si existe, sino email crudo
+      }
+
+      const cuotasTotalNum = parseInt(String(financial.numeroCuotas ?? 0), 10) || 0;
+
+      const pagoResult = await query(
+        `INSERT INTO "PAGOS_TITULARES" (
+           "_id", "idPeople", "numeroId", "gestorRecaudo", "plataforma",
+           "fechaPago", "fechaVencimiento", "numCuota", "cuotasTotal", "vlrTotalProg",
+           "valorCuota", "valorPagado", "inscripcion", "saldo", "descuento",
+           "medioPago", "documentosAdjuntos",
+           "validado", "fechaValidacion", "validadoPor",
+           "createdBy", "_createdDate", "_updatedDate"
+         ) VALUES (
+           $1, $2, $3, $4, $5,
+           CURRENT_DATE, $6::date, 0, $7, $8,
+           $9, $10, $11, $12, 0,
+           $13, '[]'::jsonb,
+           true, CURRENT_DATE, $14,
+           $14, NOW(), NOW()
+         ) RETURNING "_id"`,
+        [
+          ids.payment(),
+          titularId,
+          titular.numeroId,
+          comercialId,
+          titular.plataforma || null,
+          financial.fechaPago || null,
+          cuotasTotalNum,
+          totalPlanNum,
+          valorCuotaNum,
+          inscripcionNum, // valorPagado
+          inscripcionNum, // inscripcion
+          saldoNum,
+          financial.medioPago || null,
+          createdBy,
+        ]
+      );
+      created.pagoInicial = pagoResult.rows[0];
+
+      // 6. Sync FINANCIEROS.saldo desde los pagos VALIDADOS (Opción 2).
+      //    Como cuota#0 acaba de nacer validada, esto recalcula saldo desde
+      //    la fuente de verdad (PAGOS_TITULARES) en vez de confiar en el
+      //    valor que escribió el form. Best-effort.
+      await syncFinancieroSaldo(titularId);
+    } catch (err: any) {
+      console.warn(`[contracts] PAGOS_TITULARES cuota#0 falló para ${contrato}:`, err?.message || err);
+    }
   }
 
   return successResponse({

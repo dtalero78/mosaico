@@ -25,9 +25,14 @@ interface RecaudoUser {
 }
 
 const GESTOR_ROLES = ['RECAUDO_ASIST', 'RECAUDOS_JEFE']
+// Roles que pueden aparecer en PAGOS_TITULARES.gestorRecaudo (cuota#0 = comercial; resto = recaudo)
+const DISPLAY_ROLES = ['RECAUDO_ASIST', 'RECAUDOS_JEFE', 'COMERCIAL', 'SUPER_ADMIN', 'ADMIN']
 const ROLE_LABEL: Record<string, string> = {
   RECAUDO_ASIST: 'Asistente',
   RECAUDOS_JEFE: 'Jefe',
+  COMERCIAL: 'Comercial',
+  SUPER_ADMIN: 'Admin',
+  ADMIN: 'Admin',
 }
 
 export default function PersonFinancial({ person, financialData }: PersonFinancialProps) {
@@ -35,7 +40,11 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
 
   // Gestor de recaudo state
   const [gestorRecaudoId, setGestorRecaudoId] = useState<string | null>(person.gestorRecaudo ?? null)
+  /** Sólo usuarios con rol RECAUDO_* (poblar dropdown del modal Asignar Ejecutivo) */
   const [recaudoUsers, setRecaudoUsers] = useState<RecaudoUser[]>([])
+  /** Lista ampliada (incluye COMERCIAL/ADMIN) para resolver el _id de cualquier
+   *  gestorRecaudo guardado en PAGOS_TITULARES.gestorRecaudo (cuota#0 = comercial) */
+  const [displayUsers, setDisplayUsers] = useState<RecaudoUser[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<string>('')
@@ -107,10 +116,14 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   const loadRecaudoUsers = useCallback(async () => {
     setLoadingUsers(true)
     try {
+      // Carga ampliada (recaudo + comercial + admin) — para resolver nombre del gestor en cada pago
       const data = await api.get<{ users: RecaudoUser[] }>(
-        `/api/postgres/users/by-role?roles=${GESTOR_ROLES.join(',')}&activeOnly=true`
+        `/api/postgres/users/by-role?roles=${DISPLAY_ROLES.join(',')}&activeOnly=true`
       )
-      setRecaudoUsers(data.users || [])
+      const allUsers = data.users || []
+      setDisplayUsers(allUsers)
+      // Subset para el dropdown de Asignar Ejecutivo (sólo roles de Recaudo)
+      setRecaudoUsers(allUsers.filter(u => GESTOR_ROLES.includes(u.rol)))
     } catch (err) {
       console.warn('[PersonFinancial] No se pudieron cargar usuarios de recaudo:', err)
     } finally {
@@ -158,10 +171,13 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
       return parseFloat(cleaned) || 0
     }
     const cuotaInicialParsed = parseCurrency(data.pagoInscripcion)
+    const numeroCuotas = parseInt(data.numeroCuotas) || 0
+    const cuotasPagadas = parseInt(data.cuotasPagadas) || 0
     financial = {
       contrato: data.contrato || person.contrato,
       tarifa: parseCurrency(data.valorCuota),
-      cuotas: parseInt(data.numeroCuotas) || 0,
+      cuotas: numeroCuotas,
+      cuotasPagadas,
       saldo: parseCurrency(data.saldo),
       fechaUltimoPago: data.fechaPago || '',
       totalPlan: parseCurrency(data.totalPlan),
@@ -173,7 +189,9 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
       confirmaPrixus: data.confirmaPrixus || 'No',
       montoTotal: parseCurrency(data.totalPlan),
       montoPendiente: parseCurrency(data.saldo),
-      cuotasRestantes: data.valorCuota ? Math.ceil(parseCurrency(data.saldo) / parseCurrency(data.valorCuota)) : 0,
+      // Cuotas restantes = total de cuotas del contrato − cuotas validadas
+      // (FINANCIEROS.cuotasPagadas se mantiene al día por syncFinancieroSaldo)
+      cuotasRestantes: Math.max(0, numeroCuotas - cuotasPagadas),
     }
     const montoPagado = financial.montoTotal - financial.montoPendiente
     paymentProgress = financial.montoTotal > 0 ? (montoPagado / financial.montoTotal) * 100 : 0
@@ -346,6 +364,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                         <th className="px-3 py-2 text-right font-medium text-gray-700">Saldo</th>
                         <th className="px-3 py-2 text-center font-medium text-gray-700">Validado</th>
                         <th className="px-3 py-2 text-left font-medium text-gray-700">Fecha Validación</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Validado por</th>
                         <th className="px-3 py-2 text-left font-medium text-gray-700"># Factura</th>
                         <th className="px-3 py-2 text-right font-medium text-gray-700">Acciones</th>
                       </tr>
@@ -358,8 +377,11 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                         const fechaValidacion = p.fechaValidacion
                           ? new Date(p.fechaValidacion).toLocaleDateString('es', { timeZone: 'UTC' })
                           : '—'
-                        const gestor = recaudoUsers.find(u => u._id === p.gestorRecaudo)
-                        const gestorLabel = gestor ? gestor.nombre : (p.gestorRecaudo ? '—' : '—')
+                        // PAGOS_TITULARES.gestorRecaudo puede ser _id de USUARIOS_ROLES
+                        // (comercial en cuota#0, recaudo en otras) o un email crudo de fallback
+                        const gestor = displayUsers.find(u => u._id === p.gestorRecaudo)
+                          || displayUsers.find(u => u.email === p.gestorRecaudo)
+                        const gestorLabel = gestor ? gestor.nombre : (p.gestorRecaudo || '—')
                         return (
                           <tr key={p._id} className="hover:bg-gray-50">
                             <td className="px-3 py-2 text-center text-gray-900 font-medium">{p.numCuota ?? '—'}</td>
@@ -391,6 +413,9 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                               )}
                             </td>
                             <td className="px-3 py-2 text-gray-700 text-xs">{fechaValidacion}</td>
+                            <td className="px-3 py-2 text-gray-700 text-xs" title={p.validadoPor || ''}>
+                              {p.validadoPor ? p.validadoPor.split('@')[0] : '—'}
+                            </td>
                             <td className="px-3 py-2 text-gray-700 text-xs">{p.numeroFactura || '—'}</td>
                             <td className="px-3 py-2 text-right">
                               <div className="flex items-center justify-end gap-1">
@@ -446,6 +471,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
             primerApellido: person.primerApellido,
           }}
           gestorLabel={currentGestor ? `${currentGestor.nombre} · ${ROLE_LABEL[currentGestor.rol] || currentGestor.rol}` : null}
+          existingPagos={pagos}
           onCreated={loadPagos}
         />
       )}

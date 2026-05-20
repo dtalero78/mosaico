@@ -32,6 +32,8 @@ export interface PagoTitular {
   valorPagado: number | null;
   saldo: number | null;
   descuento: number | null;
+  inscripcion: number | null;
+  cuotasTotal: number | null;
   medioPago: string | null;
   numeroReferencia: string | null;
   numeroFactura: string | null;
@@ -70,15 +72,15 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
       `INSERT INTO "PAGOS_TITULARES" (
          "_id", "idPeople", "numeroId", "gestorRecaudo", "plataforma",
          "pagoTercero", "idTercero", "fechaPago", "fechaVencimiento",
-         "plan", "vlrTotalProg", "numCuota", "valorCuota", "valorPagado",
-         "saldo", "descuento", "medioPago", "numeroReferencia",
+         "plan", "vlrTotalProg", "numCuota", "cuotasTotal", "valorCuota", "valorPagado",
+         "saldo", "descuento", "inscripcion", "medioPago", "numeroReferencia",
          "numeroFactura", "documentosAdjuntos", "validado", "createdBy"
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, $8, $9,
-         $10, $11, $12, $13, $14,
-         $15, $16, $17, $18,
-         $19, $20::jsonb, $21, $22
+         $10, $11, $12, $13, $14, $15,
+         $16, $17, $18, $19, $20,
+         $21, $22::jsonb, $23, $24
        )
        RETURNING *`,
       [
@@ -94,10 +96,12 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
         data.plan ?? null,
         data.vlrTotalProg ?? null,
         data.numCuota ?? null,
+        data.cuotasTotal ?? null,
         data.valorCuota ?? null,
         data.valorPagado ?? null,
         data.saldo ?? null,
         data.descuento ?? 0,
+        data.inscripcion ?? null,
         data.medioPago ?? null,
         data.numeroReferencia ?? null,
         data.numeroFactura ?? null,

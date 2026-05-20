@@ -14,6 +14,7 @@ import 'server-only';
 import { PagosTitularesRepository, type PagoTitular } from '@/repositories/pagos-titulares.repository';
 import { PeopleRepository } from '@/repositories/people.repository';
 import { ids } from '@/lib/id-generator';
+import { query, queryOne } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 
 const UPDATABLE_FIELDS = [
@@ -26,10 +27,12 @@ const UPDATABLE_FIELDS = [
   'plan',
   'vlrTotalProg',
   'numCuota',
+  'cuotasTotal',
   'valorCuota',
   'valorPagado',
   'saldo',
   'descuento',
+  'inscripcion',
   'medioPago',
   'numeroReferencia',
   'numeroFactura',
@@ -45,6 +48,63 @@ function toNum(v: any): number {
 function computeSaldo(valorCuota: any, valorPagado: any, descuento: any): number {
   const s = toNum(valorCuota) - toNum(valorPagado) - toNum(descuento);
   return s < 0 ? 0 : Number(s.toFixed(2));
+}
+
+/**
+ * Sincroniza FINANCIEROS.saldo con la suma de pagos VALIDADOS del titular.
+ * Opción 2: sólo los pagos con validado=true cuentan.
+ *
+ * Best-effort: cualquier error se loggea pero NO se propaga al caller.
+ * FINANCIEROS.saldo se guarda como texto (VARCHAR(100) legacy Wix).
+ */
+export async function syncFinancieroSaldo(idPeople: string): Promise<void> {
+  try {
+    // 1) Resolver contrato del titular
+    const person = await PeopleRepository.findById(idPeople);
+    if (!person || !(person as any).contrato) return;
+    const contrato = (person as any).contrato as string;
+
+    // 2) Sumar pagos VALIDADOS del titular y contar cuotas pagadas (>0).
+    //    - Sum: sólo valorPagado + descuento. La columna `inscripcion` ya está
+    //      en valorPagado para cuota #0 (mismo valor) — sumarla doblaría.
+    //    - Count cuotasPagadas: validados con numCuota > 0
+    //      (la cuota #0 = inscripción NO cuenta como cuota pagada).
+    const sumRow = await queryOne<{ total: string; cuotas_pagadas: string }>(
+      `SELECT
+         COALESCE(SUM(COALESCE("valorPagado", 0) + COALESCE("descuento", 0)), 0)::text AS total,
+         COALESCE(SUM(CASE WHEN COALESCE("numCuota", 0) > 0 THEN 1 ELSE 0 END), 0)::text AS cuotas_pagadas
+       FROM "PAGOS_TITULARES"
+       WHERE "idPeople" = $1 AND "validado" = true`,
+      [idPeople]
+    );
+    const totalValidado = parseFloat(sumRow?.total ?? '0') || 0;
+    const cuotasPagadas = parseInt(sumRow?.cuotas_pagadas ?? '0', 10) || 0;
+
+    // 3) Leer totalPlan del FINANCIEROS (texto legacy, hay que parsear)
+    const finRow = await queryOne<{ totalPlan: string | null }>(
+      `SELECT "totalPlan" FROM "FINANCIEROS" WHERE "contrato" = $1 LIMIT 1`,
+      [contrato]
+    );
+    if (!finRow) return;
+    const totalPlan = toNum(finRow.totalPlan);
+
+    // 4) Calcular nuevo saldo (sin negativos)
+    const nuevoSaldo = Math.max(0, totalPlan - totalValidado);
+
+    // 5) Update saldo (entero, sin decimales — el frontend parsea con
+    //    parseCurrency() que asume punto = separador de miles; ".00" daría
+    //    valores 100x más grandes en la tarjeta del resumen). Y cuotasPagadas.
+    await query(
+      `UPDATE "FINANCIEROS"
+       SET "saldo" = $1,
+           "cuotasPagadas" = $2,
+           "_updatedDate" = NOW()
+       WHERE "contrato" = $3`,
+      [String(Math.round(nuevoSaldo)), cuotasPagadas, contrato]
+    );
+  } catch (err: any) {
+    console.warn(`[pagos-titulares] syncFinancieroSaldo falló para ${idPeople}:`, err?.message || err);
+  }
 }
 
 export const pagosTitularesService = {
@@ -88,6 +148,7 @@ export const pagosTitularesService = {
       valorPagado: input.valorPagado ?? null,
       saldo,
       descuento: input.descuento ?? 0,
+      inscripcion: input.inscripcion ?? null,
       medioPago: input.medioPago ?? null,
       numeroReferencia: input.numeroReferencia ?? null,
       numeroFactura: input.numeroFactura ?? null,
@@ -126,6 +187,10 @@ export const pagosTitularesService = {
 
     const updated = await PagosTitularesRepository.validar(id, validadoPor, factura);
     if (!updated) throw new ValidationError('No se pudo validar el pago');
+
+    // Opción 2: el pago acaba de pasar a validado=true → recalcular saldo
+    await syncFinancieroSaldo(existing.idPeople);
+
     return updated;
   },
 

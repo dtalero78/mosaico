@@ -6,10 +6,14 @@
  */
 
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { PersonPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { pagosTitularesService } from '@/services/pagos-titulares.service';
 
-export const GET = handlerWithAuth(async (req) => {
+export const GET = handlerWithAuth(async (req, _ctx, session) => {
+  await requirePermission(session, PersonPermission.PAGOS_VER);
+
   const { searchParams } = new URL(req.url);
   const idPeople = searchParams.get('idPeople');
   if (!idPeople) throw new ValidationError('idPeople requerido');
@@ -19,6 +23,8 @@ export const GET = handlerWithAuth(async (req) => {
 });
 
 export const POST = handlerWithAuth(async (req, _ctx, session) => {
+  await requirePermission(session, PersonPermission.PAGOS_REGISTRAR);
+
   const body = await req.json();
   const createdBy = (session.user as any)?.email || 'unknown';
   const pago = await pagosTitularesService.create(body, createdBy);

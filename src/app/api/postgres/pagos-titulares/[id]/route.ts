@@ -7,20 +7,25 @@
  */
 
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { PersonPermission } from '@/types/permissions';
 import { pagosTitularesService } from '@/services/pagos-titulares.service';
 
-export const GET = handlerWithAuth(async (_req, ctx) => {
+export const GET = handlerWithAuth(async (_req, ctx, session) => {
+  await requirePermission(session, PersonPermission.PAGOS_VER);
   const pago = await pagosTitularesService.getById(ctx.params.id);
   return successResponse({ pago });
 });
 
-export const PATCH = handlerWithAuth(async (req, ctx) => {
+export const PATCH = handlerWithAuth(async (req, ctx, session) => {
+  await requirePermission(session, PersonPermission.PAGOS_REGISTRAR);
   const body = await req.json();
   const pago = await pagosTitularesService.update(ctx.params.id, body);
   return successResponse({ pago });
 });
 
-export const DELETE = handlerWithAuth(async (_req, ctx) => {
+export const DELETE = handlerWithAuth(async (_req, ctx, session) => {
+  await requirePermission(session, PersonPermission.PAGOS_ELIMINAR);
   await pagosTitularesService.remove(ctx.params.id);
   return successResponse({ deleted: true });
 });

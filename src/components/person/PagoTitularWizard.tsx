@@ -19,6 +19,11 @@ interface PagoTitularWizardProps {
   }
   /** Display label of gestor recaudo to show in read-only field. */
   gestorLabel?: string | null
+  /** Lista de pagos existentes del titular — usado para auto-populate:
+   *  - `vlrTotalProg`/`valorCuota` ← cuota #0
+   *  - `numCuota` ← max(numCuota) + 1
+   *  - `fechaVencimiento` ← último pago.fechaPago + 1 mes */
+  existingPagos?: any[]
   /** Llamado tras crear pago exitosamente para refrescar la lista padre. */
   onCreated: () => void
 }
@@ -72,6 +77,22 @@ function toNum(v: string): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/** YYYY-MM-DD + 1 mes → YYYY-MM-DD. Maneja overflow (Ene 31 → Feb 28/29). */
+function addOneMonth(dateStr: string | null | undefined): string {
+  if (!dateStr) return ''
+  const ymd = String(dateStr).slice(0, 10)
+  const parts = ymd.split('-').map(Number)
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return ''
+  const [y, m, d] = parts
+  // Trabajamos en UTC para evitar drift por timezone
+  const target = new Date(Date.UTC(y, m, d)) // m ya es 0-indexed + 1 (queremos mes siguiente)
+  // Si el día se "rebalsó" (Ene 31 → Mar 3), retrocedemos al último día del mes objetivo
+  if (target.getUTCMonth() !== ((m) % 12)) {
+    target.setUTCDate(0)
+  }
+  return target.toISOString().slice(0, 10)
+}
+
 function formatMoney(v: string): string {
   if (!v) return ''
   const num = toNum(v)
@@ -80,8 +101,8 @@ function formatMoney(v: string): string {
 }
 
 function MoneyInput({
-  id, label, value, onChange, required = false,
-}: { id: string; label: string; value: string; onChange: (v: string) => void; required?: boolean }) {
+  id, label, value, onChange, required = false, readOnly = false,
+}: { id: string; label: string; value: string; onChange: (v: string) => void; required?: boolean; readOnly?: boolean }) {
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium text-gray-700">
@@ -93,12 +114,18 @@ function MoneyInput({
           id={id}
           type="text"
           inputMode="numeric"
+          readOnly={readOnly}
+          tabIndex={readOnly ? -1 : 0}
           value={value === '' ? '' : formatMoney(value)}
           onChange={e => {
+            if (readOnly) return
             const cleaned = e.target.value.replace(/[^0-9]/g, '')
             onChange(cleaned)
           }}
-          className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+          className={
+            `w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 ` +
+            (readOnly ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : '')
+          }
           placeholder="0"
         />
       </div>
@@ -107,7 +134,7 @@ function MoneyInput({
 }
 
 export default function PagoTitularWizard({
-  isOpen, onClose, titular, gestorLabel, onCreated,
+  isOpen, onClose, titular, gestorLabel, existingPagos, onCreated,
 }: PagoTitularWizardProps) {
   const draftKey = `pago-titular-draft-${titular._id}`
   const [form, setForm] = useState<DraftState>(empty())
@@ -116,6 +143,35 @@ export default function PagoTitularWizard({
   const [showDraftBanner, setShowDraftBanner] = useState(false)
   const draftRestored = useRef(false)
   const saveTimer = useRef<NodeJS.Timeout | null>(null)
+
+  // Defaults auto-poblados desde pagos existentes:
+  //  - cuota#0 → vlrTotalProg + valorCuota (referencia del contrato)
+  //  - max(numCuota)+1 → próxima cuota
+  //  - último pago.fechaPago + 1 mes → próxima fechaVencimiento
+  const computeAutoDefaults = (): Partial<DraftState> => {
+    const list = Array.isArray(existingPagos) ? existingPagos : []
+    if (list.length === 0) return {}
+    const cuotaCero = list.find((p: any) => Number(p.numCuota) === 0)
+    const maxCuota = list.reduce((max: number, p: any) => {
+      const n = Number(p.numCuota)
+      return Number.isFinite(n) && n > max ? n : max
+    }, -1)
+    // Ordenar por fechaPago desc para tomar el último pago real
+    const sorted = [...list].sort((a: any, b: any) => {
+      const da = (a.fechaPago || '').slice(0, 10)
+      const db = (b.fechaPago || '').slice(0, 10)
+      return db.localeCompare(da)
+    })
+    const ultimo = sorted[0]
+    const nextNumCuota = maxCuota >= 0 ? String(maxCuota + 1) : ''
+    const nextVenc = ultimo?.fechaPago ? addOneMonth(ultimo.fechaPago) : ''
+    return {
+      vlrTotalProg: cuotaCero?.vlrTotalProg != null ? String(cuotaCero.vlrTotalProg) : '',
+      valorCuota:   cuotaCero?.valorCuota   != null ? String(cuotaCero.valorCuota)   : '',
+      numCuota:     nextNumCuota,
+      fechaVencimiento: nextVenc,
+    }
+  }
 
   // Restore draft on open
   useEffect(() => {
@@ -134,10 +190,11 @@ export default function PagoTitularWizard({
         }
       }
     } catch {}
-    // Set defaults from titular
+    // Set defaults from titular + auto-populate desde pagos existentes
     setForm({
       ...empty(),
       plataforma: titular.plataforma || '',
+      ...computeAutoDefaults(),
     })
     draftRestored.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,7 +226,7 @@ export default function PagoTitularWizard({
   const discardDraft = () => {
     localStorage.removeItem(draftKey)
     delete (window as any).__pagoDraft
-    setForm({ ...empty(), plataforma: titular.plataforma || '' })
+    setForm({ ...empty(), plataforma: titular.plataforma || '', ...computeAutoDefaults() })
     setShowDraftBanner(false)
     draftRestored.current = true
   }
@@ -188,7 +245,9 @@ export default function PagoTitularWizard({
         const res = await fetch(`/api/contracts/${titular._id}/upload-url`, { method: 'POST', body: fd })
         if (!res.ok) {
           const err = await res.json().catch(() => ({}))
-          throw new Error(err.error || `Upload failed: ${res.status}`)
+          // err.details suele traer la causa real (handler() guarda el mensaje original ahí)
+          const msg = err.details || err.error || `Upload failed: ${res.status}`
+          throw new Error(msg)
         }
         const { publicUrl } = await res.json()
         setForm(f => ({
@@ -320,8 +379,9 @@ export default function PagoTitularWizard({
               </label>
               <input
                 id="fechaPago" type="date" value={form.fechaPago}
-                onChange={e => setForm(f => ({ ...f, fechaPago: e.target.value }))}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                readOnly tabIndex={-1}
+                onChange={() => {}}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
               />
             </div>
             <div>
@@ -330,8 +390,9 @@ export default function PagoTitularWizard({
               </label>
               <input
                 id="fechaVencimiento" type="date" value={form.fechaVencimiento}
-                onChange={e => setForm(f => ({ ...f, fechaVencimiento: e.target.value }))}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                readOnly tabIndex={-1}
+                onChange={() => {}}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
               />
             </div>
           </div>
@@ -347,13 +408,14 @@ export default function PagoTitularWizard({
                 placeholder="0"
               />
             </div>
-            <MoneyInput id="vlrTotalProg" label="Valor Total Programado" value={form.vlrTotalProg} onChange={v => setForm(f => ({ ...f, vlrTotalProg: v }))} />
+            <MoneyInput id="vlrTotalProg" label="Total del Programa" value={form.vlrTotalProg} onChange={v => setForm(f => ({ ...f, vlrTotalProg: v }))} readOnly />
             <div>
               <label htmlFor="numCuota" className="block text-sm font-medium text-gray-700"># Cuota</label>
               <input
                 id="numCuota" type="number" min={0} value={form.numCuota}
-                onChange={e => setForm(f => ({ ...f, numCuota: e.target.value.replace(/[^0-9]/g, '') }))}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                readOnly tabIndex={-1}
+                onChange={() => {}}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100 text-gray-600 cursor-not-allowed"
                 placeholder="0"
               />
             </div>
@@ -361,7 +423,7 @@ export default function PagoTitularWizard({
 
           {/* Valores */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <MoneyInput id="valorCuota" label="Valor Cuota" value={form.valorCuota} onChange={v => setForm(f => ({ ...f, valorCuota: v }))} />
+            <MoneyInput id="valorCuota" label="Valor Cuota" value={form.valorCuota} onChange={v => setForm(f => ({ ...f, valorCuota: v }))} readOnly />
             <MoneyInput id="valorPagado" label="Valor Pagado" value={form.valorPagado} onChange={v => setForm(f => ({ ...f, valorPagado: v }))} required />
             <MoneyInput id="descuento" label="Descuento" value={form.descuento} onChange={v => setForm(f => ({ ...f, descuento: v }))} />
             <div>
