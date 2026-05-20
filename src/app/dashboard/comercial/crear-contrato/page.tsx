@@ -373,6 +373,10 @@ function CrearContratoContent() {
     setSuccess('');
 
     try {
+      // YYYY-MM-DD en TZ local del navegador (evita corrimiento UTC al guardar fechaPago)
+      const _now = new Date();
+      const clientToday = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, '0')}-${String(_now.getDate()).padStart(2, '0')}`;
+
       const response = await fetch('/api/postgres/contracts', {
         method: 'POST',
         headers: {
@@ -389,7 +393,8 @@ function CrearContratoContent() {
             ...b,
             celular: b.celular ? getPhonePrefix() + b.celular : null
           })),
-          titularEsBeneficiario
+          titularEsBeneficiario,
+          clientToday,
         })
       });
 

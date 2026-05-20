@@ -42,7 +42,7 @@ async function generateContractNumber(plataforma: string): Promise<string> {
 }
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
-  const { titular, financial, beneficiarios, titularEsBeneficiario } = await request.json();
+  const { titular, financial, beneficiarios, titularEsBeneficiario, clientToday } = await request.json();
 
   if (!titular?.plataforma) throw new ValidationError('plataforma is required');
   if (!titular?.numeroId || !titular?.primerNombre || !titular?.primerApellido) {
@@ -162,6 +162,12 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
       const cuotasTotalNum = parseInt(String(financial.numeroCuotas ?? 0), 10) || 0;
 
+      // Fechas en TZ local del cliente (clientToday = YYYY-MM-DD enviado por
+      // el navegador). Evita corrimiento UTC al guardar fechaPago/fechaValidacion.
+      const fechaPagoCliente = (typeof clientToday === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(clientToday))
+        ? clientToday
+        : null;
+
       const pagoResult = await query(
         `INSERT INTO "PAGOS_TITULARES" (
            "_id", "idPeople", "numeroId", "gestorRecaudo", "plataforma",
@@ -172,10 +178,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
            "createdBy", "_createdDate", "_updatedDate"
          ) VALUES (
            $1, $2, $3, $4, $5,
-           CURRENT_DATE, $6::date, 0, $7, $8,
+           COALESCE($15::date, CURRENT_DATE), $6::date, 0, $7, $8,
            $9, $10, $11, $12, 0,
            $13, '[]'::jsonb,
-           true, CURRENT_DATE, $14,
+           true, COALESCE($15::date, CURRENT_DATE), $14,
            $14, NOW(), NOW()
          ) RETURNING "_id"`,
         [
@@ -193,6 +199,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
           saldoNum,
           financial.medioPago || null,
           createdBy,
+          fechaPagoCliente,
         ]
       );
       created.pagoInicial = pagoResult.rows[0];

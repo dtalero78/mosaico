@@ -83,13 +83,22 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
     setValidateModal({ id, numCuota })
   }
 
+  // YYYY-MM-DD en TZ local del navegador (evita corrimiento UTC al guardar fechas)
+  const getLocalToday = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   const handleValidarPago = async () => {
     if (!validateModal) return
     const factura = facturaInput.trim()
     if (!factura) { toast.error('Número de factura requerido'); return }
     setValidating(true)
     try {
-      await api.post(`/api/postgres/pagos-titulares/${validateModal.id}/validar`, { numeroFactura: factura })
+      await api.post(`/api/postgres/pagos-titulares/${validateModal.id}/validar`, {
+        numeroFactura: factura,
+        fechaValidacion: getLocalToday(),
+      })
       toast.success('Pago validado')
       setValidateModal(null)
       setFacturaInput('')
@@ -296,7 +305,9 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
             <div>
               <label className="block text-sm font-medium text-gray-700">Inscripción Pagada</label>
               <p className="mt-1 text-sm text-gray-900">
-                {financialData ? (financialData as any).inscripcionPagada || 'No especificado' : 'No disponible'}
+                {financialData && financial.cuotaInicial > 0
+                  ? formatCurrency(financial.cuotaInicial)
+                  : 'No disponible'}
               </p>
             </div>
           </div>
@@ -345,7 +356,28 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {pagos.map((p: any) => {
+                      {(() => {
+                        // Running balance por fila — saldo del contrato DESPUÉS
+                        // de aplicar los pagos VALIDADOS hasta esta fila inclusive
+                        // (orden cronológico por fechaPago + _createdDate).
+                        // Coincide con la lógica de syncFinancieroSaldo (Opción 2).
+                        const runningMap = new Map<string, number>()
+                        if (financial?.totalPlan) {
+                          const asc = [...pagos].sort((a: any, b: any) => {
+                            const da = (a.fechaPago || '').slice(0, 10) + (a._createdDate || '')
+                            const db = (b.fechaPago || '').slice(0, 10) + (b._createdDate || '')
+                            return da.localeCompare(db)
+                          })
+                          let running = Number(financial.totalPlan) || 0
+                          for (const pp of asc) {
+                            if (pp.validado) {
+                              const paid = (Number(pp.valorPagado) || 0) + (Number(pp.descuento) || 0)
+                              running = Math.max(0, running - paid)
+                            }
+                            runningMap.set(pp._id, running)
+                          }
+                        }
+                        return pagos.map((p: any) => {
                         const fechaPago = p.fechaPago
                           ? new Date(p.fechaPago).toLocaleDateString('es', { timeZone: 'UTC' })
                           : '—'
@@ -357,6 +389,11 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                         const gestor = displayUsers.find(u => u._id === p.gestorRecaudo)
                           || displayUsers.find(u => u.email === p.gestorRecaudo)
                         const gestorLabel = gestor ? gestor.nombre : (p.gestorRecaudo || '—')
+                        // Saldo a mostrar: running balance si fue calculado (validado),
+                        // sino conserva el saldo per-cuota almacenado para pagos pendientes
+                        const saldoDisplay = runningMap.has(p._id)
+                          ? runningMap.get(p._id)!
+                          : (p.saldo != null ? Number(p.saldo) : null)
                         return (
                           <tr key={p._id} className="hover:bg-gray-50">
                             <td className="px-3 py-2 text-center text-gray-900 font-medium">{p.numCuota ?? '—'}</td>
@@ -375,7 +412,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                             </td>
                             <td className="px-3 py-2 text-right text-gray-900 font-medium">{p.valorPagado ? formatCurrency(p.valorPagado) : '—'}</td>
                             <td className="px-3 py-2 text-right text-gray-600">{p.descuento ? formatCurrency(p.descuento) : '—'}</td>
-                            <td className="px-3 py-2 text-right text-amber-900 font-medium">{p.saldo != null ? formatCurrency(p.saldo) : '—'}</td>
+                            <td className="px-3 py-2 text-right text-amber-900 font-medium">{saldoDisplay != null ? formatCurrency(saldoDisplay) : '—'}</td>
                             <td className="px-3 py-2 text-center">
                               {p.validado ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -422,7 +459,8 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                             </td>
                           </tr>
                         )
-                      })}
+                      })
+                      })()}
                     </tbody>
                   </table>
                 </div>

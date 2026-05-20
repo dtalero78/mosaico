@@ -177,7 +177,12 @@ export const pagosTitularesService = {
     return updated;
   },
 
-  async validar(id: string, validadoPor: string, numeroFactura: string): Promise<PagoTitular> {
+  async validar(
+    id: string,
+    validadoPor: string,
+    numeroFactura: string,
+    fechaValidacion: string | null = null,
+  ): Promise<PagoTitular> {
     const existing = await PagosTitularesRepository.findById(id);
     if (!existing) throw new NotFoundError('PAGOS_TITULARES', id);
     if (existing.validado) throw new ValidationError('El pago ya está validado');
@@ -185,7 +190,7 @@ export const pagosTitularesService = {
     const factura = (numeroFactura || '').trim();
     if (!factura) throw new ValidationError('Número de factura es requerido para validar');
 
-    const updated = await PagosTitularesRepository.validar(id, validadoPor, factura);
+    const updated = await PagosTitularesRepository.validar(id, validadoPor, factura, fechaValidacion);
     if (!updated) throw new ValidationError('No se pudo validar el pago');
 
     // Opción 2: el pago acaba de pasar a validado=true → recalcular saldo
