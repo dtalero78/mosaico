@@ -185,8 +185,6 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
       formaPago: data.medioPago || data.formaPago || 'No especificado',
       plan: data.plan || 'Plan estándar',
       inscripcionPagada: data.inscripcionPagada || 'No',
-      confirmaJudith: data.confirmaJudith || 'No',
-      confirmaPrixus: data.confirmaPrixus || 'No',
       montoTotal: parseCurrency(data.totalPlan),
       montoPendiente: parseCurrency(data.saldo),
       // Cuotas restantes = total de cuotas del contrato − cuotas validadas
@@ -303,29 +301,6 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
             </div>
           </div>
 
-          {financialData && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Estado de Confirmaciones</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Confirmación Judith:</span>
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                    financial.confirmaJudith === 'Sí' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {financial.confirmaJudith || 'No'}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Confirmación Prixus:</span>
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                    financial.confirmaPrixus === 'Sí' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {financial.confirmaPrixus || 'No'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
