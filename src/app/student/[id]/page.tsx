@@ -7,6 +7,7 @@ import { getProfile, getAcademicHistory } from '@/services/student.service'
 import { PermissionGuard } from '@/components/permissions'
 import { StudentPermission } from '@/types/permissions'
 import { formatDateTimeColombia } from '@/lib/utils'
+import { isAdminSuspended } from '@/lib/contract-status'
 
 // Force dynamic rendering to prevent page caching
 export const dynamic = 'force-dynamic'
@@ -59,13 +60,15 @@ async function StudentContent({ studentId }: { studentId: string }) {
     const contratoFinalizado = student.finalContrato ?
       new Date(student.finalContrato) < now : false
 
+    const suspendida = isAdminSuspended(student)
+
     return (
       <div className="space-y-6">
         {/* Student Header */}
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className={`text-2xl font-bold ${suspendida ? 'text-red-600' : 'text-gray-900'}`}>
                 {student.primerNombre} {student.primerApellido}
               </h1>
               <div className="mt-1 flex items-center flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500">
@@ -120,6 +123,7 @@ async function StudentContent({ studentId }: { studentId: string }) {
           student={student}
           classes={classes}
           contratoFinalizado={contratoFinalizado}
+          isSuspendida={suspendida}
         />
       </div>
     )

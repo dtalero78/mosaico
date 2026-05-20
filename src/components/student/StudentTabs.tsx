@@ -19,6 +19,8 @@ interface StudentTabsProps {
   student: Student
   classes: Class[]
   contratoFinalizado?: boolean
+  /** Si true, Información General muestra el badge SUSPENDIDA. */
+  isSuspendida?: boolean
 }
 
 const tabs = [
@@ -29,7 +31,7 @@ const tabs = [
   { id: 'comments', name: 'Comentarios', icon: '💭' },
 ]
 
-export default function StudentTabs({ student, classes, contratoFinalizado = false }: StudentTabsProps) {
+export default function StudentTabs({ student, classes, contratoFinalizado = false, isSuspendida }: StudentTabsProps) {
   const [activeTab, setActiveTab] = useState('general')
   const [academicView, setAcademicView] = useState('attendance')
   const [showAcademicSubmenu, setShowAcademicSubmenu] = useState(false)
@@ -71,7 +73,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   const renderTabContent = () => {
     switch (activeTab) {
       case 'general':
-        return <StudentGeneral student={student} />
+        return <StudentGeneral student={student} isSuspendida={isSuspendida} />
       case 'academic':
         // Si la vista académica es "progress", mostrar el componente de diagnóstico
         if (academicView === 'progress') {
@@ -85,7 +87,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
       case 'comments':
         return <StudentComments studentId={student._id} usuarioId={student.usuarioId} />
       default:
-        return <StudentGeneral student={student} />
+        return <StudentGeneral student={student} isSuspendida={isSuspendida} />
     }
   }
 

@@ -16,6 +16,9 @@ interface PersonTabsProps {
   beneficiaries: Beneficiary[]
   /** Tab inicial. Acepta el id interno o un alias amigable de URL (ej. 'financiera' → 'financial'). */
   initialTab?: string
+  /** Si true, el contrato está suspendido administrativamente
+   *  (Información General mostrará el badge SUSPENDIDA). */
+  isSuspendida?: boolean
 }
 
 const tabs = [
@@ -50,13 +53,13 @@ function resolveInitialTab(initial?: string): string {
   return TAB_ALIASES[key] || 'general'
 }
 
-export default function PersonTabs({ person, financialData, beneficiaries, initialTab }: PersonTabsProps) {
+export default function PersonTabs({ person, financialData, beneficiaries, initialTab, isSuspendida }: PersonTabsProps) {
   const [activeTab, setActiveTab] = useState(() => resolveInitialTab(initialTab))
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'general':
-        return <PersonGeneral person={person} />
+        return <PersonGeneral person={person} isSuspendida={isSuspendida} />
       case 'contact':
         return <PersonContact person={person} />
       case 'financial':
@@ -68,7 +71,7 @@ export default function PersonTabs({ person, financialData, beneficiaries, initi
       case 'docs':
         return <PersonDocuments documents={person.documentacion || []} />
       default:
-        return <PersonGeneral person={person} />
+        return <PersonGeneral person={person} isSuspendida={isSuspendida} />
     }
   }
 

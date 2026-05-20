@@ -9,12 +9,15 @@ import { PersonPermission } from '@/types/permissions'
 import { api, handleApiError } from '@/hooks/use-api'
 import toast from 'react-hot-toast'
 import PersonContractViewer from './PersonContractViewer'
+import SuspendidaBadge from '@/components/common/SuspendidaBadge'
 
 interface PersonGeneralProps {
   person: Person
+  /** Si true, muestra el badge "SUSPENDIDA" en la fila de botones. */
+  isSuspendida?: boolean
 }
 
-export default function PersonGeneral({ person }: PersonGeneralProps) {
+export default function PersonGeneral({ person, isSuspendida }: PersonGeneralProps) {
   const [showDocuments, setShowDocuments] = useState(false)
   const [uploadingFiles, setUploadingFiles] = useState<string[]>([])
 
@@ -95,8 +98,8 @@ export default function PersonGeneral({ person }: PersonGeneralProps) {
 
   return (
     <div className="space-y-8">
-      {/* Action Buttons */}
-      <div className="flex items-center gap-3">
+      {/* Action Buttons + Suspendida badge */}
+      <div className="flex items-center flex-wrap gap-3">
         <PermissionGuard permission={PersonPermission.VER_CONTRATO}>
           <PersonContractViewer person={person as any} />
         </PermissionGuard>
@@ -128,6 +131,7 @@ export default function PersonGeneral({ person }: PersonGeneralProps) {
             <span>{uploadingFiles.length > 0 ? `Subiendo (${uploadingFiles.length})...` : 'Agregar Documentación'}</span>
           </button>
         </PermissionGuard>
+        <SuspendidaBadge show={!!isSuspendida} />
       </div>
 
       {/* Main Layout - Two Columns */}

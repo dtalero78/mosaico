@@ -9,12 +9,15 @@ import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import { api, handleApiError } from '@/hooks/use-api'
 import toast from 'react-hot-toast'
+import SuspendidaBadge from '@/components/common/SuspendidaBadge'
 
 interface StudentGeneralProps {
   student: Student
+  /** Si true, muestra el badge "SUSPENDIDA" en la fila de botones. */
+  isSuspendida?: boolean
 }
 
-export default function StudentGeneral({ student }: StudentGeneralProps) {
+export default function StudentGeneral({ student, isSuspendida }: StudentGeneralProps) {
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false)
   const [whatsAppSent, setWhatsAppSent] = useState(false)
   const [whatsAppError, setWhatsAppError] = useState<string | null>(null)
@@ -201,8 +204,8 @@ export default function StudentGeneral({ student }: StudentGeneralProps) {
 
   return (
     <div className="space-y-6">
-      {/* Action Buttons - Documents */}
-      <div className="flex items-center gap-3">
+      {/* Action Buttons - Documents + Suspendida badge */}
+      <div className="flex items-center flex-wrap gap-3">
         <PermissionGuard permission={PersonPermission.VER_DOCUMENTACION}>
           <button
             onClick={() => setShowDocuments(true)}
@@ -222,6 +225,7 @@ export default function StudentGeneral({ student }: StudentGeneralProps) {
             <span>{uploadingFiles.length > 0 ? `Subiendo (${uploadingFiles.length})...` : 'Agregar Documentación'}</span>
           </button>
         </PermissionGuard>
+        <SuspendidaBadge show={!!isSuspendida} />
       </div>
 
       {/* Personal Information */}

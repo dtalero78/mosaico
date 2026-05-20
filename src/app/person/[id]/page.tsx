@@ -5,6 +5,7 @@ import PersonTabs from '@/components/person/PersonTabs'
 import EstadoBadge from '@/components/common/EstadoBadge'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
+import { isAdminSuspended } from '@/lib/contract-status'
 
 interface PersonPageProps {
   params: {
@@ -82,13 +83,15 @@ async function PersonContent({ personId, initialTab }: { personId: string; initi
       estadoInactivo: person.estadoInactivo || false
     }))
 
+    const suspendida = isAdminSuspended(personData.person)
+
     return (
       <div className="space-y-6">
         {/* Person Header */}
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className={`text-2xl font-bold ${suspendida ? 'text-red-600' : 'text-gray-900'}`}>
                 {personData.person.primerNombre} {personData.person.primerApellido}
               </h1>
               <div className="mt-1 space-y-1">
@@ -136,6 +139,7 @@ async function PersonContent({ personId, initialTab }: { personId: string; initi
           financialData={financialData}
           beneficiaries={beneficiaries}
           initialTab={initialTab}
+          isSuspendida={suspendida}
         />
       </div>
     )
