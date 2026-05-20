@@ -95,7 +95,7 @@ export default function EdicionContratoPage() {
           <div>
             <p className="text-sm font-semibold text-gray-700 mb-1">Buscar titular por:</p>
             <p className="text-xs text-gray-500">
-              ID directo — formato nuevo (ej: <code className="bg-gray-100 px-1 rounded">prs_177...}</code>),
+              ID directo — formato nuevo (ej: <code className="bg-gray-100 px-1 rounded">prs_177...</code>),
               formato UUID Wix (ej: <code className="bg-gray-100 px-1 rounded">002af1cd-bdad-...</code>),
               o número de contrato (ej: <code className="bg-gray-100 px-1 rounded">01-15256-26</code>)
             </p>
