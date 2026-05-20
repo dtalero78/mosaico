@@ -166,15 +166,18 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
 
     // Página
     const limitIdx = i; const offsetIdx = i + 1;
+    // Importante: los alias deben estar entrecomillados para preservar
+    // case (de lo contrario Postgres los baja a snake_case minúsculas y
+    // el frontend recibe `undefined`).
     const rows = await queryMany<any>(
       `SELECT
          pt.*,
-         p."primerNombre"    AS titular_primerNombre,
-         p."primerApellido"  AS titular_primerApellido,
-         p."segundoApellido" AS titular_segundoApellido,
-         p."numeroId"        AS titular_numeroId,
-         p."contrato"        AS titular_contrato,
-         p."plataforma"      AS titular_plataforma
+         p."primerNombre"    AS "titular_primerNombre",
+         p."primerApellido"  AS "titular_primerApellido",
+         p."segundoApellido" AS "titular_segundoApellido",
+         p."numeroId"        AS "titular_numeroId",
+         p."contrato"        AS "titular_contrato",
+         p."plataforma"      AS "titular_plataforma"
        FROM "PAGOS_TITULARES" pt
        JOIN "PEOPLE" p ON p."_id" = pt."idPeople"
        ${whereClause}
