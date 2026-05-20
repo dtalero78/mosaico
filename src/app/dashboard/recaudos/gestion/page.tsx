@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { BanknotesIcon, CheckBadgeIcon, ArrowPathIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { BanknotesIcon, CheckBadgeIcon, ArrowPathIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, XMarkIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { RecaudosPermission, PersonPermission } from '@/types/permissions'
@@ -26,6 +26,7 @@ interface PagoRow {
   fechaValidacion: string | null
   validadoPor: string | null
   numeroFactura: string | null
+  numeroRecibo: string | null
   gestorRecaudo: string | null
   medioPago: string | null
   titular_primerNombre: string
@@ -67,6 +68,7 @@ function fmtDate(d: string | null): string {
 export default function GestionRecaudosPage() {
   const { hasPermission } = usePermissions()
   const canValidar = hasPermission(PersonPermission.PAGOS_VALIDAR)
+  const canRecibo  = hasPermission(PersonPermission.PAGOS_RECIBO)
 
   // Filtros (default estado=pendiente)
   const [estado, setEstado] = useState<'' | 'validado' | 'pendiente'>('pendiente')
@@ -163,6 +165,21 @@ export default function GestionRecaudosPage() {
       handleApiError(err, 'Error al validar pago')
     } finally {
       setValidating(false)
+    }
+  }
+
+  const handleGenerarRecibo = async (id: string) => {
+    const tid = toast.loading('Generando recibo…')
+    try {
+      const data = await api.post<{ pdfUrl: string; numeroRecibo: string }>(
+        `/api/postgres/pagos-titulares/${id}/recibo`, {}
+      )
+      toast.success(`Recibo ${data.numeroRecibo} generado`, { id: tid })
+      if (data.pdfUrl) window.open(data.pdfUrl, '_blank', 'noopener,noreferrer')
+      fetchPagos()
+    } catch (err) {
+      toast.dismiss(tid)
+      handleApiError(err, 'Error generando recibo')
     }
   }
 
@@ -383,16 +400,28 @@ export default function GestionRecaudosPage() {
                             {p.validadoPor ? p.validadoPor.split('@')[0] : '—'}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {!p.validado && canValidar && (
-                              <button
-                                type="button"
-                                onClick={() => openValidar(p)}
-                                title="Validar pago"
-                                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700"
-                              >
-                                <CheckBadgeIcon className="h-3.5 w-3.5" /> Validar
-                              </button>
-                            )}
+                            <div className="flex items-center justify-end gap-1.5">
+                              {!p.validado && canValidar && (
+                                <button
+                                  type="button"
+                                  onClick={() => openValidar(p)}
+                                  title="Validar pago"
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700"
+                                >
+                                  <CheckBadgeIcon className="h-3.5 w-3.5" /> Validar
+                                </button>
+                              )}
+                              {p.validado && canRecibo && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleGenerarRecibo(p._id)}
+                                  title={p.numeroRecibo ? `Descargar recibo ${p.numeroRecibo}` : 'Generar recibo de pago'}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700"
+                                >
+                                  <DocumentTextIcon className="h-3.5 w-3.5" /> Recibo
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )

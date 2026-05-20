@@ -34,6 +34,7 @@ export interface PagoTitular {
   descuento: number | null;
   inscripcion: number | null;
   cuotasTotal: number | null;
+  numeroRecibo: string | null;
   medioPago: string | null;
   numeroReferencia: string | null;
   numeroFactura: string | null;
@@ -204,6 +205,43 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
     built.values.push(id);
     const row = await queryOne<PagoTitular>(built.query, built.values);
     return this.parse(row);
+  }
+
+  /**
+   * Asigna numeroRecibo si no tiene, en formato LGS-####.
+   * Numeración global atómica via MAX+1 (mismo patrón que contracts).
+   * Si ya tiene numeroRecibo lo conserva (idempotente).
+   * Retorna el numeroRecibo final.
+   */
+  async assignNumeroRecibo(id: string): Promise<string> {
+    const existing = await queryOne<{ numeroRecibo: string | null }>(
+      `SELECT "numeroRecibo" FROM "PAGOS_TITULARES" WHERE "_id" = $1`,
+      [id]
+    );
+    if (existing?.numeroRecibo) return existing.numeroRecibo;
+
+    const maxRow = await queryOne<{ max_num: number | null }>(
+      `SELECT MAX(CAST(SUBSTRING("numeroRecibo" FROM 5) AS INTEGER)) AS max_num
+       FROM "PAGOS_TITULARES"
+       WHERE "numeroRecibo" LIKE 'LGS-%'
+         AND SUBSTRING("numeroRecibo" FROM 5) ~ '^[0-9]+$'`
+    );
+    const next = (Number(maxRow?.max_num ?? 0) + 1).toString().padStart(4, '0');
+    const numeroRecibo = `LGS-${next}`;
+
+    await queryOne(
+      `UPDATE "PAGOS_TITULARES"
+       SET "numeroRecibo" = $2, "_updatedDate" = NOW()
+       WHERE "_id" = $1 AND "numeroRecibo" IS NULL
+       RETURNING "_id"`,
+      [id, numeroRecibo]
+    );
+    // Re-leer por si dos requests concurrentes ganaron uno solo
+    const after = await queryOne<{ numeroRecibo: string }>(
+      `SELECT "numeroRecibo" FROM "PAGOS_TITULARES" WHERE "_id" = $1`,
+      [id]
+    );
+    return after?.numeroRecibo ?? numeroRecibo;
   }
 
   /**

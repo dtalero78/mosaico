@@ -75,6 +75,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Borrar un registro de PAGOS_TITULARES. Acción irreversible — bloqueada cuando el pago ya está validado',
   },
   {
+    code: PersonPermission.PAGOS_RECIBO,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Generar Recibo de Pago"',
+    description: 'Genera y descarga el PDF del recibo de un pago validado (formato LGS-#### con numeración consecutiva automática). Solo aparece cuando el pago ya está validado',
+  },
+  {
     code: PersonPermission.VER_DOCUMENTACION,
     module: Module.PERSON,
     section: 'Información General',

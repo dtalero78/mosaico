@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import toast from 'react-hot-toast'
-import { CheckBadgeIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { CheckBadgeIcon, TrashIcon, PlusIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import { Person, FinancialData } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 import { PermissionGuard } from '@/components/permissions'
@@ -110,6 +110,21 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
       handleApiError(err, 'Error al validar pago')
     } finally {
       setValidating(false)
+    }
+  }
+
+  const handleGenerarRecibo = async (id: string) => {
+    const tid = toast.loading('Generando recibo…')
+    try {
+      const data = await api.post<{ pdfUrl: string; numeroRecibo: string }>(
+        `/api/postgres/pagos-titulares/${id}/recibo`, {}
+      )
+      toast.success(`Recibo ${data.numeroRecibo} generado`, { id: tid })
+      if (data.pdfUrl) window.open(data.pdfUrl, '_blank', 'noopener,noreferrer')
+      loadPagos()
+    } catch (err) {
+      toast.dismiss(tid)
+      handleApiError(err, 'Error generando recibo')
     }
   }
 
@@ -434,6 +449,19 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                             <td className="px-3 py-2 text-gray-700 text-xs">{p.numeroFactura || '—'}</td>
                             <td className="px-3 py-2 text-right">
                               <div className="flex items-center justify-end gap-1">
+                                {/* Recibo: solo visible si el pago está validado y el usuario tiene permiso */}
+                                {p.validado && (
+                                  <PermissionGuard permission={PersonPermission.PAGOS_RECIBO}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleGenerarRecibo(p._id)}
+                                      title={p.numeroRecibo ? `Descargar recibo ${p.numeroRecibo}` : 'Generar recibo de pago'}
+                                      className="p-1 text-indigo-600 hover:text-indigo-800"
+                                    >
+                                      <DocumentTextIcon className="h-4 w-4" />
+                                    </button>
+                                  </PermissionGuard>
+                                )}
                                 {/* Validar: visible si no está validado (cualquier rol con permiso).
                                     SuperAdmin/Admin también lo ven en validados como referencia,
                                     pero el botón se deshabilita porque ya está validado. */}

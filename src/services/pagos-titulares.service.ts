@@ -17,6 +17,8 @@ import { ids } from '@/lib/id-generator';
 import { query, queryOne } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 
+const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
+
 const UPDATABLE_FIELDS = [
   'gestorRecaudo',
   'plataforma',
@@ -43,6 +45,15 @@ function toNum(v: any): number {
   if (v === null || v === undefined || v === '') return 0;
   const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
   return Number.isFinite(n) ? n : 0;
+}
+
+function escapeHtml(s: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function computeSaldo(valorCuota: any, valorPagado: any, descuento: any): number {
@@ -235,6 +246,152 @@ export const pagosTitularesService = {
    *   recalcula `FINANCIEROS.saldo`/`cuotasPagadas` para que el monto vuelva
    *   al saldo.
    */
+  /**
+   * Genera el PDF del recibo de pago (LGS-####).
+   * - Sólo pagos validados.
+   * - Si no tiene numeroRecibo se le asigna uno atómicamente.
+   * - Si ya tiene, se reutiliza (idempotente: vuelve a generar el mismo PDF).
+   * - HTML inline + API2PDF.
+   *
+   * Devuelve `{ pdfUrl, numeroRecibo }`.
+   */
+  async generarRecibo(id: string): Promise<{ pdfUrl: string; numeroRecibo: string }> {
+    const pago = await PagosTitularesRepository.findById(id);
+    if (!pago) throw new NotFoundError('PAGOS_TITULARES', id);
+    if (!pago.validado) throw new ValidationError('Solo se puede generar recibo de pagos validados');
+
+    const titular = await PeopleRepository.findById(pago.idPeople);
+    if (!titular) throw new NotFoundError('PEOPLE', pago.idPeople);
+
+    const numeroRecibo = await PagosTitularesRepository.assignNumeroRecibo(id);
+
+    const t: any = titular;
+    const nombreCompleto = [t.primerNombre, t.segundoNombre, t.primerApellido, t.segundoApellido]
+      .filter(Boolean).join(' ').trim();
+
+    const fmtMoney = (v: any): string => {
+      const n = typeof v === 'number' ? v : parseFloat(String(v ?? 0).replace(/[^0-9.\-]/g, ''));
+      if (!Number.isFinite(n)) return '$ 0';
+      return '$ ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(n);
+    };
+    const fmtDate = (d: any): string => {
+      if (!d) return '—';
+      try { return new Date(d).toLocaleDateString('es-CO', { timeZone: 'UTC' }); } catch { return '—'; }
+    };
+
+    const fechaRecibo  = fmtDate(pago.fechaValidacion || pago.fechaPago);
+    const valorPagado  = fmtMoney(pago.valorPagado);
+    const medioPago    = (pago.medioPago || '—').toString();
+    const numCuotaText = pago.numCuota != null ? String(pago.numCuota) : '—';
+    const periodo      = fmtDate(pago.fechaVencimiento);
+    const recibeConforme = (pago.validadoPor || '—').toString();
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://lgs-plataforma.com';
+    const logoUrl = `${baseUrl}/logo.png`;
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Recibo ${numeroRecibo}</title>
+<style>
+  @page { margin: 0; size: A4; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; margin: 0; padding: 0; }
+  .page { width: 210mm; min-height: 297mm; padding: 0; }
+  .header { background: #4f46e5; color: #fff; padding: 28px 40px; display: flex; align-items: center; justify-content: space-between; }
+  .header .logo { background: #fff; padding: 12px 16px; border-radius: 6px; display: inline-block; }
+  .header .logo img { height: 48px; display: block; }
+  .header h1 { font-size: 28pt; margin: 0; letter-spacing: 2px; font-weight: 700; }
+  .meta { padding: 36px 60px 12px 60px; text-align: right; font-size: 13pt; }
+  .meta .row { margin: 10px 0; }
+  .meta .label { color: #555; margin-right: 10px; }
+  .meta .value { display: inline-block; min-width: 180px; border-bottom: 1px solid #999; padding: 2px 8px; font-weight: 600; }
+  .body { padding: 24px 60px 40px 60px; font-size: 13pt; }
+  .field { margin: 22px 0; display: flex; align-items: baseline; gap: 12px; }
+  .field .label { white-space: nowrap; color: #333; }
+  .field .value { flex: 1; border-bottom: 1px solid #999; padding: 2px 8px; font-weight: 600; min-height: 20px; }
+  .field.half { display: inline-flex; width: 48%; }
+  .row2 { display: flex; gap: 24px; }
+  .row2 > .field { flex: 1; }
+  .footer { padding: 80px 60px 40px 60px; text-align: center; }
+  .footer .line { width: 320px; margin: 0 auto 8px auto; border-top: 1px solid #333; }
+  .footer .caption { font-size: 11pt; color: #444; font-weight: 600; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <span class="logo"><img src="${logoUrl}" alt="LGS"/></span>
+      <h1>RECIBO DE PAGO</h1>
+    </div>
+
+    <div class="meta">
+      <div class="row"><span class="label">Fecha</span><span class="value">${fechaRecibo}</span></div>
+      <div class="row"><span class="label">Recibo N°</span><span class="value">${numeroRecibo}</span></div>
+    </div>
+
+    <div class="body">
+      <div class="field">
+        <span class="label">Recibí de</span>
+        <span class="value">${escapeHtml(nombreCompleto || '—')}</span>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <span class="label">La suma de</span>
+          <span class="value">${valorPagado}</span>
+        </div>
+        <div class="field">
+          <span class="label">Forma de pago</span>
+          <span class="value">${escapeHtml(medioPago)}</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="label">Cuota No.</span>
+        <span class="value">${escapeHtml(numCuotaText)}</span>
+      </div>
+
+      <div class="field">
+        <span class="label">Periodo</span>
+        <span class="value">${periodo}</span>
+      </div>
+
+      <div class="field">
+        <span class="label">Recibe conforme</span>
+        <span class="value">${escapeHtml(recibeConforme)}</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="line"></div>
+      <div class="caption">Departamento de Recaudos · Let's Go Speak</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const pdfRes = await fetch('https://v2018.api2pdf.com/chrome/html', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': API2PDF_KEY },
+      body: JSON.stringify({
+        html: htmlContent,
+        fileName: `Recibo_${numeroRecibo}.pdf`,
+        inline: false,
+        options: { printBackground: true },
+      }),
+    });
+    if (!pdfRes.ok) {
+      const err = await pdfRes.text();
+      throw new Error(`API2PDF error ${pdfRes.status}: ${err}`);
+    }
+    const pdfData = await pdfRes.json();
+    if (!pdfData.success || !pdfData.pdf) {
+      throw new Error(`API2PDF falló: ${pdfData.error || 'Sin URL de PDF'}`);
+    }
+    return { pdfUrl: pdfData.pdf as string, numeroRecibo };
+  },
+
   async remove(id: string, userRole?: string): Promise<void> {
     const existing = await PagosTitularesRepository.findById(id);
     if (!existing) throw new NotFoundError('PAGOS_TITULARES', id);
