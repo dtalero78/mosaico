@@ -34,6 +34,11 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   // Solo COORDINADOR_ACADEMICO y SUPER_ADMIN pueden editar los campos de comentarios
   const canEditComments = userRole === Role.SUPER_ADMIN || userRole === Role.COORDINADOR_ACADEMICO
 
+  // Bloqueo de agendamiento si el estudiante está INACTIVO en ACADEMICA — solo SUPER_ADMIN puede continuar
+  const isStudentInactive = student.estadoInactivo === true
+  const canBypassInactive = userRole === Role.SUPER_ADMIN
+  const blockSchedulingByInactive = isStudentInactive && !canBypassInactive
+
   // Filter states
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -403,6 +408,11 @@ export default function StudentAcademic({ student, classes: initialClasses, view
 
   const handleSaveNewEvent = async () => {
     console.log('🔍 handleSaveNewEvent called - selectedTime:', selectedTime)
+
+    if (blockSchedulingByInactive) {
+      alert('Usuario con estado INACTIVO. Solo un SUPER_ADMIN puede agendar clases para este estudiante.')
+      return
+    }
 
     if (!selectedTime) {
       alert('Por favor selecciona una hora para la clase')
@@ -1326,6 +1336,27 @@ export default function StudentAcademic({ student, classes: initialClasses, view
 
               {/* Content */}
               <div className="p-6">
+                {isStudentInactive && (
+                  <div
+                    className={`mb-6 rounded-lg border-l-4 p-4 ${
+                      canBypassInactive
+                        ? 'border-amber-500 bg-amber-50 text-amber-900'
+                        : 'border-red-500 bg-red-50 text-red-900'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl leading-none">⚠️</span>
+                      <div className="text-sm">
+                        <p className="font-semibold">Usuario con estado INACTIVO</p>
+                        <p className="mt-1">
+                          {canBypassInactive
+                            ? 'Este estudiante está marcado como inactivo en ACADEMICA. Como SUPER_ADMIN puedes continuar, pero verifica que sea correcto agendarle clases.'
+                            : 'No se puede agendar clases para este estudiante porque su registro académico está inactivo. Consulte el Área de Servicio.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-6">
                   {/* Step 1: Event Type Selection */}
                   <div>
@@ -1447,7 +1478,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
 
                   <button
                     onClick={handleSaveNewEvent}
-                    disabled={!selectedTime || isCreatingEvent}
+                    disabled={!selectedTime || isCreatingEvent || blockSchedulingByInactive}
+                    title={blockSchedulingByInactive ? 'Estudiante INACTIVO — solo SUPER_ADMIN puede agendar' : undefined}
                     className="inline-flex items-center justify-center px-6 py-2.5 rounded-lg border border-transparent bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 text-sm font-medium shadow-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
                     {isCreatingEvent ? (

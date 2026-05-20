@@ -16,6 +16,11 @@ interface EnrollInput {
   agendadoPor?: string;
   agendadoPorEmail?: string;
   agendadoPorRol?: string;
+  /**
+   * Rol REAL de la sesión (no se acepta del body — viene del route handler).
+   * Se usa para validar el bypass de estudiantes INACTIVOS: solo SUPER_ADMIN.
+   */
+  sessionRole?: string;
 }
 
 const ROLES_SIN_LIMITE_CAPACIDAD = ['COORDINADOR_ACADEMICO', 'SERVICIO_JEFE', 'SUPER_ADMIN', 'ADMIN', 'ADMINISTRACION_JEFE'];
@@ -45,6 +50,7 @@ export async function enrollStudents(input: EnrollInput) {
 
   // Fetch all students - try PEOPLE first with JOIN to ACADEMICA to get canonical ACADEMICA _id.
   // Using ACADEMICA _id is critical: historical bookings use ACADEMICA _id, not PEOPLE _id.
+  // Incluimos estadoInactivo de PEOPLE y ACADEMICA por separado: bloqueamos si CUALQUIERA está inactivo.
   const { queryMany } = await import('@/lib/postgres');
   let students = await queryMany(
     `SELECT DISTINCT ON (COALESCE(a."_id", p."_id")) COALESCE(a."_id", p."_id") as "_id",
@@ -53,7 +59,9 @@ export async function enrollStudents(input: EnrollInput) {
             COALESCE(p."primerApellido", a."primerApellido") as "primerApellido",
             p."celular",
             COALESCE(a."nivel", p."nivel") as "nivel",
-            COALESCE(a."step", p."step") as "step"
+            COALESCE(a."step", p."step") as "step",
+            p."estadoInactivo" as "peopleEstadoInactivo",
+            a."estadoInactivo"::boolean as "academicaEstadoInactivo"
      FROM "PEOPLE" p
      LEFT JOIN "ACADEMICA" a ON a."numeroId" = p."numeroId"
      WHERE p."_id" = ANY($1::text[])`,
@@ -72,7 +80,9 @@ export async function enrollStudents(input: EnrollInput) {
                 COALESCE(p."primerApellido", a."primerApellido") as "primerApellido",
                 p."celular",
                 COALESCE(a."nivel", p."nivel") as "nivel",
-                COALESCE(a."step", p."step") as "step"
+                COALESCE(a."step", p."step") as "step",
+                p."estadoInactivo" as "peopleEstadoInactivo",
+                a."estadoInactivo"::boolean as "academicaEstadoInactivo"
          FROM "ACADEMICA" a
          LEFT JOIN "PEOPLE" p ON a."numeroId" = p."numeroId"
          WHERE a."_id" = ANY($1::text[])`,
@@ -84,6 +94,21 @@ export async function enrollStudents(input: EnrollInput) {
 
   if (students.length === 0) {
     throw new NotFoundError('Students', input.studentIds.join(', '));
+  }
+
+  // Bloqueo de estudiantes INACTIVOS — solo SUPER_ADMIN puede bypasear.
+  // sessionRole viene SIEMPRE del route handler (nunca del body) — no spoofeable.
+  const canBypassInactive = input.sessionRole === 'SUPER_ADMIN';
+  if (!canBypassInactive) {
+    const inactivos = students.filter((s: any) => s.peopleEstadoInactivo === true || s.academicaEstadoInactivo === true);
+    if (inactivos.length > 0) {
+      const detalle = inactivos
+        .map((s: any) => `${s.primerNombre || ''} ${s.primerApellido || ''} (${s.numeroId || s._id})`.trim())
+        .join(', ');
+      throw new ValidationError(
+        `No se puede agendar para estudiante(s) con estado INACTIVO: ${detalle}. Consulte el Área de Servicio.`
+      );
+    }
   }
 
   // Create bookings inside a transaction so INSERT + incrementInscritos are atomic.

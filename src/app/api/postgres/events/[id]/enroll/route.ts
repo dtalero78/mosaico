@@ -20,6 +20,9 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     agendadoPor: body.agendadoPor || session?.user?.name || undefined,
     agendadoPorEmail: body.agendadoPorEmail || session?.user?.email || undefined,
     agendadoPorRol: body.agendadoPorRol || (session?.user as any)?.role || undefined,
+    // sessionRole NUNCA viene del body — solo de la sesión autenticada.
+    // Se usa para validar bypass de estudiantes INACTIVOS (solo SUPER_ADMIN).
+    sessionRole: (session?.user as any)?.role || undefined,
   });
 
   return successResponse({
