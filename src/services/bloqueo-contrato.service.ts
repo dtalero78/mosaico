@@ -263,22 +263,44 @@ export async function executeBloqueo(personIds: string[]): Promise<BloqueoExecut
         [p._id]
       );
 
-      // ACADEMICA (best-effort por numeroId)
+      // ACADEMICA / USUARIOS_ROLES son una sola fila por persona física.
+      // Si la misma persona figura también como BENEFICIARIO activo (extensión
+      // vigente, otro contrato, etc.), NO debemos inactivar sus tablas compartidas.
+      // Verificamos antes de cada UPDATE.
       if (p.numeroId) {
-        await query(
-          `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW()
-           WHERE "numeroId" = $1`,
-          [p.numeroId]
-        ).catch(() => {});
+        const otro = await queryMany(
+          `SELECT 1 FROM "PEOPLE"
+           WHERE "numeroId" = $1 AND "tipoUsuario" = 'BENEFICIARIO'
+             AND ("estadoInactivo" IS NULL OR "estadoInactivo" = false)
+             AND "_id" <> $2
+           LIMIT 1`,
+          [p.numeroId, p._id]
+        );
+        if (otro.length === 0) {
+          await query(
+            `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW()
+             WHERE "numeroId" = $1`,
+            [p.numeroId]
+          ).catch(() => {});
+        }
       }
 
-      // USUARIOS_ROLES (best-effort por email)
       if (p.email) {
-        await query(
-          `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-           WHERE LOWER("email") = LOWER($1)`,
-          [p.email]
-        ).catch(() => {});
+        const otroLogin = await queryMany(
+          `SELECT 1 FROM "PEOPLE"
+           WHERE LOWER("email") = LOWER($1) AND "tipoUsuario" = 'BENEFICIARIO'
+             AND ("estadoInactivo" IS NULL OR "estadoInactivo" = false)
+             AND "_id" <> $2
+           LIMIT 1`,
+          [p.email, p._id]
+        );
+        if (otroLogin.length === 0) {
+          await query(
+            `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
+             WHERE LOWER("email") = LOWER($1)`,
+            [p.email]
+          ).catch(() => {});
+        }
       }
 
       details.push({
