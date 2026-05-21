@@ -144,13 +144,13 @@ export default function AsignacionRecaudosPage() {
     const rows = titulares.map(t => ({
       Titular: `${t.primerNombre} ${t.primerApellido} ${t.segundoApellido ?? ''}`.trim(),
       'Número ID': t.numeroId,
-      'Fecha Contrato': fmtDate(t.fechaContrato),
       Contrato: t.contrato || '',
+      'Fecha Contrato': fmtDate(t.fechaContrato),
+      'Día Vencimiento': dayOf(t.ultimaFechaPago),
       'Fecha Último Pago': fmtDate(t.ultimaFechaPago),
       'Última Cuota Pagada': t.ultimaCuotaPagada ?? '',
       'Saldo Actual': parseMoneyText(t.saldoActual),
       'Estado Cartera': ESTADO_CARTERA_META[t.tipoCartera]?.label || t.tipoCartera,
-      'Día Vencimiento': dayOf(t.ultimaFechaPago),
       'Estado Contrato': t.estadoInactivo ? 'Aprobada' : 'Activo',
       Plataforma: t.plataforma || '',
     }))
@@ -291,13 +291,13 @@ export default function AsignacionRecaudosPage() {
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="px-3 py-2 text-left font-medium text-gray-700">Titular</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-700">Fecha Contrato</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-700">Fecha Último Pago</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700">Contrato</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">Fecha Contrato</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-700">Día Vencimiento</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">Fecha Último Pago</th>
                       <th className="px-3 py-2 text-center font-medium text-gray-700">Última Cuota Pagada</th>
                       <th className="px-3 py-2 text-right font-medium text-gray-700">Saldo a la Fecha</th>
                       <th className="px-3 py-2 text-center font-medium text-gray-700">Estado Cartera</th>
-                      <th className="px-3 py-2 text-center font-medium text-gray-700">Día Vencimiento</th>
                       <th className="px-3 py-2 text-center font-medium text-gray-700">Estado Contrato</th>
                     </tr>
                   </thead>
@@ -320,9 +320,12 @@ export default function AsignacionRecaudosPage() {
                             </Link>
                             <div className="text-[11px] text-gray-500">ID {t.numeroId}</div>
                           </td>
-                          <td className="px-3 py-2 text-gray-900">{fmtDate(t.fechaContrato)}</td>
-                          <td className="px-3 py-2 text-gray-900">{fmtDate(t.ultimaFechaPago)}</td>
                           <td className="px-3 py-2 text-gray-700">{t.contrato || '—'}</td>
+                          <td className="px-3 py-2 text-gray-900">{fmtDate(t.fechaContrato)}</td>
+                          <td className="px-3 py-2 text-center text-gray-900 font-medium">
+                            {dayOf(t.ultimaFechaPago)}
+                          </td>
+                          <td className="px-3 py-2 text-gray-900">{fmtDate(t.ultimaFechaPago)}</td>
                           <td className="px-3 py-2 text-center text-gray-900 font-medium">
                             {t.ultimaCuotaPagada != null ? t.ultimaCuotaPagada : '—'}
                           </td>
@@ -333,9 +336,6 @@ export default function AsignacionRecaudosPage() {
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${estadoMeta.cls}`}>
                               {estadoMeta.label}
                             </span>
-                          </td>
-                          <td className="px-3 py-2 text-center text-gray-900 font-medium">
-                            {dayOf(t.ultimaFechaPago)}
                           </td>
                           <td className="px-3 py-2 text-center">
                             {t.estadoInactivo ? (
