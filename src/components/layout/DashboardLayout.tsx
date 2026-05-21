@@ -157,6 +157,7 @@ const getNavigation = (userEmail: string) => [
       },
       {
         name: 'Usuarios', isSubmenu: true, children: [
+          { name: 'Bloqueo Contrato', href: '/admin/bloqueo-contrato', newTab: true },
           { name: 'Clear Historic',   href: '/admin/clear-historic',   newTab: true },
           { name: 'Edición Contrato', href: '/admin/edicion-contrato', newTab: true },
           { name: 'Migrar Contrato',  href: '/admin/migrar-contrato',  newTab: true },
@@ -272,6 +273,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/admin/migrar-contrato': [
       MantenimientoPermission.MIGRAR_CONTRATO,
+    ],
+    '/admin/bloqueo-contrato': [
+      MantenimientoPermission.BLOQUEAR_CONTRATO,
+    ],
+    '/admin/clear-historic': [
+      MantenimientoPermission.CLEAR_HISTORIC,
+    ],
+    '/admin/edicion-contrato': [
+      MantenimientoPermission.EDICION_CONTRATO,
+    ],
+    '/admin/envio-mensajes': [
+      MantenimientoPermission.ENVIO_MENSAJES,
+    ],
+    '/admin/roles/create': [
+      MantenimientoPermission.CREAR_ROL,
+    ],
+    '/admin/ticker': [
+      MantenimientoPermission.AVISOS_TICKER,
+    ],
+    '/admin/banner': [
+      MantenimientoPermission.AVISOS_BANNER,
+    ],
+    '/admin/actualizar-videos': [
+      MantenimientoPermission.ACTUALIZAR_VIDEOS,
     ],
     // Recaudos
     '/dashboard/recaudos/gestion': [

@@ -807,13 +807,69 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Aprobar contrato sin verificación OTP del cliente',
   },
 
-  // ========== MANTENIMIENTO MODULE (Menú Mantenimiento → Usuarios) ==========
+  // ========== MANTENIMIENTO MODULE (Menú Mantenimiento) ==========
   {
     code: MantenimientoPermission.MIGRAR_CONTRATO,
     module: Module.MANTENIMIENTO,
     section: 'Usuarios',
     name: 'Página "Migrar Contrato"',
     description: 'Acceso a migrar contratos existentes creando titular y beneficiarios manualmente con número de contrato predefinido',
+  },
+  {
+    code: MantenimientoPermission.BLOQUEAR_CONTRATO,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Página "Bloqueo Contrato"',
+    description: 'Acceso a /admin/bloqueo-contrato. Permite bloquear manualmente titular y beneficiarios de un contrato vencido. Respeta extensiones individuales de beneficiarios (no bloquea si tienen finalContrato > hoy)',
+  },
+  {
+    code: MantenimientoPermission.CLEAR_HISTORIC,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Página "Clear Historic"',
+    description: 'Acceso a /admin/clear-historic. Elimina el historial académico (bookings, complementarias, step overrides) de un estudiante. Acción irreversible — solo una vez por estudiante',
+  },
+  {
+    code: MantenimientoPermission.EDICION_CONTRATO,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Página "Edición Contrato"',
+    description: 'Acceso a /admin/edicion-contrato. Busca un titular por _id o número de contrato y abre la página de detalle comercial en nueva pestaña',
+  },
+  {
+    code: MantenimientoPermission.ENVIO_MENSAJES,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Página "Envío Mensajes"',
+    description: 'Acceso a /admin/envio-mensajes. Envío masivo de mensajes WhatsApp a usuarios filtrados',
+  },
+  {
+    code: MantenimientoPermission.CREAR_ROL,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Página "Crear Rol"',
+    description: 'Acceso a /admin/roles/create. Crea nuevos roles con sus permisos asociados',
+  },
+  {
+    code: MantenimientoPermission.AVISOS_TICKER,
+    module: Module.MANTENIMIENTO,
+    section: 'Avisos',
+    name: 'Página "Ticker"',
+    description: 'Acceso a /admin/ticker. Edita el banner animado del panel estudiante',
+  },
+  {
+    code: MantenimientoPermission.AVISOS_BANNER,
+    module: Module.MANTENIMIENTO,
+    section: 'Avisos',
+    name: 'Página "Banner"',
+    description: 'Acceso a /admin/banner. Sube/edita la imagen del banner mostrado en el login',
+  },
+  {
+    code: MantenimientoPermission.ACTUALIZAR_VIDEOS,
+    module: Module.MANTENIMIENTO,
+    section: 'Material',
+    name: 'Página "Actualizar Videos"',
+    description: 'Acceso a /admin/actualizar-videos. Gestión de videos instructivos del panel estudiante y videos por nivel/step',
   },
 
   // ========== RECAUDOS MODULE (Menú Recaudos) ==========

@@ -189,6 +189,30 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/admin/migrar-contrato': [
     'MANTENIMIENTO.CONTRATOS.MIGRAR' as Permission,
   ],
+  '/admin/bloqueo-contrato': [
+    'MANTENIMIENTO.CONTRATOS.BLOQUEAR' as Permission,
+  ],
+  '/admin/clear-historic': [
+    'MANTENIMIENTO.USUARIOS.CLEAR_HISTORIC' as Permission,
+  ],
+  '/admin/edicion-contrato': [
+    'MANTENIMIENTO.USUARIOS.EDICION_CONTRATO' as Permission,
+  ],
+  '/admin/envio-mensajes': [
+    'MANTENIMIENTO.USUARIOS.ENVIO_MENSAJES' as Permission,
+  ],
+  '/admin/roles/create': [
+    'MANTENIMIENTO.USUARIOS.CREAR_ROL' as Permission,
+  ],
+  '/admin/ticker': [
+    'MANTENIMIENTO.AVISOS.TICKER' as Permission,
+  ],
+  '/admin/banner': [
+    'MANTENIMIENTO.AVISOS.BANNER' as Permission,
+  ],
+  '/admin/actualizar-videos': [
+    'MANTENIMIENTO.MATERIAL.ACTUALIZAR_VIDEOS' as Permission,
+  ],
 
   // Recaudos - Gestión
   '/dashboard/recaudos/gestion': [
