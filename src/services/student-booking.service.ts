@@ -11,7 +11,7 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { StepOverridesRepository } from '@/repositories/niveles.repository';
 import { ValidationError, ConflictError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
-import { queryMany } from '@/lib/postgres';
+import { queryMany, queryOne } from '@/lib/postgres';
 
 // --- Helpers (mirrors progress.service.ts logic) ---
 
@@ -284,6 +284,23 @@ export async function bookEvent(
   },
   eventId: string
 ) {
+  // 0. Verify student is not blocked (defensa en profundidad — la sesión
+  //    JWT puede seguir activa después de inactivar al estudiante).
+  //    Bloquea si CUALQUIERA de ACADEMICA o PEOPLE marca estadoInactivo=true.
+  const inactivoCheck = await queryOne<{ inactivo: boolean }>(
+    `SELECT (
+       COALESCE((SELECT a."estadoInactivo"::boolean FROM "ACADEMICA" a WHERE a."_id" = $1 LIMIT 1), false)
+       OR
+       COALESCE((SELECT p."estadoInactivo" FROM "PEOPLE" p
+                 WHERE p."numeroId" = $2 AND p."tipoUsuario" = 'BENEFICIARIO'
+                 ORDER BY p."estadoInactivo" DESC NULLS LAST LIMIT 1), false)
+     ) AS inactivo`,
+    [studentId, studentData.numeroId || '']
+  );
+  if (inactivoCheck?.inactivo) {
+    throw new ForbiddenError('Tu cuenta está inactiva. No puedes agendar clases. Por favor contacta al Área de Servicio.');
+  }
+
   // 1. Get event
   const event = await CalendarioRepository.findByIdWithAdvisor(eventId);
   if (!event) throw new NotFoundError('Evento', eventId);
