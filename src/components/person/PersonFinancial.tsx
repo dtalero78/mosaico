@@ -233,6 +233,11 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   // Suppress unused warning — paymentProgress is computed for parity with original
   void paymentProgress
 
+  // PEOPLE.plan tiene prioridad sobre FINANCIEROS.plan (más confiable).
+  // Se aplica POST if/else para cubrir también el caso sin financialData
+  // (titulares sin fila en FINANCIEROS — caso TIARE NUÑEZ y similares).
+  financial.plan = (person as any)?.plan || financial.plan || 'No disponible'
+
   // ── Derivados del listado de pagos para mostrar en "Información de Pagos" ──
   // Cuotas pagadas REALES = pagos validados con numCuota > 0
   // (la cuota #0 = inscripción NO cuenta como cuota pagada)
