@@ -8,6 +8,7 @@ import EventDetailModal from '@/components/academic/EventDetailModal'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, getHours, isToday, addWeeks, subWeeks } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { exportToExcel } from '@/lib/export-excel'
+import HolidayBadge from '@/components/common/HolidayBadge'
 
 interface CalendarEvent {
   _id: string
@@ -542,8 +543,9 @@ export default function AgendaAcademicaPage() {
                 <div className="text-sm font-medium text-gray-900">
                   {format(date, 'EEE', { locale: es })}
                 </div>
-                <div className={`text-lg font-semibold ${isToday(date) ? 'text-blue-600' : 'text-gray-700'}`}>
+                <div className={`text-lg font-semibold flex items-center justify-center gap-1 ${isToday(date) ? 'text-blue-600' : 'text-gray-700'}`}>
                   {format(date, 'd')}
+                  <HolidayBadge date={date} size="xs" placement="bottom" />
                 </div>
               </div>
             ))}

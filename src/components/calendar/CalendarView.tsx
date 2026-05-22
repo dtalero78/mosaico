@@ -3,6 +3,7 @@
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isWeekend, isSameDay, getDay } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import HolidayBadge from '@/components/common/HolidayBadge'
 
 interface Advisor {
   _id: string
@@ -46,18 +47,19 @@ export default function CalendarView({
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
 
-  // Encontrar el primer domingo antes o en el primer día del mes
+  // Encontrar el primer lunes antes o en el primer día del mes
+  // getDay(): 0=Dom, 1=Lun, ..., 6=Sáb. Días a retroceder hasta el lunes: (getDay+6)%7
   const calendarStart = new Date(monthStart)
-  const dayOfWeek = getDay(monthStart)
-  if (dayOfWeek !== 0) {
-    calendarStart.setDate(monthStart.getDate() - dayOfWeek)
+  const startOffset = (getDay(monthStart) + 6) % 7
+  if (startOffset !== 0) {
+    calendarStart.setDate(monthStart.getDate() - startOffset)
   }
 
-  // Encontrar el último sábado después o en el último día del mes
+  // Encontrar el último domingo después o en el último día del mes
   const calendarEnd = new Date(monthEnd)
-  const endDayOfWeek = getDay(monthEnd)
-  if (endDayOfWeek !== 6) {
-    calendarEnd.setDate(monthEnd.getDate() + (6 - endDayOfWeek))
+  const endOffset = (7 - getDay(monthEnd)) % 7
+  if (endOffset !== 0) {
+    calendarEnd.setDate(monthEnd.getDate() + endOffset)
   }
 
   const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd })
@@ -121,7 +123,7 @@ export default function CalendarView({
 
       {/* Días de la semana */}
       <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-t-lg overflow-hidden">
-        {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
+        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
           <div key={day} className="bg-gray-50 p-2 text-center text-xs font-medium text-gray-900">
             {day}
           </div>
@@ -150,11 +152,12 @@ export default function CalendarView({
             >
               <div className="flex items-center justify-between mb-1">
                 <span className={`
-                  text-sm font-medium
+                  text-sm font-medium flex items-center gap-1
                   ${!isCurrentMonth ? 'text-gray-400' : 'text-gray-900'}
                   ${isSelected ? 'text-primary-600' : ''}
                 `}>
                   {format(day, 'd')}
+                  <HolidayBadge date={day} size="xs" />
                 </span>
                 {dayEvents.length > 0 && (
                   <span className="text-xs text-gray-500">

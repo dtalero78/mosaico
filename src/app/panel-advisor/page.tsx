@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
+import HolidayBadge from '@/components/common/HolidayBadge'
 
 interface Advisor {
   _id: string
@@ -389,8 +390,9 @@ function PanelAdvisorContent() {
                         hover:bg-gray-50
                       `}
                     >
-                      <div className="text-sm font-medium mb-1">
+                      <div className="text-sm font-medium mb-1 flex items-center gap-1">
                         {format(date, 'd')}
+                        <HolidayBadge date={date} size="xs" />
                       </div>
                       <div className="space-y-1">
                         {dayEvents.slice(0, 3).map(event => (
