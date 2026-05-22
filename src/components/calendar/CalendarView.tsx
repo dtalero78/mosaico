@@ -157,7 +157,7 @@ export default function CalendarView({
                   ${isSelected ? 'text-primary-600' : ''}
                 `}>
                   {format(day, 'd')}
-                  <HolidayBadge date={day} size="xs" />
+                  <HolidayBadge date={day} size="xs" placement="bottom" />
                 </span>
                 {dayEvents.length > 0 && (
                   <span className="text-xs text-gray-500">
