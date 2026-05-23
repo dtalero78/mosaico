@@ -95,7 +95,13 @@ function UsuariosPegadosContent() {
       const res = await fetch(`/api/admin/scripts/usuarios-pegados${force ? '?force=1' : ''}`, { cache: 'no-store' })
       const json = await res.json()
       if (!res.ok || !json.success) throw new Error(json.error || 'Error cargando datos')
-      setData(json.data)
+      // successResponse spreads at root: { success, calculatedAt, rows, total, cached }
+      setData({
+        calculatedAt: json.calculatedAt,
+        rows:         json.rows ?? [],
+        total:        json.total ?? 0,
+        cached:       json.cached ?? false,
+      })
       setSelected(new Set())
     } catch (err: any) {
       setError(err?.message || 'Error desconocido')
@@ -229,7 +235,8 @@ function UsuariosPegadosContent() {
       })
       const json = await res.json()
       if (!res.ok || !json.success) throw new Error(json.error || 'Error aplicando cambios')
-      setApplyResult(json.data)
+      // successResponse spreads at root: { success, summary, results }
+      setApplyResult({ summary: json.summary, results: json.results })
       setShowConfirm(false)
       await fetchData(true)
     } catch (err: any) {
