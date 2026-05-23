@@ -42,3 +42,24 @@ src/wix-pages/
 .idea/
 .wix/
 jsconfig.json
+
+# Claude Code — settings personales por máquina (permisos, hooks y
+# preferencias del usuario, no del proyecto). Cada colaborador maneja
+# su propia versión local.
+.claude/settings.json
+.claude/settings.local.json
+
+# Reportes/exportaciones generadas por scripts en raíz del repo.
+# Son snapshots de momento (datos, no código) — los scripts que los
+# producen sí están versionados. Si necesitas commitear un CSV
+# intencionalmente, ponlo en wix-database/ o úsalo con `git add -f`.
+/Arreglo*.csv
+/aprobados-*.csv
+/bloqueo-*.csv
+/bulk-bloqueo-*.csv
+/casos-a-revisar.csv
+/finalcontrato-*.csv
+/numeroid-*.csv
+/orphan-*.csv
+/plan-*.csv
+/sin-plataforma-*.csv

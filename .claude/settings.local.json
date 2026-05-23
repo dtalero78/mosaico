@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(curl -s http://checkip.amazonaws.com)",
-      "Bash(curl -s http://ifconfig.me)"
-    ]
-  }
-}
