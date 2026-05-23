@@ -89,6 +89,20 @@ function UsuariosPegadosContent() {
   const [applying, setApplying] = useState(false)
   const [applyResult, setApplyResult] = useState<{ summary: AplicarSummary; results: AplicarItem[] } | null>(null)
 
+  type SortKey = 'nombre' | 'numeroId' | 'contrato' | 'plataforma' | 'nivel'
+                 | 'stepActual' | 'stepReal' | 'desfase' | 'clrHistoric' | 'overridesCount'
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
   const fetchData = useCallback(async (force = false) => {
     setLoading(true); setError(null)
     try {
@@ -115,7 +129,7 @@ function UsuariosPegadosContent() {
   const filtered = useMemo(() => {
     if (!data) return []
     const term = search.trim().toLowerCase()
-    return data.rows.filter(r => {
+    const out = data.rows.filter(r => {
       if (nivel && r.nivel !== nivel) return false
       if (plataforma && (r.plataforma || '').toLowerCase() !== plataforma.toLowerCase()) return false
       if (desfaseMin > 1 && r.desfase < desfaseMin) return false
@@ -126,7 +140,23 @@ function UsuariosPegadosContent() {
       }
       return true
     })
-  }, [data, search, nivel, plataforma, desfaseMin, soloLimpios])
+
+    if (sortKey) {
+      const dirMul = sortDir === 'asc' ? 1 : -1
+      out.sort((a, b) => {
+        const av = (a as any)[sortKey]
+        const bv = (b as any)[sortKey]
+        // booleans: false<true; nulls: al final siempre
+        if (av == null && bv == null) return 0
+        if (av == null) return 1
+        if (bv == null) return -1
+        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dirMul
+        if (typeof av === 'boolean' && typeof bv === 'boolean') return ((av === bv) ? 0 : av ? 1 : -1) * dirMul
+        return String(av).localeCompare(String(bv), 'es', { sensitivity: 'base', numeric: true }) * dirMul
+      })
+    }
+    return out
+  }, [data, search, nivel, plataforma, desfaseMin, soloLimpios, sortKey, sortDir])
 
   const allVisibleSelected = filtered.length > 0 && filtered.every(r => selected.has(r.academicaId))
   const someVisibleSelected = filtered.some(r => selected.has(r.academicaId))
@@ -421,16 +451,16 @@ function UsuariosPegadosContent() {
                     className="rounded border-gray-300 text-blue-600"
                   />
                 </th>
-                <th className="px-3 py-2 text-left font-medium text-gray-700">Nombre</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-700">ID</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-700">Contrato</th>
-                <th className="px-3 py-2 text-left font-medium text-gray-700">Plataforma</th>
-                <th className="px-3 py-2 text-center font-medium text-gray-700">Nivel</th>
-                <th className="px-3 py-2 text-center font-medium text-gray-700">Step Actual</th>
-                <th className="px-3 py-2 text-center font-medium text-gray-700">Step Real</th>
-                <th className="px-3 py-2 text-center font-medium text-gray-700">Desfase</th>
-                <th className="px-3 py-2 text-center font-medium text-gray-700">Clr Historic</th>
-                <th className="px-3 py-2 text-center font-medium text-gray-700">Overrides</th>
+                <SortableTh label="Nombre"       sortKey="nombre"         active={sortKey} dir={sortDir} onSort={handleSort} align="left" />
+                <SortableTh label="ID"           sortKey="numeroId"       active={sortKey} dir={sortDir} onSort={handleSort} align="left" />
+                <SortableTh label="Contrato"     sortKey="contrato"       active={sortKey} dir={sortDir} onSort={handleSort} align="left" />
+                <SortableTh label="Plataforma"   sortKey="plataforma"     active={sortKey} dir={sortDir} onSort={handleSort} align="left" />
+                <SortableTh label="Nivel"        sortKey="nivel"          active={sortKey} dir={sortDir} onSort={handleSort} align="center" />
+                <SortableTh label="Step Actual"  sortKey="stepActual"     active={sortKey} dir={sortDir} onSort={handleSort} align="center" />
+                <SortableTh label="Step Real"    sortKey="stepReal"       active={sortKey} dir={sortDir} onSort={handleSort} align="center" />
+                <SortableTh label="Desfase"      sortKey="desfase"        active={sortKey} dir={sortDir} onSort={handleSort} align="center" />
+                <SortableTh label="Clr Historic" sortKey="clrHistoric"    active={sortKey} dir={sortDir} onSort={handleSort} align="center" />
+                <SortableTh label="Overrides"    sortKey="overridesCount" active={sortKey} dir={sortDir} onSort={handleSort} align="center" />
                 <th className="px-3 py-2 text-center font-medium text-gray-700">Acción</th>
               </tr>
             </thead>
@@ -665,6 +695,33 @@ function OverridesBadge({ details }: { details: OverrideDetail[] }) {
       {ok > 0 && <span>{ok} ✓</span>}
       {block > 0 && <span>{block} ✗</span>}
     </span>
+  )
+}
+
+function SortableTh<K extends string>({
+  label, sortKey, active, dir, onSort, align,
+}: {
+  label: string
+  sortKey: K
+  active: K | null
+  dir: 'asc' | 'desc'
+  onSort: (k: K) => void
+  align: 'left' | 'center'
+}) {
+  const isActive = active === sortKey
+  const arrow = !isActive ? '⇅' : dir === 'asc' ? '↑' : '↓'
+  return (
+    <th className={`px-3 py-2 font-medium text-gray-700 ${align === 'center' ? 'text-center' : 'text-left'}`}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        title={`Ordenar por ${label}`}
+        className={`inline-flex items-center gap-1 hover:text-blue-600 transition-colors ${isActive ? 'text-blue-700' : ''}`}
+      >
+        {label}
+        <span className={`text-xs ${isActive ? 'text-blue-700' : 'text-gray-400'}`}>{arrow}</span>
+      </button>
+    </th>
   )
 }
 
