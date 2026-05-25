@@ -7,8 +7,12 @@
 import 'server-only';
 import { CalendarioRepository, EventFilters } from '@/repositories/calendar.repository';
 import { BookingRepository } from '@/repositories/booking.repository';
+import { AdvisorEventLogRepository } from '@/repositories/advisor-event-log.repository';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
+import { withTransaction } from '@/lib/postgres';
+
+const MAX_ADVISOR_REASSIGNMENTS = 2;
 
 /**
  * Get events with filters and advisor details.
@@ -105,8 +109,17 @@ const ALLOWED_EVENT_FIELDS = [
 
 /**
  * Update an existing event.
+ *
+ * Hook Ctrl Horas: si `data.advisor` difiere del actual, registra un snapshot
+ * 'Canceled' en ADVISOR_EVENT_LOG para el advisor saliente. Aplica límite de
+ * MAX_ADVISOR_REASSIGNMENTS por evento (al exceder, lanza ValidationError).
+ * El UPDATE en CALENDARIO y el INSERT en log son atómicos (transacción SQL).
  */
-export async function updateEvent(eventId: string, data: Record<string, any>) {
+export async function updateEvent(
+  eventId: string,
+  data: Record<string, any>,
+  opts?: { actor?: string; motivo?: string },
+) {
   const event = await CalendarioRepository.findById(eventId);
   if (!event) throw new NotFoundError('Event', eventId);
 
@@ -125,7 +138,50 @@ export async function updateEvent(eventId: string, data: Record<string, any>) {
     data.tituloONivel = `${data.tituloONivel} - ${data.nombreEvento}`.trim();
   }
 
-  const updated = await CalendarioRepository.updateEvent(eventId, data, ALLOWED_EVENT_FIELDS);
+  const isAdvisorChange = !!data.advisor && data.advisor !== event.advisor;
+
+  let updated: any;
+  if (isAdvisorChange) {
+    // Límite max 2 reasignaciones por evento
+    const prevCanceled = await AdvisorEventLogRepository.countCanceledByEvento(eventId);
+    if (prevCanceled >= MAX_ADVISOR_REASSIGNMENTS) {
+      throw new ValidationError(
+        `Este evento ya tuvo ${MAX_ADVISOR_REASSIGNMENTS} cambios de advisor — no se permite reasignar de nuevo`,
+      );
+    }
+
+    // Transacción: INSERT log Canceled + UPDATE CALENDARIO (con clean de notas advisor saliente)
+    updated = await withTransaction(async (client) => {
+      await AdvisorEventLogRepository.insert({
+        advisorId:     event.advisor,
+        eventoId:      eventId,
+        estado:        'Canceled',
+        fechaEvento:   event.dia,
+        horaInicio:    event.hora,
+        tipo:          event.tipo,
+        nivel:         event.nivel,
+        step:          event.step,
+        tituloEvento:  event.tituloONivel || event.titulo || event.nombreEvento,
+        horaFin:       (event as any).timeout ?? null,
+        observaciones: (event as any).notasadvisor ?? null,
+        canceladoPor:  opts?.actor || 'system',
+        motivoTransicion: opts?.motivo || null,
+      }, client);
+
+      // Clean notas del advisor saliente para que el nuevo empiece limpio
+      const cleanData = {
+        ...data,
+        timeout:           null,
+        notasadvisor:      null,
+        sesionCerrada:     false,
+        fechaCierreSesion: null,
+      };
+      const cleanFields = [...ALLOWED_EVENT_FIELDS, 'timeout', 'notasadvisor', 'sesionCerrada', 'fechaCierreSesion'];
+      return CalendarioRepository.updateEvent(eventId, cleanData, cleanFields);
+    });
+  } else {
+    updated = await CalendarioRepository.updateEvent(eventId, data, ALLOWED_EVENT_FIELDS);
+  }
   if (!updated) throw new ValidationError('No valid fields to update');
 
   // Propagate relevant field changes to existing bookings
@@ -149,20 +205,51 @@ export async function updateEvent(eventId: string, data: Record<string, any>) {
 
 /**
  * Delete an event, optionally deleting its bookings too.
+ *
+ * Hook Ctrl Horas: si el evento tiene advisor asignado, primero registra
+ * un snapshot 'Suspended' en ADVISOR_EVENT_LOG. El INSERT del log, el
+ * DELETE de bookings y el DELETE del evento son atómicos (transacción SQL).
  */
-export async function deleteEvent(eventId: string, deleteBookings: boolean = true) {
-  const event = await CalendarioRepository.getInscritos(eventId);
+export async function deleteEvent(
+  eventId: string,
+  deleteBookings: boolean = true,
+  opts?: { actor?: string; motivo?: string },
+) {
+  const event = await CalendarioRepository.findById(eventId);
   if (!event) throw new NotFoundError('Event', eventId);
 
-  let bookingsDeleted = 0;
-  if (deleteBookings) {
-    const deleted = await BookingRepository.deleteByEventId(eventId);
-    bookingsDeleted = deleted.length;
-  }
+  return await withTransaction(async (client) => {
+    if (event.advisor) {
+      await AdvisorEventLogRepository.insert({
+        advisorId:     event.advisor,
+        eventoId:      eventId,
+        estado:        'Suspended',
+        fechaEvento:   event.dia,
+        horaInicio:    event.hora,
+        tipo:          event.tipo,
+        nivel:         event.nivel,
+        step:          event.step,
+        tituloEvento:  event.tituloONivel || event.titulo || event.nombreEvento,
+        horaFin:       (event as any).timeout ?? null,
+        observaciones: (event as any).notasadvisor ?? null,
+        canceladoPor:  opts?.actor || 'system',
+        motivoTransicion: opts?.motivo || null,
+      }, client);
+    }
 
-  await CalendarioRepository.deleteById(eventId);
+    let bookingsDeleted = 0;
+    if (deleteBookings) {
+      const r = await client.query(
+        `DELETE FROM "ACADEMICA_BOOKINGS" WHERE "eventoId" = $1 OR "idEvento" = $1 RETURNING "_id"`,
+        [eventId],
+      );
+      bookingsDeleted = r.rowCount ?? 0;
+    }
 
-  return { bookingsDeleted };
+    await client.query(`DELETE FROM "CALENDARIO" WHERE "_id" = $1`, [eventId]);
+
+    return { bookingsDeleted };
+  });
 }
 
 /**

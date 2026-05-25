@@ -391,6 +391,21 @@ export default function EventModal({
     }
   }
 
+  // Estado para confirmación de cambio de advisor (Ctrl Horas hook)
+  const [pendingAdvisorChange, setPendingAdvisorChange] = useState<{
+    eventData: any
+    oldAdvisorName: string
+    newAdvisorName: string
+  } | null>(null)
+  const [confirmReassignChecked, setConfirmReassignChecked] = useState(false)
+  const [reassignMotivo, setReassignMotivo] = useState('')
+
+  function advisorNameById(id: string): string {
+    const a = advisors.find(x => x._id === id)
+    if (!a) return id
+    return `${a.primerNombre ?? ''} ${a.primerApellido ?? ''}`.trim() || id
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -419,6 +434,19 @@ export default function EventModal({
         linkZoom: formData.linkZoom || undefined
       }
 
+      // Hook Ctrl Horas: si estamos editando Y cambia el advisor, pedir confirmación
+      const isAdvisorChange = !!editingEvent && (editingEvent as any).advisor && (editingEvent as any).advisor !== formData.advisor
+      if (isAdvisorChange) {
+        setPendingAdvisorChange({
+          eventData,
+          oldAdvisorName: advisorNameById((editingEvent as any).advisor),
+          newAdvisorName: advisorNameById(formData.advisor),
+        })
+        setConfirmReassignChecked(false)
+        setReassignMotivo('')
+        return
+      }
+
       onSave(eventData)
     } catch (error) {
       console.error('Error saving event:', error)
@@ -426,6 +454,23 @@ export default function EventModal({
     } finally {
       setLoading(false)
     }
+  }
+
+  function confirmAdvisorReassignment() {
+    if (!pendingAdvisorChange || !confirmReassignChecked) return
+    const enriched = {
+      ...pendingAdvisorChange.eventData,
+      _motivoCambioAdvisor: reassignMotivo.trim() || undefined,
+    }
+    setPendingAdvisorChange(null)
+    onSave(enriched)
+  }
+
+  function cancelAdvisorReassignment() {
+    setPendingAdvisorChange(null)
+    setConfirmReassignChecked(false)
+    setReassignMotivo('')
+    setLoading(false)
   }
 
   const handleInputChange = (field: string, value: any) => {
@@ -705,6 +750,63 @@ export default function EventModal({
           </form>
         </div>
       </div>
+
+      {/* Modal de confirmación de cambio de advisor (Ctrl Horas hook) */}
+      {pendingAdvisorChange && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              ⚠️ Confirmar cambio de advisor
+            </h3>
+            <p className="text-sm text-gray-700 mb-4">
+              Esta acción registrará en el historial de <strong>{pendingAdvisorChange.oldAdvisorName}</strong> que
+              la sesión fue cancelada para él/ella y se reasigna a <strong>{pendingAdvisorChange.newAdvisorName}</strong>.
+              Las notas (Time Out y observaciones) que haya escrito el advisor anterior quedarán congeladas en su historial.
+            </p>
+            <label className="flex items-start gap-2 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmReassignChecked}
+                onChange={(e) => setConfirmReassignChecked(e.target.checked)}
+                className="mt-0.5 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
+              />
+              <span className="text-sm text-gray-800">
+                Confirmo: <strong>{pendingAdvisorChange.oldAdvisorName}</strong> canceló la sesión y se reasigna a <strong>{pendingAdvisorChange.newAdvisorName}</strong>
+              </span>
+            </label>
+            <div className="mb-4">
+              <label htmlFor="reassign-motivo" className="block text-xs font-medium text-gray-700 mb-1">
+                Motivo (opcional)
+              </label>
+              <textarea
+                id="reassign-motivo"
+                value={reassignMotivo}
+                onChange={(e) => setReassignMotivo(e.target.value)}
+                rows={2}
+                className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+                placeholder="Ej: el advisor original tuvo un imprevisto familiar"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelAdvisorReassignment}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmAdvisorReassignment}
+                disabled={!confirmReassignChecked}
+                className="px-4 py-2 text-sm font-semibold text-white bg-yellow-600 rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirmar reasignación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

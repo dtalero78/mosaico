@@ -78,6 +78,11 @@ export default function AgendaSesionesPage() {
   // Estados del modal
   const [showEventModal, setShowEventModal] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+  // Modal eliminar evento con confirmación (Ctrl Horas hook)
+  const [deleteTarget, setDeleteTarget] = useState<CalendarEvent | null>(null)
+  const [deleteConfirmChecked, setDeleteConfirmChecked] = useState(false)
+  const [deleteMotivo, setDeleteMotivo] = useState('')
+  const [deletingEvent, setDeletingEvent] = useState(false)
 
   // Estados para el modal de detalles
   const [showDetailModal, setShowDetailModal] = useState(false)
@@ -639,29 +644,47 @@ export default function AgendaSesionesPage() {
     setShowEventModal(true)
   }
 
-  const handleDeleteEvent = async (eventId: string) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este evento?')) return
+  // Estado para modal de eliminación con confirmación (Ctrl Horas hook)
+  const handleDeleteEvent = (eventId: string) => {
+    const ev = events.find(e => e._id === eventId)
+    if (!ev) return
+    setDeleteTarget(ev)
+    setDeleteConfirmChecked(false)
+    setDeleteMotivo('')
+  }
 
+  const confirmDelete = async () => {
+    if (!deleteTarget || !deleteConfirmChecked) return
+    setDeletingEvent(true)
     try {
-      const response = await fetch(`/api/postgres/events/${eventId}`, {
+      const qs = new URLSearchParams()
+      if (deleteMotivo.trim()) qs.set('motivo', deleteMotivo.trim())
+      const response = await fetch(`/api/postgres/events/${deleteTarget._id}?${qs.toString()}`, {
         method: 'DELETE'
       })
 
       if (response.ok) {
-        const deletedEvent = events.find(e => e._id === eventId)
-        setEvents(prev => prev.filter(e => e._id !== eventId))
-        // Invalidar caché solo del mes afectado (en lugar de todo)
-        if (deletedEvent) {
-          clearCacheForMonth(deletedEvent.dia)
-        }
-        console.log('🗑️ Cache invalidado solo del mes afectado después de eliminar evento')
+        const deletedEvent = events.find(e => e._id === deleteTarget._id)
+        setEvents(prev => prev.filter(e => e._id !== deleteTarget._id))
+        if (deletedEvent) clearCacheForMonth(deletedEvent.dia)
+        setDeleteTarget(null)
       } else {
-        setError('Error al eliminar el evento')
+        const json = await response.json().catch(() => ({}))
+        setError(json.error || 'Error al eliminar el evento')
       }
     } catch (error) {
       console.error('Error deleting event:', error)
       setError('Error al eliminar el evento')
+    } finally {
+      setDeletingEvent(false)
     }
+  }
+
+  const cancelDelete = () => {
+    if (deletingEvent) return
+    setDeleteTarget(null)
+    setDeleteConfirmChecked(false)
+    setDeleteMotivo('')
   }
 
   const handleEventSave = async (eventData: any) => {
@@ -941,6 +964,70 @@ export default function AgendaSesionesPage() {
             selectedDate={selectedDate}
           />
         )}
+
+        {/* Modal eliminar evento con checkbox de confirmación (Ctrl Horas hook) */}
+        {deleteTarget && (() => {
+          const adv = advisors.find(a => a._id === (deleteTarget as any).advisor)
+          const advName = adv ? `${adv.primerNombre ?? ''} ${adv.primerApellido ?? ''}`.trim() : 'el advisor asignado'
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
+              <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  ⚠️ Cancelar evento
+                </h3>
+                <p className="text-sm text-gray-700 mb-4">
+                  Estás por <strong>eliminar</strong> este evento. Esta acción quedará registrada
+                  en el historial de <strong>{advName}</strong> como sesión <strong>SUSPENDIDA</strong>.
+                </p>
+                <label className="flex items-start gap-2 mb-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={deleteConfirmChecked}
+                    onChange={(e) => setDeleteConfirmChecked(e.target.checked)}
+                    className="mt-0.5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-sm text-gray-800">
+                    Confirmo: esta sesión queda <strong>SUSPENDIDA</strong> para <strong>{advName}</strong>
+                  </span>
+                </label>
+                <div className="mb-4">
+                  <label htmlFor="delete-motivo" className="block text-xs font-medium text-gray-700 mb-1">
+                    Motivo (opcional)
+                  </label>
+                  <textarea
+                    id="delete-motivo"
+                    value={deleteMotivo}
+                    onChange={(e) => setDeleteMotivo(e.target.value)}
+                    rows={2}
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+                    placeholder="Ej: día festivo no laborable"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelDelete}
+                    disabled={deletingEvent}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDelete}
+                    disabled={!deleteConfirmChecked || deletingEvent}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {deletingEvent && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    )}
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Modal para ver detalles del evento */}
         {showDetailModal && (

@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { CalendarIcon, ClockIcon, UserGroupIcon } from '@heroicons/react/24/outline'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions'
 import { AcademicoPermission } from '@/types/permissions'
 import SessionTabs from '@/components/session/SessionTabs'
@@ -26,6 +28,11 @@ interface CalendarioEvent {
   linkZoom?: string
   nivel?: string
   step?: string
+  // Ctrl Horas
+  timeout?: string | null
+  notasadvisor?: string | null
+  sesionCerrada?: boolean
+  fechaCierreSesion?: string | null
 }
 
 interface Student {
@@ -213,16 +220,22 @@ export default function SesionPage() {
                   </div>
                 </div>
               </div>
-              {evento.linkZoom && (
-                <a
-                  href={evento.linkZoom}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Ir a Zoom
-                </a>
-              )}
+              <div className="flex items-center gap-2">
+                {evento.linkZoom && (
+                  <a
+                    href={evento.linkZoom}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Ir a Zoom
+                  </a>
+                )}
+                <RegistrarSesionButton
+                  evento={evento}
+                  onClosed={() => loadEventoData()}
+                />
+              </div>
             </div>
           </div>
 
@@ -260,5 +273,201 @@ export default function SesionPage() {
         </div>
       </PermissionGuard>
     </DashboardLayout>
+  )
+}
+
+/**
+ * Botón "Registrar Sesión" (Ctrl Horas):
+ * - Solo visible para el advisor asignado al evento (matcheado por email).
+ * - Solo habilitado si NOW >= fechaEvento + 30 min.
+ * - Pide Time Out (requerido HH:MM) y Notas (opcional, default "no hubo novedades").
+ * - Aviso suave con confirm() al salir de la página si el flag está activo.
+ */
+function RegistrarSesionButton({
+  evento,
+  onClosed,
+}: {
+  evento: CalendarioEvent
+  onClosed: () => void
+}) {
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN'
+
+  const [isMyEvent, setIsMyEvent] = useState(false)
+  const [requiereRegistro, setRequiereRegistro] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [timeoutVal, setTimeoutVal] = useState(evento.timeout || '')
+  const [notas, setNotas] = useState(evento.notasadvisor || '')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  // Resolver si el usuario logueado es el advisor del evento
+  useEffect(() => {
+    const email = (session?.user as any)?.email
+    if (!email) return
+    fetch(`/api/postgres/advisors/by-email/${encodeURIComponent(email)}`)
+      .then(r => r.json())
+      .then(j => {
+        const myId = j.advisor?._id
+        setIsMyEvent(!!myId && myId === evento.advisor)
+      })
+      .catch(() => setIsMyEvent(false))
+    fetch(`/api/postgres/config/sesion-requiere-registro`)
+      .then(r => r.json())
+      .then(j => setRequiereRegistro(j.value !== false && j.value !== 'false'))
+      .catch(() => { /* mantener default true */ })
+  }, [session, evento.advisor])
+
+  // Aviso suave al salir sin cerrar (cuando aplique)
+  useEffect(() => {
+    if (!isMyEvent || evento.sesionCerrada || !requiereRegistro) return
+    const eventStart = new Date(evento.dia).getTime()
+    if (Date.now() < eventStart + 30 * 60 * 1000) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = 'Hay datos sin guardar de la sesión. ¿Salir igual?'
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isMyEvent, evento.sesionCerrada, evento.dia, requiereRegistro])
+
+  if (isAdmin || !isMyEvent) return null
+
+  const eventStart = new Date(evento.dia).getTime()
+  const elapsedMin = (Date.now() - eventStart) / 60000
+  const canRegister = elapsedMin >= 30
+
+  if (evento.sesionCerrada) {
+    return (
+      <span className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg">
+        ✓ Sesión registrada
+      </span>
+    )
+  }
+
+  if (!canRegister) {
+    return (
+      <span className="px-3 py-2 text-xs text-gray-500 italic" title="Disponible 30 min después del inicio">
+        Registro disponible en {Math.max(0, Math.ceil(30 - elapsedMin))} min
+      </span>
+    )
+  }
+
+  const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
+
+  async function submitClose() {
+    if (!TIMEOUT_REGEX.test(timeoutVal)) {
+      setErr('Time Out debe estar en formato HH:MM militar (ej. 09:30)')
+      return
+    }
+    setSaving(true); setErr(null)
+    try {
+      const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Bogota' } catch { return 'America/Bogota' } })()
+      // 1. Guardar timeout y notas
+      const patchRes = await fetch(`/api/postgres/calendario/${evento._id}/notas-advisor`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeout: timeoutVal, notasadvisor: notas || null, tz }),
+      })
+      const patchJson = await patchRes.json()
+      if (!patchRes.ok || !patchJson.success) throw new Error(patchJson.error || 'Error guardando notas')
+
+      // 2. Cerrar sesión
+      const closeRes = await fetch(`/api/postgres/calendario/${evento._id}/cerrar-sesion`, { method: 'POST' })
+      const closeJson = await closeRes.json()
+      if (!closeRes.ok || !closeJson.success) throw new Error(closeJson.error || 'Error cerrando sesión')
+
+      toast.success('Sesión registrada correctamente')
+      setOpen(false)
+      onClosed()
+    } catch (e: any) {
+      setErr(e?.message || 'Error inesperado')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          // Auto-llenar timeout con la hora actual del navegador al abrir
+          // (el advisor puede ajustar si cerró tarde).
+          if (!timeoutVal) {
+            const now = new Date()
+            const hh = String(now.getHours()).padStart(2, '0')
+            const mm = String(now.getMinutes()).padStart(2, '0')
+            setTimeoutVal(`${hh}:${mm}`)
+          }
+          setOpen(true); setErr(null)
+        }}
+        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-semibold"
+      >
+        Registrar Sesión
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Registrar Sesión</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Esta acción cierra la sesión y la marca como atendida. No podrás editar
+              Time Out ni Notas después de cerrar.
+            </p>
+
+            <div className="mb-3">
+              <label htmlFor="timeout-input" className="block text-xs font-medium text-gray-700 mb-1">
+                Time Out (HH:MM militar) <span className="text-red-600">*</span>
+              </label>
+              <input
+                id="timeout-input"
+                type="time"
+                value={timeoutVal}
+                onChange={e => setTimeoutVal(e.target.value)}
+                required
+                className="w-32 border border-gray-300 rounded px-3 py-1.5 text-sm font-mono"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label htmlFor="notas-input" className="block text-xs font-medium text-gray-700 mb-1">
+                Notas (opcional)
+              </label>
+              <textarea
+                id="notas-input"
+                value={notas}
+                onChange={e => setNotas(e.target.value)}
+                rows={3}
+                placeholder='Si dejas vacío se guarda "no hubo novedades"'
+                className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+              />
+            </div>
+
+            {err && <div className="mb-3 text-sm text-red-600">{err}</div>}
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={submitClose}
+                disabled={saving || !timeoutVal}
+                className="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                {saving ? 'Guardando…' : 'Confirmar Registro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

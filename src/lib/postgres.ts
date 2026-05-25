@@ -314,5 +314,37 @@ export function stringifyJsonbFields<T extends Record<string, any>>(
   return stringified as T;
 }
 
+/**
+ * Ejecuta `fn` dentro de una transacción SQL (BEGIN/COMMIT/ROLLBACK).
+ * Garantía: o se aplican TODAS las queries o NINGUNA. Si `fn` lanza, se
+ * hace ROLLBACK automático y el error se re-lanza.
+ *
+ * Úsalo cuando 2+ operaciones SQL deben ser atómicas (ej: INSERT en log
+ * + UPDATE/DELETE en tabla principal). El cliente PoolClient está reservado
+ * para esta operación y se libera siempre, incluso si hay error.
+ *
+ * @example
+ *   await withTransaction(async (client) => {
+ *     await client.query('INSERT INTO "LOG" (...) VALUES (...)', [...]);
+ *     await client.query('UPDATE "T" SET ... WHERE ...', [...]);
+ *   });
+ */
+export async function withTransaction<T>(
+  fn: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => { /* best-effort */ });
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Export pool for direct access if needed
 export default pool;
