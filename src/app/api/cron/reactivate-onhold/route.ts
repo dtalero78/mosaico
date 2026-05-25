@@ -106,6 +106,16 @@ export async function GET(request: NextRequest) {
           ]
         )
 
+        // Sync ACADEMICA.estadoInactivo (por numeroId). Sin esto el estudiante
+        // queda en estado inconsistente: puede loguear pero NO puede agendar
+        // (validación de booking bloquea cuando ACADEMICA.estadoInactivo=true).
+        if (student.numeroId) {
+          await query(
+            `UPDATE "ACADEMICA" SET "estadoInactivo" = false, "_updatedDate" = NOW() WHERE "numeroId" = $1`,
+            [student.numeroId]
+          ).catch(err => console.warn(`Cron reactivate-onhold: ACADEMICA sync failed for ${student.numeroId}:`, err))
+        }
+
         console.log(`Cron reactivate-onhold: Estudiante ${student._id} reactivado exitosamente`)
 
         results.push({

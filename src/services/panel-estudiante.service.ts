@@ -182,6 +182,20 @@ export async function resolveStudentFromSession(session: Session) {
           console.warn('⚠️ Could not sync USUARIOS_ROLES on OnHold auto-reactivation:', err);
         }
       }
+
+      // Sync ACADEMICA.estadoInactivo (por numeroId). Sin esto el estudiante
+      // puede loguear (USUARIOS_ROLES.activo=true) pero NO agendar (la
+      // validación de booking bloquea cuando ACADEMICA.estadoInactivo=true).
+      if ((base as any).numeroId) {
+        try {
+          await query(
+            `UPDATE "ACADEMICA" SET "estadoInactivo" = false, "_updatedDate" = NOW() WHERE "numeroId" = $1`,
+            [(base as any).numeroId]
+          );
+        } catch (err) {
+          console.warn('⚠️ Could not sync ACADEMICA on OnHold auto-reactivation:', err);
+        }
+      }
     }
   }
 

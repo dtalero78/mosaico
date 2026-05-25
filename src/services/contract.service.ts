@@ -236,6 +236,22 @@ export async function deactivateOnHold(studentId: string) {
     newVigencia,
   );
 
+  // Sync: reactivar ACADEMICA.estadoInactivo (por numeroId).
+  // Sin esto el estudiante puede loguear (USUARIOS_ROLES.activo=true)
+  // pero NO puede agendar porque student-booking.service bloquea cuando
+  // ACADEMICA.estadoInactivo=true. Bug histórico que generaba muchos
+  // estudiantes "puede entrar pero no agendar".
+  if (person.numeroId) {
+    try {
+      await query(
+        `UPDATE "ACADEMICA" SET "estadoInactivo" = false, "_updatedDate" = NOW() WHERE "numeroId" = $1`,
+        [person.numeroId]
+      );
+    } catch (err) {
+      console.warn('⚠️ Could not sync ACADEMICA.estadoInactivo on OnHold deactivate for', person.numeroId, err);
+    }
+  }
+
   // Sync: restore login in USUARIOS_ROLES
   if (person.email) {
     try {
