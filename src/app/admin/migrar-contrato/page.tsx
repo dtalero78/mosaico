@@ -622,10 +622,18 @@ export default function MigrarContratoPage() {
                   <p className="text-xs text-gray-500 mt-1">Si se deja vacío se calcula desde la fecha de contrato + vigencia.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Plan contratado</label>
-                  <input type="text" value={financial.plan} onChange={e => setFinancial(f => ({ ...f, plan: e.target.value }))}
-                    placeholder="Ej: Plan estándar"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
+                  <label htmlFor="mig-tipo-plan" className="block text-sm font-medium text-gray-700 mb-1">Tipo Plan</label>
+                  <select
+                    id="mig-tipo-plan"
+                    value={financial.plan}
+                    onChange={e => setFinancial(f => ({ ...f, plan: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="">— Selecciona —</option>
+                    <option value="Contado">Contado</option>
+                    <option value="Credito">Credito</option>
+                    <option value="Colaborador">Colaborador</option>
+                  </select>
                 </div>
               </div>
             </div>

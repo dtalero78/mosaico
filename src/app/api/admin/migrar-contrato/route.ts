@@ -4,8 +4,23 @@ import { query, queryOne } from '@/lib/postgres';
 import { ValidationError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 
+const VALID_PLAN = ['Contado', 'Credito', 'Colaborador'] as const;
+type Plan = typeof VALID_PLAN[number];
+function normalizePlan(v: any): Plan | null {
+  if (!v) return null;
+  const s = String(v).trim();
+  return (VALID_PLAN as readonly string[]).includes(s) ? (s as Plan) : null;
+}
+
 export const POST = handlerWithAuth(async (request) => {
   const { contrato, titular, financial, beneficiarios, titularEsBeneficiario } = await request.json();
+
+  // Plan (Contado/Credito/Colaborador) — se valida y propaga a PEOPLE (titular +
+  // beneficiarios) y FINANCIEROS. Mismo patrón que /api/postgres/contracts.
+  const plan = normalizePlan(financial?.plan);
+  if (financial?.plan && !plan) {
+    throw new ValidationError(`plan debe ser uno de: ${VALID_PLAN.join(', ')}`);
+  }
 
   if (!contrato?.trim()) throw new ValidationError('El número de contrato es requerido');
   if (!titular?.plataforma) throw new ValidationError('plataforma es requerida');
@@ -43,12 +58,12 @@ export const POST = handlerWithAuth(async (request) => {
       "referenciaUno", "parentezcoRefUno", "telefonoRefUno",
       "referenciaDos", "parentezcoRefDos", "telefonoRefDos",
       "asesor", "medioPago", "tipoUsuario", "contrato",
-      "vigencia", "fechaContrato", "finalContrato",
+      "vigencia", "fechaContrato", "finalContrato", "plan",
       "aprobacion", "estadoInactivo", "origen", "_createdDate", "_updatedDate"
     ) VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
       $18,$19,$20,$21,$22,$23,$24,$25,
-      'TITULAR',$26,$27,$28,$29::date,
+      'TITULAR',$26,$27,$28,$29::date,$30,
       'Pendiente',false,'POSTGRES',NOW(),NOW()
     )`,
     [
@@ -81,6 +96,7 @@ export const POST = handlerWithAuth(async (request) => {
       financial?.vigencia || null,
       financial?.fechaContrato || null,
       finalContrato,
+      plan,
     ]
   );
 
@@ -115,12 +131,12 @@ export const POST = handlerWithAuth(async (request) => {
         "_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
         "email", "celular", "fechaNacimiento", "domicilio", "ciudad",
         "titularId", "tipoUsuario", "contrato", "plataforma",
-        "vigencia", "fechaContrato", "finalContrato",
+        "vigencia", "fechaContrato", "finalContrato", "plan",
         "aprobacion", "estadoInactivo", "origen", "_createdDate", "_updatedDate"
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
         $12,'BENEFICIARIO',$13,$14,
-        $15,$16,$17::date,
+        $15,$16,$17::date,$18,
         'Pendiente',false,'POSTGRES',NOW(),NOW()
       )`,
       [
@@ -141,6 +157,7 @@ export const POST = handlerWithAuth(async (request) => {
         financial?.vigencia || null,
         financial?.fechaContrato || null,
         finalContrato,
+        plan,
       ]
     );
     beneficiariosCreados.push(benefId);
@@ -165,7 +182,7 @@ export const POST = handlerWithAuth(async (request) => {
         financial.fechaPago || null,
         financial.medioPago || null,
         financial.vigencia || null,
-        financial.plan || null,
+        plan,
       ]
     );
   }
