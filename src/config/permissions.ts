@@ -858,6 +858,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /admin/roles/create. Crea nuevos roles con sus permisos asociados',
   },
   {
+    code: MantenimientoPermission.GENERAR_CONTRATO,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Página "Generar Contrato"',
+    description: 'Acceso a /admin/generar-contrato. Regenera el PDF del contrato y lo sube al Drive (sobreescribiendo el anterior) sin reenviar el WhatsApp al cliente. Útil cuando se detecta un error en un contrato ya generado',
+  },
+  {
     code: MantenimientoPermission.AVISOS_TICKER,
     module: Module.MANTENIMIENTO,
     section: 'Avisos',

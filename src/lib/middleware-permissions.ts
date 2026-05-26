@@ -201,6 +201,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/admin/edicion-contrato': [
     'MANTENIMIENTO.USUARIOS.EDICION_CONTRATO' as Permission,
   ],
+  '/admin/generar-contrato': [
+    'MANTENIMIENTO.USUARIOS.GENERAR_CONTRATO' as Permission,
+  ],
   '/admin/envio-mensajes': [
     'MANTENIMIENTO.USUARIOS.ENVIO_MENSAJES' as Permission,
   ],

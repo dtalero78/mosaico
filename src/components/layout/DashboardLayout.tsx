@@ -161,6 +161,7 @@ const getNavigation = (userEmail: string) => [
           { name: 'Bloqueo Contrato', href: '/admin/bloqueo-contrato', newTab: true },
           { name: 'Clear Historic',   href: '/admin/clear-historic',   newTab: true },
           { name: 'Edición Contrato', href: '/admin/edicion-contrato', newTab: true },
+          { name: 'Generar Contrato', href: '/admin/generar-contrato', newTab: true },
           { name: 'Migrar Contrato',  href: '/admin/migrar-contrato',  newTab: true },
           { name: 'Envío Mensajes',   href: '/admin/envio-mensajes',   newTab: true },
           { name: 'Crear Rol',        href: '/admin/roles/create',     newTab: true },
@@ -291,6 +292,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/admin/edicion-contrato': [
       MantenimientoPermission.EDICION_CONTRATO,
+    ],
+    '/admin/generar-contrato': [
+      MantenimientoPermission.GENERAR_CONTRATO,
     ],
     '/admin/envio-mensajes': [
       MantenimientoPermission.ENVIO_MENSAJES,
