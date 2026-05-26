@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
@@ -114,6 +114,13 @@ function ControlHorasContent() {
 
   const [selectedCard, setSelectedCard] = useState<EventCard | null>(null)
 
+  // Caché client por (advisor, año, mes). Evita refetch al navegar adelante/atrás
+  // entre meses ya consultados en la misma sesión. Se invalida sólo en:
+  //   - botón Recargar (fetchMonth(true))
+  //   - save de notas (cacheRef.current.delete(key)) para que la próxima carga
+  //     traiga datos frescos en caso de que cambie algo en el backend (audit).
+  const cacheRef = useRef(new Map<string, { vigentes: VigenteRow[]; historicos: HistoricoRow[] }>())
+
   // Info del advisor actualmente seleccionado (para el header con foto + nombre).
   // Admin: se deriva de `advisors` cuando cambia advisorId.
   // ADVISOR: se obtiene del fetch by-email.
@@ -180,8 +187,18 @@ function ControlHorasContent() {
       .catch(() => { /* fallback a inicial */ })
   }, [currentAdvisor?.fotoAdvisor])
 
-  const fetchMonth = useCallback(async () => {
+  const fetchMonth = useCallback(async (force = false) => {
     if (!advisorId) return
+    const key = `${advisorId}-${year}-${month}`
+    if (!force) {
+      const cached = cacheRef.current.get(key)
+      if (cached) {
+        setData(cached)
+        setLoading(false)
+        setError(null)
+        return
+      }
+    }
     setLoading(true); setError(null)
     try {
       const res = await fetch(
@@ -190,7 +207,9 @@ function ControlHorasContent() {
       )
       const json = await res.json()
       if (!res.ok || !json.success) throw new Error(json.error || 'Error cargando datos')
-      setData({ vigentes: json.vigentes ?? [], historicos: json.historicos ?? [] })
+      const fresh = { vigentes: json.vigentes ?? [], historicos: json.historicos ?? [] }
+      cacheRef.current.set(key, fresh)
+      setData(fresh)
     } catch (err: any) {
       setError(err?.message || 'Error desconocido')
     } finally {
@@ -207,18 +226,6 @@ function ControlHorasContent() {
     if (m > 12) { m = 1; y++ }
     setMonth(m); setYear(y)
   }
-
-  // Mapeo eventoId → card (para refrescar selectedCard tras un save sin perder modal)
-  const cardsByEvent = useMemo(() => {
-    const m = new Map<string, EventCard>()
-    if (!data) return m
-    data.vigentes.forEach(v => m.set(v.eventoId, { ...v, kind: 'vigente' }))
-    data.historicos.forEach(h => {
-      // Si ya hay vigente con ese eventoId, el histórico va por logId distinto (clave compuesta)
-      m.set(`${h.eventoId}_${h.logId}`, { ...h, kind: 'historico' })
-    })
-    return m
-  }, [data])
 
   // Agrupar cards por día del mes (key = "YYYY-MM-DD" en TZ del cliente)
   const cardsByDay = useMemo(() => {
@@ -344,7 +351,7 @@ function ControlHorasContent() {
             <ChevronRightIcon className="h-4 w-4" />
           </button>
         </div>
-        <button type="button" onClick={fetchMonth} disabled={!advisorId}
+        <button type="button" onClick={() => fetchMonth(true)} disabled={!advisorId}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-blue-600 text-sm font-medium rounded text-blue-600 hover:bg-blue-50 disabled:opacity-50">
           <ArrowPathIcon className="h-4 w-4" /> Recargar
         </button>
@@ -431,12 +438,30 @@ function ControlHorasContent() {
           canEditNotes={selectedCard.kind === 'vigente' && (isAdmin || selectedCard.canEdit)}
           isAdminEditor={isAdmin}
           onClose={() => setSelectedCard(null)}
-          onSaved={async () => {
-            await fetchMonth()
-            // Refrescar selectedCard con el dato actualizado
-            const fresh = cardsByEvent.get((selectedCard as VigenteRow).eventoId)
-            if (fresh) setSelectedCard(fresh)
-            else setSelectedCard(null)
+          // Optimistic update: en vez de refetch el mes entero (~150 eventos),
+          // mutamos sólo el evento editado con la respuesta del PATCH. Invalidamos
+          // la entrada de caché de este mes para que la próxima navegación traiga
+          // datos frescos (incluye estados como `sesionCerrada` que vienen del DB).
+          onSaved={(updated) => {
+            if (selectedCard.kind !== 'vigente') return
+            const evId = selectedCard.eventoId
+            setData(prev => {
+              if (!prev) return prev
+              return {
+                ...prev,
+                vigentes: prev.vigentes.map(v =>
+                  v.eventoId === evId
+                    ? { ...v, timeout: updated.timeout, notasadvisor: updated.notasadvisor }
+                    : v
+                ),
+              }
+            })
+            cacheRef.current.delete(`${advisorId}-${year}-${month}`)
+            setSelectedCard(prev =>
+              prev && prev.kind === 'vigente' && prev.eventoId === evId
+                ? { ...prev, timeout: updated.timeout, notasadvisor: updated.notasadvisor }
+                : prev
+            )
           }}
         />
       )}
@@ -509,7 +534,9 @@ function EventDetailModal({
   canEditNotes: boolean
   isAdminEditor: boolean
   onClose: () => void
-  onSaved: () => void
+  /** Recibe los valores actualizados devueltos por el PATCH para que el padre
+   *  haga optimistic update sin refetch. */
+  onSaved: (updated: { timeout: string | null; notasadvisor: string | null }) => void
 }) {
   const isHistorical = card.kind === 'historico'
   const [editing, setEditing] = useState(false)
@@ -596,7 +623,12 @@ function EventDetailModal({
       toast.success(json.audited ? 'Guardado (con registro de auditoría)' : 'Guardado')
       setEditing(false)
       setAdminMotivo('')
-      onSaved()
+      // El backend devuelve los valores ya normalizados (después de validar/strip).
+      // El padre los usa para optimistic update sin refetch del mes entero.
+      onSaved({
+        timeout: json.timeout ?? null,
+        notasadvisor: json.notasadvisor ?? null,
+      })
     } catch (e: any) {
       setErr(e?.message || 'Error guardando')
     } finally {

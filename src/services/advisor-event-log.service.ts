@@ -137,6 +137,11 @@ export async function buildMonthlyView(
 ): Promise<MonthlyView> {
   const { fromISO, toISO } = monthRange(year, month);
 
+  // Nota perf: el LATERAL JOIN usa `b."eventoId" = c._id OR b."idEvento" = c._id`
+  // en vez de `COALESCE(b."eventoId", b."idEvento") = c._id` porque COALESCE
+  // dentro de WHERE bloquea el uso de índices (idx_bookings_evento y
+  // idx_bookings_idevento), forzando Seq Scan sobre los 160k bookings por
+  // cada evento del mes. Con OR, Postgres usa BitmapOr y combina ambos índices.
   const vigentesRows = await queryMany<any>(
     `SELECT
        c."_id"                AS "eventoId",
@@ -159,7 +164,7 @@ export async function buildMonthlyView(
          COUNT(*) FILTER (WHERE b."cancelo" IS NOT TRUE) AS "inscritos",
          COUNT(*) FILTER (WHERE b."asistio" = true)      AS "asistieron"
        FROM "ACADEMICA_BOOKINGS" b
-       WHERE COALESCE(b."eventoId", b."idEvento") = c."_id"
+       WHERE b."eventoId" = c."_id" OR b."idEvento" = c."_id"
      ) agg ON true
      WHERE c."advisor" = $1
        AND c."dia" >= $2::timestamptz
