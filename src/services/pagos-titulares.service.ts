@@ -43,7 +43,13 @@ const UPDATABLE_FIELDS = [
   'tipoCartera',
 ];
 
-const TIPO_CARTERA_VALIDOS = ['normal', 'prejuridico', 'juridico', 'castigada'] as const;
+// Valores canónicos del tipo de cartera (mayo 2026).
+// Nota: registros previos pueden tener 'juridico' o 'castigada' (whitelist legacy);
+// se aceptan en lectura para no romper datos históricos, pero las escrituras nuevas
+// deben usar uno de los 4 valores canónicos vigentes.
+const TIPO_CARTERA_VALIDOS = ['normal', 'prejuridico', 'ultimopago', 'penalidad'] as const;
+const TIPO_CARTERA_LEGACY  = ['juridico', 'castigada'] as const;
+const TIPO_CARTERA_VALIDOS_READ = [...TIPO_CARTERA_VALIDOS, ...TIPO_CARTERA_LEGACY] as const;
 
 function toNum(v: any): number {
   if (v === null || v === undefined || v === '') return 0;
@@ -147,7 +153,7 @@ export const pagosTitularesService = {
     session: { role: string; id?: string | null; email?: string | null },
     opts: {
       search?: string | null;
-      estadoCartera?: 'normal' | 'prejuridico' | 'juridico' | 'castigada' | null;
+      estadoCartera?: typeof TIPO_CARTERA_VALIDOS_READ[number] | null;
       gestorRecaudo?: string | null;
       fechaDesde?: string | null;
       fechaHasta?: string | null;
@@ -548,5 +554,72 @@ export const pagosTitularesService = {
     if (existing.validado) {
       await syncFinancieroSaldo(existing.idPeople);
     }
+  },
+
+  /**
+   * Cambia el `tipoCartera` del titular (anclado en la fila cuota#0 de
+   * PAGOS_TITULARES). Pide motivo obligatorio; el cambio se registra en
+   * `tipoCarteraHistory` (JSONB array) con snapshot before/after, actor
+   * y timestamp — inmutable, sólo append.
+   *
+   * Si no existe cuota#0 (caso raro — contratos viejos sin migrar) se
+   * lanza ValidationError indicando que primero hay que registrar el
+   * contrato vía Crear/Migrar Contrato.
+   */
+  async cambiarTipoCartera(
+    idPeople: string,
+    input: { nuevoTipo: string; motivo: string },
+    actor: { email: string; nombre?: string | null },
+  ): Promise<{ tipoCarteraAnterior: string | null; tipoCarteraNuevo: string }> {
+    const nuevoTipo = String(input.nuevoTipo || '').trim().toLowerCase();
+    const motivo = String(input.motivo || '').trim();
+
+    if (!nuevoTipo || !(TIPO_CARTERA_VALIDOS as readonly string[]).includes(nuevoTipo)) {
+      throw new ValidationError(`nuevoTipo debe ser uno de: ${TIPO_CARTERA_VALIDOS.join(', ')}`);
+    }
+    if (!motivo) {
+      throw new ValidationError('El motivo es obligatorio');
+    }
+
+    // Resolver la fila cuota#0 (anchor de tipoCartera para este titular).
+    const cuotaCero = await queryOne<{ _id: string; tipoCartera: string | null; tipoCarteraHistory: any }>(
+      `SELECT "_id", "tipoCartera", "tipoCarteraHistory"
+       FROM "PAGOS_TITULARES"
+       WHERE "idPeople" = $1 AND "numCuota" = 0
+       ORDER BY "_createdDate" ASC
+       LIMIT 1`,
+      [idPeople],
+    );
+    if (!cuotaCero) {
+      throw new ValidationError('No se encontró la fila cuota#0 para este titular — no se puede cambiar el estado de cartera');
+    }
+
+    const previo = cuotaCero.tipoCartera ?? null;
+    const historyArr: any[] = Array.isArray(cuotaCero.tipoCarteraHistory)
+      ? cuotaCero.tipoCarteraHistory
+      : (typeof cuotaCero.tipoCarteraHistory === 'string'
+          ? (() => { try { return JSON.parse(cuotaCero.tipoCarteraHistory as any) || []; } catch { return []; } })()
+          : []);
+
+    const nuevaEntrada = {
+      fecha: new Date().toISOString(),
+      motivo,
+      estadoAnterior: previo,
+      estadoNuevo: nuevoTipo,
+      realizadoPor: actor.email,
+      realizadoPorNombre: actor.nombre || null,
+    };
+    const nuevoHistory = [...historyArr, nuevaEntrada];
+
+    await query(
+      `UPDATE "PAGOS_TITULARES"
+       SET "tipoCartera" = $1,
+           "tipoCarteraHistory" = $2::jsonb,
+           "_updatedDate" = NOW()
+       WHERE "_id" = $3`,
+      [nuevoTipo, JSON.stringify(nuevoHistory), cuotaCero._id],
+    );
+
+    return { tipoCarteraAnterior: previo, tipoCarteraNuevo: nuevoTipo };
   },
 };

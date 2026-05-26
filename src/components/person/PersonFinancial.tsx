@@ -64,6 +64,13 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   const [facturaInput, setFacturaInput] = useState('')
   const [validating, setValidating] = useState(false)
 
+  // Cambio Estado Cartera modal state
+  const [showCarteraModal, setShowCarteraModal] = useState(false)
+  const [carteraNuevoTipo, setCarteraNuevoTipo] = useState<string>('')
+  const [carteraMotivo, setCarteraMotivo] = useState('')
+  const [carteraConfirm, setCarteraConfirm] = useState(false)
+  const [savingCartera, setSavingCartera] = useState(false)
+
   const loadPagos = useCallback(async () => {
     if (!isTitular) return
     setLoadingPagos(true)
@@ -185,6 +192,32 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
     }
   }
 
+  // ─── Cambio Estado Cartera ─────────────────────────────────────────────
+  const openCarteraModal = () => {
+    setCarteraNuevoTipo('')
+    setCarteraMotivo('')
+    setCarteraConfirm(false)
+    setShowCarteraModal(true)
+  }
+
+  const handleCambiarCartera = async () => {
+    if (!carteraNuevoTipo || !carteraMotivo.trim() || !carteraConfirm) return
+    setSavingCartera(true)
+    try {
+      await api.post(`/api/postgres/people/${person._id}/cambio-cartera`, {
+        nuevoTipo: carteraNuevoTipo,
+        motivo: carteraMotivo.trim(),
+      })
+      toast.success('Estado de cartera actualizado')
+      setShowCarteraModal(false)
+      loadPagos()   // recarga para refrescar el badge desde cuota#0
+    } catch (err) {
+      handleApiError(err, 'Error al cambiar estado de cartera')
+    } finally {
+      setSavingCartera(false)
+    }
+  }
+
   // ── Financial data parsing (existing logic, unchanged) ──────────────────
   let financial: any
   let paymentProgress: number
@@ -248,11 +281,16 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   // cartera del contrato). Default 'normal' si no hay cuota #0.
   const cuotaCero: any = pagos.find((p: any) => Number(p.numCuota) === 0)
   const estadoCartera = String(cuotaCero?.tipoCartera || 'normal').toLowerCase()
+  // Vocabulario canónico (mayo 2026): Normal/Prejuridico/UltimoPago/Penalidad.
+  // Legacy: juridico/castigada se mantienen para lectura de datos históricos.
   const ESTADO_CARTERA_META: Record<string, { label: string; cls: string }> = {
     normal:      { label: 'Normal',       cls: 'bg-green-100 text-green-800' },
-    prejuridico: { label: 'Prejurídico',  cls: 'bg-amber-100 text-amber-800' },
-    juridico:    { label: 'Jurídico',     cls: 'bg-orange-100 text-orange-800' },
-    castigada:   { label: 'Castigada',    cls: 'bg-red-100 text-red-800' },
+    prejuridico: { label: 'Prejurídico',  cls: 'bg-red-100 text-red-800' },
+    ultimopago:  { label: 'Último Pago',  cls: 'bg-purple-100 text-purple-800' },
+    penalidad:   { label: 'Penalidad',    cls: 'bg-orange-100 text-orange-800' },
+    // Legacy — sólo render
+    juridico:    { label: 'Jurídico (legacy)',   cls: 'bg-gray-200 text-gray-700' },
+    castigada:   { label: 'Castigada (legacy)',  cls: 'bg-gray-200 text-gray-700' },
   }
   const estadoMeta = ESTADO_CARTERA_META[estadoCartera] || { label: estadoCartera, cls: 'bg-gray-100 text-gray-800' }
 
@@ -260,44 +298,69 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
     <div className="space-y-6">
       {/* Financial Summary */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h3 className="text-lg font-medium text-gray-900">💳 Resumen Financiero del Titular</h3>
           {isTitular && (
-            <PermissionGuard permission={PersonPermission.ASIGNAR_GESTOR_RECAUDO}>
-              <button
-                type="button"
-                onClick={openAssignModal}
-                disabled={loadingUsers}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
-              >
-                💼 {currentGestor ? 'Reasignar Ejecutivo' : 'Asignar Ejecutivo de Recaudos'}
-              </button>
-            </PermissionGuard>
+            <div className="flex items-center gap-2 flex-wrap">
+              <PermissionGuard permission={PersonPermission.ASIGNAR_GESTOR_RECAUDO}>
+                <button
+                  type="button"
+                  onClick={openAssignModal}
+                  disabled={loadingUsers}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                >
+                  💼 {currentGestor ? 'Reasignar Ejecutivo' : 'Asignar Ejecutivo de Recaudos'}
+                </button>
+              </PermissionGuard>
+              <PermissionGuard permission={PersonPermission.CAMBIO_ESTADO_CARTERA}>
+                <button
+                  type="button"
+                  onClick={openCarteraModal}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                >
+                  🔄 Cambio Estado Cartera
+                </button>
+              </PermissionGuard>
+            </div>
           )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* Valor Plan — total contractual del programa */}
           <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
             <div className="text-sm font-medium text-primary-600">Valor Plan</div>
             <div className="text-2xl font-bold text-primary-900">
               {financialData ? formatCurrency(financial.totalPlan) : 'No disponible'}
             </div>
           </div>
+          {/* Inscripción — valor pagado al firmar (cuota #0) */}
           <div className="bg-accent-50 border border-accent-200 rounded-lg p-4">
-            <div className="text-sm font-medium text-accent-600">Cuota Inicial</div>
+            <div className="text-sm font-medium text-accent-600">Inscripción</div>
             <div className="text-2xl font-bold text-accent-900">
               {financialData ? formatCurrency(financial.cuotaInicial) : 'No disponible'}
             </div>
           </div>
+          {/* Saldo a la Firma — congelado: totalPlan − inscripción */}
           <div className="bg-warning-50 border border-warning-200 rounded-lg p-4">
-            <div className="text-sm font-medium text-warning-600">Saldo</div>
+            <div className="text-sm font-medium text-warning-600">Saldo a la Firma</div>
             <div className="text-2xl font-bold text-warning-900">
-              {financialData ? formatCurrency(financial.saldo) : 'No disponible'}
+              {financialData
+                ? formatCurrency(Math.max(0, (financial.totalPlan || 0) - (financial.cuotaInicial || 0)))
+                : 'No disponible'}
             </div>
           </div>
+          {/* Total Cuotas — número de cuotas pactado en el contrato */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="text-sm font-medium text-blue-600">Cuotas Restantes</div>
+            <div className="text-sm font-medium text-blue-600">Total Cuotas</div>
             <div className="text-2xl font-bold text-blue-900">
-              {financialData ? financial.cuotasRestantes : 'No disponible'}
+              {financialData ? (financial.cuotas || 0) : 'No disponible'}
+            </div>
+          </div>
+          {/* Saldo a la Fecha — calculado: lo que queda debiendo HOY (FINANCIEROS.saldo,
+              mantenido al día por syncFinancieroSaldo desde los pagos validados) */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+            <div className="text-sm font-medium text-emerald-600">Saldo a la Fecha</div>
+            <div className="text-2xl font-bold text-emerald-900">
+              {financialData ? formatCurrency(financial.saldo) : 'No disponible'}
             </div>
           </div>
         </div>
@@ -641,6 +704,98 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
               >
                 Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Cambio Estado Cartera ──────────────────────────────────── */}
+      {showCarteraModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-900">🔄 Cambio Estado Cartera</h3>
+
+            {/* Warning */}
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-900">
+              ⚠️ Esta acción cambia el tipo de cartera del titular y queda registrada
+              en el log de auditoría con tu usuario, fecha y motivo. <strong>El cambio es
+              inmediato</strong> — afecta visualización en /dashboard/recaudos y reportes.
+            </div>
+
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Estado actual</p>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoMeta.cls}`}>
+                {estadoMeta.label}
+              </span>
+            </div>
+
+            <div>
+              <label htmlFor="cartera-nuevo-tipo" className="block text-sm font-medium text-gray-700 mb-1">
+                Nuevo Estado <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="cartera-nuevo-tipo"
+                value={carteraNuevoTipo}
+                onChange={e => setCarteraNuevoTipo(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
+              >
+                <option value="">— Selecciona —</option>
+                <option value="normal">Normal</option>
+                <option value="prejuridico">Prejurídico</option>
+                <option value="ultimopago">Último Pago</option>
+                <option value="penalidad">Penalidad</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="cartera-motivo" className="block text-sm font-medium text-gray-700 mb-1">
+                Motivo <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="cartera-motivo"
+                rows={3}
+                value={carteraMotivo}
+                onChange={e => setCarteraMotivo(e.target.value)}
+                placeholder="Ej: titular no atiende llamadas hace 30 días — escalar a Prejurídico"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                El motivo queda guardado en el log de auditoría y no se puede editar después.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={carteraConfirm}
+                onChange={e => setCarteraConfirm(e.target.checked)}
+                className="mt-0.5 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+              />
+              <span className="text-sm text-gray-800">
+                Confirmo el cambio de estado de cartera para este titular
+              </span>
+            </label>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCarteraModal(false)}
+                disabled={savingCartera}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleCambiarCartera}
+                disabled={savingCartera || !carteraNuevoTipo || !carteraMotivo.trim() || !carteraConfirm}
+                className="px-4 py-2 text-sm font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {savingCartera && (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                )}
+                {savingCartera ? 'Guardando…' : 'Confirmar Cambio'}
               </button>
             </div>
           </div>

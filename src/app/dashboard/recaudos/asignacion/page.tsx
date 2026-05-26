@@ -49,11 +49,16 @@ const ROLE_LABEL: Record<string, string> = {
   RECAUDOS_JEFE: 'Jefe',
 }
 
+// Vocabulario canónico (mayo 2026): Normal/Prejuridico/UltimoPago/Penalidad.
+// Legacy: juridico/castigada se mantienen para lectura de datos históricos.
 const ESTADO_CARTERA_META: Record<string, { label: string; cls: string }> = {
   normal:      { label: 'Normal',       cls: 'bg-green-100 text-green-800' },
-  prejuridico: { label: 'Prejurídico',  cls: 'bg-amber-100 text-amber-800' },
-  juridico:    { label: 'Jurídico',     cls: 'bg-orange-100 text-orange-800' },
-  castigada:   { label: 'Castigada',    cls: 'bg-red-100 text-red-800' },
+  prejuridico: { label: 'Prejurídico',  cls: 'bg-red-100 text-red-800' },
+  ultimopago:  { label: 'Último Pago',  cls: 'bg-purple-100 text-purple-800' },
+  penalidad:   { label: 'Penalidad',    cls: 'bg-orange-100 text-orange-800' },
+  // Legacy — sólo render
+  juridico:    { label: 'Jurídico (legacy)',   cls: 'bg-gray-200 text-gray-700' },
+  castigada:   { label: 'Castigada (legacy)',  cls: 'bg-gray-200 text-gray-700' },
 }
 
 const PAGE_SIZE = 50
@@ -87,7 +92,7 @@ export default function AsignacionRecaudosPage() {
 
   // Filtros
   const [search, setSearch] = useState('')
-  const [estadoCartera, setEstadoCartera] = useState<'' | 'normal' | 'prejuridico' | 'juridico' | 'castigada'>('')
+  const [estadoCartera, setEstadoCartera] = useState<'' | 'normal' | 'prejuridico' | 'ultimopago' | 'penalidad'>('')
   const [gestorFiltro, setGestorFiltro] = useState('')
   const [fechaInicio, setFechaInicio] = useState('')
   const [fechaFin, setFechaFin] = useState('')
@@ -232,8 +237,8 @@ export default function AsignacionRecaudosPage() {
                 <option value="">Todos</option>
                 <option value="normal">Normal</option>
                 <option value="prejuridico">Prejurídico</option>
-                <option value="juridico">Jurídico</option>
-                <option value="castigada">Castigada</option>
+                <option value="ultimopago">Último Pago</option>
+                <option value="penalidad">Penalidad</option>
               </select>
             </div>
             <div>

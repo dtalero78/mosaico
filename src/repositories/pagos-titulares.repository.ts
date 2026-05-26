@@ -250,7 +250,8 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
   async findTitularesAsignados(opts: {
     gestorRecaudoIn: string[];           // [] = no filtro adicional (admin); undefined invalida
     search?: string | null;
-    estadoCartera?: 'normal' | 'prejuridico' | 'juridico' | 'castigada' | null;
+    // Acepta vocabulario nuevo (normal/prejuridico/ultimopago/penalidad) y legacy (juridico/castigada).
+    estadoCartera?: string | null;
     fechaDesde?: string | null;
     fechaHasta?: string | null;
     /** Scope de plataforma del usuario logueado (filtra titulares.plataforma) */
