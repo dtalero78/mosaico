@@ -26,10 +26,17 @@ export const POST = handler(async (_request, { params }) => {
     [titular.contrato, titularId]
   );
 
-  const financial = await queryOne(
-    `SELECT * FROM "FINANCIEROS" WHERE "titularId" = $1 LIMIT 1`,
-    [titularId]
-  );
+  // FINANCIEROS se busca por "contrato" (la tabla no tiene titularId / éste columna
+  // legacy quedó NULL en la migración). Mismo patrón que el endpoint público
+  // /api/consent/[id]/contract-data — antes este endpoint usaba titularId y por eso
+  // los placeholders financieros del PDF (totalPlan/valorCuota/saldo/...) salían vacíos.
+  const financial = titular.contrato
+    ? await queryOne(
+        `SELECT * FROM "FINANCIEROS" WHERE "contrato" = $1
+         ORDER BY "_createdDate" DESC LIMIT 1`,
+        [titular.contrato]
+      )
+    : null;
 
   // 2. Fetch contract template for this platform
   let templateRow = await queryOne(
