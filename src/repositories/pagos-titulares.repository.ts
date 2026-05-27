@@ -392,6 +392,7 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          p."gestorRecaudo"                       AS "gestorRecaudo",
          p."estadoInactivo"                      AS "estadoInactivo",
          p."aprobacion"                          AS "aprobacion",
+         p."marcaOpcional"                       AS "marcaOpcional",
          f."saldo"                               AS "saldoActual",
          COALESCE(c0."tipoCartera", 'normal')    AS "tipoCartera",
          agg."ultimaFechaPago"                   AS "ultimaFechaPago",

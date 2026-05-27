@@ -40,6 +40,9 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
 
   // Gestor de recaudo state
   const [gestorRecaudoId, setGestorRecaudoId] = useState<string | null>(person.gestorRecaudo ?? null)
+  // Marca manual "Opcional" — alimenta columna Opcional de /dashboard/recaudos/asignacion
+  const [marcaOpcional, setMarcaOpcional] = useState<string | null>((person as any).marcaOpcional ?? null)
+  const [togglingOpcional, setTogglingOpcional] = useState(false)
   /** Sólo usuarios con rol RECAUDO_* (poblar dropdown del modal Asignar Ejecutivo) */
   const [recaudoUsers, setRecaudoUsers] = useState<RecaudoUser[]>([])
   /** Lista ampliada (incluye COMERCIAL/ADMIN) para resolver el _id de cualquier
@@ -203,6 +206,24 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
     setShowCarteraModal(true)
   }
 
+  /** Toggle de la marca "Opcional" (PEOPLE.marcaOpcional). Sin modal, sin
+   *  motivo — es una marca operativa simple del área de Recaudo. */
+  const handleToggleOpcional = async () => {
+    setTogglingOpcional(true)
+    try {
+      const data = await api.post<{ marcaOpcional: string | null }>(
+        `/api/postgres/people/${person._id}/marca-opcional`,
+        {},
+      )
+      setMarcaOpcional(data.marcaOpcional ?? null)
+      toast.success(data.marcaOpcional === 'OPC' ? 'Marcado como OPC' : 'Marca OPC removida')
+    } catch (err) {
+      handleApiError(err, 'Error al cambiar marca Opcional')
+    } finally {
+      setTogglingOpcional(false)
+    }
+  }
+
   const handleCambiarCartera = async () => {
     if (!carteraNuevoTipo || !carteraMotivo.trim() || !carteraConfirm) return
     setSavingCartera(true)
@@ -322,6 +343,24 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-orange-600 text-white rounded-md hover:bg-orange-700"
                 >
                   🔄 Cambio Estado Cartera
+                </button>
+              </PermissionGuard>
+              <PermissionGuard permission={PersonPermission.MARCAR_OPCIONAL}>
+                <button
+                  type="button"
+                  onClick={handleToggleOpcional}
+                  disabled={togglingOpcional}
+                  title={marcaOpcional === 'OPC'
+                    ? 'Quitar marca OPC (toggle)'
+                    : 'Marcar como OPC para destacar en /dashboard/recaudos/asignacion'}
+                  className={
+                    `inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md disabled:opacity-50 ` +
+                    (marcaOpcional === 'OPC'
+                      ? 'bg-orange-100 text-orange-800 border border-orange-300 hover:bg-orange-200'
+                      : 'bg-white text-orange-700 border border-orange-300 hover:bg-orange-50')
+                  }
+                >
+                  {marcaOpcional === 'OPC' ? '✓ Opcional (OPC)' : 'Opcional'}
                 </button>
               </PermissionGuard>
             </div>

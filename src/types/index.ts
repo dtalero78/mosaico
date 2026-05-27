@@ -96,6 +96,11 @@ export interface Person {
   // Collection executive (USUARIOS_ROLES._id with rol RECAUDO_ASIST or RECAUDOS_JEFE)
   gestorRecaudo?: string | null
 
+  // Marca manual de recaudo (alimentada vía botón "Opcional" en PersonFinancial).
+  // Visualizada en columna "Opcional" de /dashboard/recaudos/asignacion.
+  // Valores actuales: 'OPC' o null.
+  marcaOpcional?: string | null
+
   // Administrative suspension fields
   suspenddata?: SuspendDataEntry | null
   suspendcount?: number

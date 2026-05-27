@@ -54,6 +54,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Botón en la pestaña Financiera del titular para cambiar el tipo de cartera (Normal / Prejuridico / Ultimo Pago / Penalidad). Pide motivo obligatorio y deja registro de auditoría en PAGOS_TITULARES.tipoCarteraHistory (JSONB) de la fila cuota#0. Sin este permiso el botón no aparece',
   },
   {
+    code: PersonPermission.MARCAR_OPCIONAL,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Opcional"',
+    description: 'Botón en la pestaña Financiera del titular que activa/desactiva la marca "OPC" (PEOPLE.marcaOpcional). Esa marca se visualiza en la columna Opcional de /dashboard/recaudos/asignacion. Toggle simple sin motivo ni auditoría — alimentación 100% manual por el equipo de recaudo. Sin este permiso el botón no aparece',
+  },
+  {
     code: PersonPermission.PAGOS_VER,
     module: Module.PERSON,
     section: 'Financiera',

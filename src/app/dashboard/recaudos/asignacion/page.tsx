@@ -35,6 +35,13 @@ interface AsignacionRow {
    * sólo el día del mes; ahora la fecha completa.
    */
   fechaPrimerPago: string | null
+  /**
+   * Marca manual del área de Recaudo. Alimentada vía botón "Opcional" en
+   * /person/[id] → Tab Financiera. Valores actuales: 'OPC' o null.
+   * Reemplaza al cálculo automático que usaba fechaPrimerPago > día 27 +
+   * regla ANT (eliminado en mayo 2026).
+   */
+  marcaOpcional: string | null
 }
 
 interface DisplayUser {
@@ -68,36 +75,6 @@ function fmtDate(d: string | null): string {
   if (!d) return '—'
   try { return new Date(d).toLocaleDateString('es', { timeZone: 'UTC' }) } catch { return '—' }
 }
-/** Día del mes (1-31) en UTC. null si la fecha es nula o inválida. */
-function utcDay(d: string | null): number | null {
-  if (!d) return null
-  try {
-    const day = new Date(d).getUTCDate()
-    return Number.isFinite(day) ? day : null
-  } catch { return null }
-}
-
-/**
- * Calcula el badge de la columna "Opcional":
- *   - 'OPC' (naranja) → día del 1er pago > 27 (cae 28/29/30/31). Días que
- *     no existen en todos los meses → recaudo los trata como casos aparte.
- *   - 'ANT' (azul)    → además de OPC, el último pago real fue día ≤ 27.
- *     Significa que la cadencia se movió antes en el último mes (el titular
- *     pagó "anticipado" respecto a la fecha contractual), seña a recaudo
- *     de que el ciclo está corrido.
- *   - null            → día ≤ 27, no aplica.
- */
-function computeOpcionalBadge(
-  fechaPrimerPago: string | null,
-  ultimaFechaPago: string | null,
-): 'OPC' | 'ANT' | null {
-  const diaPrimer = utcDay(fechaPrimerPago)
-  if (diaPrimer == null || diaPrimer <= 27) return null
-  const diaUltimo = utcDay(ultimaFechaPago)
-  if (diaUltimo != null && diaUltimo <= 27) return 'ANT'
-  return 'OPC'
-}
-
 function parseMoneyText(v: any): number {
   if (v === null || v === undefined || v === '') return 0
   if (typeof v === 'number') return v
@@ -182,7 +159,7 @@ export default function AsignacionRecaudosPage() {
       Contrato: t.contrato || '',
       'Fecha Contrato': fmtDate(t.fechaContrato),
       'Fecha 1er Pago': fmtDate(t.fechaPrimerPago),
-      Opcional: computeOpcionalBadge(t.fechaPrimerPago, t.ultimaFechaPago) ?? '',
+      Opcional: t.marcaOpcional === 'OPC' ? 'OPC' : '',
       'Fecha Último Pago': fmtDate(t.ultimaFechaPago),
       'Última Cuota Pagada': t.ultimaCuotaPagada ?? '',
       'Saldo Actual': parseMoneyText(t.saldoActual),
@@ -334,7 +311,7 @@ export default function AsignacionRecaudosPage() {
                       <th className="px-3 py-2 text-left font-medium text-gray-700">Fecha 1er Pago</th>
                       <th
                         className="px-2 py-2 text-center font-medium text-gray-700"
-                        title="OPC (naranja) = día del 1er pago > 27 (28/29/30/31), cadencia mensual irregular. ANT (azul) = además, último pago real fue día ≤ 27 — el ciclo se movió antes."
+                        title="OPC = marca manual desde /person/[id] → Tab Financiera, botón Opcional. Alimentación 100% manual del equipo de Recaudo."
                       >
                         Opcional
                       </th>
@@ -369,15 +346,9 @@ export default function AsignacionRecaudosPage() {
                           <td className="px-3 py-2 text-gray-900">{fmtDate(t.fechaPrimerPago)}</td>
                           <td className="px-2 py-2 text-center">
                             {(() => {
-                              const badge = computeOpcionalBadge(t.fechaPrimerPago, t.ultimaFechaPago)
-                              if (badge === 'OPC') return (
+                              if (t.marcaOpcional === 'OPC') return (
                                 <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
                                   OPC
-                                </span>
-                              )
-                              if (badge === 'ANT') return (
-                                <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                                  ANT
                                 </span>
                               )
                               return <span className="text-gray-300">—</span>
