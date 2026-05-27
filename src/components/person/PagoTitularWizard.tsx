@@ -527,10 +527,11 @@ export default function PagoTitularWizard({
             <div>
               <label htmlFor="numCuota" className="block text-sm font-medium text-gray-700"># Cuota</label>
               <input
-                id="numCuota" type="text" readOnly tabIndex={-1}
+                id="numCuota" type="number" min={0}
                 value={form.numCuota}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100 text-gray-600 cursor-not-allowed text-center font-semibold"
-                placeholder="—"
+                onChange={e => setForm(f => ({ ...f, numCuota: e.target.value.replace(/[^0-9]/g, '') }))}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-center font-semibold"
+                placeholder="0"
               />
             </div>
           </div>
