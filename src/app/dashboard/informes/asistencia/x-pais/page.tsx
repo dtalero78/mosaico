@@ -306,27 +306,36 @@ export default function InformeXPaisPage() {
                     <tr className="text-gray-400 border-b border-gray-100">
                       <th className="text-left font-medium pb-1 pr-1">País</th>
                       <th className="text-right font-medium pb-1 pr-1">Total</th>
-                      <th className="text-right font-medium pb-1">Asist.</th>
+                      <th className="text-right font-medium pb-1 pr-1">Asist.</th>
+                      <th className="text-right font-medium pb-1">%</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.length === 0 ? (
-                      <tr><td colSpan={3} className="text-gray-400 italic py-2">Sin datos</td></tr>
-                    ) : rows.map((r, i) => (
-                      <tr key={r.plataforma} className="border-b border-gray-50 last:border-0">
-                        <td className="py-1 pr-1 text-gray-700 truncate max-w-[80px]" title={r.plataforma}>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle" style={{ backgroundColor: color(i) }} />
-                          {r.plataforma}
-                        </td>
-                        <td className="py-1 pr-1 text-right font-semibold text-gray-900">{r.total.toLocaleString()}</td>
-                        <td className="py-1 text-right text-blue-700 font-medium">{r.asistieron.toLocaleString()}</td>
-                      </tr>
-                    ))}
+                      <tr><td colSpan={4} className="text-gray-400 italic py-2">Sin datos</td></tr>
+                    ) : rows.map((r, i) => {
+                      // % = tasa de asistencia (asistidas / total agendadas) por país
+                      const pct = r.total > 0 ? ((r.asistieron / r.total) * 100).toFixed(0) : '0'
+                      return (
+                        <tr key={r.plataforma} className="border-b border-gray-50 last:border-0">
+                          <td className="py-1 pr-1 text-gray-700 truncate max-w-[70px]" title={r.plataforma}>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle" style={{ backgroundColor: color(i) }} />
+                            {r.plataforma}
+                          </td>
+                          <td className="py-1 pr-1 text-right font-semibold text-gray-900">{r.total.toLocaleString()}</td>
+                          <td className="py-1 pr-1 text-right text-blue-700 font-medium">{r.asistieron.toLocaleString()}</td>
+                          <td className="py-1 text-right text-gray-500">{pct}%</td>
+                        </tr>
+                      )
+                    })}
                     {rows.length > 0 && (
                       <tr className="border-t-2 border-gray-300 font-bold">
                         <td className="pt-1.5 pr-1 text-gray-800">TOTAL</td>
                         <td className="pt-1.5 pr-1 text-right text-gray-900">{totGeneral.toLocaleString()}</td>
-                        <td className="pt-1.5 text-right text-blue-800">{asisGeneral.toLocaleString()}</td>
+                        <td className="pt-1.5 pr-1 text-right text-blue-800">{asisGeneral.toLocaleString()}</td>
+                        <td className="pt-1.5 text-right text-gray-600">
+                          {totGeneral > 0 ? `${((asisGeneral / totGeneral) * 100).toFixed(0)}%` : '0%'}
+                        </td>
                       </tr>
                     )}
                   </tbody>
@@ -355,7 +364,9 @@ export default function InformeXPaisPage() {
                     {comp.porPlataforma.length === 0 ? (
                       <tr><td colSpan={4} className="text-gray-400 italic py-2">Sin datos</td></tr>
                     ) : comp.porPlataforma.map((r, i) => {
-                      const pct = r.total > 0 ? ((r.asistieron / r.total) * 100).toFixed(0) : '0'
+                      // % = participación de las generadas de este país sobre el
+                      // total general de complementarias generadas (no sobre su propio total)
+                      const pct = generGral > 0 ? ((r.asistieron / generGral) * 100).toFixed(0) : '0'
                       return (
                         <tr key={r.plataforma} className="border-b border-gray-50 last:border-0">
                           <td className="py-1 pr-1 text-gray-700 truncate max-w-[70px]" title={r.plataforma}>
@@ -374,7 +385,7 @@ export default function InformeXPaisPage() {
                         <td className="pt-1.5 pr-1 text-right text-gray-900">{totalGral.toLocaleString()}</td>
                         <td className="pt-1.5 pr-1 text-right text-emerald-800">{generGral.toLocaleString()}</td>
                         <td className="pt-1.5 text-right text-gray-600">
-                          {totalGral > 0 ? `${((generGral / totalGral) * 100).toFixed(0)}%` : '0%'}
+                          {generGral > 0 ? '100%' : '0%'}
                         </td>
                       </tr>
                     )}
