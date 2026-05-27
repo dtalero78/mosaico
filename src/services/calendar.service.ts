@@ -118,7 +118,7 @@ const ALLOWED_EVENT_FIELDS = [
 export async function updateEvent(
   eventId: string,
   data: Record<string, any>,
-  opts?: { actor?: string; motivo?: string },
+  opts?: { actor?: string; motivo?: string; skipLog?: boolean },
 ) {
   const event = await CalendarioRepository.findById(eventId);
   if (!event) throw new NotFoundError('Event', eventId);
@@ -138,35 +138,61 @@ export async function updateEvent(
     data.tituloONivel = `${data.tituloONivel} - ${data.nombreEvento}`.trim();
   }
 
+  // Guarda integridad: cambiar nivel/step de un evento que ya tiene
+  // estudiantes inscritos corrompe sus historiales (los bookings quedan
+  // apuntando a un nivel/step distinto al que el estudiante realmente cursó).
+  // Si el admin quiere "reorganizar" el evento, primero debe desinscribir o
+  // cancelar a los estudiantes — esta validación lo fuerza.
+  const isNivelChange = !!data.nivel && data.nivel !== event.nivel;
+  const isStepChange  = !!data.step  && data.step  !== event.step;
+  if (isNivelChange || isStepChange) {
+    const activeCount = await CalendarioRepository.countActiveEnrollments(eventId);
+    if (activeCount > 0) {
+      throw new ValidationError(
+        `No se puede cambiar el nivel/step de este evento: tiene ${activeCount} estudiante(s) inscrito(s). Cancela las inscripciones primero o crea un evento nuevo.`,
+      );
+    }
+  }
+
   const isAdvisorChange = !!data.advisor && data.advisor !== event.advisor;
 
   let updated: any;
   if (isAdvisorChange) {
-    // Límite max 2 reasignaciones por evento
-    const prevCanceled = await AdvisorEventLogRepository.countCanceledByEvento(eventId);
-    if (prevCanceled >= MAX_ADVISOR_REASSIGNMENTS) {
-      throw new ValidationError(
-        `Este evento ya tuvo ${MAX_ADVISOR_REASSIGNMENTS} cambios de advisor — no se permite reasignar de nuevo`,
-      );
+    // Límite max 2 reasignaciones por evento — sólo cuenta cuando NO es
+    // modo "Restructuración" (skipLog), porque en restructuración no se
+    // crean entradas Canceled en el log.
+    if (!opts?.skipLog) {
+      const prevCanceled = await AdvisorEventLogRepository.countCanceledByEvento(eventId);
+      if (prevCanceled >= MAX_ADVISOR_REASSIGNMENTS) {
+        throw new ValidationError(
+          `Este evento ya tuvo ${MAX_ADVISOR_REASSIGNMENTS} cambios de advisor — no se permite reasignar de nuevo`,
+        );
+      }
     }
 
-    // Transacción: INSERT log Canceled + UPDATE CALENDARIO (con clean de notas advisor saliente)
+    // Transacción: (opcional INSERT log Canceled) + UPDATE CALENDARIO con
+    // clean de notas del advisor saliente. Si skipLog=true (modo
+    // "Restructuración"), el cambio NO queda registrado en ADVISOR_EVENT_LOG
+    // — útil cuando la reasignación es por error de planificación, no por
+    // cancelación real del advisor original.
     updated = await withTransaction(async (client) => {
-      await AdvisorEventLogRepository.insert({
-        advisorId:     event.advisor,
-        eventoId:      eventId,
-        estado:        'Canceled',
-        fechaEvento:   event.dia,
-        horaInicio:    event.hora,
-        tipo:          event.tipo,
-        nivel:         event.nivel,
-        step:          event.step,
-        tituloEvento:  event.tituloONivel || event.titulo || event.nombreEvento,
-        horaFin:       (event as any).timeout ?? null,
-        observaciones: (event as any).notasadvisor ?? null,
-        canceladoPor:  opts?.actor || 'system',
-        motivoTransicion: opts?.motivo || null,
-      }, client);
+      if (!opts?.skipLog) {
+        await AdvisorEventLogRepository.insert({
+          advisorId:     event.advisor,
+          eventoId:      eventId,
+          estado:        'Canceled',
+          fechaEvento:   event.dia,
+          horaInicio:    event.hora,
+          tipo:          event.tipo,
+          nivel:         event.nivel,
+          step:          event.step,
+          tituloEvento:  event.tituloONivel || event.titulo || event.nombreEvento,
+          horaFin:       (event as any).timeout ?? null,
+          observaciones: (event as any).notasadvisor ?? null,
+          canceladoPor:  opts?.actor || 'system',
+          motivoTransicion: opts?.motivo || null,
+        }, client);
+      }
 
       // Clean notas del advisor saliente para que el nuevo empiece limpio
       const cleanData = {

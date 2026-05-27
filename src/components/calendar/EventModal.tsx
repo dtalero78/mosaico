@@ -399,6 +399,25 @@ export default function EventModal({
   } | null>(null)
   const [confirmReassignChecked, setConfirmReassignChecked] = useState(false)
   const [reassignMotivo, setReassignMotivo] = useState('')
+  /** Modo "Restructuración" para cambio de advisor — no registra en
+   *  ADVISOR_EVENT_LOG. Útil cuando es fix de planificación, no cancelación
+   *  real del advisor original (mismo patrón que el modal de Cancelar Evento). */
+  const [reassignSkipLog, setReassignSkipLog] = useState(false)
+
+  /** Confirmación de cambio de nivel/step (sólo cuando 0 estudiantes inscritos).
+   *  Si hay inscritos > 0, se muestra `nivelChangeBlocked` en su lugar. */
+  const [pendingNivelChange, setPendingNivelChange] = useState<{
+    eventData: any
+    oldLabel: string
+    newLabel: string
+  } | null>(null)
+  /** Modal bloqueante cuando el evento tiene inscritos y se intenta cambiar
+   *  nivel/step. Sólo permite cerrar (Salir) — no permite proceder. */
+  const [nivelChangeBlocked, setNivelChangeBlocked] = useState<{
+    oldLabel: string
+    newLabel: string
+    inscritos: number
+  } | null>(null)
 
   function advisorNameById(id: string): string {
     const a = advisors.find(x => x._id === id)
@@ -434,6 +453,36 @@ export default function EventModal({
         linkZoom: formData.linkZoom || undefined
       }
 
+      // Guarda integridad: si estamos editando Y cambia nivel o step (nombreEvento),
+      // detectamos antes y mostramos modal apropiado:
+      //   - Si el evento tiene inscritos > 0 → modal BLOQUEANTE (sólo Salir)
+      //   - Si tiene 0 inscritos → modal de confirmación "BN3 - Step 11 → P1 - Step 16"
+      // Esto evita corromper historiales de bookings (que apuntan al nivel/step
+      // del evento). La validación se replica en el backend como defensa.
+      if (editingEvent) {
+        const oldNivel = (editingEvent as any).nivel || (editingEvent as any).tituloONivel || ''
+        const oldStep  = (editingEvent as any).step  || (editingEvent as any).nombreEvento || ''
+        const newNivel = formData.tituloONivel || ''
+        const newStep  = formData.nombreEvento || ''
+        const nivelChanged = oldNivel && newNivel && oldNivel !== newNivel
+        const stepChanged  = oldStep && newStep && oldStep !== newStep
+        if (nivelChanged || stepChanged) {
+          const inscritos = Number((editingEvent as any).inscritos ?? 0)
+          const oldLabel = `${oldNivel}${oldStep ? ` - ${oldStep}` : ''}`
+          const newLabel = `${newNivel}${newStep ? ` - ${newStep}` : ''}`
+          if (inscritos > 0) {
+            setNivelChangeBlocked({ oldLabel, newLabel, inscritos })
+            setLoading(false)
+            return
+          }
+          // 0 inscritos → mostrar confirmación. Si el advisor también cambió,
+          // se mostrará el modal de advisor DESPUÉS (en confirmNivelChange).
+          setPendingNivelChange({ eventData, oldLabel, newLabel })
+          setLoading(false)
+          return
+        }
+      }
+
       // Hook Ctrl Horas: si estamos editando Y cambia el advisor, pedir confirmación
       const isAdvisorChange = !!editingEvent && (editingEvent as any).advisor && (editingEvent as any).advisor !== formData.advisor
       if (isAdvisorChange) {
@@ -444,6 +493,7 @@ export default function EventModal({
         })
         setConfirmReassignChecked(false)
         setReassignMotivo('')
+        setReassignSkipLog(false)
         return
       }
 
@@ -461,6 +511,9 @@ export default function EventModal({
     const enriched = {
       ...pendingAdvisorChange.eventData,
       _motivoCambioAdvisor: reassignMotivo.trim() || undefined,
+      // Restructuración: el backend honra _skipLog=true y NO inserta
+      // entrada Canceled en ADVISOR_EVENT_LOG.
+      _skipLog: reassignSkipLog || undefined,
     }
     setPendingAdvisorChange(null)
     onSave(enriched)
@@ -470,6 +523,35 @@ export default function EventModal({
     setPendingAdvisorChange(null)
     setConfirmReassignChecked(false)
     setReassignMotivo('')
+    setReassignSkipLog(false)
+    setLoading(false)
+  }
+
+  /** Confirmar cambio de nivel/step cuando NO hay estudiantes inscritos.
+   *  Tras confirmar, si el advisor también cambió, se dispara el modal
+   *  de cambio de advisor en cascada; si no, se guarda directamente. */
+  function confirmNivelChange() {
+    if (!pendingNivelChange) return
+    const eventData = pendingNivelChange.eventData
+    setPendingNivelChange(null)
+    // Re-check advisor change y disparar su propio modal si aplica
+    const isAdvisorChange = !!editingEvent && (editingEvent as any).advisor && (editingEvent as any).advisor !== formData.advisor
+    if (isAdvisorChange) {
+      setPendingAdvisorChange({
+        eventData,
+        oldAdvisorName: advisorNameById((editingEvent as any).advisor),
+        newAdvisorName: advisorNameById(formData.advisor),
+      })
+      setConfirmReassignChecked(false)
+      setReassignMotivo('')
+      setReassignSkipLog(false)
+      return
+    }
+    onSave(eventData)
+  }
+
+  function cancelNivelChange() {
+    setPendingNivelChange(null)
     setLoading(false)
   }
 
@@ -763,7 +845,7 @@ export default function EventModal({
               la sesión fue cancelada para él/ella y se reasigna a <strong>{pendingAdvisorChange.newAdvisorName}</strong>.
               Las notas (Time Out y observaciones) que haya escrito el advisor anterior quedarán congeladas en su historial.
             </p>
-            <label className="flex items-start gap-2 mb-4 cursor-pointer">
+            <label className="flex items-start gap-2 mb-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={confirmReassignChecked}
@@ -772,6 +854,23 @@ export default function EventModal({
               />
               <span className="text-sm text-gray-800">
                 Confirmo: <strong>{pendingAdvisorChange.oldAdvisorName}</strong> canceló la sesión y se reasigna a <strong>{pendingAdvisorChange.newAdvisorName}</strong>
+              </span>
+            </label>
+            {/* Restructuración: skip ADVISOR_EVENT_LOG — mismo patrón que el
+                modal de Cancelar Evento. Útil para fix de planificación
+                donde el advisor original NO canceló realmente. */}
+            <label className="flex items-start gap-2 mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={reassignSkipLog}
+                onChange={(e) => setReassignSkipLog(e.target.checked)}
+                className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-800">
+                Restructuración
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  La reasignación se aplica pero <strong>NO queda registro</strong> en Ctrl Horas del advisor original.
+                </span>
               </span>
             </label>
             <div className="mb-4">
@@ -802,6 +901,86 @@ export default function EventModal({
                 className="px-4 py-2 text-sm font-semibold text-white bg-yellow-600 rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Confirmar reasignación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal BLOQUEANTE: el evento tiene inscritos y se intentó cambiar
+          nivel/step. Sólo permite Salir — el admin debe primero cancelar
+          las inscripciones o crear un evento nuevo con el nivel correcto. */}
+      {nivelChangeBlocked && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              🚫 No se puede cambiar el nivel
+            </h3>
+            <p className="text-sm text-gray-700 mb-4">
+              Este evento tiene <strong>{nivelChangeBlocked.inscritos}</strong> estudiante(s) inscrito(s).
+              Cambiar el nivel o step corromperá sus historiales de bookings.
+            </p>
+            <div className="bg-gray-50 border border-gray-200 rounded p-3 mb-4 text-sm">
+              <div className="text-gray-500 text-xs">Cambio intentado</div>
+              <div className="font-medium text-gray-900">
+                {nivelChangeBlocked.oldLabel} → {nivelChangeBlocked.newLabel}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Para cambiar el nivel: cancela las inscripciones primero, o crea un evento nuevo con el nivel correcto.
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setNivelChangeBlocked(null)}
+                className="px-4 py-2 text-sm font-medium text-white bg-gray-700 rounded hover:bg-gray-800"
+              >
+                Salir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación de cambio de nivel/step — sólo se llega aquí
+          si inscritos === 0. Botón Confirmar / Cancelar. No pide motivo. */}
+      {pendingNivelChange && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              ⚠️ Confirmar cambio de nivel
+            </h3>
+            <p className="text-sm text-gray-700 mb-4">
+              Vas a cambiar el nivel/step del evento. Esta acción <strong>NO queda registrada</strong>
+              en Ctrl Horas (no es una cancelación para el advisor).
+            </p>
+            <div className="bg-gray-50 border border-gray-200 rounded p-3 mb-4 text-sm space-y-2">
+              <div>
+                <div className="text-gray-500 text-xs">Antes</div>
+                <div className="font-medium text-gray-900">{pendingNivelChange.oldLabel}</div>
+              </div>
+              <div>
+                <div className="text-gray-500 text-xs">Después</div>
+                <div className="font-medium text-blue-700">{pendingNivelChange.newLabel}</div>
+              </div>
+            </div>
+            <p className="text-xs text-emerald-700 mb-4">
+              ✓ Evento sin inscritos — el cambio es seguro.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelNivelChange}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmNivelChange}
+                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded hover:bg-blue-700"
+              >
+                Confirmar
               </button>
             </div>
           </div>
