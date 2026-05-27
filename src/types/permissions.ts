@@ -148,6 +148,9 @@ export enum AcademicoPermission {
 
   // Control Horas
   CONTROL_HORAS_VER = 'ACADEMICO.CONTROL_HORAS.VER',
+  // Permite seleccionar/cambiar de advisor en Ctrl Horas (ver el de otros,
+  // no sólo el propio). SUPER_ADMIN/ADMIN lo tienen implícito.
+  CONTROL_HORAS_VER_TODOS = 'ACADEMICO.CONTROL_HORAS.VER_TODOS',
 }
 
 /**

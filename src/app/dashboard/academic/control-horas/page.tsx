@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
 import { AcademicoPermission } from '@/types/permissions'
 import { ClockIcon, ChevronLeftIcon, ChevronRightIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
@@ -97,9 +98,13 @@ export default function ControlHorasPage() {
 
 function ControlHorasContent() {
   const { data: session } = useSession()
+  const { hasPermission } = usePermissions()
   const role = (session?.user as any)?.role as string | undefined
   const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN'
   const myEmail = (session?.user as any)?.email as string | undefined
+  // Puede seleccionar/consultar el Ctrl Horas de CUALQUIER advisor:
+  // SUPER_ADMIN/ADMIN (implícito) o cualquier rol con el permiso explícito.
+  const canPickAdvisor = isAdmin || hasPermission(AcademicoPermission.CONTROL_HORAS_VER_TODOS)
 
   const [advisorId, setAdvisorId] = useState<string>('')
   const [advisors, setAdvisors] = useState<AdvisorOption[]>([])
@@ -129,7 +134,7 @@ function ControlHorasContent() {
 
   useEffect(() => {
     if (!myEmail) return
-    if (isAdmin) {
+    if (canPickAdvisor) {
       fetch('/api/postgres/advisors')
         .then(r => r.json())
         .then(j => {
@@ -166,15 +171,15 @@ function ControlHorasContent() {
         })
         .catch(() => setError('No se pudo cargar tu perfil de advisor'))
     }
-  }, [myEmail, isAdmin])
+  }, [myEmail, canPickAdvisor])
 
-  // Mantener currentAdvisor sincronizado con advisorId cuando el admin cambia
+  // Mantener currentAdvisor sincronizado con advisorId cuando se cambia
   // de selección desde el dropdown.
   useEffect(() => {
-    if (!isAdmin || !advisorId) return
+    if (!canPickAdvisor || !advisorId) return
     const found = advisors.find(a => a._id === advisorId)
     if (found) setCurrentAdvisor(found)
-  }, [advisorId, advisors, isAdmin])
+  }, [advisorId, advisors, canPickAdvisor])
 
   // Cargar presigned URL de la foto cuando cambia el advisor seleccionado.
   useEffect(() => {
@@ -325,7 +330,7 @@ function ControlHorasContent() {
 
       {/* Toolbar */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap items-end gap-3">
-        {isAdmin && (
+        {canPickAdvisor && (
           <div className="flex-1 min-w-[200px]">
             <label htmlFor="advisor-select" className="block text-xs font-medium text-gray-700 mb-1">Advisor</label>
             <select

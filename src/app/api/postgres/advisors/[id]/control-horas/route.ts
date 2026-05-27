@@ -2,6 +2,7 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { ForbiddenError, ValidationError } from '@/lib/errors';
 import { queryOne } from '@/lib/postgres';
+import { getPermissionsByRole } from '@/config/roles';
 import { buildMonthlyView, isRegistroSesionRequerido } from '@/services/advisor-event-log.service';
 
 /**
@@ -15,15 +16,26 @@ import { buildMonthlyView, isRegistroSesionRequerido } from '@/services/advisor-
 export const GET = handlerWithAuth(async (request, { params }, session) => {
   const role  = (session?.user as any)?.role;
   const email = (session?.user as any)?.email || '';
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
 
-  // Advisor propio: validar que su email matchee el ADVISORS._id del path
-  if (role !== 'SUPER_ADMIN' && role !== 'ADMIN') {
-    const adv = await queryOne<{ _id: string }>(
-      `SELECT "_id" FROM "ADVISORS" WHERE LOWER("email") = LOWER($1)`,
-      [email],
-    );
-    if (!adv || adv._id !== params.id) {
-      throw new ForbiddenError('Solo puedes consultar tu propio Ctrl Horas');
+  // Acceso a Ctrl Horas de CUALQUIER advisor: SUPER_ADMIN/ADMIN o roles con
+  // el permiso ACADEMICO.CONTROL_HORAS.VER_TODOS. El resto sólo puede
+  // consultar su propio Ctrl Horas (email matchea el ADVISORS._id del path).
+  if (!isAdmin) {
+    let canPickAdvisor = false;
+    try {
+      const perms = await getPermissionsByRole(role);
+      canPickAdvisor = perms.includes('ACADEMICO.CONTROL_HORAS.VER_TODOS' as any);
+    } catch { /* sin permisos → tratado como advisor propio */ }
+
+    if (!canPickAdvisor) {
+      const adv = await queryOne<{ _id: string }>(
+        `SELECT "_id" FROM "ADVISORS" WHERE LOWER("email") = LOWER($1)`,
+        [email],
+      );
+      if (!adv || adv._id !== params.id) {
+        throw new ForbiddenError('Solo puedes consultar tu propio Ctrl Horas');
+      }
     }
   }
 

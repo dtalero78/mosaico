@@ -493,7 +493,14 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     module: Module.ACADEMICO,
     section: 'Control Horas',
     name: 'Página "Control Horas"',
-    description: 'Acceso a /dashboard/academic/control-horas. Página en construcción.',
+    description: 'Acceso a /dashboard/academic/control-horas. Cada advisor ve sus propias horas.',
+  },
+  {
+    code: AcademicoPermission.CONTROL_HORAS_VER_TODOS,
+    module: Module.ACADEMICO,
+    section: 'Control Horas',
+    name: 'Selector de Advisor en Control Horas',
+    description: 'Habilita el dropdown para seleccionar/consultar el Control de Horas de CUALQUIER advisor (no sólo el propio). Sin este permiso el usuario sólo ve su propia info. SUPER_ADMIN/ADMIN lo tienen implícito.',
   },
 
   // ========== INFORMES MODULE ==========
