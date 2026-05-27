@@ -20,10 +20,6 @@ import {
   ChartBarIcon,
   WrenchScrewdriverIcon,
   BanknotesIcon,
-  BuildingOffice2Icon,
-  PresentationChartLineIcon,
-  BriefcaseIcon,
-  CpuChipIcon,
 } from '@heroicons/react/24/outline'
 import { cn } from '@/lib/utils'
 import SearchBar from '@/components/search/SearchBar'
@@ -131,19 +127,16 @@ const getNavigation = (userEmail: string) => [
           { name: 'Horarios', href: '/dashboard/informes/estadisticas/horarios', newTab: true },
         ]
       },
+      // Tableros por área (en construcción) — hijos de Informes
+      { name: 'Administración', href: '/dashboard/tableros/administracion' },
+      { name: 'Gerencia',       href: '/dashboard/tableros/gerencia' },
+      { name: 'Académica',      href: '/dashboard/tableros/academica' },
+      { name: 'Servicio',       href: '/dashboard/tableros/servicio' },
+      { name: 'Recaudo',        href: '/dashboard/tableros/recaudo' },
+      { name: 'Comercial',      href: '/dashboard/tableros/comercial' },
+      { name: 'Sistema',        href: '/dashboard/tableros/sistema' },
     ],
   },
-  // ── Tableros por área (en construcción) ──────────────────────────────
-  // Stubs colocados debajo de Informes. Cada uno apunta a una página
-  // placeholder "En construcción". Pendiente definir contenido y permisos.
-  { name: 'Administración', href: '/dashboard/tableros/administracion', icon: BuildingOffice2Icon },
-  { name: 'Gerencia',       href: '/dashboard/tableros/gerencia',       icon: PresentationChartLineIcon },
-  { name: 'Académica',      href: '/dashboard/tableros/academica',      icon: AcademicCapIcon },
-  { name: 'Servicio',       href: '/dashboard/tableros/servicio',       icon: SpeakerWaveIcon },
-  { name: 'Recaudo',        href: '/dashboard/tableros/recaudo',        icon: BanknotesIcon },
-  { name: 'Comercial',      href: '/dashboard/tableros/comercial',      icon: BriefcaseIcon },
-  { name: 'Sistema',        href: '/dashboard/tableros/sistema',        icon: CpuChipIcon },
-
   {
     name: 'Mantenimiento',
     icon: WrenchScrewdriverIcon,
