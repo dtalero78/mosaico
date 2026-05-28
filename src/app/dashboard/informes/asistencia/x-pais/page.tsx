@@ -288,7 +288,7 @@ export default function InformeXPaisPage() {
             izquierdo se reutiliza para dos cuadros consolidados por país:
             (1) Sesiones+Jumps+Training+Clubes — total y asistieron combinados
             (2) Complementarias — total, generadas y % por país             */}
-        <aside className="w-64 flex-shrink-0">
+        <aside className="w-72 flex-shrink-0">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sticky top-4">
             <h2 className="text-base font-bold text-gray-900 mb-1">Consolidado por País</h2>
             <p className="text-xs text-gray-400 mb-3">{startDate} → {endDate}</p>
@@ -354,10 +354,10 @@ export default function InformeXPaisPage() {
                 <table className="w-full text-xs mb-4">
                   <thead>
                     <tr className="text-gray-400 border-b border-gray-100">
-                      <th className="text-left font-medium pb-1 pr-1">País</th>
-                      <th className="text-right font-medium pb-1 pr-1">Agendamiento</th>
-                      <th className="text-right font-medium pb-1 pr-1">Asistencia</th>
-                      <th className="text-right font-medium pb-1">%</th>
+                      <th className="text-left font-medium pb-1 pr-2">País</th>
+                      <th className="text-right font-medium pb-1 pr-3">Agend.</th>
+                      <th className="text-right font-medium pb-1 pr-3">Asist.</th>
+                      <th className="text-right font-medium pb-1 pl-1">%</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -368,22 +368,22 @@ export default function InformeXPaisPage() {
                       const pct = r.total > 0 ? ((r.asistieron / r.total) * 100).toFixed(0) : '0'
                       return (
                         <tr key={r.plataforma} className="border-b border-gray-50 last:border-0">
-                          <td className="py-1 pr-1 text-gray-700 truncate max-w-[70px]" title={r.plataforma}>
+                          <td className="py-1 pr-2 text-gray-700 truncate max-w-[80px]" title={r.plataforma}>
                             <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle" style={{ backgroundColor: color(i) }} />
                             {r.plataforma}
                           </td>
-                          <td className="py-1 pr-1 text-right font-semibold text-gray-900">{r.total.toLocaleString()}</td>
-                          <td className="py-1 pr-1 text-right text-blue-700 font-medium">{r.asistieron.toLocaleString()}</td>
-                          <td className="py-1 text-right text-gray-500">{pct}%</td>
+                          <td className="py-1 pr-3 text-right font-semibold text-gray-900">{r.total.toLocaleString()}</td>
+                          <td className="py-1 pr-3 text-right text-blue-700 font-medium">{r.asistieron.toLocaleString()}</td>
+                          <td className="py-1 pl-1 text-right text-gray-500">{pct}%</td>
                         </tr>
                       )
                     })}
                     {rows.length > 0 && (
                       <tr className="border-t-2 border-gray-300 font-bold">
-                        <td className="pt-1.5 pr-1 text-gray-800">TOTAL</td>
-                        <td className="pt-1.5 pr-1 text-right text-gray-900">{totGeneral.toLocaleString()}</td>
-                        <td className="pt-1.5 pr-1 text-right text-blue-800">{asisGeneral.toLocaleString()}</td>
-                        <td className="pt-1.5 text-right text-gray-600">
+                        <td className="pt-1.5 pr-2 text-gray-800">TOTAL</td>
+                        <td className="pt-1.5 pr-3 text-right text-gray-900">{totGeneral.toLocaleString()}</td>
+                        <td className="pt-1.5 pr-3 text-right text-blue-800">{asisGeneral.toLocaleString()}</td>
+                        <td className="pt-1.5 pl-1 text-right text-gray-600">
                           {totGeneral > 0 ? `${((asisGeneral / totGeneral) * 100).toFixed(0)}%` : '0%'}
                         </td>
                       </tr>
