@@ -110,13 +110,12 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
       GROUP BY a."_id"
     ),
     combined AS (
+      -- Solo advisors CON actividad en el rango (conducted o log). Los advisors
+      -- activos sin horas (ej. Super Advisor) NO aparecen en lista/gráficas.
+      -- Los inactivos aparecen únicamente si tuvieron agendamientos (nombre rojo).
       SELECT advisor_id FROM conducted
       UNION
       SELECT advisor_id FROM logs
-      UNION
-      -- Incluir SIEMPRE a los advisors activos (aunque no tengan actividad en
-      -- el rango). Los inactivos solo aparecen si tuvieron agendamientos.
-      SELECT "_id" AS advisor_id FROM "ADVISORS" WHERE "activo" = true
     )
     SELECT
       a."_id" AS "advisorId",
@@ -155,6 +154,15 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
   const rows = await queryMany<HorasAdvisorRow>(sql, params)
   const n = (v: any) => Number(v) || 0
 
+  // Conteo de advisors ACTIVOS en el scope de país (roster), independiente de
+  // si tuvieron actividad — alimenta el KPI "Advisors Activos".
+  const activosRows = await queryMany<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM "ADVISORS"
+     WHERE "activo" = true AND ($1::text IS NULL OR "pais" = $1)`,
+    [plataforma],
+  )
+  const advisorsActivos = activosRows[0]?.n ?? 0
+
   // ── Totales ──
   const totals = {
     sesiones:  rows.reduce((s, r) => s + n(r.sesiones), 0),
@@ -168,9 +176,10 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     suspended: rows.reduce((s, r) => s + n(r.suspended), 0),
     cancelled: rows.reduce((s, r) => s + n(r.cancelled), 0),
     total:     rows.reduce((s, r) => s + n(r.total), 0),
-    // Conteos de advisors en el resultado
-    advisorsActivos:               rows.filter(r => r.activo).length,
-    advisorsInactivosConActividad: rows.filter(r => !r.activo).length,
+    // Conteos de advisors
+    advisorsActivos,                                                // roster activo (país)
+    advisorsConActividad:          rows.length,                     // aparecen en lista/gráficas
+    advisorsInactivosConActividad: rows.filter(r => !r.activo).length, // nombre en rojo
   }
 
   // ── Charts ──

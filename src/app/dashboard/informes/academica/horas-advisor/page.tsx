@@ -34,7 +34,7 @@ interface Totals {
   sesiones: number; jumps: number; training: number; clubes: number
   welcome: number; essential: number; otros: number
   conducted: number; suspended: number; cancelled: number; total: number
-  advisorsActivos: number; advisorsInactivosConActividad: number
+  advisorsActivos: number; advisorsConActividad: number; advisorsInactivosConActividad: number
 }
 
 interface ReportData {
@@ -138,9 +138,12 @@ export default function HorasAdvisorPage() {
   const [data,    setData]    = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
+  // advisorId efectivamente consultado (de la última carga), para el mensaje
+  // "sin agendamiento" cuando se filtra por un advisor sin actividad.
+  const [queriedAdvisorId, setQueriedAdvisorId] = useState('')
 
   const fetchData = useCallback(async (fi: string, ff: string, plat: string, aid: string, tp: string) => {
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setQueriedAdvisorId(aid)
     try {
       const qs = new URLSearchParams({ fechaInicio: fi, fechaFin: ff, tipo: tp })
       if (plat) qs.set('plataforma', plat)
@@ -192,6 +195,10 @@ export default function HorasAdvisorPage() {
     const all = data?.meta?.advisors ?? []
     return plataforma ? all.filter(a => a.pais === plataforma) : all
   }, [data, plataforma])
+
+  // Se consultó un advisor específico pero no tuvo agendamientos en el período.
+  const sinDatosAdvisor = !loading && !error && queriedAdvisorId !== '' && (data?.table.length ?? 0) === 0
+  const MSG_SIN_AGENDA = 'Este advisor no tuvo agendamientos en el período consultado.'
 
   return (
     <DashboardLayout>
@@ -285,7 +292,9 @@ export default function HorasAdvisorPage() {
             {loading ? (
               <div className="h-64 bg-gray-100 rounded animate-pulse" />
             ) : !data?.charts.barByAdvisor.length ? (
-              <p className="text-sm text-gray-400 text-center py-10">Sin datos</p>
+              <p className={`text-sm text-center py-10 ${sinDatosAdvisor ? 'text-amber-700' : 'text-gray-400'}`}>
+                {sinDatosAdvisor ? `⚠ ${MSG_SIN_AGENDA}` : 'Sin datos'}
+              </p>
             ) : (
               <ResponsiveContainer width="100%" height={Math.max(260, data.charts.barByAdvisor.length * 30)}>
                 <BarChart data={data.charts.barByAdvisor} layout="vertical"
@@ -311,7 +320,9 @@ export default function HorasAdvisorPage() {
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Distribución por Estado</h3>
             {loading
               ? <div className="h-48 bg-gray-100 rounded animate-pulse" />
-              : <DonutChart data={data?.charts.donut ?? []} />
+              : sinDatosAdvisor
+                ? <p className="text-sm text-amber-700 text-center py-8">⚠ {MSG_SIN_AGENDA}</p>
+                : <DonutChart data={data?.charts.donut ?? []} />
             }
           </div>
         </div>
@@ -322,7 +333,9 @@ export default function HorasAdvisorPage() {
           {loading ? (
             <div className="h-48 bg-gray-100 rounded animate-pulse" />
           ) : !data?.charts.byType.length ? (
-            <p className="text-sm text-gray-400 text-center py-10">Sin datos</p>
+            <p className={`text-sm text-center py-10 ${sinDatosAdvisor ? 'text-amber-700' : 'text-gray-400'}`}>
+              {sinDatosAdvisor ? `⚠ ${MSG_SIN_AGENDA}` : 'Sin datos'}
+            </p>
           ) : (
             <ResponsiveContainer width="100%" height={Math.max(200, data.charts.byType.length * 40)}>
               <BarChart data={data.charts.byType} layout="vertical"
@@ -346,9 +359,9 @@ export default function HorasAdvisorPage() {
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-800">Detalle por Advisor</h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              {(data?.table.length ?? 0).toLocaleString()} advisors
+              {(data?.table.length ?? 0).toLocaleString()} advisors con actividad
               {' · '}
-              <span className="text-indigo-600">{totals?.advisorsActivos ?? 0} activos</span>
+              <span className="text-indigo-600">{totals?.advisorsActivos ?? 0} activos en total</span>
               {(totals?.advisorsInactivosConActividad ?? 0) > 0 && (
                 <>
                   {' · '}
@@ -366,7 +379,9 @@ export default function HorasAdvisorPage() {
               <p className="text-sm text-gray-400">Cargando...</p>
             </div>
           ) : !data?.table.length ? (
-            <p className="text-sm text-gray-400 text-center p-8">Sin datos para el período seleccionado.</p>
+            <p className={`text-sm text-center p-8 ${sinDatosAdvisor ? 'text-amber-700' : 'text-gray-400'}`}>
+              {sinDatosAdvisor ? `⚠ ${MSG_SIN_AGENDA}` : 'Sin datos para el período seleccionado.'}
+            </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm whitespace-nowrap">
