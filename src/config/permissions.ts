@@ -563,7 +563,9 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
 
   // -- Sección: Contratos --
   { code: InformesPermission.CONTRATOS, module: Module.INFORMES, section: 'Contratos', name: 'Informe "Contratos"', description: 'Ver el informe de Contratos (placeholder)' },
-  { code: InformesPermission.CONTRATOS_MATRICULAS, module: Module.INFORMES, section: 'Contratos', name: 'Informe "Matrículas"', description: 'Ver el informe Contratos → Matrículas (por aprobar / vigentes / finalizados, académicos, barras, dona y heatmap por país)' },
+  { code: InformesPermission.CONTRATOS_MATRICULAS,     module: Module.INFORMES, section: 'Contratos', name: 'Informe "Matrículas"', description: 'Ver el informe Contratos → Matrículas (por aprobar / vigentes / finalizados, académicos, barras, dona y heatmap por país)' },
+  { code: InformesPermission.CONTRATOS_MATRICULAS_EXP, module: Module.INFORMES, section: 'Contratos', name: '↳ Descargar CSV (Matrículas)', description: 'Botón Exportar CSV del informe Contratos → Matrículas' },
+  { code: InformesPermission.CONTRATOS_MATRICULAS_PDF, module: Module.INFORMES, section: 'Contratos', name: '↳ Imprimir / PDF (Matrículas)', description: 'Botón Imprimir / generar PDF del informe Contratos → Matrículas' },
 
   // -- Sección: Planta --
   { code: InformesPermission.PLANTA_ADVISORS,        module: Module.INFORMES, section: 'Planta', name: 'Informe "Advisors" (Planta)',        description: 'Ver el informe Planta → Advisors' },
