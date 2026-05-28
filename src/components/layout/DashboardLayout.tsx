@@ -178,6 +178,7 @@ const getNavigation = (userEmail: string) => [
       {
         name: 'Scripts', isSubmenu: true, children: [
           { name: 'Usuarios Pegados', href: '/admin/scripts/usuarios-pegados', newTab: true },
+          { name: 'Consulta', href: '/admin/scripts/consulta', newTab: true },
         ],
       },
     ],
@@ -330,6 +331,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/admin/scripts/usuarios-pegados': [
       MantenimientoPermission.SCRIPTS_USUARIOS_PEGADOS,
+    ],
+    '/admin/scripts/consulta': [
+      MantenimientoPermission.SCRIPTS_CONSULTA,
     ],
     // Recaudos
     '/dashboard/recaudos/gestion': [

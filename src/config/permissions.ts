@@ -947,6 +947,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Página "Usuarios Pegados"',
     description: 'Acceso a /admin/scripts/usuarios-pegados. Detecta estudiantes cuyo step actual es menor al step real calculado según sus bookings y permite reconciliar en bulk',
   },
+  {
+    code: MantenimientoPermission.SCRIPTS_CONSULTA,
+    module: Module.MANTENIMIENTO,
+    section: 'Scripts',
+    name: 'Página "Consulta de Scripts"',
+    description: 'Acceso a /admin/scripts/consulta. Catálogo de los scripts del repositorio con su utilidad, comando de ejecución, parámetros y tipo (lectura/escritura). Buscable y exportable a CSV',
+  },
 
   // ========== RECAUDOS MODULE (Menú Recaudos) ==========
   {

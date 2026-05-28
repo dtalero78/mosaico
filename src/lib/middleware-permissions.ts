@@ -231,6 +231,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/admin/scripts/usuarios-pegados': [
     'MANTENIMIENTO.SCRIPTS.USUARIOS_PEGADOS' as Permission,
   ],
+  '/admin/scripts/consulta': [
+    'MANTENIMIENTO.SCRIPTS.CONSULTA' as Permission,
+  ],
 
   // Recaudos - Gestión
   '/dashboard/recaudos/gestion': [
