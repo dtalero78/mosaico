@@ -37,12 +37,16 @@ export async function POST(request: NextRequest) {
 
     const numeroId = personResult.rows[0]?.numeroId
 
-    // Delete from ACADEMICA_BOOKINGS first (foreign key constraint)
+    // Borrar primero los bookings del estudiante. El vínculo booking→estudiante
+    // es ACADEMICA._id, guardado en "studentId" (canónico) o "idEstudiante"
+    // (legacy Wix); algunos bookings legacy además traen "numeroId". Se cubren
+    // las tres rutas. (El bug previo usaba "visitorId", columna inexistente.)
     if (numeroId) {
       await query(
-        `DELETE FROM "ACADEMICA_BOOKINGS" WHERE "visitorId" IN (
-          SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = $1
-        )`,
+        `DELETE FROM "ACADEMICA_BOOKINGS"
+         WHERE "studentId" IN (SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = $1)
+            OR "idEstudiante" IN (SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = $1)
+            OR "numeroId" = $1`,
         [numeroId]
       )
 
