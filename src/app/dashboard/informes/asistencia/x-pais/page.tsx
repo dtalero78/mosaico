@@ -292,9 +292,58 @@ export default function InformeXPaisPage() {
             <h2 className="text-base font-bold text-gray-900 mb-1">Consolidado por País</h2>
             <p className="text-xs text-gray-400 mb-3">{startDate} → {endDate}</p>
 
-            {/* Consolidado Sesiones + Jumps + Training + Clubes */}
+            {/* Eventos Asistencia — participación (%) de cada país sobre el total
+                de asistencias a TODOS los eventos (excluye complementarias).
+                Incluye Sesiones + Jumps + Training + Clubes + Welcome.        */}
             <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Sesiones + Jumps + Training + Clubes
+              Eventos Asistencia
+            </p>
+            {(() => {
+              const rows = [...consolidatePorPais([ses, jmp, tr, cl, wel])]
+                .sort((a, b) => b.asistieron - a.asistieron)
+              const asisTotal = rows.reduce((a, r) => a + r.asistieron, 0)
+              return (
+                <table className="w-full text-xs mb-4">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-100">
+                      <th className="text-left font-medium pb-1 pr-1">País</th>
+                      <th className="text-right font-medium pb-1 pr-1">Asistencia</th>
+                      <th className="text-right font-medium pb-1">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 ? (
+                      <tr><td colSpan={3} className="text-gray-400 italic py-2">Sin datos</td></tr>
+                    ) : rows.map((r, i) => {
+                      // % = participación del país sobre el total de asistencias
+                      // (su porción del 100% de asistentes a todos los eventos)
+                      const pct = asisTotal > 0 ? ((r.asistieron / asisTotal) * 100).toFixed(0) : '0'
+                      return (
+                        <tr key={r.plataforma} className="border-b border-gray-50 last:border-0">
+                          <td className="py-1 pr-1 text-gray-700 truncate max-w-[70px]" title={r.plataforma}>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle" style={{ backgroundColor: color(i) }} />
+                            {r.plataforma}
+                          </td>
+                          <td className="py-1 pr-1 text-right text-blue-700 font-medium">{r.asistieron.toLocaleString()}</td>
+                          <td className="py-1 text-right text-gray-500">{pct}%</td>
+                        </tr>
+                      )
+                    })}
+                    {rows.length > 0 && (
+                      <tr className="border-t-2 border-gray-300 font-bold">
+                        <td className="pt-1.5 pr-1 text-gray-800">TOTAL</td>
+                        <td className="pt-1.5 pr-1 text-right text-blue-800">{asisTotal.toLocaleString()}</td>
+                        <td className="pt-1.5 text-right text-gray-600">100%</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )
+            })()}
+
+            {/* Asistencia vs Agendamiento — tasa de asistencia (asistencia/agendamiento) por país */}
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2 mt-3 pt-3 border-t border-gray-200">
+              Asistencia vs Agendamiento
             </p>
             {(() => {
               const rows = consolidatePorPais([ses, jmp, tr, cl])
@@ -305,8 +354,8 @@ export default function InformeXPaisPage() {
                   <thead>
                     <tr className="text-gray-400 border-b border-gray-100">
                       <th className="text-left font-medium pb-1 pr-1">País</th>
-                      <th className="text-right font-medium pb-1 pr-1">Total</th>
-                      <th className="text-right font-medium pb-1 pr-1">Asist.</th>
+                      <th className="text-right font-medium pb-1 pr-1">Agendamiento</th>
+                      <th className="text-right font-medium pb-1 pr-1">Asistencia</th>
                       <th className="text-right font-medium pb-1">%</th>
                     </tr>
                   </thead>
@@ -348,24 +397,22 @@ export default function InformeXPaisPage() {
               Complementarias
             </p>
             {(() => {
-              const totalGral = comp.porPlataforma.reduce((a, r) => a + r.total, 0)
               const generGral = comp.porPlataforma.reduce((a, r) => a + r.asistieron, 0)
               return (
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-gray-400 border-b border-gray-100">
                       <th className="text-left font-medium pb-1 pr-1">País</th>
-                      <th className="text-right font-medium pb-1 pr-1">Total</th>
-                      <th className="text-right font-medium pb-1 pr-1">Gener.</th>
+                      <th className="text-right font-medium pb-1 pr-1">Generadas</th>
                       <th className="text-right font-medium pb-1">%</th>
                     </tr>
                   </thead>
                   <tbody>
                     {comp.porPlataforma.length === 0 ? (
-                      <tr><td colSpan={4} className="text-gray-400 italic py-2">Sin datos</td></tr>
+                      <tr><td colSpan={3} className="text-gray-400 italic py-2">Sin datos</td></tr>
                     ) : comp.porPlataforma.map((r, i) => {
                       // % = participación de las generadas de este país sobre el
-                      // total general de complementarias generadas (no sobre su propio total)
+                      // total general de complementarias generadas
                       const pct = generGral > 0 ? ((r.asistieron / generGral) * 100).toFixed(0) : '0'
                       return (
                         <tr key={r.plataforma} className="border-b border-gray-50 last:border-0">
@@ -373,7 +420,6 @@ export default function InformeXPaisPage() {
                             <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle" style={{ backgroundColor: color(i) }} />
                             {r.plataforma}
                           </td>
-                          <td className="py-1 pr-1 text-right font-semibold text-gray-900">{r.total.toLocaleString()}</td>
                           <td className="py-1 pr-1 text-right text-emerald-700 font-medium">{r.asistieron.toLocaleString()}</td>
                           <td className="py-1 text-right text-gray-500">{pct}%</td>
                         </tr>
@@ -382,7 +428,6 @@ export default function InformeXPaisPage() {
                     {comp.porPlataforma.length > 0 && (
                       <tr className="border-t-2 border-gray-300 font-bold">
                         <td className="pt-1.5 pr-1 text-gray-800">TOTAL</td>
-                        <td className="pt-1.5 pr-1 text-right text-gray-900">{totalGral.toLocaleString()}</td>
                         <td className="pt-1.5 pr-1 text-right text-emerald-800">{generGral.toLocaleString()}</td>
                         <td className="pt-1.5 text-right text-gray-600">
                           {generGral > 0 ? '100%' : '0%'}
