@@ -129,7 +129,7 @@ export default function HorasAdvisorPage() {
       [
         { header: 'Advisor',    accessor: r => r.advisorNombre },
         { header: 'NumeroId',   accessor: r => r.numeroId ?? '' },
-        { header: 'Plataforma', accessor: r => r.plataforma ?? '' },
+        { header: 'País',       accessor: r => r.plataforma ?? '' },
         { header: 'Conducted',  accessor: r => r.conducted },
         { header: 'Suspended',  accessor: r => r.suspended },
         { header: 'Cancelled',  accessor: r => r.cancelled },
@@ -162,7 +162,7 @@ export default function HorasAdvisorPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label htmlFor="ha-plataforma" className="block text-xs text-gray-500 mb-1">Plataforma (País)</label>
+              <label htmlFor="ha-plataforma" className="block text-xs text-gray-500 mb-1">País</label>
               <select id="ha-plataforma" value={plataforma}
                 onChange={e => { setPlataforma(e.target.value); setAdvisorId('') }}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]">
