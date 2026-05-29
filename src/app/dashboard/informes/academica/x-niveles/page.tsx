@@ -9,22 +9,24 @@ interface Row { nombre: string; id: string; correo: string | null; nivel: string
 interface Data {
   rows: Row[]; total: number; capped: boolean; maxRows: number
   porNivel: { nivel: string; n: number }[]
-  meta: { niveles: string[]; nivel: string; startDate: string; endDate: string }
+  meta: { niveles: string[]; stepsDisponibles: string[]; nivel: string; step: string; startDate: string; endDate: string }
 }
 
 export default function XNivelesPage() {
   const [nivel, setNivel]         = useState('')
+  const [step, setStep]           = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate]     = useState('')
   const [data, setData]   = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchData = useCallback(async (nv: string, sd: string, ed: string) => {
+  const fetchData = useCallback(async (nv: string, st: string, sd: string, ed: string) => {
     setLoading(true); setError(null)
     try {
       const qs = new URLSearchParams()
       if (nv) qs.set('nivel', nv)
+      if (st) qs.set('step', st)
       if (sd) qs.set('startDate', sd)
       if (ed) qs.set('endDate', ed)
       const res = await fetch(`/api/postgres/reports/academica/x-niveles?${qs}`, { cache: 'no-store' })
@@ -35,10 +37,15 @@ export default function XNivelesPage() {
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { fetchData('', '', '') }, [fetchData])
+  useEffect(() => { fetchData('', '', '', '') }, [fetchData])
 
-  const handleApply = () => fetchData(nivel, startDate, endDate)
-  const handleClear = () => { setNivel(''); setStartDate(''); setEndDate(''); fetchData('', '', '') }
+  // Cambiar nivel reinicia el step y recarga (así el dropdown de steps se
+  // repuebla y el conteo/chips quedan siempre en sync con lo mostrado).
+  const onNivelChange = (v: string) => { setNivel(v); setStep(''); fetchData(v, '', startDate, endDate) }
+  const onStepChange  = (v: string) => { setStep(v); fetchData(nivel, v, startDate, endDate) }
+  const pickNivel     = (v: string) => { setNivel(v); setStep(''); fetchData(v, '', startDate, endDate) }
+  const handleApply   = () => fetchData(nivel, step, startDate, endDate)
+  const handleClear   = () => { setNivel(''); setStep(''); setStartDate(''); setEndDate(''); fetchData('', '', '', '') }
 
   const handleCSV = () => {
     if (!data?.rows.length) return
@@ -48,8 +55,11 @@ export default function XNivelesPage() {
       { header: 'Correo', accessor: r => r.correo ?? '' },
       { header: 'Nivel',  accessor: r => r.nivel },
       { header: 'Step',   accessor: r => r.step ?? '' },
-    ], `x-niveles${nivel ? '_' + nivel : '_todos'}${startDate ? '_' + startDate : ''}`)
+    ], `x-niveles${nivel ? '_' + nivel : '_todos'}${step ? '_' + step.replace(/\s+/g, '') : ''}${startDate ? '_' + startDate : ''}`)
   }
+
+  const appliedNivel = data?.meta?.nivel ?? ''
+  const stepsDisponibles = data?.meta?.stepsDisponibles ?? []
 
   return (
     <DashboardLayout>
@@ -68,10 +78,19 @@ export default function XNivelesPage() {
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label htmlFor="xn-nivel" className="block text-xs text-gray-500 mb-1">Nivel</label>
-              <select id="xn-nivel" value={nivel} onChange={e => setNivel(e.target.value)}
+              <select id="xn-nivel" value={nivel} onChange={e => onNivelChange(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[140px]">
                 <option value="">Todos</option>
                 {(data?.meta?.niveles ?? []).map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="xn-step" className="block text-xs text-gray-500 mb-1">Step</label>
+              <select id="xn-step" value={step} onChange={e => onStepChange(e.target.value)} disabled={!nivel || !stepsDisponibles.length}
+                title={!nivel ? 'Selecciona un nivel para filtrar por step' : 'Filtrar por step'}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[130px] disabled:bg-gray-100 disabled:text-gray-400">
+                <option value="">Todos</option>
+                {stepsDisponibles.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
@@ -108,14 +127,14 @@ export default function XNivelesPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-3">
             <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Total usuarios</p>
             <p className="text-3xl font-bold text-gray-900">{(data?.total ?? 0).toLocaleString()}</p>
-            <p className="text-[11px] text-gray-400">{nivel || 'Todos los niveles'}</p>
+            <p className="text-[11px] text-gray-400">{appliedNivel || 'Todos los niveles'}{data?.meta?.step ? ` · ${data.meta.step}` : ''}</p>
           </div>
           {/* Chips por nivel */}
           <div className="flex flex-wrap gap-1.5 flex-1">
             {(data?.porNivel ?? []).map(p => (
               <button key={p.nivel} type="button"
-                onClick={() => { setNivel(p.nivel); fetchData(p.nivel, startDate, endDate) }}
-                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${nivel === p.nivel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                onClick={() => pickNivel(p.nivel)}
+                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${appliedNivel === p.nivel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
                 {p.nivel} <span className="font-semibold">{p.n.toLocaleString()}</span>
               </button>
             ))}
