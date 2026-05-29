@@ -13,19 +13,14 @@ interface CronHealth {
 }
 interface HoldRow { _id: string; nombre: string; numeroId: string; plataforma: string | null; fechaOnHold: string | null; fechaFinOnHold: string | null; diasVencido: number; causa: string }
 interface VigRow  { _id: string; nombre: string; numeroId: string; plataforma: string | null; contrato: string | null; finalContrato: string | null; diasVencido: number; causa: string }
-interface PegRow  { _id: string; nombre: string; numeroId: string; plataforma: string | null; contrato: string | null; nivel: string; stepActual: number; stepReal: number; desfase: number; causa: string }
-interface AccionRow { fecha: string; nombre: string; studentId: string; success: boolean; error?: string; diasExtendidos?: number; finalContrato?: string; numeroId?: string; nivel?: string; stepAnterior?: number; stepNuevo?: number }
+interface AccionRow { fecha: string; nombre: string; studentId: string; success: boolean; error?: string; diasExtendidos?: number; finalContrato?: string }
 
 interface Data {
-  crons: { reactivate: CronHealth; expire: CronHealth; reconcile: CronHealth }
+  crons: { reactivate: CronHealth; expire: CronHealth }
   rango: { startDate: string; endDate: string }
-  desbloqueos: AccionRow[]; bloqueos: AccionRow[]; reconciliaciones: AccionRow[]
-  totalesRango: {
-    desbloqueosOk: number; desbloqueosFail: number;
-    bloqueosOk: number; bloqueosFail: number;
-    reconciliacionesOk: number; reconciliacionesFail: number;
-  }
-  inconsistencias: { holdPendientes: HoldRow[]; vigenciaPendientes: VigRow[]; pegadosLimpios: PegRow[]; pegadosConFlags: number }
+  desbloqueos: AccionRow[]; bloqueos: AccionRow[]
+  totalesRango: { desbloqueosOk: number; desbloqueosFail: number; bloqueosOk: number; bloqueosFail: number }
+  inconsistencias: { holdPendientes: HoldRow[]; vigenciaPendientes: VigRow[] }
 }
 
 const today       = new Date().toISOString().substring(0, 10)
@@ -91,10 +86,8 @@ export default function HoldVigenciasPage() {
     const rows: any[] = []
     data.inconsistencias.holdPendientes.forEach(r => rows.push({ tipo: 'Inconsistencia OnHold', nombre: r.nombre, numeroId: r.numeroId, pais: r.plataforma ?? '', fecha: r.fechaFinOnHold ?? '', dias: r.diasVencido, detalle: r.causa }))
     data.inconsistencias.vigenciaPendientes.forEach(r => rows.push({ tipo: 'Inconsistencia Vigencia', nombre: r.nombre, numeroId: r.numeroId, pais: r.plataforma ?? '', fecha: r.finalContrato ?? '', dias: r.diasVencido, detalle: r.causa }))
-    data.inconsistencias.pegadosLimpios?.forEach(r => rows.push({ tipo: 'Inconsistencia Pegado', nombre: r.nombre, numeroId: r.numeroId, pais: r.plataforma ?? '', fecha: '', dias: r.desfase, detalle: `${r.nivel} step ${r.stepActual} -> ${r.stepReal}. ${r.causa}` }))
     data.desbloqueos.forEach(r => rows.push({ tipo: 'Desbloqueo', nombre: r.nombre, numeroId: r.studentId, pais: '', fecha: r.fecha, dias: r.diasExtendidos ?? '', detalle: r.success ? 'OK' : `Fallido: ${r.error}` }))
     data.bloqueos.forEach(r => rows.push({ tipo: 'Bloqueo', nombre: r.nombre, numeroId: r.studentId, pais: '', fecha: r.fecha, dias: '', detalle: r.success ? 'OK' : `Fallido: ${r.error}` }))
-    data.reconciliaciones?.forEach(r => rows.push({ tipo: 'Reconciliación Pegado', nombre: r.nombre, numeroId: r.numeroId ?? r.studentId, pais: '', fecha: r.fecha, dias: '', detalle: r.success ? `${r.nivel} step ${r.stepAnterior} -> ${r.stepNuevo}` : `Fallido: ${r.error}` }))
     if (!rows.length) { rows.push({ tipo: 'Sin datos', nombre: '', numeroId: '', pais: '', fecha: '', dias: '', detalle: '' }) }
     exportToExcel(rows, [
       { header: 'Tipo', accessor: r => r.tipo }, { header: 'Nombre', accessor: r => r.nombre },
@@ -106,8 +99,6 @@ export default function HoldVigenciasPage() {
 
   const holdInc = data?.inconsistencias.holdPendientes ?? []
   const vigInc  = data?.inconsistencias.vigenciaPendientes ?? []
-  const pegInc  = data?.inconsistencias.pegadosLimpios ?? []
-  const pegFlags = data?.inconsistencias.pegadosConFlags ?? 0
   const t = data?.totalesRango
   const emptyHealth: CronHealth = { lastRun: null, status: null, hoursSince: null, stale: true, processed: 0, success: 0, failed: 0, error: null }
 
@@ -118,7 +109,7 @@ export default function HoldVigenciasPage() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Hold &amp; Vigencias</h1>
-            <p className="text-sm text-gray-500">Monitoreo de crons nocturnos: reconciliación de pegados (02 UTC), desbloqueo OnHold (03 UTC) y bloqueo por vigencia (04 UTC).</p>
+            <p className="text-sm text-gray-500">Monitoreo del cron: desbloqueos por OnHold vencido, bloqueos por contrato vencido e inconsistencias.</p>
           </div>
           <div className="flex items-end gap-2 flex-wrap">
             <div>
@@ -150,8 +141,7 @@ export default function HoldVigenciasPage() {
         )}
 
         {/* Salud de los crons */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <CronCard title="Reconciliación Pegados (reconcile-pegados)" schedule="Diario 02:00 UTC · 9 PM Colombia" h={data?.crons.reconcile ?? emptyHealth} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <CronCard title="Desbloqueo OnHold (reactivate-onhold)" schedule="Diario 03:00 UTC · 10 PM Colombia" h={data?.crons.reactivate ?? emptyHealth} />
           <CronCard title="Bloqueo por Vigencia (expire-contracts)" schedule="Diario 04:00 UTC · 11 PM Colombia" h={data?.crons.expire ?? emptyHealth} />
         </div>
@@ -221,54 +211,8 @@ export default function HoldVigenciasPage() {
           </div>
         </div>
 
-        {/* Inconsistencia: pegados limpios no reconciliados */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-800">Usuarios pegados LIMPIOS no reconciliados</h3>
-              <p className="text-[11px] text-gray-400">
-                Estudiantes con stepReal &gt; stepActual sin overrides ni clrHistoric — el cron debería procesarlos esta noche.
-                {pegFlags > 0 && <span className="ml-2 text-amber-700">· {pegFlags} con flags requieren decisión manual (no listados aquí)</span>}
-              </p>
-            </div>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${pegInc.length ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{pegInc.length}</span>
-          </div>
-          {loading ? <div className="p-6 text-center text-sm text-gray-400">Cargando…</div>
-            : pegInc.length === 0 ? (
-              <p className="p-6 text-center text-sm text-green-700 flex items-center justify-center gap-2"><CheckCircleIcon className="h-5 w-5" />Sin inconsistencias — todos reconciliados o el cron está al día</p>
-            ) : (
-              <div className="overflow-x-auto max-h-80 overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 text-gray-500 sticky top-0"><tr>
-                    <th className="text-left px-3 py-2 font-semibold">Estudiante</th>
-                    <th className="text-left px-3 py-2 font-semibold">País</th>
-                    <th className="text-left px-3 py-2 font-semibold">Nivel</th>
-                    <th className="text-center px-3 py-2 font-semibold">Actual</th>
-                    <th className="text-center px-3 py-2 font-semibold">Real</th>
-                    <th className="text-center px-3 py-2 font-semibold">Desfase</th>
-                    <th className="text-left px-3 py-2 font-semibold">Causa</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {pegInc.map(r => (
-                      <tr key={r._id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2"><a href={`/student/${r._id}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">{r.nombre}</a><div className="text-[10px] text-gray-400">{r.numeroId} · {r.contrato ?? ''}</div></td>
-                        <td className="px-3 py-2 text-gray-600">{r.plataforma ?? '—'}</td>
-                        <td className="px-3 py-2 text-gray-600">{r.nivel}</td>
-                        <td className="px-3 py-2 text-center text-gray-700">{r.stepActual}</td>
-                        <td className="px-3 py-2 text-center text-blue-700 font-semibold">{r.stepReal}</td>
-                        <td className="px-3 py-2 text-center"><span className="text-red-600 font-semibold">+{r.desfase}</span></td>
-                        <td className="px-3 py-2 text-amber-700">{r.causa}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-        </div>
-
         {/* Acciones recientes del cron (rango) */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <AccionTable title="Reconciliaciones de pegados" subtitle={`${t?.reconciliacionesOk ?? 0} OK · ${t?.reconciliacionesFail ?? 0} fallidos · ${startDate} → ${endDate}`} rows={data?.reconciliaciones ?? []} loading={loading} extraCol="reconcileChange" extraLabel="Cambio" />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <AccionTable title="Desbloqueos (OnHold) realizados" subtitle={`${t?.desbloqueosOk ?? 0} OK · ${t?.desbloqueosFail ?? 0} fallidos · ${startDate} → ${endDate}`} rows={data?.desbloqueos ?? []} loading={loading} extraCol="diasExtendidos" extraLabel="Días ext." />
           <AccionTable title="Bloqueos (Vigencia) realizados" subtitle={`${t?.bloqueosOk ?? 0} OK · ${t?.bloqueosFail ?? 0} fallidos · ${startDate} → ${endDate}`} rows={data?.bloqueos ?? []} loading={loading} extraCol="finalContrato" extraLabel="Fin contrato" />
         </div>
@@ -278,16 +222,9 @@ export default function HoldVigenciasPage() {
 }
 
 function AccionTable({ title, subtitle, rows, loading, extraCol, extraLabel }: {
-  title: string; subtitle: string; rows: AccionRow[]; loading: boolean;
-  extraCol: 'diasExtendidos' | 'finalContrato' | 'reconcileChange'; extraLabel: string
+  title: string; subtitle: string; rows: AccionRow[]; loading: boolean; extraCol: 'diasExtendidos' | 'finalContrato'; extraLabel: string
 }) {
-  const renderExtra = (r: AccionRow) => {
-    if (extraCol === 'reconcileChange') {
-      if (r.stepAnterior === undefined && r.stepNuevo === undefined) return '—'
-      return <span className="text-gray-700">{r.nivel ? `${r.nivel} · ` : ''}step {r.stepAnterior ?? '?'} → <strong className="text-blue-700">{r.stepNuevo ?? '?'}</strong></span>
-    }
-    return (r as any)[extraCol] ?? '—'
-  }
+  const renderExtra = (r: AccionRow) => (r as any)[extraCol] ?? '—'
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
       <div className="px-5 py-3 border-b border-gray-100">
