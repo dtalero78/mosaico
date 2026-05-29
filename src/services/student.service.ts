@@ -336,14 +336,26 @@ export async function autoAdvanceStep(bookingId: string) {
   // Sólo avanzamos dentro del MISMO nivel — esta guarda nunca se relaja.
   if (student.nivel !== bookingNivel) return null;
 
-  // Para steps NORMALES (1-4, 6-9, 11-14, etc.): regla estricta — sólo el step actual.
-  // Para JUMPS (5, 10, 15, 20, 25, 30, 35, 40, 45): se relaja para destrabar
-  // estudiantes que aprobaron el Jump fuera de orden cronológico (caso documentado
-  // como "pegados"). La validación dura de aprobación sigue en aproboElJump()
-  // dentro de isCurrentStepComplete() más abajo, así que un Jump no aprobado
-  // jamás avanza aunque pase esta guarda.
+  // Para steps NORMALES (1-4, 6-9, 11-14, etc.): el booking debe ser del MISMO
+  // step del estudiante (por NÚMERO, no por string). El bookingStep puede venir
+  // como "Step N" (SESSION) o "TRAINING - Step N" / "GRAMMAR - Step N" / etc.
+  // (CLUB), y student.step siempre es "Step N" puro. Comparar por número resuelve
+  // el desfase de prefijo: una TRAINING - Step N atendida por un estudiante que
+  // está en Step N completa el step (si junto con sus 2 sesiones cumple la regla)
+  // y debe disparar el avance — el bug anterior, `student.step !== bookingStep`
+  // como strings, bloqueaba este caso y regeneraba "pegados" cada día (mayo 2026).
+  //
+  // Para JUMPS (5, 10, 15, 20, 25, 30, 35, 40, 45): se relaja la guarda incluso
+  // por número, para destrabar estudiantes que aprobaron el Jump fuera de orden
+  // (Opción B). La validación dura de aprobación sigue en aproboElJump() dentro
+  // de isCurrentStepComplete() más abajo, así que un Jump no aprobado jamás
+  // avanza aunque pase esta guarda.
   const esJumpDelBooking = isJumpStep(bookingStep);
-  if (!esJumpDelBooking && student.step !== bookingStep) return null;
+  if (!esJumpDelBooking) {
+    const sNum = extractStepNum(student.step);
+    const bNum = extractStepNum(bookingStep);
+    if (sNum === null || bNum === null || sNum !== bNum) return null;
+  }
 
   // Resolve overrideStudentId (STEP_OVERRIDES uses PEOPLE _id)
   let overrideStudentId = student._id;
