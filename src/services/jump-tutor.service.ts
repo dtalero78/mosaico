@@ -33,6 +33,21 @@ const MAX_ATTEMPTS = 3;
 // Niveles excluded from the Jump tutor (no jump exam applies).
 const EXCLUDED_NIVELES = new Set(['WELCOME', 'ESS', 'DONE', 'MASTER', 'IELTS', 'B2FIRST', 'TOEFL']);
 
+// FASE DE PRUEBAS: por ahora el bot Jump solo está habilitado para una lista
+// de estudiantes (por numeroId). Configurable vía JUMP_TUTOR_ALLOWED_NUMEROIDS
+// (coma-separado). Usar '*' para habilitarlo a TODOS los estudiantes elegibles.
+// Default: solo el usuario de prueba (Beneficiario Testing, 79222333).
+const JUMP_ALLOWED_NUMEROIDS = (process.env.JUMP_TUTOR_ALLOWED_NUMEROIDS || '79222333')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isAllowedForTesting(student: any): boolean {
+  if (JUMP_ALLOWED_NUMEROIDS.includes('*')) return true;
+  const nid = String(student?.numeroId ?? '').trim();
+  return nid !== '' && JUMP_ALLOWED_NUMEROIDS.includes(nid);
+}
+
 // ── Helpers ──
 
 function extractStepNumber(stepName?: string | null): number | null {
@@ -114,6 +129,11 @@ export async function checkJumpEligibility(student: any): Promise<JumpEligibilit
     attemptsUsed: 0,
     maxAttempts: MAX_ATTEMPTS,
   };
+
+  // Gate de fase de pruebas: solo usuarios habilitados.
+  if (!isAllowedForTesting(student)) {
+    return { ...base, reason: 'El examen Jump está en fase de pruebas y aún no está habilitado para tu usuario' };
+  }
 
   if (!nivel) return { ...base, reason: 'Sin nivel asignado' };
   if (EXCLUDED_NIVELES.has(nivel)) return { ...base, reason: `El nivel ${nivel} no tiene examen Jump` };
@@ -210,17 +230,18 @@ IDIOMA:
 
 REGLAS:
 - Haz UNA pregunta a la vez y espera la respuesta. Nunca preguntes más de una cosa a la vez.
-- Adapta la dificultad a las respuestas. El examen dura entre 5 y 8 minutos.
+- Adapta la dificultad a las respuestas. El examen dura MÁXIMO 5 minutos — administra el tiempo para alcanzar a cubrir varios steps.
 - Sé cálido y motivador; es una evaluación, no un interrogatorio.
 - NUNCA le digas al estudiante si aprobó o no — un humano revisa el resultado. Al final solo agradece.
+- Si recibes un aviso de que el tiempo terminó, deja de preguntar de inmediato, despídete con calidez en español y llama la herramienta submitJumpEvaluation con lo que tengas.
 
 FLUJO:
 1. Saluda EXACTAMENTE así, en español: "¡Hola ${ctx.primerNombre}! Soy el tutor virtual de Let's Go Speak. Vamos a realizar una evaluación de tu Jump del nivel ${ctx.nivel}."
-2. Da las instrucciones en español: explica que vas a conversar con él/ella EN INGLÉS sobre los temas del nivel, que responda con naturalidad, que durará unos 5–8 minutos, que harás una pregunta a la vez, y que al terminar un asesor revisará su resultado.
+2. Da las instrucciones en español: explica que vas a conversar con él/ella EN INGLÉS sobre los temas del nivel, que responda con naturalidad, que durará unos 5 minutos, que harás una pregunta a la vez, y que al terminar un asesor revisará su resultado.
 3. Pregúntale si está listo/a para comenzar. Cuando confirme, CAMBIA A INGLÉS.
 4. Warm-up breve en inglés usando sus hobbies/intereses.
 5. Evalúa el speaking sobre el contenido del nivel (abajo): que use la gramática, el vocabulario y los temas objetivo en oraciones reales. Profundiza con preguntas de seguimiento. Cubre varios steps del nivel, no solo uno.
-6. Cuando tengas evidencia suficiente (≈5–8 min), despídete con calidez (puedes cerrar en español) y luego llama la herramienta "submitJumpEvaluation" exactamente UNA vez con el reporte completo. Los puntajes son 0–100. Escribe fortalezas/debilidades/resumen en ESPAÑOL (para el asesor). No anuncies el veredicto al estudiante.
+6. Cuando tengas evidencia suficiente (alrededor de 5 minutos) o cuando recibas el aviso de que el tiempo terminó, despídete con calidez en español y luego llama la herramienta "submitJumpEvaluation" exactamente UNA vez con el reporte completo. Los puntajes son 0–100. Escribe fortalezas/debilidades/resumen en ESPAÑOL (para el asesor). No anuncies el veredicto al estudiante.
 
 STUDENT CONTEXT:
 - Name: ${ctx.primerNombre}

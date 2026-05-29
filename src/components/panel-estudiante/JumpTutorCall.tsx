@@ -18,7 +18,8 @@ import toast from 'react-hot-toast';
 
 type Phase = 'idle' | 'connecting' | 'live' | 'submitting' | 'done' | 'error';
 
-const MAX_CALL_MS = 10 * 60 * 1000; // 10 min hard cap
+const WRAP_UP_MS = 5 * 60 * 1000;          // 5 min → pedir despedida + reporte
+const HARD_CLOSE_AFTER_WRAP_MS = 30 * 1000; // backstop si el modelo no cierra
 
 interface SessionResponse {
   evaluationId: string;
@@ -45,14 +46,18 @@ export default function JumpTutorCall({ onFinished }: { onFinished?: () => void 
   const startedAtRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const capRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hardCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transcriptRef = useRef<Array<{ role: string; text: string }>>([]);
   const reportSentRef = useRef(false);
+  const endedRef = useRef(false);
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (capRef.current) clearTimeout(capRef.current);
+    if (hardCloseRef.current) clearTimeout(hardCloseRef.current);
     timerRef.current = null;
     capRef.current = null;
+    hardCloseRef.current = null;
     try { dcRef.current?.close(); } catch {}
     try { pcRef.current?.close(); } catch {}
     micRef.current?.getTracks().forEach((t) => t.stop());
@@ -87,6 +92,8 @@ export default function JumpTutorCall({ onFinished }: { onFinished?: () => void 
   }, []);
 
   const endCall = useCallback((finalPhase: Phase = 'done') => {
+    if (endedRef.current) return;
+    endedRef.current = true;
     cleanup();
     setPhase(finalPhase);
     onFinished?.();
@@ -132,6 +139,7 @@ export default function JumpTutorCall({ onFinished }: { onFinished?: () => void 
     setErrorMsg(null);
     setPhase('connecting');
     reportSentRef.current = false;
+    endedRef.current = false;
     transcriptRef.current = [];
 
     try {
@@ -167,10 +175,25 @@ export default function JumpTutorCall({ onFinished }: { onFinished?: () => void 
             () => setElapsed(Math.round((Date.now() - startedAtRef.current) / 1000)),
             1000
           );
+          // A los 5 min: pedirle al bot que se despida en español y mande el
+          // reporte. Si no cumple, cierre forzado como respaldo.
           capRef.current = setTimeout(() => {
-            toast('Tiempo máximo del examen alcanzado', { icon: '⏱️' });
-            endCall('done');
-          }, MAX_CALL_MS);
+            if (reportSentRef.current) { endCall('done'); return; }
+            try {
+              dcRef.current?.send(JSON.stringify({
+                type: 'response.create',
+                response: {
+                  instructions:
+                    'El tiempo de evaluación (5 minutos) terminó. Deja de hacer preguntas ahora. Despídete del estudiante con calidez EN ESPAÑOL, agradécele su tiempo, y luego llama la herramienta submitJumpEvaluation con tu reporte. No reveles el veredicto.',
+                },
+              }));
+            } catch {}
+            toast('Cerrando la evaluación…', { icon: '⏱️' });
+            hardCloseRef.current = setTimeout(
+              () => endCall(reportSentRef.current ? 'done' : 'error'),
+              HARD_CLOSE_AFTER_WRAP_MS
+            );
+          }, WRAP_UP_MS);
         } else if (st === 'failed' || st === 'closed') {
           endCall(reportSentRef.current ? 'done' : 'error');
         }
