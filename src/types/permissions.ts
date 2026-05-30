@@ -155,6 +155,10 @@ export enum AcademicoPermission {
 
   // Evaluaciones Jump (Bot Tutor) — revisar/aprobar reportes del bot
   JUMP_EVAL_REVISAR = 'ACADEMICO.JUMP_EVAL.REVISAR',
+
+  // Performance Evaluation — dashboard de evaluaciones de estudiantes a advisors
+  PERFORMANCE_EVAL_VER       = 'ACADEMICO.PERFORMANCE_EVAL.VER',
+  PERFORMANCE_EVAL_EXPORTAR  = 'ACADEMICO.PERFORMANCE_EVAL.EXPORTAR',
 }
 
 /**

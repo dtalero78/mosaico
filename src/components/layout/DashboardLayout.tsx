@@ -43,6 +43,7 @@ const getNavigation = (userEmail: string) => [
       { name: 'Actualizar Material', href: '/dashboard/academic/actualizar-material', newTab: true },
       { name: 'Control Horas', href: '/dashboard/academic/control-horas' },
       { name: 'Evaluaciones Jump', href: '/dashboard/academic/jump-evaluaciones' },
+      { name: 'Performance Evaluation', href: '/dashboard/academic/performance-evaluation', newTab: true },
     ],
   },
   {
@@ -249,6 +250,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/dashboard/academic/jump-evaluaciones': [
       AcademicoPermission.JUMP_EVAL_REVISAR,
+    ],
+    '/dashboard/academic/performance-evaluation': [
+      AcademicoPermission.PERFORMANCE_EVAL_VER,
     ],
     '/panel-advisor': [
       AcademicoPermission.ADVISOR_VER_ENLACE,

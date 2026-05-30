@@ -26,6 +26,9 @@ import MyEventsSection from '@/components/panel-estudiante/MyEventsSection'
 import { formatDate } from '@/lib/utils'
 import AttendanceStats from '@/components/panel-estudiante/AttendanceStats'
 import BookingFlow from '@/components/panel-estudiante/BookingFlow'
+import SinEvaluarCard from '@/components/panel-estudiante/SinEvaluarCard'
+import EvaluacionModal from '@/components/panel-estudiante/EvaluacionModal'
+import { useEvaluacionesPendientes } from '@/hooks/use-evaluations'
 import ProgressReport from '@/components/panel-estudiante/ProgressReport'
 import MaterialsList from '@/components/panel-estudiante/MaterialsList'
 import WhatsAppContacts from '@/components/panel-estudiante/WhatsAppContacts'
@@ -94,7 +97,18 @@ function PanelEstudianteContent() {
     }
   }
 
+  // Hard block: si hay evaluaciones pendientes (asistidas + sin evaluar),
+  // bloqueamos la apertura del wizard de agendamiento y forzamos a evaluar.
+  // El servidor también valida (defense in depth).
+  const evalPendientesQuery = useEvaluacionesPendientes()
+  const pendientesRows = evalPendientesQuery.data?.featureEnabled ? (evalPendientesQuery.data.rows ?? []) : []
+  const [showHardBlock, setShowHardBlock] = useState(false)
+
   const openBooking = (tipo?: string) => {
+    if (pendientesRows.length > 0) {
+      setShowHardBlock(true)
+      return
+    }
     setBookingTipo(tipo)
     setShowBookingFlow(true)
   }
@@ -209,6 +223,9 @@ function PanelEstudianteContent() {
 
       {/* Main Content */}
       <div className="px-6 pt-8 pb-6 space-y-6">
+        {/* Performance Evaluation — tarjeta "Sin Evaluar" (solo si flag activo + hay pendientes) */}
+        <SinEvaluarCard />
+
         {/* Jump exam banner (only when eligible) */}
         <JumpExamBanner />
 
@@ -396,6 +413,15 @@ function PanelEstudianteContent() {
         <BookingFlow
           onClose={() => { setShowBookingFlow(false); setBookingTipo(undefined) }}
           initialTipo={bookingTipo}
+        />
+      )}
+
+      {/* Hard block: si hay evaluaciones pendientes al intentar agendar */}
+      {showHardBlock && pendientesRows.length > 0 && (
+        <EvaluacionModal
+          items={pendientesRows}
+          onClose={() => setShowHardBlock(false)}
+          onAllDone={() => { setShowHardBlock(false); /* el usuario re-clickea Booking */ }}
         />
       )}
 

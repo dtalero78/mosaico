@@ -120,6 +120,11 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/jump-evaluaciones': [
     'ACADEMICO.JUMP_EVAL.REVISAR' as Permission,
   ],
+  '/dashboard/academic/performance-evaluation': [
+    'ACADEMICO.PERFORMANCE_EVAL.VER' as Permission,
+  ],
+  // /admin/feature-flags/performance-eval queda gateado solo por SUPER_ADMIN
+  // (no aparece en sidebar para otros roles; el endpoint valida la sesión).
 
   // Panel Advisor
   '/panel-advisor': [

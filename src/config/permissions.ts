@@ -509,6 +509,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Revisar Evaluaciones Jump (Bot Tutor)',
     description: 'Acceso a /dashboard/academic/jump-evaluaciones. Permite revisar los reportes del bot tutor del examen Jump y aprobar/rechazar (al aprobar se crea el booking del Jump y avanza el step).',
   },
+  {
+    code: AcademicoPermission.PERFORMANCE_EVAL_VER,
+    module: Module.ACADEMICO,
+    section: 'Performance Evaluation',
+    name: 'Ver Dashboard Performance Evaluation',
+    description: 'Acceso a /dashboard/academic/performance-evaluation. KPIs, ranking Top 5 / Bottom 5 advisors, distribución de calificaciones, evolución mensual y tabla de comentarios. Pensado para roles COORDINADOR_ACADEMICO / ACADEMICO_JEFE. Sujeto al feature flag global performance_eval_mode (off / beta / on).',
+  },
+  {
+    code: AcademicoPermission.PERFORMANCE_EVAL_EXPORTAR,
+    module: Module.ACADEMICO,
+    section: 'Performance Evaluation',
+    name: '↳ Descargar CSV (Performance Evaluation)',
+    description: 'Botón Exportar CSV del informe Performance Evaluation.',
+  },
 
   // ========== INFORMES MODULE ==========
   // Abuelo: muestra el grupo Informes en el sidebar. Cada informe se habilita
