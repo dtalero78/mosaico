@@ -20,6 +20,12 @@ export const GET = handler(async (request: Request) => {
     AND "_createdDate" < ($2::date + INTERVAL '1 day')
     AND ($3 = '' OR "plataforma" = $3)
     AND ($4 = '' OR "nivel" = $4)
+    AND NOT EXISTS (
+      SELECT 1 FROM "ACADEMICA" a_prb
+      JOIN "PEOPLE" pp_prb ON pp_prb."numeroId" = a_prb."numeroId"
+      WHERE a_prb."_id" = "COMPLEMENTARIA_ATTEMPTS"."studentId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )
   `
 
   const [totals, plataformas] = await Promise.all([

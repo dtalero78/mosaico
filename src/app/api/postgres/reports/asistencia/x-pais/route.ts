@@ -44,6 +44,15 @@ export const GET = handler(async (request: Request) => {
     AND "fechaEvento" < ($2::date + INTERVAL '1 day')
   `
 
+  // Excluye contratos de prueba (PRB-). Asume alias `b` para ACADEMICA_BOOKINGS.
+  const NO_PRB = `
+    NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = b."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )
+  `
+
   // JOIN ACADEMICA to resolve plataforma when booking.plataforma is null
   const BASE_SELECT = `
     SELECT
@@ -60,7 +69,7 @@ export const GET = handler(async (request: Request) => {
     // ── SESIONES: SESSION + step 0-45 excluyendo múltiplos de 5 ──────────
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day') AND ${NO_PRB}
         AND COALESCE(b."tipo", b."tipoEvento") = 'SESSION'
         AND COALESCE(b."nombreEvento", b."step", '') ~* 'step\\s+[0-9]+'
         AND ${STEP_EXTRACT} BETWEEN 0 AND 45
@@ -87,7 +96,7 @@ export const GET = handler(async (request: Request) => {
         THEN 1 ELSE 0 END), 0)::int AS "noAprobaron"
       FROM "ACADEMICA_BOOKINGS" b
       LEFT JOIN "ACADEMICA" a ON a."_id" = COALESCE(b."studentId", b."idEstudiante")
-      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day') AND ${NO_PRB}
         AND COALESCE(b."tipo", b."tipoEvento") = 'SESSION'
         AND COALESCE(b."nombreEvento", b."step", '') ~* 'step\\s+[0-9]+'
         AND ${STEP_EXTRACT} BETWEEN 1 AND 45
@@ -99,7 +108,7 @@ export const GET = handler(async (request: Request) => {
     // ── TRAINING: CLUB + nombre empieza con TRAINING…Step ────────────────
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day') AND ${NO_PRB}
         AND COALESCE(b."tipo", b."tipoEvento") = 'CLUB'
         AND COALESCE(b."nombreEvento", b."step", '') ~* '^TRAINING.*Step'
       GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
@@ -109,7 +118,7 @@ export const GET = handler(async (request: Request) => {
     // ── CLUBES: CLUB + GRAMMAR/LISTENING/KARAOKE/PRONUNCIATION/CONVERSATION
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day') AND ${NO_PRB}
         AND COALESCE(b."tipo", b."tipoEvento") = 'CLUB'
         AND COALESCE(b."nombreEvento", b."step", '') ~* '^(GRAMMAR|LISTENING|KARAOKE|PRONUNCIATION|CONVERSATION).*Step'
       GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
@@ -119,7 +128,7 @@ export const GET = handler(async (request: Request) => {
     // ── WELCOME: nivel = WELCOME ──────────────────────────────────────────
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day') AND ${NO_PRB}
         AND COALESCE(b."nivel", '') = 'WELCOME'
       GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
       ORDER BY total DESC
@@ -128,7 +137,7 @@ export const GET = handler(async (request: Request) => {
     // ── COMPLEMENTARIAS: tipoEvento = COMPLEMENTARIA ─────────────────────
     safeQuery(() => queryMany<any>(`
       ${BASE_SELECT}
-      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day')
+      WHERE b."fechaEvento" >= $1::date AND b."fechaEvento" < ($2::date + INTERVAL '1 day') AND ${NO_PRB}
         AND COALESCE(b."tipo", b."tipoEvento") = 'COMPLEMENTARIA'
       GROUP BY COALESCE(b."plataforma", a."plataforma", 'Sin plataforma')
       ORDER BY total DESC

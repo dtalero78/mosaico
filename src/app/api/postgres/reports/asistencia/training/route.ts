@@ -42,6 +42,11 @@ export const GET = handler(async (request: Request) => {
     AND COALESCE("nombreEvento", "step", '') ILIKE 'TRAINING - Step%'
     AND ${STEP_EXTRACT} BETWEEN 1 AND 45
     AND ${STEP_EXTRACT} % 5 != 0
+    AND NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = "ACADEMICA_BOOKINGS"."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )
   `
 
   const [training, plataformas, niveles] = await Promise.all([

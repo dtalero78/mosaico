@@ -51,6 +51,11 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
        ON p."_id" = COALESCE(b."studentId", b."idEstudiante")
      WHERE COALESCE(b."eventoId", b."idEvento") = $1
        AND (b."cancelo" IS NULL OR b."cancelo" = false)
+       AND NOT EXISTS (
+         SELECT 1 FROM "PEOPLE" pp_prb
+         WHERE pp_prb."numeroId" = b."numeroId"
+           AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+       )
      ORDER BY "primerApellido", "primerNombre"`,
     [eventId]
   )

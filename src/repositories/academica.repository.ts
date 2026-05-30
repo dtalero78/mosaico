@@ -185,7 +185,12 @@ class AcademicaRepositoryClass extends BaseRepository {
   // ── Dashboard helpers ──
 
   async countTotal(): Promise<number> {
-    return this.count();
+    // Excluye contratos de prueba (PRB-) — sus PEOPLE quedan fuera del dashboard.
+    return this.count(`WHERE NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = "ACADEMICA"."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )`);
   }
 
   async updateClave(id: string, clave: string) {

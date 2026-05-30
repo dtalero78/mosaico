@@ -93,6 +93,11 @@ export async function getMonthlyAggregates(tz: string = 'America/Bogota'): Promi
          ON (b."eventoId" = c."_id" OR b."idEvento" = c."_id")
        WHERE c."dia" >= $1::timestamptz
          AND c."dia" <  $2::timestamptz
+         AND NOT EXISTS (
+           SELECT 1 FROM "PEOPLE" pp_prb
+           WHERE pp_prb."numeroId" = b."numeroId"
+             AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+         )
        GROUP BY "weekday", "hour"`,
       [monthStart, nextMonth, tz],
     ),
@@ -108,7 +113,12 @@ export async function getMonthlyAggregates(tz: string = 'America/Bogota'): Promi
        FROM "CALENDARIO" c
        JOIN "ACADEMICA_BOOKINGS" b
          ON (b."eventoId" = c."_id" OR b."idEvento" = c."_id")
-       WHERE c."dia" >= $1::timestamptz AND c."dia" < $2::timestamptz`,
+       WHERE c."dia" >= $1::timestamptz AND c."dia" < $2::timestamptz
+         AND NOT EXISTS (
+           SELECT 1 FROM "PEOPLE" pp_prb
+           WHERE pp_prb."numeroId" = b."numeroId"
+             AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+         )`,
       [monthStart, nextMonth],
     ),
     queryMany<MonthlyNivelPoint>(
@@ -121,6 +131,11 @@ export async function getMonthlyAggregates(tz: string = 'America/Bogota'): Promi
        WHERE c."dia" >= $1::timestamptz
          AND c."dia" <  $2::timestamptz
          AND b."cancelo" IS NOT TRUE
+         AND NOT EXISTS (
+           SELECT 1 FROM "PEOPLE" pp_prb
+           WHERE pp_prb."numeroId" = b."numeroId"
+             AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+         )
        GROUP BY 1
        ORDER BY 2 DESC`,
       [monthStart, nextMonth],

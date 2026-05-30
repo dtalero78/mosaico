@@ -20,6 +20,11 @@ export const GET = handler(async (request: Request) => {
     AND ($3 = '' OR "plataforma" = $3)
     AND COALESCE("tipo", "tipoEvento") = 'SESSION'
     AND COALESCE("nivel", '') = 'WELCOME'
+    AND NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = "ACADEMICA_BOOKINGS"."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )
   `
 
   const [sesiones, plataformas] = await Promise.all([

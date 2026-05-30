@@ -149,6 +149,11 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
     LEFT JOIN "ACADEMICA_BOOKINGS" b
       ON COALESCE(b."eventoId", b."idEvento") = c."_id"
       AND (b."cancelo" IS NULL OR b."cancelo" = false)
+      AND NOT EXISTS (
+        SELECT 1 FROM "PEOPLE" pp_prb
+        WHERE pp_prb."numeroId" = b."numeroId"
+          AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+      )
     WHERE c."dia" BETWEEN $1::date AND ($2::date + interval '1 day')
       AND ${typeCondition}
       ${whereExtra}

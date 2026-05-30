@@ -41,6 +41,11 @@ export const GET = handler(async (request: Request) => {
     AND COALESCE("nivel", '') != 'DONE'
     AND COALESCE("nivel", '') != 'ESS'
     AND ${STEP_EXTRACT} % 5 = 0
+    AND NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = "ACADEMICA_BOOKINGS"."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )
   `
 
   const [jumps, plataformas, niveles] = await Promise.all([

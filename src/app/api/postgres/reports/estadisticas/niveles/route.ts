@@ -33,7 +33,8 @@ export const GET = handler(async (req) => {
 
   const nivelFilter = nivel ? `AND COALESCE(c."nivel", b."nivel") = '${nivel.replace(/'/g, "''")}'` : ''
 
-  // Base WHERE para el período filtrado — excluye WELCOME, cancelos, sin fecha agendamiento
+  // Base WHERE para el período filtrado — excluye WELCOME, cancelos, sin fecha
+  // agendamiento, y contratos de prueba (PRB-).
   const baseWhere = `
     b."fechaAgendamiento" IS NOT NULL
     AND b."fechaAgendamiento" >= $1::date
@@ -41,6 +42,11 @@ export const GET = handler(async (req) => {
     AND (b."cancelo" IS NULL OR b."cancelo" = false)
     AND b."origen" IN ('PANEL_EST','POSTGRES','COMP')
     AND COALESCE(c."nivel", b."nivel", '') NOT IN ('WELCOME','')
+    AND NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = b."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )
     ${nivelFilter}
     LEFT_JOIN_PLACEHOLDER
   `

@@ -36,6 +36,11 @@ export const GET = handler(async (req) => {
     AND COALESCE("tipo", "tipoEvento", '') NOT IN ('COMPLEMENTARIA', 'WELCOME')
     AND COALESCE("nivel", '') != 'WELCOME'
     AND EXTRACT(HOUR FROM "fechaAgendamiento" AT TIME ZONE '${tz}') BETWEEN 6 AND 22
+    AND NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = "ACADEMICA_BOOKINGS"."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )
   `
 
   const [porHora, porDia, heatmap, porPlataforma] = await Promise.all([

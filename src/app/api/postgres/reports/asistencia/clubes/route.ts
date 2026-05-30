@@ -30,6 +30,11 @@ export const GET = handler(async (request: Request) => {
     AND COALESCE("tipo", "tipoEvento") = 'CLUB'
     AND COALESCE("nombreEvento", "step", '') NOT ILIKE 'TRAINING%'
     AND ($5 = '' OR COALESCE("nombreEvento", "step", '') ILIKE ($5 || '%'))
+    AND NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = "ACADEMICA_BOOKINGS"."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
+    )
   `
 
   // Nombre del tipo de club: extrae el prefijo antes de " - Step"

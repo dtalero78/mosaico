@@ -30,7 +30,8 @@ export const GET = handler(async (request: Request) => {
 
   const params = [startDate, endDate, plataforma, nivel]
 
-  // Filtro base: permite steps 1-45 normales O registros de nivel ESS (Step 0)
+  // Filtro base: permite steps 1-45 normales O registros de nivel ESS (Step 0).
+  // Excluye contratos de prueba (PRB-) — viven solo en /admin/contratos-prueba.
   const baseWhere = `
     "fechaEvento" >= $1::date
     AND "fechaEvento" <= $2::date
@@ -46,6 +47,11 @@ export const GET = handler(async (request: Request) => {
         COALESCE("nombreEvento", "step", '') ~* 'step\\s+[0-9]+'
         AND ${STEP_EXTRACT} BETWEEN 1 AND 45
       )
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM "PEOPLE" pp_prb
+      WHERE pp_prb."numeroId" = "ACADEMICA_BOOKINGS"."numeroId"
+        AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
     )
   `
 
