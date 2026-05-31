@@ -34,9 +34,13 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
   const userAgent = request.headers.get('user-agent') || '';
 
+  // Las bookings se enlazan con ACADEMICA._id vía studentId/idEstudiante.
+  // resolveStudentFromSession devuelve _id = PEOPLE._id y academicaId aparte.
+  const academicaId = (student as any).academicaId || student._id;
+
   const created = await submitEvaluation({
     email,
-    academicaId: student._id,
+    academicaId,
     bookingId: body.bookingId,
     puntualidad:         Number(body.puntualidad),
     claridad:            Number(body.claridad),

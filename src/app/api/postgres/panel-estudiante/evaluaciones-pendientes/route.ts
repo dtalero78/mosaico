@@ -24,6 +24,9 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
   const student = await resolveStudentFromSession(session as any);
   if (!student) return successResponse({ featureEnabled: true, rows: [], total: 0 });
 
-  const rows = await findEvaluablesForStudent(student._id);
+  // Las bookings se enlazan con ACADEMICA._id vía studentId/idEstudiante.
+  // resolveStudentFromSession devuelve _id = PEOPLE._id y academicaId aparte.
+  const academicaId = (student as any).academicaId || student._id;
+  const rows = await findEvaluablesForStudent(academicaId);
   return successResponse({ featureEnabled: true, rows, total: rows.length });
 });
