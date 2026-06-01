@@ -3,8 +3,15 @@
  *
  *   - Feature flag global en APP_CONFIG (performance_eval_mode = off/beta/on).
  *   - Whitelist de beta-testers por email (performance_eval_beta_users).
- *   - Submit: valida elegibilidad, calcula promedio, INSERT con snapshot.
- *   - getDashboardStats: KPIs + Top/Bottom ranking + distribuciones + chart data.
+ *   - Submit: valida elegibilidad, calcula promedio /4, INSERT con snapshot.
+ *   - getDashboardStats: KPIs + Top/Bottom ranking + métricas por dimensión +
+ *     distribución por dimensión + búsqueda en comentarios + evolución mensual.
+ *
+ * V2 (mayo 2026):
+ *   - 4 dims (puntualidad, claridad, actividades, ambiente) en vez de 6.
+ *   - Ventana semanal lunes-domingo aplicada en findEvaluablesForStudent.
+ *   - Filtro de groserías: blacklist local + OpenAI Moderation (no bloqueante
+ *     si OpenAI falla — local manda como red de seguridad).
  *
  * Lectura del flag tiene caché en proceso de 30s para evitar query por request.
  */
@@ -13,12 +20,18 @@ import { query, queryOne } from '@/lib/postgres';
 import { EvaluationsRepository } from '@/repositories/evaluations.repository';
 import { ValidationError, ForbiddenError, ConflictError, NotFoundError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
+import { checkProfanity, PROFANITY_MESSAGE } from '@/lib/profanity-filter';
+import { moderateText } from '@/lib/openai-moderation';
 
 export type FeatureMode = 'off' | 'beta' | 'on';
 
 interface FlagState { mode: FeatureMode; betaUsers: string[]; loadedAt: number }
 let flagCache: FlagState | null = null;
 const FLAG_TTL_MS = 30 * 1000;
+
+const COMMENT_MAX = 250;
+const DIMS = ['puntualidad', 'claridad', 'actividades', 'ambiente'] as const;
+type Dim = typeof DIMS[number];
 
 async function loadFlag(): Promise<FlagState> {
   if (flagCache && Date.now() - flagCache.loadedAt < FLAG_TTL_MS) return flagCache;
@@ -78,7 +91,7 @@ export async function isEnabledForEmail(email: string | null | undefined): Promi
   return f.betaUsers.includes(String(email).toLowerCase());
 }
 
-/** Bookings ASISTIDOS sin evaluar — entrada para tarjeta "Sin Evaluar" + hard block. */
+/** Bookings ASISTIDOS sin evaluar de la semana actual — entrada para tarjeta "Sin Evaluar". */
 export async function findEvaluablesForStudent(academicaId: string) {
   return EvaluationsRepository.findEligibleByStudent(academicaId);
 }
@@ -89,8 +102,9 @@ export async function findEvaluablesForStudent(academicaId: string) {
  *   - booking existe y pertenece al estudiante
  *   - asistencia OK, no cancelado, tipo evaluable, nivel != WELCOME
  *   - no hay eval previa para ese booking
- *   - ratings en [1..5]
- *   - comentario <= 1000 chars
+ *   - 4 ratings en [1..5]
+ *   - comentario <= 250 chars
+ *   - comentario NO contiene groserías (blacklist local + OpenAI Moderation)
  *
  * Devuelve la fila creada.
  */
@@ -98,8 +112,7 @@ export async function submitEvaluation(input: {
   email: string | null;
   academicaId: string;
   bookingId: string;
-  puntualidad: number; claridad: number; actividades: number;
-  ambiente: number; motivacion: number; satisfaccionGeneral: number;
+  puntualidad: number; claridad: number; actividades: number; ambiente: number;
   comentario?: string | null;
   ip?: string | null; userAgent?: string | null;
 }) {
@@ -108,15 +121,30 @@ export async function submitEvaluation(input: {
   if (!enabled) throw new ForbiddenError('Performance Evaluation no está habilitado para tu cuenta.');
 
   // 2) Ratings 1..5
-  const ratings = ['puntualidad','claridad','actividades','ambiente','motivacion','satisfaccionGeneral'] as const;
-  for (const k of ratings) {
+  for (const k of DIMS) {
     const v = (input as any)[k];
     if (!Number.isInteger(v) || v < 1 || v > 5) throw new ValidationError(`${k} debe ser entero entre 1 y 5`);
   }
   const comentario = (input.comentario || '').trim();
-  if (comentario.length > 1000) throw new ValidationError('Comentario no puede exceder 1000 caracteres');
+  if (comentario.length > COMMENT_MAX) {
+    throw new ValidationError(`Comentario no puede exceder ${COMMENT_MAX} caracteres`);
+  }
 
-  // 3) Booking existe + pertenece al estudiante + elegible
+  // 3) Filtro de groserías (defensa en profundidad — el cliente también valida).
+  if (comentario) {
+    const local = checkProfanity(comentario);
+    if (local.blocked) {
+      throw new ValidationError(PROFANITY_MESSAGE);
+    }
+    // OpenAI Moderation como segunda barrera. Si falla / timeout no bloquea —
+    // confiamos en el blacklist local. Si responde y marca → bloqueamos.
+    const remote = await moderateText(comentario);
+    if (remote.flagged) {
+      throw new ValidationError(PROFANITY_MESSAGE);
+    }
+  }
+
+  // 4) Booking existe + pertenece al estudiante + elegible
   const booking = await queryOne<any>(
     `SELECT b.*,
             COALESCE(c."tipo", b."tipoEvento", b."tipo") AS "tipo_real",
@@ -132,7 +160,7 @@ export async function submitEvaluation(input: {
   const pertenece = booking.studentId === input.academicaId || booking.idEstudiante === input.academicaId;
   if (!pertenece) throw new ForbiddenError('El booking no pertenece al estudiante autenticado');
 
-  // 4) Reglas de elegibilidad
+  // 5) Reglas de elegibilidad
   const asistio = booking.asistio === true || booking.asistencia === true;
   if (!asistio) throw new ValidationError('Solo se pueden evaluar sesiones con asistencia registrada');
   if (booking.cancelo === true) throw new ValidationError('No se pueden evaluar sesiones canceladas');
@@ -145,24 +173,23 @@ export async function submitEvaluation(input: {
     throw new ValidationError('La sesión aún no ha ocurrido — debe haber pasado para poder evaluar');
   }
 
-  // 5) No evaluado previamente
+  // 6) No evaluado previamente
   const ya = await EvaluationsRepository.findByBookingId(input.bookingId);
   if (ya) throw new ConflictError('Esta sesión ya fue evaluada anteriormente');
 
-  // 6) Derivar subtipo (TRAINING/JUMP)
+  // 7) Derivar subtipo (TRAINING/JUMP)
   const stepStr = String(booking.step_real || '');
   const stepNum = parseInt((stepStr.match(/(\d+)/) || [])[1] || '0', 10);
   let subtipo: string | null = null;
   if (tipo === 'CLUB' && /^TRAINING\s*-/i.test(stepStr)) subtipo = 'TRAINING';
   else if (tipo === 'SESSION' && stepNum > 0 && stepNum % 5 === 0) subtipo = 'JUMP';
 
-  // 7) Promedio
+  // 8) Promedio /4
   const promedio = (
-    (input.puntualidad + input.claridad + input.actividades +
-     input.ambiente + input.motivacion + input.satisfaccionGeneral) / 6
+    (input.puntualidad + input.claridad + input.actividades + input.ambiente) / 4
   );
 
-  // 8) INSERT (snapshot inmutable)
+  // 9) INSERT (snapshot inmutable)
   const created = await EvaluationsRepository.insertOne({
     _id: ids.audit(),
     bookingId: input.bookingId,
@@ -179,8 +206,6 @@ export async function submitEvaluation(input: {
     claridad: input.claridad,
     actividades: input.actividades,
     ambiente: input.ambiente,
-    motivacion: input.motivacion,
-    satisfaccionGeneral: input.satisfaccionGeneral,
     promedio: Math.round(promedio * 100) / 100,
     comentario: comentario || null,
     ipAddress: input.ip || null,
@@ -191,8 +216,8 @@ export async function submitEvaluation(input: {
 
 /**
  * Estadísticas para el dashboard admin.
- * Devuelve KPIs + ranking Top 5 / Bottom 5 (mín 5 evals) + distribución
- * de calificaciones + evolución mensual + tabla detalle.
+ * Devuelve KPIs + ranking Top 5 / Bottom 5 (mín 5 evals) + métricas por
+ * dimensión + distribución por dimensión + evolución mensual + comentarios.
  */
 export async function getDashboardStats(opts: {
   startDate?: string | null;
@@ -201,10 +226,11 @@ export async function getDashboardStats(opts: {
   nivel?: string | null;
   tipo?: string | null;
   plataforma?: string | null;
+  comentarioSearch?: string | null;
 }) {
   const rows = await EvaluationsRepository.listForDashboard(opts);
 
-  // KPIs globales
+  // === KPIs globales ===
   const total = rows.length;
   const promedioGeneral = total > 0
     ? Math.round((rows.reduce((s, r) => s + Number(r.promedio), 0) / total) * 100) / 100
@@ -212,18 +238,44 @@ export async function getDashboardStats(opts: {
   const satisfaccionPct = total > 0
     ? Math.round((rows.filter(r => Number(r.promedio) >= 4).length / total) * 100)
     : 0;
+  const totalComentarios = rows.filter(r => r.comentario && String(r.comentario).trim().length > 0).length;
+  const largoPromedioComentario = totalComentarios > 0
+    ? Math.round(
+        rows.filter(r => r.comentario)
+            .reduce((s, r) => s + String(r.comentario).trim().length, 0) / totalComentarios
+      )
+    : 0;
+  const pctConComentario = total > 0 ? Math.round((totalComentarios / total) * 100) : 0;
 
-  // Ranking por advisor (con nombre desde ADVISORS)
-  const byAdvisor = new Map<string, { advisorId: string; count: number; sum: number; sumByDim: Record<string, number> }>();
-  const DIMS = ['puntualidad','claridad','actividades','ambiente','motivacion','satisfaccionGeneral'] as const;
+  // === Métricas por DIMENSIÓN (las 4) ===
+  // Para cada dim: promedio global + % satisfacción + distribución 1→5.
+  const porDimension = DIMS.map(dim => {
+    const valores = rows.map(r => Number(r[dim] || 0)).filter(v => v > 0);
+    if (valores.length === 0) {
+      return { dim, promedio: 0, satisfaccionPct: 0, distribucion: [1,2,3,4,5].map(e => ({ estrella: e, total: 0 })) };
+    }
+    const prom = Math.round((valores.reduce((s, v) => s + v, 0) / valores.length) * 100) / 100;
+    const satPct = Math.round((valores.filter(v => v >= 4).length / valores.length) * 100);
+    const distribucion = [1,2,3,4,5].map(estrella => ({
+      estrella, total: valores.filter(v => v === estrella).length,
+    }));
+    return { dim, promedio: prom, satisfaccionPct: satPct, distribucion };
+  });
+
+  // === Ranking por advisor (con nombre + dimensiones para radar) ===
+  const byAdvisor = new Map<string, {
+    advisorId: string; count: number; sum: number;
+    sumByDim: Record<string, number>;
+  }>();
   for (const r of rows) {
     const k = r.advisorId || '__sin_advisor__';
-    const cur = byAdvisor.get(k) ?? { advisorId: k, count: 0, sum: 0, sumByDim: { puntualidad:0, claridad:0, actividades:0, ambiente:0, motivacion:0, satisfaccionGeneral:0 } as Record<string, number> };
+    const cur = byAdvisor.get(k) ?? {
+      advisorId: k, count: 0, sum: 0,
+      sumByDim: { puntualidad: 0, claridad: 0, actividades: 0, ambiente: 0 } as Record<string, number>,
+    };
     cur.count++;
     cur.sum += Number(r.promedio);
-    for (const dim of DIMS) {
-      cur.sumByDim[dim] += Number(r[dim] || 0);
-    }
+    for (const dim of DIMS) cur.sumByDim[dim] += Number(r[dim] || 0);
     byAdvisor.set(k, cur);
   }
   const advisorIds = Array.from(byAdvisor.keys()).filter(k => k !== '__sin_advisor__');
@@ -250,13 +302,13 @@ export async function getDashboardStats(opts: {
   const bottom5 = [...elegibles].sort((a, b) => a.promedio - b.promedio).slice(0, 5);
   const conMasEvals = [...rankingFull].sort((a, b) => b.evaluaciones - a.evaluaciones)[0] ?? null;
 
-  // Distribución de calificaciones (promedio redondeado a entero más cercano)
+  // === Distribución global del promedio (redondeado a entero) ===
   const distribucion = [1,2,3,4,5].map(estrella => ({
     estrella,
     total: rows.filter(r => Math.round(Number(r.promedio)) === estrella).length,
   }));
 
-  // Evolución mensual (promedio por mes en el rango)
+  // === Evolución mensual (promedio por mes) ===
   const byMes = new Map<string, { count: number; sum: number }>();
   for (const r of rows) {
     if (!r.fechaEvento) continue;
@@ -270,8 +322,7 @@ export async function getDashboardStats(opts: {
     .map(([mes, v]) => ({ mes, promedio: Math.round((v.sum / v.count) * 100) / 100, evaluaciones: v.count }))
     .sort((a, b) => a.mes.localeCompare(b.mes));
 
-  // Comentarios (con flag para anonimización del cliente — pero entregamos todos;
-  // el frontend decide qué mostrar según rol del solicitante).
+  // === Comentarios (lista — el front aplica anonimización por rol) ===
   const comentarios = rows
     .filter(r => r.comentario && String(r.comentario).trim().length > 0)
     .slice(0, 200)
@@ -283,6 +334,7 @@ export async function getDashboardStats(opts: {
       nivel: r.nivel, tipo: r.tipo, subtipo: r.subtipo,
       promedio: Number(r.promedio),
       comentario: r.comentario,
+      aiSentimiento: r.aiSentimiento ?? null,
     }));
 
   return {
@@ -293,7 +345,11 @@ export async function getDashboardStats(opts: {
       advisorConMasEvals: conMasEvals,
       advisorsEnRanking: elegibles.length,
       advisorsConPocas: rankingFull.length - elegibles.length,
+      totalComentarios,
+      pctConComentario,
+      largoPromedioComentario,
     },
+    porDimension,
     rankingTop5: top5,
     rankingBottom5: bottom5,
     rankingFull,

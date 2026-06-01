@@ -97,18 +97,27 @@ function PanelEstudianteContent() {
     }
   }
 
-  // Hard block: si hay evaluaciones pendientes (asistidas + sin evaluar),
-  // bloqueamos la apertura del wizard de agendamiento y forzamos a evaluar.
-  // El servidor también valida (defense in depth).
+  // Soft prompt: si hay evaluaciones pendientes (semana actual, asistidas, sin evaluar),
+  // al hacer click en "Agendar" abrimos el modal de evaluación con la PRIMERA pendiente.
+  // El usuario puede evaluar y luego continuar, o usar "Evaluar más tarde y agendar"
+  // para bypassear y abrir el wizard normal (la pendiente sigue en la lista).
   const evalPendientesQuery = useEvaluacionesPendientes()
   const pendientesRows = evalPendientesQuery.data?.featureEnabled ? (evalPendientesQuery.data.rows ?? []) : []
-  const [showHardBlock, setShowHardBlock] = useState(false)
+  const [softPrompt, setSoftPrompt] = useState<{ tipo?: string } | null>(null)
 
   const openBooking = (tipo?: string) => {
     if (pendientesRows.length > 0) {
-      setShowHardBlock(true)
+      setSoftPrompt({ tipo })
       return
     }
+    setBookingTipo(tipo)
+    setShowBookingFlow(true)
+  }
+
+  /** "Evaluar más tarde y agendar" — bypass + abre wizard. */
+  const handleEvaluarMasTarde = () => {
+    const tipo = softPrompt?.tipo
+    setSoftPrompt(null)
     setBookingTipo(tipo)
     setShowBookingFlow(true)
   }
@@ -223,9 +232,6 @@ function PanelEstudianteContent() {
 
       {/* Main Content */}
       <div className="px-6 pt-8 pb-6 space-y-6">
-        {/* Performance Evaluation — tarjeta "Sin Evaluar" (solo si flag activo + hay pendientes) */}
-        <SinEvaluarCard />
-
         {/* Jump exam banner (only when eligible) */}
         <JumpExamBanner />
 
@@ -310,11 +316,19 @@ function PanelEstudianteContent() {
           </div>
         </div>
 
-        {/* 5. Advisor Comments (full width) */}
-        <AdvisorComments
-          data={commentsQuery.data}
-          isLoading={commentsQuery.isLoading}
-        />
+        {/* Evaluación + Comentarios: 2 columnas (Sin Evaluar a la izquierda, Comentarios a la derecha).
+            La columna izquierda colapsa cuando no hay pendientes y AdvisorComments ocupa todo el ancho.  */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-1">
+            <SinEvaluarCard />
+          </div>
+          <div className="lg:col-span-2">
+            <AdvisorComments
+              data={commentsQuery.data}
+              isLoading={commentsQuery.isLoading}
+            />
+          </div>
+        </div>
 
         {/* 5. Let's Go assistance */}
         <WhatsAppContacts />
@@ -416,12 +430,17 @@ function PanelEstudianteContent() {
         />
       )}
 
-      {/* Hard block: si hay evaluaciones pendientes al intentar agendar */}
-      {showHardBlock && pendientesRows.length > 0 && (
+      {/* Soft prompt: si hay evaluaciones pendientes al intentar agendar.
+          "Evaluar más tarde y agendar" bypassea — la pendiente queda para evaluar luego. */}
+      {softPrompt && pendientesRows.length > 0 && (
         <EvaluacionModal
-          items={pendientesRows}
-          onClose={() => setShowHardBlock(false)}
-          onAllDone={() => { setShowHardBlock(false); /* el usuario re-clickea Booking */ }}
+          item={pendientesRows[0]}
+          onClose={handleEvaluarMasTarde}
+          onSubmitted={() => {
+            // Tras enviar la evaluación, abrimos directo el wizard de booking.
+            handleEvaluarMasTarde()
+          }}
+          laterButtonLabel="Evaluar más tarde y agendar"
         />
       )}
 

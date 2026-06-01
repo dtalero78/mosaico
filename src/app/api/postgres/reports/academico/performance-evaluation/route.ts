@@ -1,8 +1,8 @@
 /**
  * GET /api/postgres/reports/academico/performance-evaluation
- *   ?startDate&endDate&advisorId&nivel&tipo&plataforma
+ *   ?startDate&endDate&advisorId&nivel&tipo&plataforma&comentarioSearch
  *
- * Stats agregadas para el dashboard de Performance Evaluation.
+ * Stats agregadas para el dashboard de Performance Evaluation V2.
  * Gateado por ACADEMICO.PERFORMANCE_EVAL.VER (SUPER_ADMIN/ADMIN bypass).
  */
 import 'server-only';
@@ -22,6 +22,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     nivel:     searchParams.get('nivel'),
     tipo:      searchParams.get('tipo'),
     plataforma: searchParams.get('plataforma'),
+    comentarioSearch: searchParams.get('comentarioSearch'),
   });
   return successResponse(stats);
 });

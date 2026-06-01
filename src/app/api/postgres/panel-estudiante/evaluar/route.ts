@@ -6,12 +6,12 @@
  *   - booking pertenece al estudiante autenticado
  *   - asistencia OK + no cancelado + tipo evaluable + nivel != WELCOME
  *   - no evaluado previamente
- *   - ratings en [1..5], comentario ≤ 1000 chars
+ *   - 4 ratings en [1..5], comentario ≤ 250 chars
+ *   - comentario sin lenguaje ofensivo (blacklist local + OpenAI Moderation)
  *
  * Body:
  *   {
- *     bookingId, puntualidad, claridad, actividades,
- *     ambiente, motivacion, satisfaccionGeneral, comentario?
+ *     bookingId, puntualidad, claridad, actividades, ambiente, comentario?
  *   }
  */
 import 'server-only';
@@ -42,13 +42,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     email,
     academicaId,
     bookingId: body.bookingId,
-    puntualidad:         Number(body.puntualidad),
-    claridad:            Number(body.claridad),
-    actividades:         Number(body.actividades),
-    ambiente:            Number(body.ambiente),
-    motivacion:          Number(body.motivacion),
-    satisfaccionGeneral: Number(body.satisfaccionGeneral),
-    comentario:          body.comentario ?? null,
+    puntualidad: Number(body.puntualidad),
+    claridad:    Number(body.claridad),
+    actividades: Number(body.actividades),
+    ambiente:    Number(body.ambiente),
+    comentario:  body.comentario ?? null,
     ip, userAgent,
   });
 

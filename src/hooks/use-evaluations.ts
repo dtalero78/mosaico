@@ -27,8 +27,7 @@ export function useEvaluarMutation() {
   return useMutation(
     (input: {
       bookingId: string
-      puntualidad: number; claridad: number; actividades: number
-      ambiente: number; motivacion: number; satisfaccionGeneral: number
+      puntualidad: number; claridad: number; actividades: number; ambiente: number
       comentario?: string | null
     }) => api.post(`${STUDENT_BASE}/evaluar`, input),
     {
@@ -46,6 +45,7 @@ export function usePerformanceDashboard(filters: {
   startDate?: string | null; endDate?: string | null;
   advisorId?: string | null; nivel?: string | null;
   tipo?: string | null; plataforma?: string | null;
+  comentarioSearch?: string | null;
 }) {
   const qs = new URLSearchParams()
   Object.entries(filters).forEach(([k, v]) => { if (v) qs.set(k, String(v)) })

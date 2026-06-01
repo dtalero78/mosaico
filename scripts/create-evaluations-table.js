@@ -35,8 +35,6 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
         "claridad"             INT  NOT NULL CHECK ("claridad"             BETWEEN 1 AND 5),
         "actividades"          INT  NOT NULL CHECK ("actividades"          BETWEEN 1 AND 5),
         "ambiente"             INT  NOT NULL CHECK ("ambiente"             BETWEEN 1 AND 5),
-        "motivacion"           INT  NOT NULL CHECK ("motivacion"           BETWEEN 1 AND 5),
-        "satisfaccionGeneral"  INT  NOT NULL CHECK ("satisfaccionGeneral"  BETWEEN 1 AND 5),
         "promedio"             NUMERIC(3,2) NOT NULL,
         "comentario"           TEXT,
         "aiCategorias"         JSONB,
