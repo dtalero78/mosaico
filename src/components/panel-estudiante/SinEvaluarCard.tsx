@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { StarIcon } from '@heroicons/react/24/solid'
+import { StarIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import { useEvaluacionesPendientes } from '@/hooks/use-evaluations'
 import EvaluacionModal from './EvaluacionModal'
 
@@ -16,15 +16,13 @@ interface PendingItem {
 }
 
 /**
- * Tarjeta "⭐ Sin Evaluar" V2 — lista SELECCIONABLE (no cadena).
+ * Tarjeta "Evaluaciones" V2 — lista SELECCIONABLE.
  *
- * Cada pendiente es una fila con su botón "Evaluar"; el usuario elige cuál
- * abrir. Al enviar una evaluación, esa pendiente desaparece y la lista se
- * refresca. Se renderiza sólo si el feature flag está activo PARA el
- * estudiante (defensa server-side: `featureEnabled:false` → no data → null).
+ * Se renderiza SIEMPRE que el feature flag esté activo para el estudiante:
+ *   - Con pendientes → estilo naranja con lista de sesiones por evaluar.
+ *   - Sin pendientes → estilo neutro con mensaje "no hay eventos por evaluar".
  *
- * Se muestra SIEMPRE que haya pendientes. No bloquea el agendamiento — el
- * panel-estudiante lo hace mediante un soft-prompt independiente.
+ * Si el flag está off para el estudiante → null (la tarjeta no existe).
  */
 export default function SinEvaluarCard() {
   const { data, isLoading } = useEvaluacionesPendientes()
@@ -33,12 +31,37 @@ export default function SinEvaluarCard() {
   if (isLoading) return null
   if (!data?.featureEnabled) return null
   const rows: PendingItem[] = data?.rows ?? []
-  if (rows.length === 0) return null
+  const hasPending = rows.length > 0
 
   const selected = selectedBookingId
     ? rows.find(r => r.bookingId === selectedBookingId) ?? null
     : null
 
+  // Estado vacío (sin pendientes) — paleta neutra verde-grisácea
+  if (!hasPending) {
+    return (
+      <div className="bg-gradient-to-br from-emerald-50 to-gray-50 border-2 border-emerald-200 rounded-2xl p-5 shadow-sm h-full flex flex-col">
+        <div className="flex items-start gap-3 mb-2">
+          <div className="p-2 bg-emerald-200 rounded-lg flex-shrink-0">
+            <CheckCircleIcon className="h-6 w-6 text-emerald-700" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-bold text-emerald-900">Evaluaciones</h3>
+            <p className="text-xs text-emerald-800 mt-0.5">
+              Aquí verás las sesiones que tienes pendientes por evaluar.
+            </p>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-center py-4">
+          <p className="text-sm text-gray-500">
+            🎉 No tienes sesiones por evaluar esta semana.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Con pendientes — paleta naranja original
   return (
     <>
       <div className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-300 rounded-2xl p-5 shadow-sm h-full flex flex-col">
