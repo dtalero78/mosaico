@@ -5,7 +5,8 @@ import {
   CheckCircleIcon,
   UserGroupIcon,
   ChatBubbleLeftRightIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
 interface CalendarioEvent {
@@ -59,6 +60,10 @@ interface SessionStudentsTabProps {
   selectedStudent: StudentWithClass | null
   onStudentSelect: (student: StudentWithClass | null) => void
   onDataUpdate: () => void
+  /** Si false → inputs deshabilitados (fuera de ventana o sesión cerrada). Default true. */
+  canMarkAttendance?: boolean
+  /** Mensaje a mostrar en el banner cuando `!canMarkAttendance`. */
+  attendanceLockedReason?: string | null
 }
 
 export default function SessionStudentsTab({
@@ -66,8 +71,11 @@ export default function SessionStudentsTab({
   students,
   selectedStudent,
   onStudentSelect,
-  onDataUpdate
+  onDataUpdate,
+  canMarkAttendance = true,
+  attendanceLockedReason = null,
 }: SessionStudentsTabProps) {
+  const isLocked = !canMarkAttendance
   // Form states
   const [asistencia, setAsistencia] = useState(false)
   const [participacion, setParticipacion] = useState(false)
@@ -276,6 +284,14 @@ export default function SessionStudentsTab({
 
       {/* Panel de calificación */}
       <div className="lg:col-span-2 space-y-6">
+        {/* Banner global: fuera de ventana o sesión cerrada → todo read-only */}
+        {isLocked && attendanceLockedReason && (
+          <div className="bg-amber-50 border-l-4 border-amber-500 rounded-r-lg p-4 flex items-start gap-3">
+            <ExclamationTriangleIcon className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-900">{attendanceLockedReason}</p>
+          </div>
+        )}
+
         {!selectedStudent ? (
           <div className="bg-white rounded-lg shadow-sm p-8 text-center">
             <UserGroupIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -311,31 +327,34 @@ export default function SessionStudentsTab({
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Asistencia y Participación</h3>
                 <div className="space-y-4">
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={asistencia}
                       onChange={(e) => setAsistencia(e.target.checked)}
-                      className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500"
+                      disabled={isLocked}
+                      className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed"
                     />
                     <span className="text-gray-700">Asistió a la clase</span>
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={participacion}
                       onChange={(e) => setParticipacion(e.target.checked)}
-                      className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500"
+                      disabled={isLocked}
+                      className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed"
                     />
                     <span className="text-gray-700">Participó activamente</span>
                   </label>
                   {isJumpStep() && (
-                    <label className="flex items-center gap-3 cursor-pointer">
+                    <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
                         type="checkbox"
                         checked={noAprobo}
                         onChange={(e) => setNoAprobo(e.target.checked)}
-                        className="w-5 h-5 text-red-600 rounded focus:ring-red-500"
+                        disabled={isLocked}
+                        className="w-5 h-5 text-red-600 rounded focus:ring-red-500 disabled:cursor-not-allowed"
                       />
                       <span className="text-red-700 font-medium">No aprobó (Jump Step)</span>
                     </label>
@@ -357,14 +376,15 @@ export default function SessionStudentsTab({
                       { value: 'B2FIRST', label: 'B2 First (→ B2FIRST · Step 48)' },
                       { value: 'TOEFL',   label: 'TOEFL (→ TOEFL · Step 49)' },
                     ].map(opt => (
-                      <label key={opt.value || 'none'} className="flex items-center gap-3 cursor-pointer">
+                      <label key={opt.value || 'none'} className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                         <input
                           type="radio"
                           name="pruebainter"
                           value={opt.value}
                           checked={pruebainter === opt.value}
                           onChange={(e) => setPruebainter(e.target.value)}
-                          className="w-4 h-4 text-primary-600 focus:ring-primary-500"
+                          disabled={isLocked}
+                          className="w-4 h-4 text-primary-600 focus:ring-primary-500 disabled:cursor-not-allowed"
                         />
                         <span className="text-gray-700 text-sm">{opt.label}</span>
                       </label>
@@ -380,7 +400,8 @@ export default function SessionStudentsTab({
               <select
                 value={calificacion}
                 onChange={(e) => setCalificacion(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                disabled={isLocked}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">Seleccionar calificación</option>
                 <option value="Excelente">Excelente</option>
@@ -400,9 +421,10 @@ export default function SessionStudentsTab({
               <textarea
                 value={comentarios}
                 onChange={(e) => setComentarios(e.target.value)}
+                disabled={isLocked}
                 rows={4}
                 placeholder="Escribe comentarios que verá el estudiante..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
 
@@ -415,9 +437,10 @@ export default function SessionStudentsTab({
               <textarea
                 value={advisorAnotaciones}
                 onChange={(e) => setAdvisorAnotaciones(e.target.value)}
+                disabled={isLocked}
                 rows={4}
                 placeholder="Notas privadas del advisor..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
 
@@ -431,8 +454,9 @@ export default function SessionStudentsTab({
                   Actividad Propuesta (IA)
                 </h3>
                 <button
+                  type="button"
                   onClick={handleGenerateActivity}
-                  disabled={isGeneratingActivity || !selectedStudent}
+                  disabled={isGeneratingActivity || !selectedStudent || isLocked}
                   className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isGeneratingActivity ? (
@@ -453,9 +477,10 @@ export default function SessionStudentsTab({
               <textarea
                 value={actividadPropuesta}
                 onChange={(e) => setActividadPropuesta(e.target.value)}
+                disabled={isLocked}
                 rows={6}
                 placeholder="Haz clic en 'Generar con IA' para crear una actividad personalizada para este estudiante..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
               />
               <p className="text-xs text-gray-500 mt-2">
                 La IA genera una actividad personalizada basada en el perfil del estudiante y su nivel
@@ -465,10 +490,12 @@ export default function SessionStudentsTab({
             {/* Botón Guardar */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <button
+                type="button"
                 onClick={handleSaveClassRecord}
-                className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
+                disabled={isLocked}
+                className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
               >
-                Guardar Calificación y Comentarios
+                {isLocked ? 'Edición bloqueada' : 'Guardar Calificación y Comentarios'}
               </button>
             </div>
           </>

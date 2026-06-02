@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { CalendarIcon, ClockIcon, UserGroupIcon } from '@heroicons/react/24/outline'
+import { CalendarIcon, ClockIcon, UserGroupIcon, ExclamationTriangleIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import toast from 'react-hot-toast'
@@ -15,6 +15,7 @@ import SessionGeneralTab from '@/components/session/SessionGeneralTab'
 import SessionStudentsTab from '@/components/session/SessionStudentsTab'
 import SessionMaterialTab from '@/components/session/SessionMaterialTab'
 import SessionAdvisorMaterialTab from '@/components/session/SessionAdvisorMaterialTab'
+import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window'
 
 interface CalendarioEvent {
   _id: string
@@ -75,12 +76,29 @@ export default function SesionPage() {
   const params = useParams()
   const router = useRouter()
   const eventoId = params.id as string
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role
 
   const [loading, setLoading] = useState(true)
   const [evento, setEvento] = useState<CalendarioEvent | null>(null)
   const [students, setStudents] = useState<StudentWithClass[]>([])
   const [selectedStudent, setSelectedStudent] = useState<StudentWithClass | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Reloj que tick cada 30s para que las ventanas (canMark, canRegister, expired)
+  // se recalculen sin necesidad de recargar la página manualmente.
+  const [now, setNow] = useState<Date>(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Estado de la ventana — visible para todos los hijos. Coordinator bypassea
+  // todo (canMark/canRegister=true, isExpired=false). Si aún no carga el evento,
+  // todo cae a defaults seguros (no se renderizan acciones hasta tener fecha).
+  const windowState = useMemo(
+    () => getSessionWindow(evento?.dia ?? null, role, now),
+    [evento?.dia, role, now],
+  )
 
   useEffect(() => {
     if (eventoId) {
@@ -194,10 +212,47 @@ export default function SesionPage() {
     )
   }
 
+  // Asistentes ya marcados (para la rama "sin asistentes" del registro).
+  const totalConAsistencia = students.filter(s =>
+    s.classRecord?.asistencia === true || (s.classRecord as any)?.asistio === true,
+  ).length
+
+  // Para mostrar banners coherentes:
+  //   - Si la sesión ya está cerrada → no mostramos nada (badge ✓ del botón ya lo dice).
+  //   - Si expiró Y advisor (no coordinator) → banner ámbar bloqueante.
+  //   - Si es coordinator entrando a una sesión vencida → banner azul informativo.
+  const sesionCerrada = evento.sesionCerrada === true
+  const showExpiredAdvisorBanner = !sesionCerrada && windowState.isExpired
+  const showCoordinatorBanner = !sesionCerrada && windowState.isCoordinator && windowState.minutesElapsed > 120
+
   return (
     <DashboardLayout>
       <PermissionGuard permission={AcademicoPermission.IR_A_SESION}>
         <div className="space-y-6">
+          {/* Banner expirado (advisor) */}
+          {showExpiredAdvisorBanner && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 rounded-r-lg p-4 flex items-start gap-3">
+              <ExclamationTriangleIcon className="h-6 w-6 text-amber-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900">Período de registro vencido</p>
+                <p className="text-sm text-amber-800 mt-0.5">{EXPIRED_MESSAGE}</p>
+              </div>
+            </div>
+          )}
+          {/* Banner gestión coordinador */}
+          {showCoordinatorBanner && (
+            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4 flex items-start gap-3">
+              <ShieldCheckIcon className="h-6 w-6 text-blue-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-blue-900">Estás gestionando como Coordinador / Admin</p>
+                <p className="text-sm text-blue-800 mt-0.5">
+                  Esta sesión venció su ventana del advisor ({windowState.minutesElapsed} min desde el inicio).
+                  Puedes marcar asistencia y registrar el cierre — quedará auditado con motivo <code>GESTION_COORDINADOR</code>.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-start justify-between">
@@ -233,6 +288,9 @@ export default function SesionPage() {
                 )}
                 <RegistrarSesionButton
                   evento={evento}
+                  windowState={windowState}
+                  totalInscritos={students.length}
+                  totalConAsistencia={totalConAsistencia}
                   onClosed={() => loadEventoData()}
                 />
               </div>
@@ -255,6 +313,14 @@ export default function SesionPage() {
                   selectedStudent={selectedStudent}
                   onStudentSelect={setSelectedStudent}
                   onDataUpdate={loadStudents}
+                  canMarkAttendance={windowState.canMarkAttendance && !sesionCerrada}
+                  attendanceLockedReason={
+                    sesionCerrada
+                      ? 'La sesión ya está cerrada — los registros son de solo lectura.'
+                      : windowState.isExpired
+                        ? EXPIRED_MESSAGE
+                        : null
+                  }
                 />
               ),
               material: (
@@ -277,32 +343,51 @@ export default function SesionPage() {
 }
 
 /**
- * Botón "Registrar Sesión" (Ctrl Horas):
- * - Solo visible para el advisor asignado al evento (matcheado por email).
- * - Solo habilitado si NOW >= fechaEvento + 30 min.
- * - Pide Time Out (requerido HH:MM) y Notas (opcional, default "no hubo novedades").
- * - Aviso suave con confirm() al salir de la página si el flag está activo.
+ * Botón "Registrar Sesión" (Ctrl Horas V2 — ventana +120 min + sin asistentes):
+ *
+ * Visibilidad:
+ *   - Advisor asignado al evento → siempre visible
+ *   - COORDINADOR_ACADEMICO / SUPER_ADMIN / ADMIN → siempre visible (bypass)
+ *   - Otro advisor / rol sin permiso → null
+ *
+ * Estados del botón:
+ *   - sesionCerrada=true        → badge gris "✓ Sesión registrada"
+ *   - elapsedMin < 30 (advisor) → countdown "Registro disponible en X min"
+ *   - elapsedMin > 120 (advisor) → mensaje "Período vencido — Coordinador"
+ *   - en ventana → botón verde "Registrar Sesión"
+ *   - en ventana + sin asistencias marcadas → al clickear muestra modal de
+ *     confirmación "¿La clase no tuvo asistentes?" antes del modal normal
+ *
+ * Aviso suave (beforeunload):
+ *   - Advisor en ventana operativa con sesión sin cerrar → confirma salida
  */
 function RegistrarSesionButton({
   evento,
+  windowState,
+  totalInscritos,
+  totalConAsistencia,
   onClosed,
 }: {
   evento: CalendarioEvent
+  windowState: ReturnType<typeof getSessionWindow>
+  totalInscritos: number
+  totalConAsistencia: number
   onClosed: () => void
 }) {
   const { data: session } = useSession()
-  const role = (session?.user as any)?.role
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN'
 
   const [isMyEvent, setIsMyEvent] = useState(false)
   const [requiereRegistro, setRequiereRegistro] = useState(true)
-  const [open, setOpen] = useState(false)
+  // Step "confirmSinAsistentes" → "registrar" → done
+  const [step, setStep] = useState<'idle' | 'confirmSinAsistentes' | 'registrar'>('idle')
+  const [sinAsistentes, setSinAsistentes] = useState(false)
   const [timeoutVal, setTimeoutVal] = useState(evento.timeout || '')
   const [notas, setNotas] = useState(evento.notasadvisor || '')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  // Resolver si el usuario logueado es el advisor del evento
+  // Resolver si el usuario logueado es el advisor del evento (necesario aún
+  // para advisor; coordinator igual ve el botón sin importar)
   useEffect(() => {
     const email = (session?.user as any)?.email
     if (!email) return
@@ -319,25 +404,24 @@ function RegistrarSesionButton({
       .catch(() => { /* mantener default true */ })
   }, [session, evento.advisor])
 
-  // Aviso suave al salir sin cerrar (cuando aplique)
+  // beforeunload — aplica para el actor que está en ventana operativa
+  // (advisor propio o coordinator) y la sesión no está cerrada.
   useEffect(() => {
-    if (!isMyEvent || evento.sesionCerrada || !requiereRegistro) return
-    const eventStart = new Date(evento.dia).getTime()
-    if (Date.now() < eventStart + 30 * 60 * 1000) return
+    if (evento.sesionCerrada || !requiereRegistro) return
+    if (!windowState.canRegister) return  // fuera de ventana operativa
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
-      e.returnValue = 'Hay datos sin guardar de la sesión. ¿Salir igual?'
+      e.returnValue = 'La sesión no se ha registrado. ¿Salir igual?'
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [isMyEvent, evento.sesionCerrada, evento.dia, requiereRegistro])
+  }, [evento.sesionCerrada, requiereRegistro, windowState.canRegister])
 
-  if (isAdmin || !isMyEvent) return null
+  // Visibilidad: advisor propio o coordinator. Si nada de eso, no se renderiza.
+  const canSee = isMyEvent || windowState.isCoordinator
+  if (!canSee) return null
 
-  const eventStart = new Date(evento.dia).getTime()
-  const elapsedMin = (Date.now() - eventStart) / 60000
-  const canRegister = elapsedMin >= 30
-
+  // Sesión ya cerrada
   if (evento.sesionCerrada) {
     return (
       <span className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg">
@@ -346,15 +430,50 @@ function RegistrarSesionButton({
     )
   }
 
-  if (!canRegister) {
-    return (
-      <span className="px-3 py-2 text-xs text-gray-500 italic" title="Disponible 30 min después del inicio">
-        Registro disponible en {Math.max(0, Math.ceil(30 - elapsedMin))} min
-      </span>
-    )
+  // Antes de la ventana de registro (solo aplica a advisor — coordinator
+  // siempre puede)
+  if (!windowState.canRegister && !windowState.isCoordinator) {
+    if (windowState.isExpired) {
+      return (
+        <span className="px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg" title={EXPIRED_MESSAGE}>
+          ⚠ Período vencido — Coordinador
+        </span>
+      )
+    }
+    if (windowState.minutesUntilRegister !== null) {
+      return (
+        <span className="px-3 py-2 text-xs text-gray-500 italic" title="Disponible 30 min después del inicio">
+          Registro disponible en {windowState.minutesUntilRegister} min
+        </span>
+      )
+    }
   }
 
   const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
+
+  // Click en "Registrar Sesión":
+  //   - Si totalInscritos > 0 Y totalConAsistencia === 0 → confirma sinAsistentes primero
+  //   - Si no → directo al modal Time Out + Notas
+  const handleClick = () => {
+    setErr(null)
+    if (!timeoutVal) {
+      const now = new Date()
+      const hh = String(now.getHours()).padStart(2, '0')
+      const mm = String(now.getMinutes()).padStart(2, '0')
+      setTimeoutVal(`${hh}:${mm}`)
+    }
+    if (totalInscritos > 0 && totalConAsistencia === 0) {
+      setStep('confirmSinAsistentes')
+    } else {
+      setSinAsistentes(false)
+      setStep('registrar')
+    }
+  }
+
+  const confirmSinAsistentes = () => {
+    setSinAsistentes(true)
+    setStep('registrar')
+  }
 
   async function submitClose() {
     if (!TIMEOUT_REGEX.test(timeoutVal)) {
@@ -373,13 +492,20 @@ function RegistrarSesionButton({
       const patchJson = await patchRes.json()
       if (!patchRes.ok || !patchJson.success) throw new Error(patchJson.error || 'Error guardando notas')
 
-      // 2. Cerrar sesión
-      const closeRes = await fetch(`/api/postgres/calendario/${evento._id}/cerrar-sesion`, { method: 'POST' })
+      // 2. Cerrar sesión (con sinAsistentes si aplica)
+      const closeRes = await fetch(`/api/postgres/calendario/${evento._id}/cerrar-sesion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sinAsistentes }),
+      })
       const closeJson = await closeRes.json()
       if (!closeRes.ok || !closeJson.success) throw new Error(closeJson.error || 'Error cerrando sesión')
 
-      toast.success('Sesión registrada correctamente')
-      setOpen(false)
+      toast.success(sinAsistentes
+        ? `Sesión registrada como SIN ASISTENTES (${closeJson.bookingsActualizados ?? 0} estudiantes marcados como no-asistido)`
+        : 'Sesión registrada correctamente')
+      setStep('idle')
+      setSinAsistentes(false)
       onClosed()
     } catch (e: any) {
       setErr(e?.message || 'Error inesperado')
@@ -392,26 +518,60 @@ function RegistrarSesionButton({
     <>
       <button
         type="button"
-        onClick={() => {
-          // Auto-llenar timeout con la hora actual del navegador al abrir
-          // (el advisor puede ajustar si cerró tarde).
-          if (!timeoutVal) {
-            const now = new Date()
-            const hh = String(now.getHours()).padStart(2, '0')
-            const mm = String(now.getMinutes()).padStart(2, '0')
-            setTimeoutVal(`${hh}:${mm}`)
-          }
-          setOpen(true); setErr(null)
-        }}
+        onClick={handleClick}
         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-semibold"
       >
         Registrar Sesión
       </button>
 
-      {open && (
+      {/* Modal A: confirmación "sin asistentes" — aparece ANTES del modal de registro
+          si hay inscritos pero ninguno con asistencia marcada. */}
+      {step === 'confirmSinAsistentes' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
           <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Registrar Sesión</h3>
+            <h3 className="text-lg font-semibold text-amber-900 mb-3 flex items-center gap-2">
+              <ExclamationTriangleIcon className="h-6 w-6 text-amber-600" />
+              ¿Ningún estudiante asistió?
+            </h3>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-900">
+              No has marcado asistencia a ningún estudiante de los <strong>{totalInscritos}</strong> inscritos.
+              Si confirmas, esta acción:
+              <ul className="list-disc list-inside mt-2 space-y-0.5 text-amber-800">
+                <li>Marcará a los {totalInscritos} estudiantes como <strong>no asistidos</strong>.</li>
+                <li>Registrará la sesión con motivo <code className="bg-amber-100 px-1 rounded">SIN_ASISTENTES</code>.</li>
+                <li>Continuarás al paso de Time Out + Notas.</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setStep('idle')}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmSinAsistentes}
+                className="px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded hover:bg-amber-700"
+              >
+                Sí, confirmar sin asistentes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal B: registrar (Time Out + Notas) */}
+      {step === 'registrar' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">
+              Registrar Sesión
+              {sinAsistentes && (
+                <span className="ml-2 text-xs font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded">SIN ASISTENTES</span>
+              )}
+            </h3>
             <p className="text-sm text-gray-600 mb-4">
               Esta acción cierra la sesión y la marca como atendida. No podrás editar
               Time Out ni Notas después de cerrar.
@@ -450,7 +610,7 @@ function RegistrarSesionButton({
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => { setStep('idle'); setSinAsistentes(false) }}
                 disabled={saving}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
               >

@@ -2,7 +2,8 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { autoAdvanceStep } from '@/services/student.service';
-import { query } from '@/lib/postgres';
+import { query, queryOne } from '@/lib/postgres';
+import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window';
 
 const UPDATABLE_FIELDS = [
   'asistio', 'asistencia', 'participacion', 'noAprobo',
@@ -26,14 +27,40 @@ async function ensurePruebaInterColumn() {
  *
  * Save evaluation for a student booking by idEstudiante + idEvento.
  * Used by the session detail page (SessionStudentsTab).
+ *
+ * Ventana temporal: el advisor solo puede marcar asistencia/evaluación
+ * desde el inicio del evento hasta +120 min después. Pasado eso, debe
+ * pasar por el Coordinador Académico. Bypass por rol:
+ * COORDINADOR_ACADEMICO / SUPER_ADMIN / ADMIN.
  */
-export const POST = handlerWithAuth(async (request) => {
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
+  const sessionRole = (session?.user as any)?.role;
 
   const { idEstudiante, idEvento, asistencia, participacion, noAprobo, calificacion, comentarios, advisorAnotaciones, actividadPropuesta, pruebainter } = body;
 
   if (!idEstudiante || !idEvento) {
     throw new ValidationError('idEstudiante and idEvento are required');
+  }
+
+  // Validación de ventana temporal: si el evento existe en CALENDARIO,
+  // verificar que estamos dentro de [0..+120min] o que el rol es coordinador.
+  // Si el evento no está en CALENDARIO (datos legacy de Wix sin link), no
+  // bloqueamos — comportamiento previo.
+  const evt = await queryOne<{ dia: Date | null }>(
+    `SELECT "dia" FROM "CALENDARIO" WHERE "_id" = $1`,
+    [idEvento],
+  );
+  if (evt?.dia) {
+    const ws = getSessionWindow(evt.dia, sessionRole, new Date());
+    if (!ws.canMarkAttendance) {
+      if (ws.isExpired) throw new ValidationError(EXPIRED_MESSAGE);
+      throw new ValidationError(
+        ws.minutesElapsed < 0
+          ? 'El evento aún no ha comenzado — no se puede marcar asistencia todavía.'
+          : 'Fuera de la ventana de registro de asistencia.',
+      );
+    }
   }
 
   // Find the booking by student + event

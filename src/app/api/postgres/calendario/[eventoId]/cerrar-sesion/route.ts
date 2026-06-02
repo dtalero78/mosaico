@@ -9,11 +9,32 @@ import { closeSession } from '@/services/advisor-event-log.service';
  * Botón "Registrar Sesión" del advisor. Marca el evento como cerrado.
  * Si notasadvisor está vacío, set automáticamente "no hubo novedades".
  * Requiere timeout previamente guardado.
+ *
+ * Body opcional:
+ *   {
+ *     sinAsistentes?: boolean   // si true: marca todos los bookings como
+ *                                // no-asistido + motivoCierre='SIN_ASISTENTES'
+ *   }
+ *
+ * Bypass de ventana temporal: COORDINADOR_ACADEMICO / SUPER_ADMIN / ADMIN.
+ * El rol se toma de la sesión NextAuth — NUNCA del body (no spoofeable).
  */
-export const POST = handlerWithAuth(async (_request, { params }, session) => {
+export const POST = handlerWithAuth(async (request, { params }, session) => {
   const email = (session?.user as any)?.email;
   if (!email) throw new UnauthorizedError('Sesión sin email');
+  const sessionRole = (session?.user as any)?.role;
 
-  const result = await closeSession(params.eventoId, email);
+  // Body es opcional — solo se lee si hay payload.
+  let body: { sinAsistentes?: boolean } = {};
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+
+  const result = await closeSession(params.eventoId, email, {
+    sinAsistentes: body?.sinAsistentes === true,
+    sessionRole,
+  });
   return successResponse(result);
 });

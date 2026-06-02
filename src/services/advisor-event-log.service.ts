@@ -25,10 +25,14 @@ import { query, queryOne, queryMany } from '@/lib/postgres';
 import { ValidationError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { AdvisorEventLogRepository, AdvisorEventLogRow } from '@/repositories/advisor-event-log.repository';
 import { AdvisorNotesAuditRepository } from '@/repositories/advisor-notes-audit.repository';
+import { getSessionWindow } from '@/lib/session-window';
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const EDIT_WINDOW_MIN_MINUTES = 30;
 const TZ_REGEX = /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+(\/[A-Za-z_+\-0-9]+)?$/;
+
+/** Valores válidos para CALENDARIO.motivoCierre. */
+export type MotivoCierre = 'NORMAL' | 'SIN_ASISTENTES' | 'GESTION_COORDINADOR';
 
 // ────────────────────────────── tipos ──────────────────────────────
 
@@ -248,12 +252,17 @@ export async function updateAdvisorNotes(
     motivoAdminEdit?: string;
   },
 ): Promise<{ ok: true; timeout: string | null; notasadvisor: string | null; audited: boolean }> {
-  const isAdmin = patch.sessionRole === 'SUPER_ADMIN' || patch.sessionRole === 'ADMIN';
+  // El rol determina si bypassea ventanas — calculamos `isCoordinator` con
+  // el helper más abajo. Antes resolvemos el advisorId por email para validar
+  // ownership cuando NO es coordinador.
   const advisorId = await resolveAdvisorIdByEmail(sessionEmail);
 
-  // ADVISOR (propio): exige email registrado en ADVISORS.
-  // ADMIN: no necesita estar en ADVISORS (puede editar evento de cualquiera).
-  if (!isAdmin && !advisorId) {
+  const roleUpper = String(patch.sessionRole || '').toUpperCase();
+  const isCoordinatorRole = ['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN'].includes(roleUpper);
+
+  // Coordinador no necesita estar en ADVISORS (puede editar evento de cualquiera).
+  // Advisor propio sí: si no está, no puede actuar.
+  if (!isCoordinatorRole && !advisorId) {
     throw new ForbiddenError('Tu email no está registrado en ADVISORS');
   }
 
@@ -279,23 +288,40 @@ export async function updateAdvisorNotes(
 
   const sesionCerrada = evt.sesionCerrada === true;
 
-  if (isAdmin) {
-    // Bypass validaciones de ownership / ventana temporal / sesión cerrada.
-    // PERO si la sesión está cerrada, exigir motivo (sería edición forzada
-    // y queda registro de auditoría).
+  // Usamos el helper unificado para que la ventana sea la misma que ve el
+  // cliente. Coordinador (COORDINADOR_ACADEMICO / SUPER_ADMIN / ADMIN) bypassea
+  // ownership + ventana + sesionCerrada. Advisor propio sigue las reglas:
+  //   - Es dueño del evento
+  //   - No está cerrada
+  //   - Está dentro de la ventana de registro [+30 .. +120 min]
+  const ws = getSessionWindow(new Date(evt.dia), patch.sessionRole, new Date());
+
+  if (ws.isCoordinator) {
+    // Si la sesión ya está cerrada y un coordinador la edita, exigir motivo
+    // (queda registro de auditoría).
     if (sesionCerrada && !patch.motivoAdminEdit?.trim()) {
       throw new ValidationError('La sesión está cerrada — debes incluir un motivo obligatorio para editar.');
     }
   } else {
-    // ADVISOR: validaciones normales
     if (evt.advisor !== advisorId) {
       throw new ForbiddenError('Este evento está asignado a otro advisor');
     }
     if (sesionCerrada) {
       throw new ValidationError('La sesión ya fue registrada (cerrada). No se puede editar.');
     }
-    const { canEdit, editReason } = computeEditability(new Date(evt.dia), false);
-    if (!canEdit) throw new ValidationError(editReason ?? 'No se puede editar todavía');
+    if (!ws.canRegister) {
+      if (ws.isExpired) {
+        throw new ValidationError(
+          'Período de registro vencido. Para marcar asistencia y registrar la sesión, contacta al Coordinador Académico.',
+        );
+      }
+      if (ws.minutesUntilRegister !== null) {
+        throw new ValidationError(
+          `Disponible 30 min después del inicio del evento (faltan ${ws.minutesUntilRegister} min).`,
+        );
+      }
+      throw new ValidationError('No se puede registrar esta sesión en este momento.');
+    }
   }
 
   const updates: string[] = [];
@@ -334,8 +360,9 @@ export async function updateAdvisorNotes(
 
   // Auditoría: solo cuando el editor NO es el advisor propio del evento.
   // Las ediciones del propio advisor en su evento abierto son flujo normal
-  // y no se registran (ruido). Las del admin SÍ se registran siempre.
-  const shouldAudit = isAdmin && (evt.advisor !== advisorId || sesionCerrada);
+  // y no se registran (ruido). Las del coordinador/admin SÍ se registran
+  // siempre que edite a otro advisor o una sesión ya cerrada.
+  const shouldAudit = isCoordinatorRole && (evt.advisor !== advisorId || sesionCerrada);
   if (shouldAudit) {
     await AdvisorNotesAuditRepository.insert({
       eventoId,
@@ -361,15 +388,50 @@ export async function updateAdvisorNotes(
 
 /**
  * Cierra la sesión (botón "Registrar Sesión").
+ *
  * Marca sesionCerrada=true. Si notasadvisor está vacío, set "no hubo novedades".
  * Requiere timeout válido previamente guardado.
+ *
+ * Reglas extendidas (V2 — ventana de 120 min + sin asistentes):
+ *   - ADVISOR: solo puede cerrar dentro de [+30..+120 min]. Pasado eso, expira.
+ *   - COORDINADOR_ACADEMICO/SUPER_ADMIN/ADMIN: bypass de ventana (puede cerrar
+ *     fuera del rango, p.ej. una sesión vencida que el advisor no registró).
+ *
+ *   - Si `sinAsistentes=true`: marca TODOS los bookings con `asistio=false`
+ *     (registro explícito de no-asistencia, no NULL) y cierra la sesión con
+ *     `motivoCierre='SIN_ASISTENTES'`. Defensa: verifica primero que ningún
+ *     booking tenga asistencia ya marcada — si lo hay, rechaza (sería
+ *     incoherente decir "sin asistentes" y tener marcado a alguien).
+ *
+ *   - `motivoCierre` se setea automáticamente:
+ *       NORMAL              → ADVISOR cerrando dentro de ventana con asistentes
+ *       SIN_ASISTENTES      → cualquiera cerrando con sinAsistentes=true
+ *       GESTION_COORDINADOR → coordinador cerrando fuera de ventana (>+120min)
  */
 export async function closeSession(
   eventoId: string,
   sessionEmail: string,
-): Promise<{ ok: true; fechaCierreSesion: string; notasadvisor: string }> {
+  opts: {
+    /** Marca el cierre como "sin asistentes" — pone asistio=false en todos los bookings. */
+    sinAsistentes?: boolean;
+    /** Rol de la sesión NextAuth — viene del route handler, no del body. */
+    sessionRole?: string;
+  } = {},
+): Promise<{
+  ok: true;
+  fechaCierreSesion: string;
+  notasadvisor: string;
+  motivoCierre: MotivoCierre;
+  bookingsActualizados: number;
+}> {
+  const roleUpper = String(opts.sessionRole || '').toUpperCase();
+  const isCoordinatorRole = ['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN'].includes(roleUpper);
+
   const advisorId = await resolveAdvisorIdByEmail(sessionEmail);
-  if (!advisorId) throw new ForbiddenError('Tu email no está registrado en ADVISORS');
+  // Coordinador no necesita estar en ADVISORS.
+  if (!isCoordinatorRole && !advisorId) {
+    throw new ForbiddenError('Tu email no está registrado en ADVISORS');
+  }
 
   const evt = await queryOne<{
     advisor: string;
@@ -383,7 +445,6 @@ export async function closeSession(
     [eventoId],
   );
   if (!evt) throw new NotFoundError('Evento', eventoId);
-  if (evt.advisor !== advisorId) throw new ForbiddenError('Este evento está asignado a otro advisor');
   if (evt.sesionCerrada === true) {
     throw new ValidationError('La sesión ya está cerrada');
   }
@@ -391,8 +452,62 @@ export async function closeSession(
     throw new ValidationError('Debes registrar la hora de fin (Time Out) antes de cerrar la sesión');
   }
 
-  const { canEdit } = computeEditability(new Date(evt.dia), false);
-  if (!canEdit) throw new ValidationError('La sesión no puede cerrarse aún');
+  const ws = getSessionWindow(new Date(evt.dia), opts.sessionRole, new Date());
+
+  if (!ws.isCoordinator) {
+    if (evt.advisor !== advisorId) {
+      throw new ForbiddenError('Este evento está asignado a otro advisor');
+    }
+    if (!ws.canRegister) {
+      if (ws.isExpired) {
+        throw new ValidationError(
+          'Período de registro vencido. Para registrar la sesión, contacta al Coordinador Académico.',
+        );
+      }
+      throw new ValidationError('La sesión no puede cerrarse aún');
+    }
+  }
+
+  // Si sinAsistentes=true: defensa server-side. Verificar que ningún booking
+  // del evento tiene asistencia marcada. Si alguno la tiene → inconsistente.
+  let bookingsActualizados = 0;
+  if (opts.sinAsistentes === true) {
+    const conflict = await queryOne<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM "ACADEMICA_BOOKINGS"
+       WHERE (("eventoId" = $1) OR ("idEvento" = $1))
+         AND ("asistio" = true OR "asistencia" = true)`,
+      [eventoId],
+    );
+    if ((conflict?.n ?? 0) > 0) {
+      throw new ValidationError(
+        `No se puede cerrar como "sin asistentes": ${conflict!.n} booking(s) ya tienen asistencia marcada.`,
+      );
+    }
+    const upd = await query(
+      `UPDATE "ACADEMICA_BOOKINGS"
+         SET "asistio" = false, "asistencia" = false, "_updatedDate" = NOW()
+       WHERE (("eventoId" = $1) OR ("idEvento" = $1))
+         AND ("cancelo" IS NULL OR "cancelo" = false)`,
+      [eventoId],
+    );
+    bookingsActualizados = upd.rowCount ?? 0;
+  }
+
+  // Determinar motivoCierre
+  let motivoCierre: MotivoCierre = 'NORMAL';
+  if (opts.sinAsistentes === true) {
+    motivoCierre = 'SIN_ASISTENTES';
+  } else if (ws.isCoordinator && ws.isExpired) {
+    // Esto sólo se evalúa para non-coordinator real (porque para coordinator
+    // isExpired es false). Lo dejamos como protección — si en el futuro se
+    // pasa role distinto, queda consistente.
+    motivoCierre = 'GESTION_COORDINADOR';
+  } else if (roleUpper && isCoordinatorRole) {
+    // Coordinador cerrando fuera de la ventana del advisor (es decir, después
+    // de +120 min). Mismo motivo.
+    const minutesElapsed = (Date.now() - new Date(evt.dia).getTime()) / 60_000;
+    if (minutesElapsed > 120) motivoCierre = 'GESTION_COORDINADOR';
+  }
 
   const notas = (evt.notasadvisor && evt.notasadvisor.trim().length > 0)
     ? evt.notasadvisor
@@ -403,16 +518,19 @@ export async function closeSession(
      SET "sesionCerrada" = true,
          "fechaCierreSesion" = NOW(),
          "notasadvisor" = $2,
+         "motivoCierre" = $3,
          "_updatedDate" = NOW()
      WHERE "_id" = $1
      RETURNING "fechaCierreSesion", "notasadvisor"`,
-    [eventoId, notas],
+    [eventoId, notas, motivoCierre],
   );
 
   return {
     ok: true,
     fechaCierreSesion: result!.fechaCierreSesion.toISOString(),
     notasadvisor: result!.notasadvisor,
+    motivoCierre,
+    bookingsActualizados,
   };
 }
 
