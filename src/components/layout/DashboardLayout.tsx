@@ -183,7 +183,7 @@ const getNavigation = (userEmail: string) => [
           { name: 'Generar Contrato', href: '/admin/generar-contrato', newTab: true },
           { name: 'Migrar Contrato',  href: '/admin/migrar-contrato',  newTab: true },
           { name: 'Envío Mensajes',   href: '/admin/envio-mensajes',   newTab: true },
-          { name: 'Crear Rol',        href: '/admin/roles/create',     newTab: true },
+          { name: 'Crea UserRol',     href: '/admin/roles/create',     newTab: true },
         ],
       },
       {
