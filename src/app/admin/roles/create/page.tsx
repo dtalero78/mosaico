@@ -105,8 +105,8 @@ export default function CrearUserRolPage() {
       const body: Record<string, string> = { numeroId: preview.academica.numeroId }
       // Sólo enviamos password si ACADEMICA no la tiene (caso en que el admin la digitó).
       if (!preview.passwordFromAcademica) {
-        if (!password || password.length < 6) {
-          throw new Error('La contraseña debe tener al menos 6 caracteres')
+        if (!password || password.length < 4) {
+          throw new Error('La contraseña debe tener al menos 4 caracteres')
         }
         body.password = password
       }
@@ -310,7 +310,7 @@ export default function CrearUserRolPage() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Mínimo 4 caracteres"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-10"
                       disabled={creating}
                     />
@@ -343,7 +343,7 @@ export default function CrearUserRolPage() {
                   disabled={
                     !preview.canCreate ||
                     creating ||
-                    (!preview.passwordFromAcademica && password.length < 6)
+                    (!preview.passwordFromAcademica && password.length < 4)
                   }
                   className="px-5 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

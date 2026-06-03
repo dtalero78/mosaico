@@ -188,8 +188,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     finalPassword = claveAcademica;
     passwordSource = 'academica';
   } else {
-    if (!passwordInput || passwordInput.length < 6) {
-      throw new ValidationError('ACADEMICA.clave está vacía. Debes ingresar una contraseña (mín 6 caracteres).');
+    if (!passwordInput || passwordInput.length < 4) {
+      throw new ValidationError('ACADEMICA.clave está vacía. Debes ingresar una contraseña (mín 4 caracteres).');
     }
     finalPassword = passwordInput;
     passwordSource = 'admin';
