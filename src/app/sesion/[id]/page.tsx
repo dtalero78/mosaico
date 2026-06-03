@@ -34,6 +34,7 @@ interface CalendarioEvent {
   notasadvisor?: string | null
   sesionCerrada?: boolean
   fechaCierreSesion?: string | null
+  motivoCierre?: 'NORMAL' | 'SIN_ASISTENTES' | 'GESTION_COORDINADOR' | null
 }
 
 interface Student {
@@ -468,11 +469,24 @@ function RegistrarSesionButton({
   const canSee = isMyEvent || windowState.isCoordinator
   if (!canSee) return null
 
-  // Sesión ya cerrada
+  // Sesión ya cerrada.
+  // Si la cerró el Coordinador (motivoCierre='GESTION_COORDINADOR') porque
+  // el advisor no la registró en su ventana → badge ROJO con texto extendido
+  // para que el advisor sepa que no fue él quien la cerró.
   if (evento.sesionCerrada) {
+    const cerradaPorCoord = evento.motivoCierre === 'GESTION_COORDINADOR'
     return (
-      <span className="px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg">
-        ✓ Sesión registrada
+      <span
+        className={`px-3 py-2 text-sm font-medium rounded-lg ${
+          cerradaPorCoord
+            ? 'text-white bg-red-600'
+            : 'text-gray-600 bg-gray-100'
+        }`}
+        title={cerradaPorCoord
+          ? 'El Coordinador Académico registró esta sesión porque venció la ventana del advisor.'
+          : 'Sesión registrada por el advisor.'}
+      >
+        ✓ Sesión registrada{cerradaPorCoord ? ' por Coordinación' : ''}
       </span>
     )
   }

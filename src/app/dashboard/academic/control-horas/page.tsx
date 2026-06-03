@@ -252,9 +252,14 @@ function ControlHorasContent() {
     return m
   }, [data])
 
-  // Totales del mes — por tipo (vigentes + históricos) y por estado
+  // Totales del mes — por tipo (vigentes + históricos), por estado, y registro.
+  // effective + sinRegistrar = conducted (las 2 caras de la misma moneda).
   const totales = useMemo(() => {
-    const t = { sessions: 0, clubs: 0, welcome: 0, conducted: 0, canceled: 0, suspended: 0 }
+    const t = {
+      sessions: 0, clubs: 0, welcome: 0,
+      conducted: 0, canceled: 0, suspended: 0,
+      effective: 0, sinRegistrar: 0,
+    }
     if (!data) return t
     const countByTipo = (tipo: string | null) => {
       switch ((tipo || '').toUpperCase()) {
@@ -266,6 +271,8 @@ function ControlHorasContent() {
     data.vigentes.forEach(v => {
       countByTipo(v.tipo)
       t.conducted++
+      if (v.sesionCerrada === true) t.effective++
+      else                          t.sinRegistrar++
     })
     data.historicos.forEach(h => {
       countByTipo(h.tipo)
@@ -370,6 +377,14 @@ function ControlHorasContent() {
           <LegendDot color="bg-red-500"    label="Canceled" />
         </div>
       </div>
+
+      {/* Tarjetas destacadas: Effective vs sin Registrar (cara registro) */}
+      {data && !loading && !error && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+          <TotalCard label="Effective Hours"        value={totales.effective}    color="bg-emerald-50 border-emerald-400 text-emerald-700" />
+          <TotalCard label="Hours without recording" value={totales.sinRegistrar} color="bg-amber-50   border-amber-400   text-amber-700" />
+        </div>
+      )}
 
       {/* Tarjetas de totales del mes */}
       {data && !loading && !error && (

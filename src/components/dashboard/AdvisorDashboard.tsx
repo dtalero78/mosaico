@@ -123,8 +123,17 @@ export default function AdvisorDashboard() {
   // ── Derivados ────────────────────────────────────────────────────────────
   // KPIs del mes — desglose por tipo y por estado.
   // Training se separa de "Clubs (otros)" mirando el prefijo del step.
+  //
+  // Effective Hours / Hours without recording son las 2 caras del Conducted:
+  //   - effective = vigentes con sesionCerrada=true (registradas por advisor o coord)
+  //   - sinRegistrar = vigentes con sesionCerrada=false/null (pendientes)
+  // effective + sinRegistrar = conducted.
   const kpis = useMemo(() => {
-    const k = { sessions: 0, training: 0, clubs: 0, welcome: 0, conducted: 0, canceled: 0, suspended: 0 }
+    const k = {
+      sessions: 0, training: 0, clubs: 0, welcome: 0,
+      conducted: 0, canceled: 0, suspended: 0,
+      effective: 0, sinRegistrar: 0,
+    }
     if (!data) return k
 
     const countTipoStep = (tipo: string | null, step: string | null) => {
@@ -134,7 +143,12 @@ export default function AdvisorDashboard() {
       else if (t === 'WELCOME') k.welcome++
     }
 
-    data.vigentes.forEach(v => { countTipoStep(v.tipo, v.step); k.conducted++ })
+    data.vigentes.forEach(v => {
+      countTipoStep(v.tipo, v.step)
+      k.conducted++
+      if (v.sesionCerrada === true) k.effective++
+      else                          k.sinRegistrar++
+    })
     data.historicos.forEach(h => {
       countTipoStep(h.tipo, h.step)
       if (h.estado === 'Canceled')  k.canceled++
@@ -202,7 +216,25 @@ export default function AdvisorDashboard() {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs destacados — Effective Hours + Hours without recording.
+          Effective = vigentes con sesionCerrada=true. Without recording =
+          vigentes sin cerrar (advisor o coord no las ha registrado todavía). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <KpiCard
+          label="Effective Hours"
+          value={kpis.effective}
+          color="bg-emerald-50  border-emerald-400  text-emerald-700"
+          big
+        />
+        <KpiCard
+          label="Hours without recording"
+          value={kpis.sinRegistrar}
+          color="bg-amber-50    border-amber-400    text-amber-700"
+          big
+        />
+      </div>
+
+      {/* KPIs detalle */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
         <KpiCard label="Sessions"  value={kpis.sessions}  color="bg-blue-50    border-blue-300    text-blue-700" />
         <KpiCard label="Training"  value={kpis.training}  color="bg-orange-50  border-orange-300  text-orange-700" />
@@ -274,11 +306,13 @@ function AdvisorAvatar({ fotoUrl, inicial }: { fotoUrl: string | null; inicial: 
   )
 }
 
-function KpiCard({ label, value, color }: { label: string; value: number; color: string }) {
+function KpiCard({ label, value, color, big }: { label: string; value: number; color: string; big?: boolean }) {
+  // Mismo padding y altura que las cards normales; solo la card 'big' tiene
+  // borde mas grueso para destacar — la altura final coincide visualmente.
   return (
-    <div className={`${color} border rounded-lg px-3 py-2 text-center`}>
+    <div className={`${color} ${big ? 'border-2' : 'border'} rounded-lg px-3 py-2 text-center`}>
       <div className="text-2xl font-bold">{value}</div>
-      <div className="text-[10px] uppercase tracking-wide font-semibold">{label}</div>
+      <div className={big ? 'text-xs uppercase tracking-wide font-semibold' : 'text-[10px] uppercase tracking-wide font-semibold'}>{label}</div>
     </div>
   )
 }
