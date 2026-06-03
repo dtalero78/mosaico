@@ -175,8 +175,9 @@ const getNavigation = (userEmail: string) => [
         ],
       },
       {
-        name: 'Plantillas', isSubmenu: true, children: [
-          { name: 'Gestión', href: '/admin/plantillas/gestion', newTab: true },
+        name: 'Mensajes', isSubmenu: true, children: [
+          { name: 'Plantillas', href: '/admin/plantillas/gestion', newTab: true },
+          { name: 'Gestión',    href: '/admin/envio-mensajes',     newTab: true },
         ],
       },
       {
@@ -187,7 +188,6 @@ const getNavigation = (userEmail: string) => [
           { name: 'Edición Contrato', href: '/admin/edicion-contrato', newTab: true },
           { name: 'Generar Contrato', href: '/admin/generar-contrato', newTab: true },
           { name: 'Migrar Contrato',  href: '/admin/migrar-contrato',  newTab: true },
-          { name: 'Envío Mensajes',   href: '/admin/envio-mensajes',   newTab: true },
           { name: 'Crea UserRol',     href: '/admin/roles/create',     newTab: true },
         ],
       },
