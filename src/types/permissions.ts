@@ -159,6 +159,9 @@ export enum AcademicoPermission {
   // Performance Evaluation — dashboard de evaluaciones de estudiantes a advisors
   PERFORMANCE_EVAL_VER       = 'ACADEMICO.PERFORMANCE_EVAL.VER',
   PERFORMANCE_EVAL_EXPORTAR  = 'ACADEMICO.PERFORMANCE_EVAL.EXPORTAR',
+
+  // Sesiones sin gestión — backlog de eventos pasados sin cerrar
+  SESIONES_SIN_GESTION_VER   = 'ACADEMICO.SESIONES_SIN_GESTION.VER',
 }
 
 /**

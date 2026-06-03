@@ -523,6 +523,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Descargar CSV (Performance Evaluation)',
     description: 'Botón Exportar CSV del informe Performance Evaluation.',
   },
+  {
+    code: AcademicoPermission.SESIONES_SIN_GESTION_VER,
+    module: Module.ACADEMICO,
+    section: 'Sesiones sin gestión',
+    name: 'Página "Sesiones sin gestión"',
+    description: 'Acceso a /dashboard/academic/sesiones-sin-gestion. Lista de eventos pasados sin registrar (sesionCerrada=false) con filtros por fecha y advisor. Muestra inscritos/asistencia marcada para detectar si el advisor empezó pero no cerró, y un acceso directo al panel del evento para que el coordinador gestione el cierre.',
+  },
 
   // ========== INFORMES MODULE ==========
   // Abuelo: muestra el grupo Informes en el sidebar. Cada informe se habilita
