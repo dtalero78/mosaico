@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import EventDetailModal from '@/components/academic/EventDetailModal'
+import AdminEventRegistrarModal from '@/components/admin-events/AdminEventRegistrarModal'
 import {
   CalendarIcon,
   ClockIcon,
@@ -61,6 +62,9 @@ function PanelAdvisorContent() {
   // States
   const [advisor, setAdvisor] = useState<Advisor | null>(null)
   const [events, setEvents] = useState<CalendarioEvent[]>([])
+  // Admin events del mes (Training/Support/Observation/Meeting/Development)
+  const [adminEvents, setAdminEvents] = useState<any[]>([])
+  const [selectedAdminEvent, setSelectedAdminEvent] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [eventsLoading, setEventsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -192,6 +196,12 @@ function PanelAdvisorContent() {
 
       const data = await response.json()
 
+      // Cargar admin events del mes en paralelo (no bloquean si fallan)
+      fetch(`/api/postgres/advisors/${advisor._id}/admin-events?year=${currentMonth.getFullYear()}&month=${currentMonth.getMonth() + 1}`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(j => { if (j?.success) setAdminEvents(j.items || []) })
+        .catch(() => setAdminEvents([]))
+
       if (data.success) {
         const eventos = data.data || []
 
@@ -280,7 +290,8 @@ function PanelAdvisorContent() {
   const handleDayClick = (date: Date) => {
     setSelectedDate(date)
     const dayEvents = getEventsForDay(date)
-    if (dayEvents.length > 0) {
+    const dayAdminEvents = getAdminEventsForDay(date)
+    if (dayEvents.length > 0 || dayAdminEvents.length > 0) {
       setDayEventsModalDate(date)
       setShowDayEventsModal(true)
     }
@@ -296,6 +307,10 @@ function PanelAdvisorContent() {
       const eventDate = new Date(event.dia)
       return isSameDay(eventDate, date)
     })
+  }
+
+  const getAdminEventsForDay = (date: Date) => {
+    return adminEvents.filter(ae => isSameDay(new Date(ae.fechaInicio), date))
   }
 
   const getEventColor = (tipo: string) => {
@@ -479,6 +494,25 @@ function PanelAdvisorContent() {
                             +{dayEvents.length - 3} más
                           </div>
                         )}
+                        {/* Admin events del día — color naranja (Welcome ya es morado).
+                            Click abre modal de registro. */}
+                        {getAdminEventsForDay(date).slice(0, 2).map(ae => (
+                          <div
+                            key={ae._id}
+                            className={`text-xs px-1 py-0.5 rounded text-white truncate cursor-pointer hover:opacity-80 ${
+                              ae.registrado ? 'bg-orange-400' : 'bg-orange-600'
+                            }`}
+                            title={`[ADMIN ${ae.tipo}] ${ae.titulo || ''} · ${ae.horas}h${ae.registrado ? ' (registrado)' : ''}`}
+                            onClick={(e) => { e.stopPropagation(); setSelectedAdminEvent(ae) }}
+                          >
+                            {format(new Date(ae.fechaInicio), 'HH:mm')} · {ae.tipo}
+                          </div>
+                        ))}
+                        {getAdminEventsForDay(date).length > 2 && (
+                          <div className="text-xs text-orange-600">
+                            +{getAdminEventsForDay(date).length - 2} admin
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
@@ -528,6 +562,31 @@ function PanelAdvisorContent() {
                       </div>
                       <div className="text-sm opacity-90">
                         {event.evento || event.tipo} {event.nombreEvento && `- ${event.nombreEvento}`}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {/* Admin events del día — color naranja, click abre modal de registro */}
+              {getAdminEventsForDay(dayEventsModalDate).map(ae => (
+                <div
+                  key={ae._id}
+                  onClick={() => {
+                    setShowDayEventsModal(false)
+                    setDayEventsModalDate(null)
+                    setSelectedAdminEvent(ae)
+                  }}
+                  className={`p-3 rounded-lg cursor-pointer hover:opacity-80 transition-opacity text-white ${
+                    ae.registrado ? 'bg-orange-400' : 'bg-orange-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">
+                        {format(new Date(ae.fechaInicio), 'HH:mm')} - [ADMIN] {ae.tipo}
+                      </div>
+                      <div className="text-sm opacity-90">
+                        {ae.titulo || 'Sin título'} · {ae.horas}h{ae.registrado ? ' · ✓ Registrado' : ''}
                       </div>
                     </div>
                   </div>
@@ -628,6 +687,15 @@ function PanelAdvisorContent() {
         advisors={advisor ? [advisor] : []}
         advisorId={advisor?._id}
       />
+
+      {/* Modal Admin Event: ver detalle + registrar (ventana +40/+120) */}
+      {selectedAdminEvent && (
+        <AdminEventRegistrarModal
+          event={selectedAdminEvent}
+          onClose={() => setSelectedAdminEvent(null)}
+          onSaved={() => { setSelectedAdminEvent(null); loadEvents() }}
+        />
+      )}
     </DashboardLayout>
   )
 }

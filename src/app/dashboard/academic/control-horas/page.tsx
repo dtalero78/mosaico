@@ -224,6 +224,23 @@ function ControlHorasContent() {
 
   useEffect(() => { if (advisorId) fetchMonth() }, [advisorId, fetchMonth])
 
+  // Admin Events del mes — query paralela. Solo trae el agregado para los KPIs
+  // y la lista para pintarlos en el calendario (Fase 3b).
+  const [adminEventsAgg, setAdminEventsAgg] = useState<{ registradas: number; sinRegistrar: number }>({ registradas: 0, sinRegistrar: 0 })
+  const [adminEventsList, setAdminEventsList] = useState<any[]>([])
+  useEffect(() => {
+    if (!advisorId) { setAdminEventsAgg({ registradas: 0, sinRegistrar: 0 }); setAdminEventsList([]); return }
+    fetch(`/api/postgres/advisors/${advisorId}/admin-events?year=${year}&month=${month}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        if (j.success) {
+          setAdminEventsAgg(j.aggregate || { registradas: 0, sinRegistrar: 0 })
+          setAdminEventsList(j.items || [])
+        }
+      })
+      .catch(() => { /* silent */ })
+  }, [advisorId, year, month])
+
   function changeMonth(delta: number) {
     let m = month + delta
     let y = year
@@ -253,14 +270,25 @@ function ControlHorasContent() {
   }, [data])
 
   // Totales del mes — por tipo (vigentes + históricos), por estado, y registro.
-  // effective + sinRegistrar = conducted (las 2 caras de la misma moneda).
+  //
+  // Effective Hours = sesiones académicas cerradas (1h c/u) + admin events
+  //                   registrados (sumando sus horas).
+  // Hours without recording = sesiones académicas vigentes sin cerrar (1h c/u)
+  //                   + admin events sin registrar (sumando sus horas).
+  // Administrative Hours = solo admin events registrados (suma de horas).
   const totales = useMemo(() => {
     const t = {
       sessions: 0, clubs: 0, welcome: 0,
       conducted: 0, canceled: 0, suspended: 0,
       effective: 0, sinRegistrar: 0,
+      administrative: 0,
     }
     if (!data) return t
+    // KPIs solo cuentan eventos que YA ocurrieron (fechaEvento <= NOW).
+    // Eventos futuros del mes están agendados pero aún no son "actividad real".
+    const nowMs = Date.now()
+    const isPast = (iso: string | null | undefined) =>
+      iso != null && new Date(iso).getTime() <= nowMs
     const countByTipo = (tipo: string | null) => {
       switch ((tipo || '').toUpperCase()) {
         case 'SESSION': t.sessions++; break
@@ -269,18 +297,29 @@ function ControlHorasContent() {
       }
     }
     data.vigentes.forEach(v => {
+      if (!isPast(v.fechaEvento)) return
       countByTipo(v.tipo)
       t.conducted++
       if (v.sesionCerrada === true) t.effective++
       else                          t.sinRegistrar++
     })
     data.historicos.forEach(h => {
+      if (!isPast(h.fechaEvento)) return
       countByTipo(h.tipo)
       if (h.estado === 'Canceled')  t.canceled++
       if (h.estado === 'Suspended') t.suspended++
     })
+    // Admin events:
+    //   - Effective suma las registradas (horas ya "marcadas tarjeta").
+    //   - Hours without recording suma las sin registrar (pendientes).
+    //   - Administrative muestra el TOTAL del mes (registradas + sin registrar).
+    //     Así se cumple la identidad visible al advisor:
+    //       effective = conducted + administrative - hoursWithoutRecording
+    t.effective      += adminEventsAgg.registradas
+    t.sinRegistrar   += adminEventsAgg.sinRegistrar
+    t.administrative  = adminEventsAgg.registradas + adminEventsAgg.sinRegistrar
     return t
-  }, [data])
+  }, [data, adminEventsAgg])
 
   // Build calendar grid: filas x 7 columnas (Lun-Dom)
   const calendarCells = useMemo(() => {
@@ -378,11 +417,12 @@ function ControlHorasContent() {
         </div>
       </div>
 
-      {/* Tarjetas destacadas: Effective vs sin Registrar (cara registro) */}
+      {/* Tarjetas destacadas: Effective | Sin registrar | Administrative (incluida en Effective) */}
       {data && !loading && !error && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-          <TotalCard label="Effective Hours"        value={totales.effective}    color="bg-emerald-50 border-emerald-400 text-emerald-700" />
-          <TotalCard label="Hours without recording" value={totales.sinRegistrar} color="bg-amber-50   border-amber-400   text-amber-700" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+          <TotalCard label="Effective Hours"        value={totales.effective}      color="bg-emerald-50 border-emerald-400 text-emerald-700" />
+          <TotalCard label="Hours without recording" value={totales.sinRegistrar}   color="bg-amber-50   border-amber-400   text-amber-700" />
+          <TotalCard label="Administrative Hours"   value={totales.administrative} color="bg-violet-50  border-violet-400  text-violet-700" />
         </div>
       )}
 

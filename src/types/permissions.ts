@@ -162,6 +162,11 @@ export enum AcademicoPermission {
 
   // Sesiones sin gestión — backlog de eventos pasados sin cerrar
   SESIONES_SIN_GESTION_VER   = 'ACADEMICO.SESIONES_SIN_GESTION.VER',
+
+  // Admin Events — eventos administrativos del advisor (Training/Support/...)
+  ADMIN_EVENTS_GESTIONAR  = 'ACADEMICO.ADMIN_EVENTS.GESTIONAR',  // crear/editar/eliminar
+  ADMIN_EVENTS_REGISTRAR  = 'ACADEMICO.ADMIN_EVENTS.REGISTRAR',  // advisor registra timeout+notas
+  ADMIN_EVENTS_VER_TODOS  = 'ACADEMICO.ADMIN_EVENTS.VER_TODOS',  // ver de cualquier advisor
 }
 
 /**

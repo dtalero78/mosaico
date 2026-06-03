@@ -530,6 +530,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Página "Sesiones sin gestión"',
     description: 'Acceso a /dashboard/academic/sesiones-sin-gestion. Lista de eventos pasados sin registrar (sesionCerrada=false) con filtros por fecha y advisor. Muestra inscritos/asistencia marcada para detectar si el advisor empezó pero no cerró, y un acceso directo al panel del evento para que el coordinador gestione el cierre.',
   },
+  {
+    code: AcademicoPermission.ADMIN_EVENTS_GESTIONAR,
+    module: Module.ACADEMICO,
+    section: 'Eventos Administrativos',
+    name: 'Página "Eventos Administrativos" — crear / editar / eliminar',
+    description: 'Acceso a /dashboard/academic/eventos-administrativos. Crear eventos administrativos del advisor (Training/Support/Observation/Meeting/Development), asignarlos a uno o varios advisors, editarlos o eliminarlos. Pensado para SUPER_ADMIN / ADMIN / COORDINADOR_ACADEMICO.',
+  },
+  {
+    code: AcademicoPermission.ADMIN_EVENTS_REGISTRAR,
+    module: Module.ACADEMICO,
+    section: 'Eventos Administrativos',
+    name: 'Registrar Evento Administrativo (advisor)',
+    description: 'Permite que el advisor marque como registrado un evento administrativo asignado a él, dentro de su ventana de +40 / +120 min. El rol ADVISOR lo tiene por default.',
+  },
+  {
+    code: AcademicoPermission.ADMIN_EVENTS_VER_TODOS,
+    module: Module.ACADEMICO,
+    section: 'Eventos Administrativos',
+    name: 'Ver Eventos Administrativos de cualquier advisor',
+    description: 'Acceso al listado completo de eventos administrativos sin restricción de advisor. Cada advisor siempre ve los suyos sin necesidad de este permiso.',
+  },
 
   // ========== INFORMES MODULE ==========
   // Abuelo: muestra el grupo Informes en el sidebar. Cada informe se habilita

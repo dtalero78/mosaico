@@ -39,6 +39,20 @@ interface Item {
   asistioMarcados: number
 }
 
+interface AdminItem {
+  eventoId: string
+  eventGroupId: string
+  fechaInicio: string
+  tipo: string
+  titulo: string | null
+  horas: number
+  advisorId: string | null
+  advisorNombre: string | null
+  advisorEmail: string | null
+}
+
+type Tab = 'academicas' | 'admin'
+
 const PAD = (n: number) => String(n).padStart(2, '0')
 
 /** "YYYY-MM-DD" en la TZ local del navegador. */
@@ -90,8 +104,10 @@ export default function SesionesSinGestionPage() {
   const [advisorsLoading, setAdvisorsLoading] = useState(true)
 
   const [items, setItems] = useState<Item[]>([])
+  const [adminItems, setAdminItems] = useState<AdminItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<Tab>('academicas')
 
   // Cargar advisors activos para el dropdown
   useEffect(() => {
@@ -118,16 +134,25 @@ export default function SesionesSinGestionPage() {
         try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Bogota' }
         catch { return 'America/Bogota' }
       })()
-      const qs = new URLSearchParams({ startDate, endDate, tz })
-      if (advisorId) qs.set('advisorId', advisorId)
-      if (tipo)      qs.set('tipo', tipo)
-      const r = await fetch(`/api/postgres/reports/academico/sesiones-sin-gestion?${qs}`)
-      const j = await r.json()
-      if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
-      setItems(j.items as Item[])
+      const qsBase = new URLSearchParams({ startDate, endDate, tz })
+      if (advisorId) qsBase.set('advisorId', advisorId)
+
+      // Cargar ambas listas en paralelo — la tab muestra solo la activa pero
+      // mantenemos contadores actualizados sin doble click.
+      const academicQs = new URLSearchParams(qsBase)
+      if (tipo) academicQs.set('tipo', tipo)
+      const [rAc, rAd] = await Promise.all([
+        fetch(`/api/postgres/reports/academico/sesiones-sin-gestion?${academicQs}`),
+        fetch(`/api/postgres/reports/academico/admin-events-sin-registrar?${qsBase}`),
+      ])
+      const [jAc, jAd] = await Promise.all([rAc.json(), rAd.json()])
+      if (!rAc.ok || !jAc.success) throw new Error(jAc?.error || `Error ${rAc.status}`)
+      setItems(jAc.items as Item[])
+      if (rAd.ok && jAd.success) setAdminItems(jAd.items as AdminItem[])
+      else setAdminItems([])
     } catch (e: any) {
       setError(e?.message || 'Error al cargar')
-      setItems([])
+      setItems([]); setAdminItems([])
     } finally {
       setLoading(false)
     }
@@ -249,7 +274,86 @@ export default function SesionesSinGestionPage() {
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">{error}</div>
           )}
 
-          {/* Tabla */}
+          {/* Tabs */}
+          <div className="border-b border-gray-200 flex gap-1">
+            <button type="button" onClick={() => setTab('academicas')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'academicas' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              Sesiones académicas ({items.length})
+            </button>
+            <button type="button" onClick={() => setTab('admin')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'admin' ? 'border-violet-600 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              Eventos administrativos ({adminItems.length})
+            </button>
+          </div>
+
+          {/* Tabla — render condicional según tab */}
+          {tab === 'admin' && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              {loading ? (
+                <p className="p-8 text-center text-sm text-gray-400">Cargando…</p>
+              ) : adminItems.length === 0 ? (
+                <div className="p-10 text-center">
+                  <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-100 rounded-full mb-3">
+                    <span className="text-2xl">✓</span>
+                  </div>
+                  <p className="text-sm font-semibold text-emerald-700">No hay eventos administrativos sin registrar</p>
+                  <p className="text-xs text-gray-500 mt-1">El backlog administrativo está al día.</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr className="text-xs text-gray-500 uppercase">
+                      <th className="text-left font-medium px-3 py-2">Advisor</th>
+                      <th className="text-left font-medium px-3 py-2 w-32">Tipo</th>
+                      <th className="text-left font-medium px-3 py-2">Título</th>
+                      <th className="text-left font-medium px-3 py-2 w-40">Fecha · Hora</th>
+                      <th className="text-center font-medium px-3 py-2 w-16">Horas</th>
+                      <th className="text-right font-medium px-3 py-2 w-24">Ir</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminItems.map(it => (
+                      <tr key={it.eventoId} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-shrink-0 h-7 w-7 rounded-full bg-gray-100 flex items-center justify-center">
+                              <UserCircleIcon className="h-6 w-6 text-gray-400" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{it.advisorNombre || '(sin nombre)'}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center text-xs bg-violet-100 text-violet-700 border border-violet-300 px-2 py-0.5 rounded-full font-medium">
+                            {it.tipo}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{it.titulo || '—'}</td>
+                        <td className="px-3 py-2">
+                          <div className="text-sm text-gray-900">{fechaCorta(it.fechaInicio)}</div>
+                          <div className="text-xs font-mono text-gray-600">{horaLocal(it.fechaInicio)}</div>
+                        </td>
+                        <td className="px-3 py-2 text-center text-sm font-semibold text-gray-700">{it.horas}h</td>
+                        <td className="px-3 py-2 text-right">
+                          {/* Ir al panel-advisor del advisor — desde ahí coord puede registrar */}
+                          {it.advisorEmail && (
+                            <a href={`/panel-advisor?email=${encodeURIComponent(it.advisorEmail)}`}
+                              target="_blank" rel="noopener noreferrer"
+                              title="Ir al panel-advisor del advisor"
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-violet-50 text-violet-600 hover:text-violet-700">
+                              <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* Tabla — sesiones académicas (tab por defecto) */}
+          {tab === 'academicas' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             {loading ? (
               <p className="p-8 text-center text-sm text-gray-400">Cargando…</p>
@@ -338,6 +442,7 @@ export default function SesionesSinGestionPage() {
               </table>
             )}
           </div>
+          )}
         </div>
       </PermissionGuard>
     </DashboardLayout>
