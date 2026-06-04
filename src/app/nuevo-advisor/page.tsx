@@ -109,6 +109,8 @@ export default function NuevoAdvisorPage() {
     if (currentStep === 3) {
       if (!form.fechaNacimiento) e.fechaNacimiento = 'Requerido'
       if (!form.zoom.trim())     e.zoom = 'Requerido'
+      // Foto obligatoria — debe haber un fotoKey (ya subida) o un fotoFile pendiente
+      if (!form.fotoKey && !fotoFile) e.fotoKey = 'La foto de perfil es obligatoria'
     }
     setErrors(e)
     return Object.keys(e).length === 0
@@ -269,11 +271,13 @@ export default function NuevoAdvisorPage() {
               {/* Foto */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Foto de perfil <span className="text-gray-400 text-xs">(opcional)</span>
+                  Foto de perfil <span className="text-red-500">*</span>
                 </label>
                 <div className="flex items-center gap-4">
                   <div
-                    className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-2 border-indigo-200 cursor-pointer hover:opacity-90 transition flex-shrink-0"
+                    className={`w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-2 cursor-pointer hover:opacity-90 transition flex-shrink-0 ${
+                      errors.fotoKey ? 'border-red-400' : 'border-indigo-200'
+                    }`}
                     onClick={() => fileRef.current?.click()}
                   >
                     {fotoPreview
@@ -290,6 +294,7 @@ export default function NuevoAdvisorPage() {
                       {fotoPreview ? 'Cambiar foto' : 'Subir foto'}
                     </button>
                     <p className="text-xs text-gray-400 mt-1">JPG, PNG, WEBP</p>
+                    {errors.fotoKey && <p className="text-red-500 text-xs mt-1">{errors.fotoKey}</p>}
                     {errors.foto && <p className="text-red-500 text-xs mt-1">{errors.foto}</p>}
                   </div>
                 </div>

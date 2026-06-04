@@ -16,10 +16,60 @@ export const POST = handler(async (request: Request) => {
   if (!primerNombre?.trim()) throw new ValidationError('primerNombre es requerido');
   if (!primerApellido?.trim()) throw new ValidationError('primerApellido es requerido');
   if (!email?.trim()) throw new ValidationError('email es requerido');
+  // Foto obligatoria — body.fotoKey es la key del archivo en DO Spaces
+  // (la sube el frontend via /api/postgres/advisors/photo-presign-public).
+  if (!body.fotoKey?.trim()) throw new ValidationError('La foto de perfil es obligatoria');
 
-  // Check duplicate email
-  const existing = await AdvisorRepository.findByEmail(email.trim().toLowerCase());
-  if (existing) throw new ConflictError('Ya existe un advisor con ese email');
+  const emailLower = email.trim().toLowerCase();
+  const numeroIdNorm = body.numeroId?.trim().toUpperCase() || null;
+  const zoomNorm = body.zoom?.trim() || null;
+
+  // --- Validación de duplicados (3 dimensiones) ---
+  // Mensaje específico para que el usuario sepa qué campo limpiar.
+
+  // 1) Email — en ADVISORS o USUARIOS_ROLES (cualquiera de las dos lo bloquea)
+  const advByEmail = await AdvisorRepository.findByEmail(emailLower);
+  if (advByEmail) throw new ConflictError('Ya existe un advisor registrado con ese correo');
+
+  const userByEmail = await queryOne<{ _id: string; nombre: string | null; rol: string }>(
+    `SELECT "_id","nombre","rol" FROM "USUARIOS_ROLES"
+      WHERE LOWER(TRIM("email")) = LOWER(TRIM($1)) LIMIT 1`,
+    [emailLower]
+  );
+  if (userByEmail) {
+    throw new ConflictError(
+      `Ese correo ya está en uso por otro usuario (rol ${userByEmail.rol}${userByEmail.nombre ? ' — ' + userByEmail.nombre : ''})`
+    );
+  }
+
+  // 2) Número de identificación — verificar en USUARIOS_ROLES.numberid
+  if (numeroIdNorm) {
+    const userByNumeroId = await queryOne<{ _id: string; nombre: string | null; email: string; rol: string }>(
+      `SELECT "_id","nombre","email","rol" FROM "USUARIOS_ROLES"
+        WHERE UPPER(TRIM("numberid")) = UPPER(TRIM($1)) LIMIT 1`,
+      [numeroIdNorm]
+    );
+    if (userByNumeroId) {
+      throw new ConflictError(
+        `Ya existe un usuario con ese número de identificación (rol ${userByNumeroId.rol}${userByNumeroId.nombre ? ' — ' + userByNumeroId.nombre : ''})`
+      );
+    }
+  }
+
+  // 3) Link de Zoom — debe ser único en ADVISORS (no se valida en USUARIOS_ROLES;
+  // el campo linkZoom de ahí no se usa como fuente de verdad).
+  if (zoomNorm) {
+    const advByZoom = await queryOne<{ _id: string; nombreCompleto: string | null }>(
+      `SELECT "_id","nombreCompleto" FROM "ADVISORS"
+        WHERE TRIM("zoom") = TRIM($1) LIMIT 1`,
+      [zoomNorm]
+    );
+    if (advByZoom) {
+      throw new ConflictError(
+        `Ese link de Zoom ya está asignado a otro advisor${advByZoom.nombreCompleto ? ' (' + advByZoom.nombreCompleto + ')' : ''}`
+      );
+    }
+  }
 
   const nombreCompleto = [primerNombre, primerApellido].map(s => s.trim()).join(' ');
 
@@ -40,13 +90,12 @@ export const POST = handler(async (request: Request) => {
 
   // Also create USUARIOS_ROLES entry so the advisor can log in
   const password = body.clave?.trim() || 'LGS2026';
-  const emailLower = email.trim().toLowerCase();
   const inserted = await queryOne<{ _id: string }>(
     `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numberid", "_createdDate", "_updatedDate")
      VALUES ($1, $2, $3, $4, 'ADVISOR', true, $5, NOW(), NOW())
      ON CONFLICT ("email") DO NOTHING
      RETURNING "_id"`,
-    [ids.advisor(), emailLower, password, nombreCompleto, body.numeroId?.trim().toUpperCase() || null]
+    [ids.advisor(), emailLower, password, nombreCompleto, numeroIdNorm]
   );
 
   // Relación formal ADVISORS -> USUARIOS_ROLES (análoga a ACADEMICA.usuarioId).
