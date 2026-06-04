@@ -46,14 +46,14 @@ export default function SinEvaluarCard() {
             <CheckCircleIcon className="h-6 w-6 text-emerald-700" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold text-emerald-900">Evaluaciones</h3>
+            <h3 className="text-lg font-bold text-emerald-900">Valoración de Sesiones</h3>
             <p className="text-xs text-emerald-800 mt-0.5">
-              Aquí verás las sesiones que tienes pendientes por evaluar.
+              Aquí verás las sesiones que tienes pendientes por valorar.
             </p>
           </div>
         </div>
         <p className="text-sm text-gray-500 text-center py-2">
-          🎉 No tienes sesiones por evaluar esta semana.
+          🎉 No tienes encuestas pendientes esta semana.
         </p>
       </div>
     )
@@ -67,7 +67,7 @@ export default function SinEvaluarCard() {
           <div className="p-2 bg-orange-200 rounded-lg flex-shrink-0"><StarIcon className="h-6 w-6 text-orange-700" /></div>
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-bold text-orange-900">
-              Sin Calificar · {rows.length} {rows.length === 1 ? 'sesión' : 'sesiones'}
+              Valoración pendiente · {rows.length} {rows.length === 1 ? 'sesión' : 'sesiones'}
             </h3>
             <p className="text-xs text-orange-800 mt-0.5">
               Selecciona una sesión y llena la encuesta.
