@@ -29,6 +29,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# diagnosticos / output local de scripts (datos sensibles)
+*.csv
+!public/**/*.csv
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
