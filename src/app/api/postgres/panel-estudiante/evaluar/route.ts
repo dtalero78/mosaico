@@ -31,7 +31,12 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     throw new ValidationError('bookingId requerido');
   }
 
-  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
+  // x-forwarded-for puede traer una cadena "cliente, proxy1, proxy2, …" cuando
+  // pasa por Cloudflare + DO load balancer. Tomamos sólo la primera IP (cliente
+  // real) y truncamos a 45 chars para caber holgadamente en VARCHAR(50) de la BD
+  // (45 = espacio para IPv6 expandida "0000:0000:0000:0000:0000:0000:0000:0000").
+  const ipRaw = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
+  const ip = ipRaw.split(',')[0].trim().slice(0, 45);
   const userAgent = request.headers.get('user-agent') || '';
 
   // Las bookings se enlazan con ACADEMICA._id vía studentId/idEstudiante.

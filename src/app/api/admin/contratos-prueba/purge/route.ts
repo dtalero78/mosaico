@@ -50,8 +50,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   const actorEmail  = (session?.user as any)?.email ?? ''
   const actorNombre = (session?.user as any)?.name ?? null
-  const ip          = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || ''
-  const userAgent   = request.headers.get('user-agent') || ''
+  // x-forwarded-for puede traer chain "cliente, proxy1, proxy2..." en producción.
+  // Tomamos la primera IP (cliente real) y truncamos a 45 para caber en VARCHAR(50).
+  const ipRaw      = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || ''
+  const ip         = ipRaw.split(',')[0].trim().slice(0, 45)
+  const userAgent  = request.headers.get('user-agent') || ''
 
   const results: PurgeResultItem[] = []
 
