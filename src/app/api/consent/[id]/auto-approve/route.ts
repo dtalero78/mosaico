@@ -4,6 +4,7 @@ import { autoApproveConsent } from '@/services/consent.service';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
+import { getAsesorInfo } from '@/lib/asesor';
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
 const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
@@ -104,12 +105,14 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
           hash: result.hash,
         };
 
+        const asesorInfo = await getAsesorInfo((titular as any).asesor);
         const contractText = fillContractTemplate(
           templateRow.template,
           titular,
           beneficiarios,
           financial,
-          consentData as any
+          consentData as any,
+          asesorInfo,
         );
 
         const htmlContent = `<!DOCTYPE html>

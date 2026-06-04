@@ -34,12 +34,18 @@ function fmtDate(value: any): string {
  * Fill a contract template with data, replacing {{placeholder}} tokens.
  * Mirrors the Wix TemplateManager.buildData + fillTemplate logic.
  */
+export interface EjecutivoComercialInfo {
+  nombre?: string;
+  email?: string;
+}
+
 export function fillContractTemplate(
   template: string,
   titular: any,
   beneficiarios: any[],
   financial: any,
-  consentData?: ConsentDisplay
+  consentData?: ConsentDisplay,
+  ejecutivoComercial?: EjecutivoComercialInfo | null,
 ): string {
   // Build beneficiarios text block
   const beneficiariosText = beneficiarios.length === 0
@@ -66,12 +72,19 @@ export function fillContractTemplate(
       : '';
     const tipo = c.tipoAprobacion === 'AUTOMATICA' ? ' (Aprobacion Automatica)' : '';
 
+    const ejecutivoLineas =
+      (ejecutivoComercial && (ejecutivoComercial.nombre || ejecutivoComercial.email))
+        ? `Ejecutivo Comercial: ${ejecutivoComercial.nombre || ''}\n` +
+          `Correo del ejecutivo: ${ejecutivoComercial.email || ''}\n`
+        : '';
+
     firmaText =
       `\n--- CONSENTIMIENTO DECLARATIVO VERIFICADO${tipo} ---\n` +
       `Documento: ${c.numeroDocumento || ''}\n` +
       `Fecha: ${fecha}\n` +
       `Celular Verificado: ${c.celularValidado || ''}\n` +
       `Hash: ${consentData.hash?.substring(0, 16) || ''}...\n` +
+      ejecutivoLineas +
       `---`;
   }
 

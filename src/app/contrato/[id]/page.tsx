@@ -46,7 +46,7 @@ export default function ContratoPublicoPage() {
         return
       }
 
-      const { titular: tit, beneficiarios: ben, financial: fin, template } = contractRes
+      const { titular: tit, beneficiarios: ben, financial: fin, template, asesorInfo } = contractRes
 
       setTitular(tit)
       setBeneficiarios(ben || [])
@@ -56,7 +56,7 @@ export default function ContratoPublicoPage() {
       setConsentStatus(consent)
 
       // Fill template
-      const filled = fillContractTemplate(template || '', tit, ben || [], fin || null, consent || undefined)
+      const filled = fillContractTemplate(template || '', tit, ben || [], fin || null, consent || undefined, asesorInfo || null)
       setContractText(filled)
 
       if (consent?.hasConsent) {

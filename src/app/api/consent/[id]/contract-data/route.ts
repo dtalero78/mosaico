@@ -2,6 +2,7 @@ import 'server-only';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { NotFoundError } from '@/lib/errors';
 import { queryOne, queryMany } from '@/lib/postgres';
+import { getAsesorInfo } from '@/lib/asesor';
 
 export const GET = handler(async (_request, { params }) => {
   const titularId = params.id;
@@ -62,5 +63,8 @@ export const GET = handler(async (_request, { params }) => {
     template = tplRow?.template || null;
   }
 
-  return successResponse({ titular, beneficiarios, financial, template });
+  // Resolve asesor info (used at end of consent block in template).
+  const asesorInfo = await getAsesorInfo((titular as any).asesor);
+
+  return successResponse({ titular, beneficiarios, financial, template, asesorInfo });
 });

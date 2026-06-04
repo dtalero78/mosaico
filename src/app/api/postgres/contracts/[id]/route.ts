@@ -4,6 +4,7 @@ import { queryOne, queryMany, parseJsonbFields } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { PeopleRepository } from '@/repositories/people.repository';
 import { FinancialRepository } from '@/repositories/financial.repository';
+import { getAsesorInfo } from '@/lib/asesor';
 
 // Fields editable on PEOPLE records (titular & beneficiarios)
 const PEOPLE_EDIT_FIELDS = [
@@ -89,10 +90,14 @@ export const GET = handler(async (
     financial = await FinancialRepository.findByContrato(parsedTitular.contrato);
   }
 
+  // 4. Resolve asesor (ejecutivo comercial) info — used at end of consent block.
+  const asesorInfo = await getAsesorInfo(parsedTitular.asesor);
+
   return successResponse({
     titular: parsedTitular,
     beneficiarios,
     financial,
+    asesorInfo,
   });
 });
 

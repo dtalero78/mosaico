@@ -68,7 +68,8 @@ export default function PersonContractViewer({ person }: Props) {
         contractData.titular,
         contractData.beneficiarios || [],
         contractData.financial || null,
-        consentStatus || undefined
+        consentStatus || undefined,
+        contractData.asesorInfo || null,
       )
       setContractHtml(filled)
     } catch (err: any) {

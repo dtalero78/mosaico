@@ -3,6 +3,7 @@ import { handler, successResponse } from '@/lib/api-helpers';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { queryOne, queryMany } from '@/lib/postgres';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
+import { getAsesorInfo } from '@/lib/asesor';
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
 const WHAPI_TOKEN = 'VSyDX4j7ooAJ7UGOhz8lGplUVDDs2EYj';
@@ -58,13 +59,17 @@ export const POST = handler(async (_request, { params }) => {
     ? { hasConsent: true, consent: consentObj, hash: titular.hashConsentimiento }
     : { hasConsent: false };
 
+  // 3b. Resolve ejecutivo comercial (asesor) — incluido al final del bloque de consentimiento.
+  const asesorInfo = await getAsesorInfo((titular as any).asesor);
+
   // 4. Fill template with data (full contract text)
   const contractText = fillContractTemplate(
     templateRow.template,
     titular,
     beneficiarios,
     financial,
-    consentData
+    consentData,
+    asesorInfo,
   );
 
   // 5. Wrap in HTML for PDF generation

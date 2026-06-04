@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { queryOne, queryMany } from '@/lib/postgres';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
+import { getAsesorInfo } from '@/lib/asesor';
 import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
 
@@ -70,12 +71,14 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
     ? { hasConsent: true, consent: consentObj, hash: titular.hashConsentimiento }
     : { hasConsent: false };
 
+  const asesorInfo = await getAsesorInfo((titular as any).asesor);
   const contractText = fillContractTemplate(
     templateRow.template,
     titular,
     beneficiarios,
     financial,
-    consentData
+    consentData,
+    asesorInfo,
   );
 
   const htmlContent = `<!DOCTYPE html>

@@ -218,6 +218,7 @@ export default function ContratoDetailPage() {
   const [titular, setTitular] = useState<any>(null)
   const [beneficiarios, setBeneficiarios] = useState<any[]>([])
   const [financial, setFinancial] = useState<any>(null)
+  const [asesorInfo, setAsesorInfo] = useState<{ nombre?: string; email?: string } | null>(null)
 
   // Edit state
   const [editTitular, setEditTitular] = useState<Record<string, any>>({})
@@ -265,6 +266,7 @@ export default function ContratoDetailPage() {
       setTitular(data.titular)
       setBeneficiarios(data.beneficiarios || [])
       setFinancial(data.financial || null)
+      setAsesorInfo(data.asesorInfo || null)
     } catch (err: any) {
       setError(err.message || 'Error cargando contrato')
       handleApiError(err, 'Error cargando contrato')
@@ -312,11 +314,11 @@ export default function ContratoDetailPage() {
     if (showContractModal && templateCacheRef.current && consentStatus?.hasConsent) {
       const filled = fillContractTemplate(
         templateCacheRef.current, titular, beneficiarios, financial,
-        consentStatus || undefined
+        consentStatus || undefined, asesorInfo,
       )
       setContractHtml(filled)
     }
-  }, [consentStatus, showContractModal, titular, beneficiarios, financial])
+  }, [consentStatus, showContractModal, titular, beneficiarios, financial, asesorInfo])
 
   // Open contract preview modal
   const openContractPreview = async () => {
@@ -331,7 +333,7 @@ export default function ContratoDetailPage() {
         `/api/postgres/contracts/template?plataforma=${encodeURIComponent(titular.plataforma)}`
       )
       templateCacheRef.current = data.template
-      const filled = fillContractTemplate(data.template, titular, beneficiarios, financial, consentStatus || undefined)
+      const filled = fillContractTemplate(data.template, titular, beneficiarios, financial, consentStatus || undefined, asesorInfo)
       setContractHtml(filled)
     } catch (err) {
       handleApiError(err, 'Error cargando plantilla del contrato')
