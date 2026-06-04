@@ -40,8 +40,11 @@ class AdvisorRepositoryClass extends BaseRepository {
    * Find advisor by email
    */
   async findByEmail(email: string) {
+    // case-insensitive + TRIM para tolerar emails con espacios al borde o
+    // mayúsculas distintas entre USUARIOS_ROLES.email y ADVISORS.email.
     return queryOne(
-      `SELECT ${ADVISOR_COLUMNS} FROM "ADVISORS" WHERE "email" = $1`,
+      `SELECT ${ADVISOR_COLUMNS} FROM "ADVISORS"
+        WHERE LOWER(TRIM("email")) = LOWER(TRIM($1)) LIMIT 1`,
       [email]
     );
   }
@@ -51,7 +54,8 @@ class AdvisorRepositoryClass extends BaseRepository {
    */
   async findByIdOrEmail(idOrEmail: string) {
     return queryOne(
-      `SELECT ${ADVISOR_COLUMNS} FROM "ADVISORS" WHERE "_id" = $1 OR "email" = $1`,
+      `SELECT ${ADVISOR_COLUMNS} FROM "ADVISORS"
+        WHERE "_id" = $1 OR LOWER(TRIM("email")) = LOWER(TRIM($1)) LIMIT 1`,
       [idOrEmail]
     );
   }
