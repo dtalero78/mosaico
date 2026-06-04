@@ -22,7 +22,10 @@ interface CalendarioEvent {
   nombreEvento: string
   evento: 'SESSION' | 'CLUB' | 'WELCOME'
   dia: string
-  advisor: string
+  advisor: string                          // ADVISORS._id (UUID)
+  advisorNombreCompleto?: string | null    // viene del JOIN del endpoint
+  advisorPrimerNombre?: string | null
+  advisorPrimerApellido?: string | null
   tituloONivel: string
   observaciones?: string
   limiteUsuarios: number

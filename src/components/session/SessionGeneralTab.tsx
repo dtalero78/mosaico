@@ -9,7 +9,10 @@ interface CalendarioEvent {
   nombreEvento: string
   evento: 'SESSION' | 'CLUB' | 'WELCOME'
   dia: string
-  advisor: string
+  advisor: string                          // ADVISORS._id (UUID) — no human-readable
+  advisorNombreCompleto?: string | null    // viene del JOIN del endpoint
+  advisorPrimerNombre?: string | null
+  advisorPrimerApellido?: string | null
   tituloONivel: string
   observaciones?: string
   limiteUsuarios: number
@@ -22,6 +25,13 @@ interface SessionGeneralTabProps {
 }
 
 export default function SessionGeneralTab({ evento, studentCount }: SessionGeneralTabProps) {
+  // Preferir nombre completo del JOIN; fallback al UUID si no hay match en ADVISORS.
+  const advisorDisplay =
+    evento.advisorNombreCompleto?.trim() ||
+    [evento.advisorPrimerNombre, evento.advisorPrimerApellido].filter(Boolean).join(' ').trim() ||
+    evento.advisor ||
+    'No asignado'
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 space-y-6">
       {/* Información Básica */}
@@ -70,7 +80,7 @@ export default function SessionGeneralTab({ evento, studentCount }: SessionGener
             Advisor
           </label>
           <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-gray-900">{evento.advisor || 'No asignado'}</p>
+            <p className="text-gray-900">{advisorDisplay}</p>
           </div>
         </div>
 
