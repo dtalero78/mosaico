@@ -66,7 +66,9 @@ export default function AprobacionPage() {
   const [allContratos, setAllContratos] = useState<Contrato[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState<FilterState>({
-    estado: '',
+    // Default = "Firmado sin aprobar" para que el aprobador entre directo al
+    // backlog operativo (contratos que el cliente ya firmó y esperan visto bueno).
+    estado: 'Firmado sin aprobar',
     fechaInicio: null,
     fechaFin: null
   })
