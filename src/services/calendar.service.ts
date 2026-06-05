@@ -123,6 +123,17 @@ export async function updateEvent(
   const event = await CalendarioRepository.findById(eventId);
   if (!event) throw new NotFoundError('Event', eventId);
 
+  // tipo y evento son la MISMA cosa en CALENDARIO (legacy: el campo se llamaba
+  // "evento" en Wix, ahora la fuente de verdad es "tipo"). Si el frontend manda
+  // sólo uno, sincronizamos ambos para evitar que queden desfasados — bug que
+  // ya ocurrió: editar un evento cambiaba sólo una columna y los queries que
+  // filtran por la otra dejaban de verlo.
+  if (data.tipo || data.evento) {
+    const t = data.tipo ?? data.evento;
+    data.tipo = t;
+    data.evento = t;
+  }
+
   // Derive nivel, step and tituloONivel from the modal data
   if (data.tituloONivel && !data.nivel) {
     data.nivel = data.tituloONivel;
@@ -220,6 +231,8 @@ export async function updateEvent(
   if (data.nivel && data.nivel !== event.nivel) bookingUpdates.nivel = data.nivel;
   if (data.step && data.step !== event.step) bookingUpdates.step = data.step;
   if (data.tituloONivel && data.tituloONivel !== event.tituloONivel) bookingUpdates.tituloONivel = data.tituloONivel;
+  // tipo cambió (ya está sincronizado con evento arriba) — propaga AMBAS
+  // columnas a los bookings hijos (tipo y tipoEvento, legacy Wix).
   if (data.tipo && data.tipo !== event.tipo) { bookingUpdates.tipo = data.tipo; bookingUpdates.tipoEvento = data.tipo; }
 
   if (Object.keys(bookingUpdates).length > 0) {
