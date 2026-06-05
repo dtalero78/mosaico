@@ -11,6 +11,7 @@ const FLAG_BASE    = '/api/admin/feature-flags/performance-eval'
 const keys = {
   pendientes:    ['evaluations', 'pendientes'] as const,
   dashboard:     (filters: Record<string, string | null>) => ['evaluations', 'dashboard', filters] as const,
+  advisorsList:  ['evaluations', 'advisors-list'] as const,
   flag:          ['evaluations', 'feature-flag'] as const,
 }
 
@@ -53,6 +54,15 @@ export function usePerformanceDashboard(filters: {
     keys.dashboard(filters as any),
     () => api.get(`${ADMIN_BASE}?${qs.toString()}`),
     { staleTime: 60 * 1000 }
+  )
+}
+
+/** Lista de advisors con evaluaciones, para el dropdown de la pestaña "Por Advisor". */
+export function useAdvisorsWithEvaluations() {
+  return useQuery(
+    keys.advisorsList,
+    () => api.get(`${ADMIN_BASE}/advisors-list`),
+    { staleTime: 5 * 60 * 1000 }
   )
 }
 
