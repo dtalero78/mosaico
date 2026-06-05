@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { ArrowDownTrayIcon, ArrowPathIcon, StarIcon } from '@heroicons/react/24/solid'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowDownTrayIcon, ArrowPathIcon, StarIcon, UserGroupIcon, UserCircleIcon } from '@heroicons/react/24/solid'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { exportToExcel } from '@/lib/export-excel'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission, Role } from '@/types/permissions'
-import { usePerformanceDashboard } from '@/hooks/use-evaluations'
+import { usePerformanceDashboard, useAdvisorsWithEvaluations } from '@/hooks/use-evaluations'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useSession } from 'next-auth/react'
 
 /** Dimensiones V2 con sus labels canónicos (mismo orden que el modal). */
@@ -34,6 +35,12 @@ export default function PerformanceEvaluationPage() {
   const { data: session } = useSession()
   const role = (session?.user as any)?.role
   const canSeeRawComments = role === Role.SUPER_ADMIN || role === Role.ADMIN
+  const { hasPermission } = usePermissions()
+  const canSeeByAdvisor = hasPermission(AcademicoPermission.PERFORMANCE_EVAL_POR_ADVISOR)
+                        || role === Role.SUPER_ADMIN || role === Role.ADMIN
+
+  // Tab activo: vista general o vista por advisor.
+  const [view, setView] = useState<'general' | 'porAdvisor'>('general')
 
   const [filters, setFilters] = useState({
     startDate: oneMonthBackStr(),
@@ -101,15 +108,66 @@ export default function PerformanceEvaluationPage() {
     <DashboardLayout>
       <PermissionGuard permission={AcademicoPermission.PERFORMANCE_EVAL_VER}>
         <div className="space-y-5 pb-10">
-          {/* Header + filtros */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <StarIcon className="h-7 w-7 text-amber-500" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Performance Evaluation</h1>
-                <p className="text-sm text-gray-500">Evaluaciones de estudiantes a advisors. Ranking Top 5 / Bottom 5 (mín 5 evals).</p>
-              </div>
+          {/* Header con tabs */}
+          <div className="flex items-center gap-3">
+            <StarIcon className="h-7 w-7 text-amber-500" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Performance Evaluation</h1>
+              <p className="text-sm text-gray-500">
+                {view === 'general'
+                  ? 'Vista global de evaluaciones — Top 5 / 5 Promedios Más Bajos.'
+                  : 'Vista por advisor — métricas individuales comparadas contra el promedio general.'}
+              </p>
             </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-1 border-b border-gray-200">
+            <button
+              type="button"
+              onClick={() => setView('general')}
+              className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+                view === 'general'
+                  ? 'border-indigo-600 text-indigo-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+              }`}
+            >
+              <UserGroupIcon className="h-4 w-4" /> Vista General
+            </button>
+            {canSeeByAdvisor && (
+              <button
+                type="button"
+                onClick={() => setView('porAdvisor')}
+                className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+                  view === 'porAdvisor'
+                    ? 'border-indigo-600 text-indigo-700'
+                    : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                }`}
+              >
+                <UserCircleIcon className="h-4 w-4" /> Por Advisor
+              </button>
+            )}
+          </div>
+
+          {/* ─────────────────────────────────────────────────────────────
+              VISTA POR ADVISOR — comparativos contra promedio general
+            ───────────────────────────────────────────────────────────── */}
+          {view === 'porAdvisor' && (
+            <PermissionGuard permission={AcademicoPermission.PERFORMANCE_EVAL_POR_ADVISOR}>
+              <ByAdvisorView
+                filterDates={{ startDate: filters.startDate, endDate: filters.endDate, tipo: filters.tipo }}
+                onFilterDatesChange={(patch) => setFilters(f => ({ ...f, ...patch }))}
+                canExport={true}
+              />
+            </PermissionGuard>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────
+              VISTA GENERAL (la original — sin cambios funcionales)
+            ───────────────────────────────────────────────────────────── */}
+          {view === 'general' && (<>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex-1" />
             <div className="flex items-end gap-2 flex-wrap">
               <div>
                 <label htmlFor="pe-start" className="block text-xs text-gray-500 mb-1">Desde</label>
@@ -328,6 +386,8 @@ export default function PerformanceEvaluationPage() {
               </ul>
             )}
           </div>
+          </>)}
+          {/* fin view === 'general' */}
         </div>
 
         {/* Modal radar advisor */}
@@ -484,6 +544,340 @@ function RadarAdvisorModal({ advisor, onClose }: { advisor: any; onClose: () => 
           </table>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VISTA "POR ADVISOR"
+   Dropdown de advisor con toggle Activos/Inactivos/Todos (default Activos).
+   Métricas del advisor seleccionado comparadas contra el promedio general
+   (mismas fechas + mismo tipo de evento), con deltas visuales.
+   ═══════════════════════════════════════════════════════════════════════ */
+function ByAdvisorView({
+  filterDates, onFilterDatesChange, canExport,
+}: {
+  filterDates: { startDate: string; endDate: string; tipo: string };
+  onFilterDatesChange: (patch: Partial<{ startDate: string; endDate: string; tipo: string }>) => void;
+  canExport: boolean;
+}) {
+  const [advisorFilter, setAdvisorFilter] = useState<'activos' | 'inactivos' | 'todos'>('activos')
+  const [advisorId, setAdvisorId] = useState<string>('')
+
+  const advisorsQ = useAdvisorsWithEvaluations()
+  const advisorsRaw: any[] = advisorsQ.data?.advisors ?? []
+
+  const advisorsList = useMemo(() => {
+    if (advisorFilter === 'activos')   return advisorsRaw.filter(a => a.activo === true)
+    if (advisorFilter === 'inactivos') return advisorsRaw.filter(a => a.activo !== true)
+    return advisorsRaw
+  }, [advisorsRaw, advisorFilter])
+
+  // Si el advisor seleccionado se sale del set por cambio de filtro, lo limpio.
+  useEffect(() => {
+    if (advisorId && !advisorsList.some(a => a._id === advisorId)) {
+      setAdvisorId('')
+    }
+  }, [advisorId, advisorsList])
+
+  // Stats del advisor + stats del promedio general (sin filtro de advisor)
+  // mismas fechas + mismo tipo para que la comparación sea justa.
+  const baseFilters = {
+    startDate: filterDates.startDate || null,
+    endDate:   filterDates.endDate || null,
+    tipo:      filterDates.tipo || null,
+    nivel: null, plataforma: null, comentarioSearch: null,
+  }
+  const advisorStatsQ = usePerformanceDashboard({ ...baseFilters, advisorId: advisorId || null })
+  const generalStatsQ = usePerformanceDashboard({ ...baseFilters, advisorId: null })
+
+  const advData: any = advisorStatsQ.data
+  const genData: any = generalStatsQ.data
+
+  const advKpi = advData?.kpis ?? null
+  const genKpi = genData?.kpis ?? null
+  const advPorDim = advData?.porDimension ?? []
+  const genPorDim = genData?.porDimension ?? []
+  const advDistr  = advData?.distribucion ?? []
+  const advEvo    = advData?.evolucionMensual ?? []
+  const advCom    = advData?.comentarios ?? []
+  const fullGen   = genData?.rankingFull ?? []
+
+  // Posición en ranking general (1-based) entre advisors con ≥5 evals.
+  const posicion = useMemo(() => {
+    if (!advisorId || !fullGen.length) return null
+    const idx = fullGen.findIndex((r: any) => r.advisorId === advisorId)
+    if (idx < 0) return null
+    return { posicion: idx + 1, total: fullGen.length }
+  }, [advisorId, fullGen])
+
+  const distrMax = Math.max(1, ...advDistr.map((d: any) => d.total))
+  const evoMax   = Math.max(1, ...advEvo.map((e: any) => e.evaluaciones))
+
+  // Genera badge de delta: ▲ +0.04 (verde) o ▼ −0.03 (rojo) o = (gris).
+  const renderDelta = (advVal: number | null, genVal: number | null, suffix = '') => {
+    if (advVal == null || genVal == null) return null
+    const diff = advVal - genVal
+    const sign = diff > 0 ? '▲' : diff < 0 ? '▼' : '='
+    const color = diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'
+    const txt   = diff === 0 ? '=' : `${diff > 0 ? '+' : ''}${diff.toFixed(2)}`
+    return <span className={`text-[11px] font-medium ${color}`}>{sign} {txt}{suffix}</span>
+  }
+
+  const handleCSV = () => {
+    if (!advCom.length) return
+    exportToExcel(advCom, [
+      { header: 'Fecha',        accessor: (c: any) => c.fechaEvento ? new Date(c.fechaEvento).toLocaleDateString('es-ES') : '' },
+      { header: 'Tipo',         accessor: (c: any) => c.tipo + (c.subtipo ? ` (${c.subtipo})` : '') },
+      { header: 'Nivel',        accessor: (c: any) => c.nivel || '' },
+      { header: 'Promedio',     accessor: (c: any) => c.promedio },
+      { header: 'Comentario',   accessor: (c: any) => c.comentario || '' },
+      { header: 'IA Sentimiento', accessor: (c: any) => c.aiSentimiento || '' },
+    ], `perf-eval-advisor_${(advisorsList.find(a => a._id === advisorId)?.nombre || advisorId).replace(/\s+/g, '_')}_${filterDates.startDate}_${filterDates.endDate}`)
+  }
+
+  const advisorSelected = advisorsList.find(a => a._id === advisorId)
+  const isLoading = advisorStatsQ.isLoading || generalStatsQ.isLoading
+
+  return (
+    <div className="space-y-5">
+      {/* Filtros: fechas + tipo + activos/inactivos/todos + dropdown advisor */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-end gap-2 flex-wrap">
+        <div>
+          <label htmlFor="bya-start" className="block text-xs text-gray-500 mb-1">Desde</label>
+          <input id="bya-start" type="date" value={filterDates.startDate}
+            onChange={e => onFilterDatesChange({ startDate: e.target.value })}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor="bya-end" className="block text-xs text-gray-500 mb-1">Hasta</label>
+          <input id="bya-end" type="date" value={filterDates.endDate}
+            onChange={e => onFilterDatesChange({ endDate: e.target.value })}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label htmlFor="bya-tipo" className="block text-xs text-gray-500 mb-1">Tipo</label>
+          <select id="bya-tipo" value={filterDates.tipo}
+            onChange={e => onFilterDatesChange({ tipo: e.target.value })}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">Todos</option>
+            <option value="SESSION">Session</option>
+            <option value="CLUB">Club</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="bya-status" className="block text-xs text-gray-500 mb-1">Estado advisor</label>
+          <select id="bya-status" value={advisorFilter}
+            onChange={e => setAdvisorFilter(e.target.value as 'activos' | 'inactivos' | 'todos')}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="activos">Activos</option>
+            <option value="inactivos">Inactivos</option>
+            <option value="todos">Todos</option>
+          </select>
+        </div>
+        <div className="flex-1 min-w-[260px]">
+          <label htmlFor="bya-advisor" className="block text-xs text-gray-500 mb-1">
+            Advisor <span className="text-gray-400">({advisorsList.length} disponibles)</span>
+          </label>
+          <select id="bya-advisor" value={advisorId}
+            onChange={e => setAdvisorId(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">— Selecciona un advisor —</option>
+            {advisorsList.map(a => (
+              <option key={a._id} value={a._id}>
+                {a.nombre} ({a.evaluaciones} evals){a.activo === false ? ' · Inactivo' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {!advisorId && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-8 text-center">
+          <UserCircleIcon className="h-12 w-12 text-indigo-400 mx-auto mb-2" />
+          <p className="text-sm text-indigo-900 font-medium">Selecciona un advisor para ver sus métricas</p>
+          <p className="text-xs text-indigo-700 mt-1">El dropdown filtra por estado ({advisorsList.length} {advisorFilter}).</p>
+        </div>
+      )}
+
+      {advisorId && isLoading && (
+        <div className="text-center text-sm text-gray-500 py-10">Cargando métricas…</div>
+      )}
+
+      {advisorId && !isLoading && advKpi && (
+        <>
+          {/* Header del advisor */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
+            <UserCircleIcon className="h-10 w-10 text-indigo-500" />
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-bold text-gray-900 truncate">{advisorSelected?.nombre || advisorId}</h2>
+              <p className="text-xs text-gray-500">
+                {advisorSelected?.activo === false ? <span className="text-gray-500">⚪ Inactivo · </span> : ''}
+                {advKpi.totalEvaluaciones} evaluaciones · Promedio <span className="text-amber-600 font-bold">{advKpi.promedioGeneral} ★</span>
+                {posicion && <span className="ml-2 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[11px] font-medium">Posición #{posicion.posicion} de {posicion.total}</span>}
+              </p>
+            </div>
+            {canExport && (
+              <button type="button" onClick={handleCSV} disabled={!advCom.length}
+                className="inline-flex items-center gap-1 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                <ArrowDownTrayIcon className="h-4 w-4" />CSV Comentarios
+              </button>
+            )}
+          </div>
+
+          {/* KPIs con comparativos */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <KpiCompare
+              label="Total Evaluaciones"
+              value={advKpi.totalEvaluaciones?.toLocaleString() ?? '—'}
+              compare={genKpi ? `general: ${genKpi.totalEvaluaciones?.toLocaleString()}` : null}
+            />
+            <KpiCompare
+              label="Promedio"
+              value={advKpi.promedioGeneral != null ? `${advKpi.promedioGeneral} ★` : '—'}
+              compare={genKpi?.promedioGeneral != null ? `general: ${genKpi.promedioGeneral} ★` : null}
+              delta={renderDelta(Number(advKpi.promedioGeneral), Number(genKpi?.promedioGeneral))}
+            />
+            <KpiCompare
+              label="Satisfacción ≥4★"
+              value={advKpi.satisfaccionPct != null ? `${advKpi.satisfaccionPct}%` : '—'}
+              compare={genKpi?.satisfaccionPct != null ? `general: ${genKpi.satisfaccionPct}%` : null}
+              delta={renderDelta(Number(advKpi.satisfaccionPct), Number(genKpi?.satisfaccionPct), '%')}
+            />
+            <KpiCompare
+              label="% con comentario"
+              value={advKpi.pctConComentario != null ? `${advKpi.pctConComentario}%` : '—'}
+              compare={genKpi?.pctConComentario != null ? `general: ${genKpi.pctConComentario}%` : null}
+              delta={renderDelta(Number(advKpi.pctConComentario), Number(genKpi?.pctConComentario), '%')}
+            />
+            <KpiCompare
+              label="Largo prom. coment."
+              value={advKpi.largoPromedioComentario != null ? `${advKpi.largoPromedioComentario} car.` : '—'}
+              compare={genKpi?.largoPromedioComentario != null ? `general: ${genKpi.largoPromedioComentario}` : null}
+              delta={renderDelta(Number(advKpi.largoPromedioComentario), Number(genKpi?.largoPromedioComentario))}
+            />
+          </div>
+
+          {/* Métricas por dimensión — advisor vs general */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-800">Métricas por dimensión · advisor vs promedio general</h3>
+              <p className="text-[11px] text-gray-400">Promedio del advisor en barra sólida; el promedio general aparece debajo como referencia.</p>
+            </div>
+            <div className="p-4">
+              {advPorDim.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">Sin datos</p> : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-gray-500 border-b border-gray-100">
+                      <th className="text-left font-medium py-2">Dimensión</th>
+                      <th className="text-right font-medium py-2 w-24">Advisor</th>
+                      <th className="text-right font-medium py-2 w-24">General</th>
+                      <th className="text-right font-medium py-2 w-20">Δ</th>
+                      <th className="text-right font-medium py-2 w-20">≥4★</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {advPorDim.map((d: any) => {
+                      const gen = genPorDim.find((g: any) => g.dim === d.dim)
+                      const diff = Number(d.promedio) - Number(gen?.promedio || 0)
+                      return (
+                        <tr key={d.dim} className="border-b border-gray-50 last:border-0">
+                          <td className="py-3 font-medium text-gray-800">{DIM_LABELS[d.dim] || d.dim}</td>
+                          <td className="py-3 text-right text-amber-600 font-bold">{d.promedio} ★</td>
+                          <td className="py-3 text-right text-gray-500">{gen?.promedio ?? '—'} ★</td>
+                          <td className={`py-3 text-right font-medium ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                            {diff === 0 ? '=' : `${diff > 0 ? '+' : ''}${diff.toFixed(2)}`}
+                          </td>
+                          <td className="py-3 text-right text-gray-700">{d.satisfaccionPct}%</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* Distribución + Evolución */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Distribución de calificaciones · {advisorSelected?.nombre || ''}</h3>
+              {advDistr.length === 0 ? <p className="text-sm text-gray-400">Sin datos</p> : (
+                <div className="space-y-2">
+                  {advDistr.map((d: any) => (
+                    <div key={d.estrella} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-600 w-12">{d.estrella} ★</span>
+                      <div className="flex-1 bg-gray-100 rounded h-5 relative overflow-hidden">
+                        <div className="h-full bg-amber-400" style={{ width: `${(d.total / distrMax) * 100}%` }} />
+                      </div>
+                      <span className="text-xs text-gray-700 w-10 text-right">{d.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Evolución mensual · {advisorSelected?.nombre || ''}</h3>
+              {advEvo.length === 0 ? <p className="text-sm text-gray-400">Sin datos</p> : (
+                <div className="space-y-2">
+                  {advEvo.map((e: any) => (
+                    <div key={e.mes} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-600 w-16">{e.mes}</span>
+                      <div className="flex-1 bg-gray-100 rounded h-5 relative overflow-hidden">
+                        <div className="h-full bg-indigo-500" style={{ width: `${(e.evaluaciones / evoMax) * 100}%` }} />
+                      </div>
+                      <span className="text-xs text-gray-700 w-20 text-right">{e.promedio} ★ · {e.evaluaciones}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Comentarios del advisor */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-800">Comentarios recibidos por {advisorSelected?.nombre || ''}</h3>
+              <p className="text-[11px] text-gray-400">{advCom.length} {advCom.length === 1 ? 'comentario' : 'comentarios'}</p>
+            </div>
+            {advCom.length === 0 ? <p className="p-6 text-center text-sm text-gray-400">Sin comentarios en el período</p> : (
+              <ul className="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
+                {advCom.map((c: any) => (
+                  <li key={c._id} className="px-5 py-3">
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-1 flex-wrap">
+                      <span>{c.tipo}{c.subtipo ? ` (${c.subtipo})` : ''} · {c.nivel}</span>
+                      <span>· {c.fechaEvento ? new Date(c.fechaEvento).toLocaleDateString('es-ES') : ''}</span>
+                      {c.aiSentimiento && (
+                        <span className={`px-1.5 rounded-full text-[10px] font-medium ${
+                          c.aiSentimiento === 'positivo' ? 'bg-emerald-100 text-emerald-700'
+                            : c.aiSentimiento === 'negativo' ? 'bg-red-100 text-red-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>{c.aiSentimiento}</span>
+                      )}
+                      <span className="ml-auto inline-flex items-center gap-0.5 text-amber-600 font-bold">{c.promedio}★</span>
+                    </div>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{c.comentario}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** KPI con comparativo: valor principal grande, valor general pequeño abajo, delta a la derecha. */
+function KpiCompare({ label, value, compare, delta }: { label: string; value: string; compare: string | null; delta?: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+      <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">{label}</p>
+      <div className="flex items-end gap-2 flex-wrap">
+        <p className="text-2xl font-bold text-gray-900">{value}</p>
+        {delta}
+      </div>
+      {compare && <p className="text-[11px] text-gray-500 truncate" title={compare}>{compare}</p>}
     </div>
   )
 }

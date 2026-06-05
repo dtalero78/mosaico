@@ -524,6 +524,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Botón Exportar CSV del informe Performance Evaluation.',
   },
   {
+    code: AcademicoPermission.PERFORMANCE_EVAL_POR_ADVISOR,
+    module: Module.ACADEMICO,
+    section: 'Performance Evaluation',
+    name: '↳ Pestaña Por Advisor (Performance Evaluation)',
+    description: 'Acceso a la pestaña "Por Advisor" dentro del dashboard Performance Evaluation. Permite filtrar por un advisor específico y ver sus métricas comparadas contra el promedio general (KPIs con delta, métricas por dimensión, distribución, evolución y comentarios filtrados). Requiere también PERFORMANCE_EVAL.VER.',
+  },
+  {
     code: AcademicoPermission.SESIONES_SIN_GESTION_VER,
     module: Module.ACADEMICO,
     section: 'Sesiones sin gestión',
