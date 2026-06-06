@@ -299,20 +299,30 @@ function ControlHorasContent() {
       }
     }
     // Eventos compartidos: el advisor da 1 sola hora real aunque haya 2-3
-    // filas (una por nivel). Deduplicamos por `eventoCompartidoId` antes de
-    // contar para no inflar los KPIs. Eventos individuales (compartidoId
-    // NULL) usan su propio _id como clave.
-    const seenGroups = new Set<string>()
+    // filas (una por nivel). Agrupamos por `eventoCompartidoId` y aplicamos
+    // la regla "any closed → Effective": si AL MENOS UNO de los hermanos
+    // está cerrado, el grupo cuenta como Effective. Así un advisor que
+    // cierra P1 pero abandona antes de P2/P3 igual suma 1 Effective (no 3
+    // sin registrar). Los hermanos sin cerrar siguen visibles en el
+    // calendario para que el Coordinador pueda terminarlos si quiere.
+    type GroupState = { tipo: string | null; sesionCerrada: boolean }
+    const groups = new Map<string, GroupState>()
     data.vigentes.forEach(v => {
       if (!isPast(v.fechaEvento)) return
       const key = v.eventoCompartidoId || v.eventoId
-      if (seenGroups.has(key)) return
-      seenGroups.add(key)
-      countByTipo(v.tipo)
-      t.conducted++
-      if (v.sesionCerrada === true) t.effective++
-      else                          t.sinRegistrar++
+      const existing = groups.get(key)
+      if (!existing) {
+        groups.set(key, { tipo: v.tipo, sesionCerrada: v.sesionCerrada === true })
+      } else if (v.sesionCerrada === true) {
+        existing.sesionCerrada = true
+      }
     })
+    for (const g of groups.values()) {
+      countByTipo(g.tipo)
+      t.conducted++
+      if (g.sesionCerrada) t.effective++
+      else                 t.sinRegistrar++
+    }
     data.historicos.forEach(h => {
       if (!isPast(h.fechaEvento)) return
       countByTipo(h.tipo)

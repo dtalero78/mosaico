@@ -151,23 +151,32 @@ export default function AdvisorDashboard() {
     }
 
     // KPIs solo cuentan eventos que YA ocurrieron (fechaEvento <= NOW).
-    // Eventos futuros del mes son agenda, no actividad real.
-    // Eventos compartidos: 1 sola hora real aunque haya 2-3 filas
-    // (deduplicamos por eventoCompartidoId; eventos sueltos usan su _id).
+    // Eventos compartidos: agrupamos por `eventoCompartidoId` y aplicamos
+    // la regla "any closed → Effective": si AL MENOS UNO de los hermanos
+    // está cerrado, el grupo cuenta como Effective (1 sola hora real).
+    // Esto blinda el caso de advisor que cierra P1 y abandona — el KPI
+    // refleja que dio la clase aunque P2/P3 queden abiertos en el calendario.
     const nowMs = Date.now()
     const isPast = (iso: string | null | undefined) =>
       iso != null && new Date(iso).getTime() <= nowMs
-    const seenGroups = new Set<string>()
+    type GroupState = { tipo: string | null; step: string | null; sesionCerrada: boolean }
+    const groups = new Map<string, GroupState>()
     data.vigentes.forEach(v => {
       if (!isPast(v.fechaEvento)) return
       const key = v.eventoCompartidoId || v.eventoId
-      if (seenGroups.has(key)) return
-      seenGroups.add(key)
-      countTipoStep(v.tipo, v.step)
-      k.conducted++
-      if (v.sesionCerrada === true) k.effective++
-      else                          k.sinRegistrar++
+      const existing = groups.get(key)
+      if (!existing) {
+        groups.set(key, { tipo: v.tipo, step: v.step, sesionCerrada: v.sesionCerrada === true })
+      } else if (v.sesionCerrada === true) {
+        existing.sesionCerrada = true
+      }
     })
+    for (const g of groups.values()) {
+      countTipoStep(g.tipo, g.step)
+      k.conducted++
+      if (g.sesionCerrada) k.effective++
+      else                 k.sinRegistrar++
+    }
     data.historicos.forEach(h => {
       if (!isPast(h.fechaEvento)) return
       countTipoStep(h.tipo, h.step)

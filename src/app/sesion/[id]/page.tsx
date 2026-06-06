@@ -88,6 +88,9 @@ export default function SesionPage() {
   const [students, setStudents] = useState<StudentWithClass[]>([])
   const [selectedStudent, setSelectedStudent] = useState<StudentWithClass | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Hermanos del grupo compartido (si el evento pertenece a uno). Cargado en
+  // paralelo al montaje — alimenta el banner y el modal "Continuar al siguiente".
+  const [groupSiblings, setGroupSiblings] = useState<any[]>([])
   // Reloj que tick cada 30s para que las ventanas (canMark, canRegister, expired)
   // se recalculen sin necesidad de recargar la página manualmente.
   const [now, setNow] = useState<Date>(() => new Date())
@@ -125,6 +128,18 @@ export default function SesionPage() {
 
       // Cargar estudiantes inscritos
       await loadStudents()
+
+      // Cargar hermanos del grupo (fire-and-forget — si falla no rompe la página)
+      fetch(`/api/postgres/events/${eventoId}/group`)
+        .then(r => r.ok ? r.json() : null)
+        .then(j => {
+          if (j?.isShared && Array.isArray(j.siblings)) {
+            setGroupSiblings(j.siblings)
+          } else {
+            setGroupSiblings([])
+          }
+        })
+        .catch(() => setGroupSiblings([]))
 
     } catch (err) {
       console.error('Error loading evento:', err)
@@ -234,6 +249,15 @@ export default function SesionPage() {
   const showExpiredAdvisorBanner = !sesionCerrada && windowState.isExpired
   const showCoordinatorBanner = !sesionCerrada && windowState.isCoordinator && windowState.minutesElapsed > 120
 
+  // Info del grupo compartido. El siguiente hermano para el flujo guiado
+  // es el primero (alfabético por nivel) que NO sea el actual Y aún esté
+  // sin cerrar. Si no hay → fin del flujo, redirigir a /panel-advisor.
+  const isShared = groupSiblings.length > 1
+  const indexInGroup = isShared ? groupSiblings.findIndex(s => s._id === eventoId) : -1
+  const nextSibling = isShared
+    ? (groupSiblings.find(s => s._id !== eventoId && s.sesionCerrada !== true) || null)
+    : null
+
   return (
     <DashboardLayout>
       <PermissionGuard permission={AcademicoPermission.IR_A_SESION}>
@@ -282,6 +306,47 @@ export default function SesionPage() {
             </div>
           )}
 
+          {/* Banner: evento compartido entre niveles — muestra el progreso del
+              flujo (chips con cada hermano y su estado). El cierre de cada
+              uno es independiente; al cerrar uno, ofrecemos continuar con el
+              siguiente sin cerrar (orden alfabético por nivel). */}
+          {isShared && (
+            <div className="bg-indigo-50 border-l-4 border-indigo-500 rounded-r-lg p-4 flex items-start gap-3 flex-wrap">
+              <div className="flex-shrink-0 text-2xl" aria-hidden>🔗</div>
+              <div className="flex-1 min-w-[200px]">
+                <p className="text-sm font-semibold text-indigo-900">
+                  Sesión compartida entre {groupSiblings.length} niveles
+                  {indexInGroup >= 0 && <> · paso {indexInGroup + 1} de {groupSiblings.length}</>}
+                </p>
+                <p className="text-xs text-indigo-800 mt-0.5">
+                  Marca asistencia y registra esta sesión. Al cerrar, te ofreceremos continuar con el siguiente nivel.
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {groupSiblings.map(s => {
+                  const isCurrent = s._id === eventoId
+                  const closed = s.sesionCerrada === true
+                  return (
+                    <span
+                      key={s._id}
+                      className={`px-2 py-1 rounded-full text-[11px] font-medium ${
+                        closed
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : isCurrent
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-white text-indigo-700 border border-indigo-300'
+                      }`}
+                      title={`${s.nivel || '—'}${closed ? ' · cerrado' : isCurrent ? ' · actual' : ' · pendiente'}`}
+                    >
+                      {closed ? '✓ ' : isCurrent ? '⏳ ' : '○ '}
+                      {s.nivel || s._id.slice(-4)}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-start justify-between">
@@ -321,6 +386,9 @@ export default function SesionPage() {
                   totalInscritos={students.length}
                   totalConAsistencia={totalConAsistencia}
                   onClosed={() => loadEventoData()}
+                  isShared={isShared}
+                  nextSibling={nextSibling}
+                  groupSize={groupSiblings.length}
                 />
               </div>
             </div>
@@ -398,22 +466,48 @@ function RegistrarSesionButton({
   totalInscritos,
   totalConAsistencia,
   onClosed,
+  isShared,
+  nextSibling,
+  groupSize,
 }: {
   evento: CalendarioEvent
   windowState: ReturnType<typeof getSessionWindow>
   totalInscritos: number
   totalConAsistencia: number
   onClosed: () => void
+  isShared: boolean
+  nextSibling: any | null
+  groupSize: number
 }) {
+  const router = useRouter()
   const { data: session } = useSession()
 
   const [isMyEvent, setIsMyEvent] = useState(false)
   const [requiereRegistro, setRequiereRegistro] = useState(true)
-  // Step "confirmSinAsistentes" → "registrar" → done
-  const [step, setStep] = useState<'idle' | 'confirmSinAsistentes' | 'registrar'>('idle')
+  // Step "confirmSinAsistentes" → "registrar" → "postCierreCompartido" → done
+  const [step, setStep] = useState<'idle' | 'confirmSinAsistentes' | 'registrar' | 'postCierreCompartido'>('idle')
   const [sinAsistentes, setSinAsistentes] = useState(false)
-  const [timeoutVal, setTimeoutVal] = useState(evento.timeout || '')
-  const [notas, setNotas] = useState(evento.notasadvisor || '')
+  // Pre-carga de Time Out + Notas: si vienes del flujo guiado desde un
+  // hermano del grupo, el sessionStorage trae los últimos valores para no
+  // tener que reescribirlos. Se limpia tras leerse.
+  const [timeoutVal, setTimeoutVal] = useState(() => {
+    if (typeof window === 'undefined') return evento.timeout || ''
+    const stored = window.sessionStorage.getItem('lgs-grupo-prefill-timeout')
+    if (stored) {
+      window.sessionStorage.removeItem('lgs-grupo-prefill-timeout')
+      return stored
+    }
+    return evento.timeout || ''
+  })
+  const [notas, setNotas] = useState(() => {
+    if (typeof window === 'undefined') return evento.notasadvisor || ''
+    const stored = window.sessionStorage.getItem('lgs-grupo-prefill-notas')
+    if (stored) {
+      window.sessionStorage.removeItem('lgs-grupo-prefill-notas')
+      return stored
+    }
+    return evento.notasadvisor || ''
+  })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -578,14 +672,48 @@ function RegistrarSesionButton({
       toast.success(sinAsistentes
         ? `Sesión registrada como SIN ASISTENTES (${closeJson.bookingsActualizados ?? 0} estudiantes marcados como no-asistido)`
         : 'Sesión registrada correctamente')
-      setStep('idle')
       setSinAsistentes(false)
-      onClosed()
+      // Flujo guiado de evento compartido:
+      //   - Si hay siguiente hermano sin cerrar → mostrar modal "Continuar"
+      //   - Si NO hay (era el último) → redirige al panel del advisor
+      //   - Si NO es compartido → cierra el modal normalmente y refresca
+      if (isShared) {
+        if (nextSibling) {
+          setStep('postCierreCompartido')
+        } else {
+          // Último hermano cerrado: terminar flujo y volver al calendario.
+          toast.success('🎉 Todos los niveles del grupo quedaron registrados.')
+          setStep('idle')
+          router.push('/panel-advisor')
+        }
+      } else {
+        setStep('idle')
+        onClosed()
+      }
     } catch (e: any) {
       setErr(e?.message || 'Error inesperado')
     } finally {
       setSaving(false)
     }
+  }
+
+  // Navega al siguiente hermano del grupo. Pre-llena timeout + notas en
+  // sessionStorage para que el siguiente render los lea y reutilice.
+  function continuarConSiguiente() {
+    if (!nextSibling) return
+    try {
+      if (typeof window !== 'undefined') {
+        if (timeoutVal) window.sessionStorage.setItem('lgs-grupo-prefill-timeout', timeoutVal)
+        if (notas)      window.sessionStorage.setItem('lgs-grupo-prefill-notas', notas)
+      }
+    } catch { /* sessionStorage puede fallar en modo incógnito */ }
+    setStep('idle')
+    router.push(`/sesion/${nextSibling._id}`)
+  }
+
+  function terminarFlujo() {
+    setStep('idle')
+    router.push('/panel-advisor')
   }
 
   return (
@@ -697,6 +825,46 @@ function RegistrarSesionButton({
                 className="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50"
               >
                 {saving ? 'Guardando…' : 'Confirmar Registro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal C: post-cierre de evento compartido — ofrece continuar con
+          el siguiente nivel del grupo o terminar el flujo. Solo aparece
+          cuando hay nextSibling pendiente. */}
+      {step === 'postCierreCompartido' && nextSibling && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-emerald-900 mb-2 flex items-center gap-2">
+              ✓ Sesión {evento.nivel || ''} registrada
+            </h3>
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4 text-sm">
+              <p className="font-medium text-indigo-900 mb-1">
+                🔗 Esta clase es compartida entre {groupSize} niveles.
+              </p>
+              <p className="text-xs text-indigo-800">
+                Continúa con el siguiente nivel —{' '}
+                <strong>{nextSibling.nivel || 'siguiente'}</strong>
+                {nextSibling.nombreEvento ? ` · ${nextSibling.nombreEvento}` : (nextSibling.step ? ` · ${nextSibling.step}` : '')}.
+                Tu Time Out y notas quedan pre-llenadas con los valores que acabas de registrar.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={terminarFlujo}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Terminar (ir al panel)
+              </button>
+              <button
+                type="button"
+                onClick={continuarConSiguiente}
+                className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+              >
+                Continuar con {nextSibling.nivel || 'siguiente'} →
               </button>
             </div>
           </div>
