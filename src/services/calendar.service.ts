@@ -12,7 +12,7 @@ import { AdvisorEventLogRepository } from '@/repositories/advisor-event-log.repo
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { withTransaction } from '@/lib/postgres';
-import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS } from '@/lib/evento-compartido';
+import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS, extractClubPrefix } from '@/lib/evento-compartido';
 
 const MAX_ADVISOR_REASSIGNMENTS = 2;
 
@@ -111,6 +111,23 @@ export async function createEvent(data: {
     const uniqueLevels = new Set(todosNiveles.filter(Boolean));
     if (uniqueLevels.size !== todosNiveles.length) {
       throw new ValidationError('Los niveles del grupo compartido deben ser distintos.');
+    }
+    // Si el evento base es CLUB, los hermanos deben ser del MISMO tipo de club
+    // (no mezclar KARAOKE con LISTENING, etc.). Para SESSION Jumps no aplica
+    // porque cada nivel tiene su step numérico distinto.
+    if ((tipo || '').toUpperCase() === 'CLUB') {
+      const basePrefix = extractClubPrefix(data.step);
+      if (!basePrefix) {
+        throw new ValidationError('No se pudo determinar el tipo de club del step base.');
+      }
+      for (const adic of compartidoCon) {
+        const adicPrefix = extractClubPrefix(adic.step);
+        if (adicPrefix !== basePrefix) {
+          throw new ValidationError(
+            `Todos los niveles del grupo deben ser del mismo tipo de club. Base = ${basePrefix}, nivel ${adic.nivel} = ${adicPrefix || 'desconocido'}.`,
+          );
+        }
+      }
     }
     eventoCompartidoId = randomUUID();
   }

@@ -57,6 +57,25 @@ export function isEventoCompartible(tipo: string | null | undefined, step: strin
 }
 
 /**
+ * Extrae el prefijo del tipo de club de un step ("KARAOKE - Step 16" → "KARAOKE",
+ * "LISTENING - Step 7" → "LISTENING"). Para SESSION o steps sin prefijo
+ * devuelve null.
+ *
+ * Sirve para validar que todos los hermanos de un grupo compartido CLUB sean
+ * el MISMO tipo (no mezclar KARAOKE con LISTENING).
+ */
+export function extractClubPrefix(step: string | null | undefined): string | null {
+  if (!step) return null;
+  const s = String(step).trim();
+  const m = s.match(/^([A-ZÁÉÍÓÚÑ]+)\s*-/i);
+  if (!m) return null;
+  const prefix = m[1].toUpperCase();
+  // Si el "prefijo" es la palabra Step, no es realmente un prefijo de club.
+  if (prefix === 'STEP') return null;
+  return prefix;
+}
+
+/**
  * Mensaje human-readable de POR QUÉ el evento NO es compartible.
  * Útil para tooltip en el wizard.
  */

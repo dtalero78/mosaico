@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { XMarkIcon } from '@heroicons/react/24/outline'
-import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS } from '@/lib/evento-compartido'
+import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS, extractClubPrefix } from '@/lib/evento-compartido'
 
 interface CalendarEvent {
   _id: string
@@ -352,11 +352,23 @@ export default function EventModal({
   // Helper sin side-effects: devuelve las opciones (step o club) de un nivel.
   // Usado por la UI de "Evento compartido" — cada nivel adicional necesita
   // su propio dropdown de step y no podemos pisar setStepOptions/setClubOptions.
-  const getOptionsForNivelTipo = (nivelCode: string, tipo: 'SESSION' | 'CLUB'): StepOption[] => {
+  //
+  // Para CLUB: si se pasa `clubPrefixFilter`, filtra las opciones para que
+  // solo aparezcan las del mismo tipo de club (ej. solo KARAOKE si el base
+  // es KARAOKE). Esto impide mezclar tipos en un grupo compartido.
+  const getOptionsForNivelTipo = (
+    nivelCode: string,
+    tipo: 'SESSION' | 'CLUB',
+    clubPrefixFilter?: string | null,
+  ): StepOption[] => {
     const niv = niveles.find(n => n.code === nivelCode)
     if (!niv) return []
     if (tipo === 'CLUB') {
-      return (niv.clubs || []).map(c => ({ value: c, label: c }))
+      let opts = (niv.clubs || []).map(c => ({ value: c, label: c }))
+      if (clubPrefixFilter) {
+        opts = opts.filter(o => extractClubPrefix(o.value) === clubPrefixFilter)
+      }
+      return opts
     }
     return (niv.steps || []).map(s => ({ value: s, label: getStepLabel(s) }))
   }
@@ -385,6 +397,13 @@ export default function EventModal({
   // que no esté ya elegido por otra entrada del array.
   const nivelesUsados = new Set<string>([formData.tituloONivel, ...compartidoCon.map(c => c.nivel)])
 
+  // Prefijo de club del evento BASE (ej. "KARAOKE" si nombreEvento = "KARAOKE - Step 16").
+  // Para SESSION devuelve null. Se usa para filtrar las opciones de step de
+  // los niveles adicionales: en grupos CLUB, todos deben ser del mismo tipo.
+  const baseClubPrefix = formData.evento === 'CLUB'
+    ? extractClubPrefix(formData.nombreEvento)
+    : null
+
   const agregarNivelCompartido = () => {
     if (compartidoCon.length >= MAX_NIVELES_COMPARTIDOS - 1) return
     setCompartidoCon([...compartidoCon, { nivel: '', step: '', options: [] }])
@@ -393,7 +412,7 @@ export default function EventModal({
     setCompartidoCon(compartidoCon.filter((_, i) => i !== idx))
   }
   const actualizarNivelCompartido = (idx: number, nivel: string) => {
-    const options = getOptionsForNivelTipo(nivel, formData.evento)
+    const options = getOptionsForNivelTipo(nivel, formData.evento, baseClubPrefix)
     setCompartidoCon(compartidoCon.map((c, i) =>
       i === idx ? { ...c, nivel, step: '', options } : c
     ))
@@ -403,6 +422,21 @@ export default function EventModal({
       i === idx ? { ...c, step } : c
     ))
   }
+
+  // Si el admin cambia el step base (ej. de KARAOKE a LISTENING) después de
+  // haber agregado niveles adicionales, las opciones de step ya cacheadas
+  // pueden volverse inválidas. Las recargamos con el nuevo prefijo y
+  // limpiamos el step seleccionado si ya no es válido.
+  useEffect(() => {
+    if (compartidoCon.length === 0) return
+    setCompartidoCon(prev => prev.map(c => {
+      if (!c.nivel) return c
+      const newOptions = getOptionsForNivelTipo(c.nivel, formData.evento, baseClubPrefix)
+      const stepStillValid = newOptions.some(o => o.value === c.step)
+      return { ...c, options: newOptions, step: stepStillValid ? c.step : '' }
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseClubPrefix, formData.evento])
 
   const cargarNombreStep = () => {
     const nivelSeleccionado = formData.tituloONivel
