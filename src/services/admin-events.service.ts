@@ -164,7 +164,9 @@ export async function registrarAdminEvent(input: {
   if (!ev) throw new NotFoundError('Admin Event', input.id);
   if (ev.registrado) throw new ConflictError('Este evento ya está registrado');
 
-  const ws = getAdminEventWindow(ev.fechaInicio, input.sessionRole, new Date());
+  // Ventana proporcional a las horas del evento (ej. horas=3 → registro abre
+  // a las 3 horas después del inicio, cierra 90 min después).
+  const ws = getAdminEventWindow(ev.fechaInicio, input.sessionRole, new Date(), ev.horas);
 
   // Si NO es coordinator, validar ownership + ventana
   if (!ws.isCoordinator) {
@@ -177,13 +179,34 @@ export async function registrarAdminEvent(input: {
     if (adv._id !== ev.advisorId) throw new ForbiddenError('Este evento no te pertenece');
     if (!ws.canRegister) {
       if (ws.isExpired) throw new ValidationError(ADMIN_EVENT_EXPIRED_MESSAGE);
-      throw new ValidationError(`Disponible 40 min después del inicio (faltan ${ws.minutesUntilRegister} min)`);
+      const fmtHoras = ev.horas > 1 ? `${ev.horas} horas` : '1 hora';
+      throw new ValidationError(
+        `El evento dura ${fmtHoras} — el registro estará disponible cuando termine (faltan ${ws.minutesUntilRegister} min).`,
+      );
+    }
+
+    // Defensa B: validar que el timeout no sea ANTES del fin nominal.
+    // El advisor podría cerrar más tarde (margen post-fin), pero nunca antes
+    // de que el evento haya terminado nominalmente.
+    const finNominalDate = new Date(new Date(ev.fechaInicio).getTime() + ws.finNominalMin * 60_000);
+    const [hh, mm] = input.timeout.split(':').map(Number);
+    const timeoutDate = new Date(finNominalDate);
+    timeoutDate.setHours(hh, mm, 0, 0);
+    // Si timeout cae antes de fin nominal en el mismo día, ajustamos al día siguiente
+    // (caso raro: evento nocturno que cruza medianoche). Si igual queda antes, rechazamos.
+    if (timeoutDate < finNominalDate) {
+      const finHH = String(finNominalDate.getHours()).padStart(2, '0');
+      const finMM = String(finNominalDate.getMinutes()).padStart(2, '0');
+      throw new ValidationError(
+        `Time Out (${input.timeout}) no puede ser anterior a la hora de fin del evento (${finHH}:${finMM}).`,
+      );
     }
   }
 
-  // motivoCierre: si lo cierra coord y ya pasó la ventana → GESTION_COORDINADOR
+  // motivoCierre: si lo cierra coord y ya pasó la ventana → GESTION_COORDINADOR.
+  // El umbral ahora es relativo a la duración del evento.
   const motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR' =
-    ws.isCoordinator && ws.minutesElapsed > 120 ? 'GESTION_COORDINADOR' : 'NORMAL';
+    ws.isCoordinator && ws.minutesElapsed > ws.finNominalMin + 90 ? 'GESTION_COORDINADOR' : 'NORMAL';
 
   const notasFinal = (input.notas?.trim() || 'no hubo novedades');
 

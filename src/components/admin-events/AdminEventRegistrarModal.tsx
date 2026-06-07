@@ -3,14 +3,16 @@
 /**
  * Modal de detalle + registro de un Admin Event.
  *
- * Estados visibles según ventana +40 / +120 min:
- *   - Antes del inicio              → solo info, sin acciones
- *   - 0..+40 min                    → info + countdown "Disponible en N min"
- *   - +40..+120 min y NO registrado → input Time Out + Notas + botón "Registrar"
- *   - >+120 sin registrar y advisor → mensaje "Período vencido — Coordinador"
+ * La ventana ESCALA con la duración nominal (`event.horas`):
+ *   - Antes del fin nominal           → info + countdown "Disponible en N min"
+ *   - Entre fin nominal y +90 min     → input Time Out + Notas + botón "Registrar"
+ *   - Después de fin + 90 min         → "Período vencido — Coordinador"
  *   - Coordinador (cualquier momento) → siempre puede registrar (bypass)
- *   - Ya registrado                 → solo info (Time Out + Notas read-only +
- *                                      badge "Por Coordinación" si aplica)
+ *   - Ya registrado                   → solo info (Time Out + Notas read-only +
+ *                                        badge "Por Coordinación" si aplica)
+ *
+ * El timeout se auto-llena con la HORA DE FIN NOMINAL (no la hora actual)
+ * para reflejar la duración cobrada al advisor. El advisor puede editar.
  */
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
@@ -54,19 +56,27 @@ export default function AdminEventRegistrarModal({
     const t = setInterval(() => setNow(new Date()), 30_000)
     return () => clearInterval(t)
   }, [])
-  const ws = getAdminEventWindow(event.fechaInicio, role, now)
+  const ws = getAdminEventWindow(event.fechaInicio, role, now, event.horas)
+
+  // Hora de fin nominal en formato HH:MM local (sirve para auto-llenado
+  // del timeout y para mostrar mensajes "termina a las HH:MM").
+  const finNominalHHMM = (() => {
+    const start = new Date(event.fechaInicio)
+    const end = new Date(start.getTime() + event.horas * 60 * 60_000)
+    return `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
+  })()
 
   const [timeout, setTimeoutVal] = useState(event.timeout || '')
   const [notas, setNotas]         = useState(event.notas || '')
   const [saving, setSaving]       = useState(false)
   const [err, setErr]             = useState<string | null>(null)
 
-  // Auto-llenar timeout con hora actual al abrir si está vacío y se puede registrar
+  // Auto-llenar timeout con HORA DE FIN NOMINAL al abrir si está vacío y se
+  // puede registrar. Refleja la duración cobrada al advisor (no la hora
+  // actual del navegador). El advisor puede editar si cerró más tarde.
   useEffect(() => {
     if (!event.registrado && !timeout && ws.canRegister) {
-      const hh = String(now.getHours()).padStart(2, '0')
-      const mm = String(now.getMinutes()).padStart(2, '0')
-      setTimeoutVal(`${hh}:${mm}`)
+      setTimeoutVal(finNominalHHMM)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event._id])
@@ -148,7 +158,7 @@ export default function AdminEventRegistrarModal({
         {/* Estado de ventana — solo si NO registrado */}
         {!event.registrado && (
           <>
-            {ws.isCoordinator && ws.minutesElapsed > 120 ? (
+            {ws.isCoordinator && ws.minutesElapsed > ws.finNominalMin + 90 ? (
               <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-3 mb-4 text-sm text-blue-900">
                 <strong>Gestionando como Coordinador</strong>: la ventana del advisor venció (
                 {ws.minutesElapsed} min desde el inicio). Quedará con motivo
@@ -160,7 +170,8 @@ export default function AdminEventRegistrarModal({
               </div>
             ) : !ws.canRegister && ws.minutesUntilRegister !== null ? (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-900">
-                Registro disponible en {ws.minutesUntilRegister} min (a +40 min del inicio).
+                El evento dura {event.horas}h — termina a las <strong>{finNominalHHMM}</strong>.
+                {' '}Registro disponible en {ws.minutesUntilRegister} min.
               </div>
             ) : null}
 
@@ -178,6 +189,10 @@ export default function AdminEventRegistrarModal({
                     onChange={e => setTimeoutVal(e.target.value)}
                     className="w-32 border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-mono"
                   />
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Pre-llenado con la hora de fin nominal ({finNominalHHMM}).
+                    {!ws.isCoordinator && <> No puede ser anterior.</>}
+                  </p>
                 </div>
                 <div>
                   <label htmlFor="ae-notas" className="block text-xs font-medium text-gray-700 mb-1">

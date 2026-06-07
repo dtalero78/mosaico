@@ -2,25 +2,37 @@
  * Admin Event Window — reglas de ventana temporal para REGISTRAR eventos
  * administrativos del advisor.
  *
- * Diferencia con `session-window.ts` (sesiones académicas):
- *   - No hay "ventana de asistencia" (no hay estudiantes — solo registro de horas)
- *   - Apertura de registro a +40 min (no +30)
- *   - Cierre de ventana a +120 min (igual)
+ * La ventana ESCALA con la duración nominal (`horas`) del evento:
+ *   - Apertura: cuando el evento termina nominalmente (`fechaInicio + horas*60min`).
+ *     El advisor no puede registrar antes — la duración cobrada al advisor
+ *     debe corresponder a la duración real.
+ *   - Cierre: +90 min después del fin nominal.
  *
- *   ┌──────────────────────────────────────────────────────────────┐
- *   │ 0min            +40min                +120min                │
- *   │  │                │                      │                   │
- *   │  │              ├──> Registrar ────────┤                     │
- *   │  │                                       │                   │
- *   │  ├──── COORDINADOR / ADMIN: siempre ─────────────────────────┤
- *   └──────────────────────────────────────────────────────────────┘
+ * Ejemplos:
  *
- * Bypass total: COORDINADOR_ACADEMICO, SUPER_ADMIN, ADMIN.
+ *   horas=1 (evento 8:00–9:00):
+ *   ┌──────────────────────────────────────────────────────────┐
+ *   │ 0min          +60min (fin)              +150min          │
+ *   │                │                          │              │
+ *   │              ├──> Registrar ────────────┤                │
+ *   └──────────────────────────────────────────────────────────┘
+ *
+ *   horas=3 (evento 8:00–11:00):
+ *   ┌──────────────────────────────────────────────────────────┐
+ *   │ 0min                +180min (fin)         +270min        │
+ *   │                      │                       │           │
+ *   │                    ├──> Registrar ─────────┤             │
+ *   └──────────────────────────────────────────────────────────┘
+ *
+ * Bypass total: COORDINADOR_ACADEMICO, SUPER_ADMIN, ADMIN — pueden registrar
+ * en cualquier momento (antes, durante o después del fin nominal).
+ *
+ * Defensa: si no recibimos `horas`, usamos 1 como fallback.
  * Cliente Y servidor (no `'server-only'`).
  */
 
-export const ADMIN_REGISTER_OPEN_MIN  = 40;
-export const ADMIN_REGISTER_CLOSE_MIN = 120;
+/** Margen post-fin: cuánto tiempo después del fin nominal queda abierta la ventana. */
+export const ADMIN_REGISTER_GRACE_MIN = 90;
 
 const BYPASS_ROLES = new Set(['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN']);
 
@@ -31,14 +43,19 @@ export interface AdminEventWindowState {
   minutesElapsed: number;
   minutesUntilRegister: number | null;
   minutesUntilExpire: number | null;
+  /** Minuto del fin nominal del evento (`horas*60`). Útil para mensajes UI. */
+  finNominalMin: number;
 }
 
 export function getAdminEventWindow(
   fechaInicio: Date | string | null | undefined,
   role: string | null | undefined,
   now: Date = new Date(),
+  horas?: number | null,
 ): AdminEventWindowState {
   const isCoordinator = BYPASS_ROLES.has(String(role || '').toUpperCase());
+  const horasNum = typeof horas === 'number' && horas > 0 ? Math.floor(horas) : 1;
+  const finNominalMin = horasNum * 60;
 
   if (!fechaInicio) {
     return {
@@ -48,6 +65,7 @@ export function getAdminEventWindow(
       minutesElapsed: 0,
       minutesUntilRegister: null,
       minutesUntilExpire: null,
+      finNominalMin,
     };
   }
 
@@ -60,20 +78,24 @@ export function getAdminEventWindow(
       minutesElapsed: 0,
       minutesUntilRegister: null,
       minutesUntilExpire: null,
+      finNominalMin,
     };
   }
 
   const elapsedMs = now.getTime() - startMs;
   const minutesElapsed = Math.floor(elapsedMs / 60_000);
 
-  const inRegisterWindow = minutesElapsed >= ADMIN_REGISTER_OPEN_MIN && minutesElapsed <= ADMIN_REGISTER_CLOSE_MIN;
-  const expired          = minutesElapsed > ADMIN_REGISTER_CLOSE_MIN;
+  const openMin  = finNominalMin;
+  const closeMin = finNominalMin + ADMIN_REGISTER_GRACE_MIN;
 
-  const minutesUntilRegister = !isCoordinator && minutesElapsed < ADMIN_REGISTER_OPEN_MIN
-    ? ADMIN_REGISTER_OPEN_MIN - minutesElapsed
+  const inRegisterWindow = minutesElapsed >= openMin && minutesElapsed <= closeMin;
+  const expired          = minutesElapsed > closeMin;
+
+  const minutesUntilRegister = !isCoordinator && minutesElapsed < openMin
+    ? openMin - minutesElapsed
     : null;
-  const minutesUntilExpire = !isCoordinator && minutesElapsed >= ADMIN_REGISTER_OPEN_MIN && minutesElapsed <= ADMIN_REGISTER_CLOSE_MIN
-    ? ADMIN_REGISTER_CLOSE_MIN - minutesElapsed
+  const minutesUntilExpire = !isCoordinator && minutesElapsed >= openMin && minutesElapsed <= closeMin
+    ? closeMin - minutesElapsed
     : null;
 
   return {
@@ -83,6 +105,7 @@ export function getAdminEventWindow(
     minutesElapsed,
     minutesUntilRegister,
     minutesUntilExpire,
+    finNominalMin,
   };
 }
 
