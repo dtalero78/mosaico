@@ -26,7 +26,7 @@ import SearchBar from '@/components/search/SearchBar'
 import { usePermissions } from '@/hooks/usePermissions'
 import { ServicioPermission, AcademicoPermission, InformesPermission, ComercialPermission, AprobacionPermission, MantenimientoPermission, RecaudosPermission, Permission } from '@/types/permissions'
 
-const getNavigation = (userEmail: string) => [
+const getNavigation = (userEmail: string, userRole: string) => [
   {
     name: 'Dashboard',
     href: '/',
@@ -39,7 +39,13 @@ const getNavigation = (userEmail: string) => [
       { name: 'Agenda Sesiones', href: '/dashboard/academic/agenda-sesiones' },
       { name: 'Agenda Académica', href: '/dashboard/academic/agenda-academica' },
       { name: 'Advisors', href: '/dashboard/academic/advisors' },
-      { name: 'Panel Advisor', href: `/panel-advisor?email=${encodeURIComponent(userEmail)}` },
+      // Si el usuario logueado ES advisor, su email va en la URL para abrir SU panel.
+      // Para coordinadores/admins el link va SIN email — el panel auto-selecciona
+      // el primer advisor del dropdown (si pasamos el email del coordinador, el
+      // endpoint /by-email retorna 404 y la página muestra "Error al buscar advisor").
+      { name: 'Panel Advisor', href: userRole === 'ADVISOR'
+        ? `/panel-advisor?email=${encodeURIComponent(userEmail)}`
+        : '/panel-advisor' },
       { name: 'Actualizar Material', href: '/dashboard/academic/actualizar-material', newTab: true },
       { name: 'Control Horas', href: '/dashboard/academic/control-horas' },
       { name: 'Eventos Administrativos', href: '/dashboard/academic/eventos-administrativos', newTab: true },
@@ -463,7 +469,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   })
 
   // Get navigation with dynamic email
-  const navigation = getNavigation(userEmail)
+  const navigation = getNavigation(userEmail, userRole)
 
   const filteredNavigation = navigation.filter(item => {
     // Always show Dashboard home
