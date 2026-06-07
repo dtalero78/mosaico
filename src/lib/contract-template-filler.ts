@@ -120,6 +120,10 @@ export function fillContractTemplate(
     telefonoRefUno: titular?.telefonoRefUno || '',
     referenciaDos: titular?.referenciaDos || '',
     parentezcoRefDos: titular?.parentezcoRefDos || '',
+    // Asesor: muestra el nombre resuelto (USUARIOS_ROLES) si está disponible,
+    // si no el email crudo del titular. Plantillas Chile/Colombia usan {{asesor}}
+    // al final del contrato (después del nombre del titular).
+    asesor: ejecutivoComercial?.nombre || ejecutivoComercial?.email || titular?.asesor || '',
     telefonoRefDos: titular?.telefonoRefDos || '',
     firma: firmaText,
   };
