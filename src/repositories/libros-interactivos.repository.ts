@@ -47,12 +47,25 @@ class LibrosInteractivosRepositoryClass extends BaseRepository<LibroInteractivoR
 
   async findAll(opts?: { includeInactive?: boolean }): Promise<LibroInteractivoRow[]> {
     const where = opts?.includeInactive ? '' : 'WHERE "activo" = true';
+    // Orden pedagógico canónico del programa LGS (no alfabético).
+    // Libros desconocidos van al final.
     const rows = await queryMany<LibroInteractivoRow>(
       `SELECT "codigo", "titulo", "totalPaginas", "audios", "activo",
               "_createdDate", "_updatedDate"
          FROM "LIBROS_INTERACTIVOS"
          ${where}
-        ORDER BY "codigo" ASC`
+        ORDER BY
+          CASE "codigo"
+            WHEN 'ESS'        THEN 1
+            WHEN 'BEGINNER'   THEN 2
+            WHEN 'PRACTICAL'  THEN 3
+            WHEN 'FUNCTIONAL' THEN 4
+            WHEN 'IELTS'      THEN 5
+            WHEN 'B2FIRST'    THEN 6
+            WHEN 'TOEFL'      THEN 7
+            ELSE 99
+          END ASC,
+          "codigo" ASC`
     );
     return this.parseMany(rows);
   }
