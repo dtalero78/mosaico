@@ -8,7 +8,7 @@ export default function ActualizarMaterialPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Actualizar Material</h1>
       <p className="text-gray-500 mb-8">Selecciona el tipo de material que deseas actualizar, esta acción genera registros de auditoría.</p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {/* Usuarios */}
         <button
           type="button"
@@ -42,6 +42,24 @@ export default function ActualizarMaterialPage() {
           <div className="text-center">
             <div className="text-lg font-semibold text-gray-900 group-hover:text-green-600 transition-colors">Advisor</div>
             <div className="text-sm text-gray-500 mt-1">Material para advisors</div>
+          </div>
+        </button>
+
+        {/* Interactivo */}
+        <button
+          type="button"
+          onClick={() => openTab('/dashboard/academic/actualizar-material/interactivo')}
+          className="flex flex-col items-center justify-center gap-4 p-10 bg-white border-2 border-gray-200 rounded-2xl shadow-sm hover:border-emerald-500 hover:shadow-md transition-all text-left group"
+        >
+          <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
+            <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">Interactivo</div>
+            <div className="text-sm text-gray-500 mt-1">Libros con páginas + audios</div>
           </div>
         </button>
       </div>
