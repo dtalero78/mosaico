@@ -79,7 +79,7 @@ export async function checkEligibility(
     `SELECT b."tipo", COALESCE(c."step", b."step") AS "step",
             b."asistio", b."asistencia", b."participacion"
      FROM "ACADEMICA_BOOKINGS" b
-     LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+     LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
      WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
        AND COALESCE(c."nivel", b."nivel") = $2
        AND (b."cancelo" IS NULL OR b."cancelo" = false)`,

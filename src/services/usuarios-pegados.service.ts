@@ -244,7 +244,7 @@ export async function findPegados(opts?: { force?: boolean }): Promise<PegadosRe
             b."noAprobo",
             b."cancelo"
      FROM "ACADEMICA_BOOKINGS" b
-     LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+     LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
      WHERE COALESCE(b."studentId", b."idEstudiante") = ANY($1::text[])`,
     [academicaIds],
   );
@@ -387,7 +387,7 @@ async function reconcileOne(
               b."noAprobo",
               b."cancelo"
        FROM "ACADEMICA_BOOKINGS" b
-       LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+       LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
        WHERE COALESCE(b."studentId", b."idEstudiante") = $1`,
       [academicaId],
     );

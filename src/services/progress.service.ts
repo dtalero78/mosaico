@@ -133,7 +133,7 @@ export async function generateReport(studentId: string) {
             b."tipo", b."nombreEvento", b."asistio", b."asistencia", b."participacion",
             b."calificacion", b."comentarios", b."noAprobo", b."cancelo"
      FROM "ACADEMICA_BOOKINGS" b
-     LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+     LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
      WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
        AND (b."fechaEvento" IS NULL OR b."fechaEvento"::date <= CURRENT_DATE)
      ORDER BY b."fechaEvento" DESC`,

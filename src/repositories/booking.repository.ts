@@ -107,6 +107,28 @@ class BookingRepositoryClass extends BaseRepository {
    * Get a student's class history
    */
   async findByStudentId(studentId: string, limit: number = 500) {
+    // Pre-resolver TODOS los IDs candidatos del estudiante en 1 query rapida
+    // (~5ms con indices). Esto elimina la subquery anidada de 2 niveles que
+    // disparaba Seq Scan en la query principal.
+    //
+    // Razón: un estudiante puede tener bookings agendados con:
+    //   - su ACADEMICA._id           (studentId param directamente)
+    //   - su PEOPLE._id correspondiente (mismo numeroId que ACADEMICA)
+    //   - duplicados en PEOPLE (BENEFICIARIO+TITULAR mismo numeroId)
+    const idsRow = await queryMany<{ id: string }>(
+      `SELECT a."_id" AS id FROM "ACADEMICA" a WHERE a."_id" = $1
+       UNION
+       SELECT p."_id" AS id FROM "PEOPLE" p
+        WHERE p."numeroId" = (
+          SELECT a."numeroId" FROM "ACADEMICA" a WHERE a."_id" = $1 LIMIT 1
+        )`,
+      [studentId]
+    );
+    const candidateIds = idsRow.map(r => r.id);
+    if (candidateIds.length === 0) candidateIds.push(studentId);
+
+    // Query principal con OR explicito (en vez de COALESCE) para que Postgres
+    // use BitmapOr sobre los indices idx_bookings_evento + idx_bookings_idevento.
     return queryMany(
       `SELECT b."_id", b."studentId", b."eventoId", b."tipo", b."fecha", b."hora",
               b."advisor",
@@ -122,19 +144,13 @@ class BookingRepositoryClass extends BaseRepository {
               b."fechaAgendamiento", b."fechaEvento", b."tipoEvento", b."nombreEvento", b."tituloONivel",
               b."_createdDate", b."_updatedDate"
        FROM "ACADEMICA_BOOKINGS" b
-       LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+       LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
        LEFT JOIN "ADVISORS" adv ON adv."_id" = b."advisor"
-       WHERE (b."idEstudiante" = $1 OR b."studentId" = $1
-         OR b."idEstudiante" IN (
-           SELECT p."_id" FROM "PEOPLE" p
-           WHERE p."numeroId" = (
-             SELECT a."numeroId" FROM "ACADEMICA" a WHERE a."_id" = $1 LIMIT 1
-           )
-         )
-       )
+       WHERE b."idEstudiante" = ANY($1::text[])
+          OR b."studentId"    = ANY($1::text[])
        ORDER BY b."fechaEvento" DESC, b."hora" DESC
        LIMIT $2`,
-      [studentId, limit]
+      [candidateIds, limit]
     );
   }
 
@@ -364,8 +380,8 @@ class BookingRepositoryClass extends BaseRepository {
          COALESCE(p."plataforma", a."plataforma", '') as "plataforma",
          COUNT(*) OVER (PARTITION BY COALESCE(ab."studentId", ab."idEstudiante")) as "totalSesionesWelcome"
        FROM "ACADEMICA_BOOKINGS" ab
-       LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(ab."eventoId", ab."idEvento")
-       LEFT JOIN "ACADEMICA" a ON COALESCE(ab."studentId", ab."idEstudiante") = a."_id"
+       LEFT JOIN "CALENDARIO" c ON (c."_id" = ab."eventoId" OR c."_id" = ab."idEvento")
+       LEFT JOIN "ACADEMICA" a ON (ab."studentId" = a."_id" OR ab."idEstudiante" = a."_id")
        LEFT JOIN "PEOPLE" p ON a."numeroId" = p."numeroId"
          AND (p."tipoUsuario" = 'BENEFICIARIO' OR p."tipoUsuario" = 'BENEFICIARIA')
        WHERE ${conditions.join(' AND ')}
@@ -413,8 +429,8 @@ class BookingRepositoryClass extends BaseRepository {
          COALESCE(adv."nombreCompleto", adv."primerNombre" || ' ' || adv."primerApellido", c."advisor") as "advisor",
          COALESCE(p."plataforma", a."plataforma", '') as "plataforma"
        FROM "CALENDARIO" c
-       INNER JOIN "ACADEMICA_BOOKINGS" ab ON c."_id" = COALESCE(ab."eventoId", ab."idEvento")
-       LEFT JOIN "ACADEMICA" a ON COALESCE(ab."studentId", ab."idEstudiante") = a."_id"
+       INNER JOIN "ACADEMICA_BOOKINGS" ab ON (c."_id" = ab."eventoId" OR c."_id" = ab."idEvento")
+       LEFT JOIN "ACADEMICA" a ON (ab."studentId" = a."_id" OR ab."idEstudiante" = a."_id")
        LEFT JOIN "PEOPLE" p ON a."numeroId" = p."numeroId" AND p."tipoUsuario" = 'BENEFICIARIO'
        LEFT JOIN "ADVISORS" adv ON c."advisor" = adv."_id"
        WHERE ${conditions.join(' AND ')}
@@ -434,7 +450,7 @@ class BookingRepositoryClass extends BaseRepository {
               c."linkZoom" as "eventLinkZoom"
        FROM "ACADEMICA_BOOKINGS" ab
        LEFT JOIN "ADVISORS" a ON ab."advisor" = a."_id"
-       LEFT JOIN "CALENDARIO" c ON COALESCE(ab."eventoId", ab."idEvento") = c."_id"
+       LEFT JOIN "CALENDARIO" c ON (ab."eventoId" = c."_id" OR ab."idEvento" = c."_id")
        WHERE (ab."idEstudiante" = $1 OR ab."studentId" = $1)
          AND ab."cancelo" = false
          AND ab."fechaEvento" >= NOW() - INTERVAL '15 minutes'
@@ -554,7 +570,7 @@ class BookingRepositoryClass extends BaseRepository {
               COALESCE(c."nivel", b."nivel") AS "nivel",
               COALESCE(c."tipo", b."tipoEvento") AS "tipo"
        FROM "ACADEMICA_BOOKINGS" b
-       LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+       LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
        WHERE b."_id" = $1`,
       [bookingId]
     );
