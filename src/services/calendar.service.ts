@@ -162,7 +162,13 @@ export async function createEvent(data: {
     for (const adic of compartidoCon) {
       const adicNivel = (adic.nivel || '').trim();
       const adicStep  = (adic.step  || data.step || '').trim();
-      const adicNombreEvento = (adic.nombreEvento || data.nombreEvento || data.titulo || '').trim();
+      // El `step` y el `nombreEvento` son lo mismo para CLUB ("KARAOKE - Step 18")
+      // y SESSION ("Step 5") — son la opción que el admin eligió en el dropdown.
+      // Si el frontend no manda nombreEvento explícito, lo derivamos del step
+      // del ADICIONAL (no del base). Esto fixea el bug donde los 3 hermanos
+      // del grupo quedaban con el mismo nombre del base aunque tuvieran steps
+      // distintos en BD.
+      const adicNombreEvento = (adic.nombreEvento || adicStep || data.nombreEvento || data.titulo || '').trim();
       const adicTituloONivel = adic.tituloONivel
         || (adicNivel ? `${adicNivel} - ${adicNombreEvento || adicStep}`.trim() : '');
       const siblingData = {
