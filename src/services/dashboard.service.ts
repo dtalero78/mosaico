@@ -53,11 +53,9 @@ export async function getStats() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface MonthlyHeatmapPoint { weekday: number; hour: number; total: number }
 export interface MonthlyDonut { asistieron: number; canceladas: number; noAsistieron: number }
 export interface MonthlyNivelPoint { nivel: string; total: number }
 export interface MonthlyAggregates {
-  heatmap: MonthlyHeatmapPoint[]
   donut: MonthlyDonut
   porNivel: MonthlyNivelPoint[]
   monthLabel: string
@@ -65,42 +63,27 @@ export interface MonthlyAggregates {
 
 /**
  * Agregaciones globales del mes corriente para el dashboard admin.
- * 3 queries paralelas sobre ACADEMICA_BOOKINGS JOIN CALENDARIO.
+ * 2 queries paralelas sobre ACADEMICA_BOOKINGS JOIN CALENDARIO.
  *
- * - heatmap: bookings agrupados por weekday (0=Lun, 6=Dom) × hora (06-21)
  * - donut:   3 buckets disjuntos (asistieron / canceladas / noAsistieron-pasadas)
  * - porNivel: bookings no cancelados agrupados por nivel del evento
+ *
+ * El heatmap Día×Hora se eliminó (2026-06-09) — eliminado del UI por decisión
+ * operativa y aprovechamos para quitar la query pesada (GROUP BY weekday × hour
+ * sobre todos los bookings del mes) que sumaba carga a la BD.
  *
  * Nota perf: el JOIN usa `b."eventoId" = c."_id" OR b."idEvento" = c."_id"`
  * en vez de COALESCE para que Postgres use BitmapOr sobre los índices
  * idx_bookings_evento + idx_bookings_idevento (mismo fix aplicado en
  * advisor-event-log.service para evitar Seq Scan).
  */
-export async function getMonthlyAggregates(tz: string = 'America/Bogota'): Promise<MonthlyAggregates> {
+export async function getMonthlyAggregates(_tz: string = 'America/Bogota'): Promise<MonthlyAggregates> {
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1)).toISOString();
   const nextMonth  = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1)).toISOString();
   const monthLabel = now.toLocaleDateString('es', { month: 'long', year: 'numeric' });
 
-  const [heatmap, donut, porNivel] = await Promise.all([
-    queryMany<MonthlyHeatmapPoint>(
-      `SELECT
-         (((EXTRACT(DOW FROM c."dia" AT TIME ZONE $3))::int + 6) % 7) AS "weekday",
-         (EXTRACT(HOUR FROM c."dia" AT TIME ZONE $3))::int            AS "hour",
-         COUNT(*)::int                                                  AS "total"
-       FROM "CALENDARIO" c
-       JOIN "ACADEMICA_BOOKINGS" b
-         ON (b."eventoId" = c."_id" OR b."idEvento" = c."_id")
-       WHERE c."dia" >= $1::timestamptz
-         AND c."dia" <  $2::timestamptz
-         AND NOT EXISTS (
-           SELECT 1 FROM "PEOPLE" pp_prb
-           WHERE pp_prb."numeroId" = b."numeroId"
-             AND COALESCE(pp_prb."contrato",'') LIKE 'PRB-%'
-         )
-       GROUP BY "weekday", "hour"`,
-      [monthStart, nextMonth, tz],
-    ),
+  const [donut, porNivel] = await Promise.all([
     queryOne<MonthlyDonut>(
       `SELECT
          COUNT(*) FILTER (WHERE b."cancelo" IS NOT TRUE AND b."asistio" = true)::int  AS "asistieron",
@@ -143,7 +126,6 @@ export async function getMonthlyAggregates(tz: string = 'America/Bogota'): Promi
   ]);
 
   return {
-    heatmap,
     donut: donut ?? { asistieron: 0, canceladas: 0, noAsistieron: 0 },
     porNivel,
     monthLabel,

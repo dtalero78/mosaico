@@ -3,27 +3,26 @@
 /**
  * Visualizaciones globales del mes corriente para el dashboard admin
  * (cualquier rol NO-ADVISOR):
- *   1. Heatmap Día × Hora con todos los agendamientos del mes
- *   2. Donut con 3 buckets disjuntos: Asistieron / Canceladas / No asistieron
- *   3. Barras horizontales con sesiones agendadas por nivel
+ *   1. Donut con 3 buckets disjuntos: Asistieron / Canceladas / No asistieron
+ *   2. Barras horizontales con sesiones agendadas por nivel
  *
- * Datos: `/api/postgres/dashboard/monthly?tz=...` (3 queries paralelas en
+ * Datos: `/api/postgres/dashboard/monthly?tz=...` (2 queries paralelas en
  * dashboard.service.getMonthlyAggregates). Caché client-side via React Query
  * (staleTime 5min, refetchInterval 10min) — mismo patrón que DashboardStats.
+ *
+ * El heatmap Día×Hora se eliminó (2026-06-09) — no se usaba operativamente
+ * y reduce 1 query pesada (GROUP BY weekday × hour sobre todos los bookings
+ * del mes) a la BD por cada carga del dashboard.
  */
 
 import { useMemo } from 'react'
 import { useQuery } from 'react-query'
 
 interface MonthlyData {
-  heatmap: { weekday: number; hour: number; total: number }[]
   donut: { asistieron: number; canceladas: number; noAsistieron: number }
   porNivel: { nivel: string; total: number }[]
   monthLabel: string
 }
-
-const WEEKDAYS_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-const HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 
 function clientTz(): string {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Bogota' }
@@ -37,21 +36,10 @@ export default function DashboardMonthlyCharts() {
       const r = await fetch(`/api/postgres/dashboard/monthly?tz=${encodeURIComponent(clientTz())}`)
       const j = await r.json()
       if (!j.success) throw new Error(j.error || 'Error cargando agregados mensuales')
-      return { heatmap: j.heatmap, donut: j.donut, porNivel: j.porNivel, monthLabel: j.monthLabel }
+      return { donut: j.donut, porNivel: j.porNivel, monthLabel: j.monthLabel }
     },
     { staleTime: 5 * 60 * 1000, refetchInterval: 10 * 60 * 1000 },
   )
-
-  // Matriz 7×16 para el heatmap (default 0)
-  const matrix = useMemo(() => {
-    const m = Array.from({ length: 7 }, () => Array(HOURS.length).fill(0)) as number[][]
-    data?.heatmap.forEach(r => {
-      const hi = HOURS.indexOf(r.hour)
-      if (hi >= 0 && r.weekday >= 0 && r.weekday <= 6) m[r.weekday][hi] = r.total
-    })
-    return m
-  }, [data])
-  const matrixMax = useMemo(() => matrix.flat().reduce((a, b) => Math.max(a, b), 0), [matrix])
 
   const nivelMax = useMemo(
     () => data?.porNivel.reduce((m, r) => Math.max(m, r.total), 0) ?? 0,
@@ -73,97 +61,23 @@ export default function DashboardMonthlyCharts() {
   const totalDonut = data.donut.asistieron + data.donut.canceladas + data.donut.noAsistieron
 
   return (
-    <div className="space-y-4">
-      {/* Heatmap del mes — ancho completo */}
-      <DayHourHeatmap
-        title="Agendamientos del mes — Día vs Hora"
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <DonutCard
+        title="Sesiones del mes"
         subtitle={data.monthLabel}
-        matrix={matrix}
-        max={matrixMax}
+        total={totalDonut}
+        segments={[
+          { label: 'Asistieron',    value: data.donut.asistieron,   color: '#22c55e' },
+          { label: 'No asistieron', value: data.donut.noAsistieron, color: '#f97316' },
+          { label: 'Canceladas',    value: data.donut.canceladas,   color: '#ef4444' },
+        ]}
       />
-
-      {/* Donut + barras por nivel */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <DonutCard
-          title="Sesiones del mes"
-          subtitle={data.monthLabel}
-          total={totalDonut}
-          segments={[
-            { label: 'Asistieron',    value: data.donut.asistieron,   color: '#22c55e' },
-            { label: 'No asistieron', value: data.donut.noAsistieron, color: '#f97316' },
-            { label: 'Canceladas',    value: data.donut.canceladas,   color: '#ef4444' },
-          ]}
-        />
-        <NivelBarChart
-          title="Sesiones agendadas por nivel"
-          subtitle={data.monthLabel}
-          items={data.porNivel}
-          max={nivelMax}
-        />
-      </div>
-    </div>
-  )
-}
-
-// ────────────────────────────────────────────────────────────────────────
-// Heatmap Día × Hora (mismo patrón usado en AdvisorDashboard)
-// ────────────────────────────────────────────────────────────────────────
-
-function DayHourHeatmap({ title, subtitle, matrix, max }: {
-  title: string
-  subtitle: string
-  matrix: number[][]
-  max: number
-}) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <div className="flex items-baseline justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-        <span className="text-xs text-gray-500 capitalize">{subtitle}</span>
-      </div>
-      {max === 0 ? (
-        <div className="flex items-center justify-center min-h-[180px] text-sm text-gray-400">
-          Sin agendamientos para este mes
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="border-separate border-spacing-0.5 text-[10px] mx-auto">
-            <thead>
-              <tr>
-                <th className="w-8"><span className="sr-only">Día</span></th>
-                {HOURS.map(h => (
-                  <th key={h} className="w-7 text-center font-medium text-gray-500">
-                    {String(h).padStart(2, '0')}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {WEEKDAYS_ES.map((dayLabel, wd) => (
-                <tr key={dayLabel}>
-                  <td className="pr-1 text-right font-medium text-gray-500">{dayLabel}</td>
-                  {HOURS.map((h, hIdx) => {
-                    const v = matrix[wd][hIdx]
-                    const bg = scaleColor(v, max, '#1d4ed8', '#dbeafe')
-                    return (
-                      <td
-                        key={h}
-                        className="w-7 h-7 text-center align-middle rounded border border-gray-100"
-                        style={bg ? { backgroundColor: bg } : undefined}
-                        title={`${dayLabel} ${String(h).padStart(2, '0')}:00 — ${v} agendamiento(s)`}
-                      >
-                        <span className={v >= Math.ceil(max * 0.6) ? 'text-white font-semibold' : 'text-gray-700'}>
-                          {v || ''}
-                        </span>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <NivelBarChart
+        title="Sesiones agendadas por nivel"
+        subtitle={data.monthLabel}
+        items={data.porNivel}
+        max={nivelMax}
+      />
     </div>
   )
 }
@@ -280,32 +194,4 @@ function NivelBarChart({ title, subtitle, items, max }: {
       )}
     </div>
   )
-}
-
-// ────────────────────────────────────────────────────────────────────────
-// Helpers de color (mismo patrón en AdvisorDashboard)
-// ────────────────────────────────────────────────────────────────────────
-
-function scaleColor(value: number, max: number, dark: string, light: string): string | null {
-  if (!value || !max) return null
-  const t = Math.max(0.15, value / max)
-  return mixHex(light, dark, t)
-}
-
-function mixHex(a: string, b: string, t: number): string {
-  const pa = hexToRgb(a), pb = hexToRgb(b)
-  const r = Math.round(pa.r + (pb.r - pa.r) * t)
-  const g = Math.round(pa.g + (pb.g - pa.g) * t)
-  const bl = Math.round(pa.b + (pb.b - pa.b) * t)
-  return `rgb(${r}, ${g}, ${bl})`
-}
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const h = hex.replace('#', '')
-  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h
-  return {
-    r: parseInt(v.slice(0, 2), 16),
-    g: parseInt(v.slice(2, 4), 16),
-    b: parseInt(v.slice(4, 6), 16),
-  }
 }

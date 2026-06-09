@@ -6,8 +6,10 @@ import { getMonthlyAggregates } from '@/services/dashboard.service';
  * GET /api/postgres/dashboard/monthly?tz=America/Bogota
  *
  * Agregaciones globales del mes corriente para el dashboard admin:
- * heatmap (weekday × hora), donut (asistieron/canceladas/noAsistieron),
- * porNivel (bookings por nivel). Sólo bookings con evento en el mes actual.
+ * donut (asistieron/canceladas/noAsistieron) y porNivel (bookings por
+ * nivel). Sólo bookings con evento en el mes actual. El heatmap se eliminó
+ * el 2026-06-09 — el `tz` query param se ignora ahora pero se conserva
+ * para no romper requests cacheados de la versión anterior.
  *
  * Acceso: cualquier usuario autenticado (el dashboard principal ya filtra
  * por rol en /page.tsx — ADVISOR ve su propio dashboard, no este).
