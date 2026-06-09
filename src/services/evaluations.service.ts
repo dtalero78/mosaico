@@ -152,7 +152,7 @@ export async function submitEvaluation(input: {
             COALESCE(c."step", b."step")                 AS "step_real",
             COALESCE(c."dia", b."fechaEvento")           AS "fecha_real"
      FROM "ACADEMICA_BOOKINGS" b
-     LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+     LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
      WHERE b."_id" = $1`,
     [input.bookingId]
   );
