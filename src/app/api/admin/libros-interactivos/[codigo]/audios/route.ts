@@ -61,3 +61,32 @@ export const DELETE = handlerWithAuth(async (req, ctx, session) => {
   LibrosInteractivosService.invalidateLibroCache(codigo);
   return successResponse({ ok: true });
 });
+
+/**
+ * PATCH /api/admin/libros-interactivos/[codigo]/audios
+ * Body: { key: string, titulo: string | null }
+ *
+ * Actualiza solo el título de un audio existente. No re-sube el archivo,
+ * solo cambia el label que ven los estudiantes. Útil para titular audios
+ * viejos (subidos antes del feature de títulos) sin tocar Spaces.
+ *
+ * `titulo: null | ''` limpia el título — el visor lo mostrará como "Audio N".
+ */
+export const PATCH = handlerWithAuth(async (req, ctx, session) => {
+  await requirePermission(session, AcademicoPermission.ACTUALIZAR_MATERIAL);
+  const codigo = String(ctx.params.codigo || '').toUpperCase().trim();
+  const body = await req.json().catch(() => ({}));
+  const key = String(body?.key || '').trim();
+  if (!key || !key.startsWith('audio/')) {
+    throw new ValidationError('key inválida (debe empezar con "audio/")');
+  }
+  const titulo = body?.titulo == null || body?.titulo === ''
+    ? null
+    : String(body.titulo).trim().slice(0, 80);
+
+  const updated = await LibrosInteractivosRepository.updateAudioTitulo(codigo, key, titulo);
+  if (!updated) throw new NotFoundError('AudioLibroInteractivo', key);
+
+  LibrosInteractivosService.invalidateLibroCache(codigo);
+  return successResponse({ ok: true, titulo });
+});

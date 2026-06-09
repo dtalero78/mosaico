@@ -33,7 +33,21 @@ import {
   ArrowUpTrayIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  PencilSquareIcon,
 } from '@heroicons/react/24/outline'
+
+/** Extrae un título sugerido de un nombre de archivo:
+ *    "Diálogo - The Alphabet.mp3"  →  "Diálogo - The Alphabet"
+ *    "page-008-dialogo.mp3"        →  "page 008 dialogo"
+ *  Limpia extensión, guiones bajos y compacta espacios. */
+function titleFromFilename(filename: string): string {
+  return filename
+    .replace(/\.[a-z0-9]{2,5}$/i, '')   // quita extensión
+    .replace(/[_]+/g, ' ')              // _ → espacio
+    .replace(/\s+/g, ' ')               // compacta
+    .trim()
+    .slice(0, 60)
+}
 
 /**
  * Fetch tolerante a respuestas no-JSON (servidor a veces devuelve HTML de
@@ -353,8 +367,48 @@ function SeccionRangos({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
 function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () => void }) {
   const [paginaNueva, setPaginaNueva] = useState<number | ''>('')
   const [tituloNuevo, setTituloNuevo] = useState('')
+  const [tituloTocado, setTituloTocado] = useState(false) // ¿el admin escribió en el input?
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null) // key del audio en edición
+  const [editTitulo, setEditTitulo] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  // Al elegir archivo, pre-llenar título sugerido (solo si el admin no escribió ya).
+  const handleFileChange = (f: File | null) => {
+    setFile(f)
+    if (f && !tituloTocado) {
+      setTituloNuevo(titleFromFilename(f.name))
+    }
+  }
+
+  const startEdit = (key: string, tituloActual: string | null) => {
+    setEditing(key)
+    setEditTitulo(tituloActual || '')
+  }
+
+  const cancelEdit = () => {
+    setEditing(null)
+    setEditTitulo('')
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    setSavingEdit(true)
+    try {
+      await jsonFetchRetry(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/audios`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: editing, titulo: editTitulo.trim() || null }),
+      })
+      cancelEdit()
+      onReload()
+    } catch (e: any) {
+      alert(e?.message || 'Error')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
 
   const subir = async () => {
     if (typeof paginaNueva !== 'number' || paginaNueva < 1) {
@@ -390,7 +444,7 @@ function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
         }),
       })
 
-      setFile(null); setPaginaNueva(''); setTituloNuevo('')
+      setFile(null); setPaginaNueva(''); setTituloNuevo(''); setTituloTocado(false)
       onReload()
     } catch (e: any) {
       alert(e?.message || 'Error')
@@ -436,11 +490,12 @@ function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
             <input
               id={`tit-${libro.codigo}`}
               type="text"
-              maxLength={40}
+              maxLength={60}
               value={tituloNuevo}
-              onChange={e => setTituloNuevo(e.target.value)}
+              onChange={e => { setTituloNuevo(e.target.value); setTituloTocado(true) }}
               className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
-              placeholder="Diálogo"
+              placeholder="Diálogo (auto desde MP3)"
+              title="Título del audio (opcional)"
             />
           </div>
           <div className="flex-1 min-w-[180px]">
@@ -449,7 +504,7 @@ function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
               id={`audio-${libro.codigo}`}
               type="file"
               accept="audio/mpeg,audio/mp3,.mp3"
-              onChange={e => setFile(e.target.files?.[0] || null)}
+              onChange={e => handleFileChange(e.target.files?.[0] || null)}
               className="w-full text-xs"
             />
           </div>
@@ -472,9 +527,9 @@ function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="text-right px-3 py-2 w-20">Página</th>
-                <th className="text-left px-3 py-2 w-44">Título</th>
+                <th className="text-left px-3 py-2 w-56">Título</th>
                 <th className="text-left px-3 py-2">Key</th>
-                <th className="text-right px-3 py-2 w-12"></th>
+                <th className="text-right px-3 py-2 w-20">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -483,23 +538,77 @@ function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
                   if (a.pagina !== b.pagina) return a.pagina - b.pagina
                   return (a.titulo || '').localeCompare(b.titulo || '')
                 })
-                .map(a => (
-                  <tr key={a.key} className="border-t border-gray-100">
-                    <td className="px-3 py-2 text-right font-bold tabular-nums">{a.pagina}</td>
-                    <td className="px-3 py-2 text-xs text-gray-700 truncate">{a.titulo || <span className="italic text-gray-400">(sin título)</span>}</td>
-                    <td className="px-3 py-2 text-xs text-gray-500 font-mono truncate">{a.key}</td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => eliminar(a.key, a.titulo || `Audio página ${a.pagina}`)}
-                        className="text-red-600 hover:text-red-800"
-                        title="Eliminar audio"
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                .map(a => {
+                  const enEdicion = editing === a.key
+                  return (
+                    <tr key={a.key} className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-right font-bold tabular-nums">{a.pagina}</td>
+                      <td className="px-3 py-2 text-xs text-gray-700 truncate">
+                        {enEdicion ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              maxLength={60}
+                              value={editTitulo}
+                              onChange={e => setEditTitulo(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveEdit()
+                                if (e.key === 'Escape') cancelEdit()
+                              }}
+                              autoFocus
+                              className="flex-1 border border-indigo-300 rounded px-2 py-0.5 text-xs"
+                              placeholder="(sin título)"
+                              title="Nuevo título"
+                            />
+                            <button
+                              type="button"
+                              onClick={saveEdit}
+                              disabled={savingEdit}
+                              className="text-emerald-600 hover:text-emerald-800 text-xs px-1 disabled:opacity-40"
+                              title="Guardar"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              disabled={savingEdit}
+                              className="text-gray-500 hover:text-gray-700 text-xs px-1 disabled:opacity-40"
+                              title="Cancelar"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          a.titulo || <span className="italic text-gray-400">(sin título)</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-500 font-mono truncate">{a.key}</td>
+                      <td className="px-3 py-2 text-right">
+                        {!enEdicion && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(a.key, a.titulo ?? null)}
+                              className="text-indigo-600 hover:text-indigo-800"
+                              title="Editar título"
+                            >
+                              <PencilSquareIcon className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => eliminar(a.key, a.titulo || `Audio página ${a.pagina}`)}
+                              className="text-red-600 hover:text-red-800"
+                              title="Eliminar audio"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
             </tbody>
           </table>
         </div>

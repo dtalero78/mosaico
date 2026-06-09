@@ -167,6 +167,33 @@ class LibrosInteractivosRepositoryClass extends BaseRepository<LibroInteractivoR
     const filtered = (libro.audios || []).filter(a => a.key !== key);
     await this.replaceAudios(codigo, filtered);
   }
+
+  /**
+   * Actualiza solo el título de un audio existente, identificándolo por su key.
+   * Sin tocar Spaces — el archivo MP3 mantiene la misma ruta. Útil para
+   * titular audios viejos sin tener que re-subirlos.
+   * Si la key no existe, no hace nada.
+   * `titulo` puede ser null/'' para limpiar el título (volverá a mostrarse
+   * como "Audio N" en el visor).
+   */
+  async updateAudioTitulo(codigo: string, key: string, titulo: string | null): Promise<boolean> {
+    const libro = await this.findByCodigo(codigo);
+    if (!libro) return false;
+    const cleanTitulo = titulo ? String(titulo).trim() : null;
+    const next = (libro.audios || []).map(a =>
+      a.key === key ? { ...a, titulo: cleanTitulo || null } : a
+    );
+    // Verifica que la key realmente existía
+    const existed = (libro.audios || []).some(a => a.key === key);
+    if (!existed) return false;
+    // Re-ordena por pagina y título
+    next.sort((a, b) => {
+      if (a.pagina !== b.pagina) return a.pagina - b.pagina;
+      return (a.titulo || '').localeCompare(b.titulo || '');
+    });
+    await this.replaceAudios(codigo, next);
+    return true;
+  }
 }
 
 /**
