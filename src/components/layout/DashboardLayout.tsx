@@ -170,14 +170,6 @@ const getNavigation = (userEmail: string, userRole: string) => [
         ],
       },
       {
-        name: 'Juegos',
-        isSubmenu: true,
-        children: [
-          { name: 'Architecture Quiz', href: '/game.html', external: true },
-          { name: 'Pac-Man Data Flow', href: '/game-pacman.html', external: true },
-        ],
-      },
-      {
         name: 'Material', isSubmenu: true, children: [
           { name: 'Actualizar Videos', href: '/admin/actualizar-videos', newTab: true },
         ],
@@ -547,7 +539,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       if (hasFullAccess) return true
 
       // Para Mantenimiento: no-SUPER_ADMIN solo ve ítems con permiso explícito en pagePermissions.
-      // Permisos, Avisos, Juegos, Material → no tienen pagePermissions → se ocultan.
+      // Permisos, Avisos, Material → no tienen pagePermissions → se ocultan.
       // Usuarios (isSubmenu) tiene Migrar Contrato → tiene pagePermissions → visible si tiene permiso.
       if (item.name === 'Mantenimiento') {
         if (child.isSubmenu) {
