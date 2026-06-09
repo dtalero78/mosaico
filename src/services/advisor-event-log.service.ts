@@ -39,6 +39,9 @@ export type MotivoCierre = 'NORMAL' | 'SIN_ASISTENTES' | 'GESTION_COORDINADOR';
 export interface VigenteRow {
   source: 'CALENDARIO';
   eventoId: string;
+  /** UUID común para hermanos del grupo compartido (NULL si es evento normal).
+   *  Usado por AdvisorDashboard y Ctrl Horas para deduplicar KPIs ("any closed → Effective"). */
+  eventoCompartidoId: string | null;
   fechaEvento: string;
   horaInicio: string | null;
   tipo: string | null;
@@ -187,6 +190,7 @@ export async function buildMonthlyView(
     return {
       source: 'CALENDARIO',
       eventoId: r.eventoId,
+      eventoCompartidoId: r.eventoCompartidoId ?? null,
       fechaEvento: fechaEvt.toISOString(),
       horaInicio: r.horaInicio,
       tipo: r.tipo,

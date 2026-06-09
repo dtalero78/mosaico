@@ -96,6 +96,8 @@ class CalendarioRepositoryClass extends BaseRepository {
       `SELECT c."_id", c."tipo", c."fecha", c."hora", c."advisor", c."nivel", c."step",
               c."club", c."titulo", c."observaciones", c."linkZoom", c."limiteUsuarios",
               c."inscritos", c."origen", c."dia", c."evento", c."nombreEvento", c."tituloONivel",
+              c."eventoCompartidoId",
+              c."sesionCerrada",
               c."_createdDate", c."_updatedDate",
               a."primerNombre" as "advisorPrimerNombre",
               a."primerApellido" as "advisorPrimerApellido",
