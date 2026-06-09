@@ -20,8 +20,11 @@ const getDatabaseConfig = () => {
     const urlWithoutSslMode = process.env.DATABASE_URL.replace(/[?&]sslmode=[^&]*/g, '');
     return {
       connectionString: urlWithoutSslMode,
-      max: 25,
-      idleTimeoutMillis: 15000,
+      // BD basic (db-s-1vcpu-1gb) tiene ~22 max_connections. Cada instancia
+      // de Next.js en DO con max=25 puede saturarlo si hay 2+ replicas.
+      // Bajamos a 8 → margen para ~2 replicas + admin tools + scripts.
+      max: 8,
+      idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 10000,
       ssl: {
         rejectUnauthorized: false,
@@ -33,8 +36,8 @@ const getDatabaseConfig = () => {
 
 const poolConfig = getDatabaseConfig() || {
   connectionString: undefined,
-  max: 20,
-  idleTimeoutMillis: 30000,
+  max: 8,
+  idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 10000,
   ssl: { rejectUnauthorized: false },
 };
