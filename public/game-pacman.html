@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LGS Data Flow — Pac-Man Edition</title>
+<style>
+/* ── Reset & Base ── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f172a;color:#e2e8f0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;overflow:hidden;height:100vh}
+
+/* ── Layout ── */
+#app{display:flex;height:100vh;width:100vw}
+#board-area{flex:1;display:flex;flex-direction:column;min-width:0}
+#header{padding:16px 24px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #1e293b;background:#0f172a;z-index:10}
+#header h1{font-size:1.3rem;font-weight:700;white-space:nowrap}
+#header h1 span{color:#FACC15}
+#svg-wrap{flex:1;position:relative;overflow:hidden}
+#svg-wrap svg{width:100%;height:100%}
+
+/* ── Sidebar ── */
+#sidebar{width:320px;min-width:320px;background:#1e293b;border-left:1px solid #334155;display:flex;flex-direction:column;overflow:hidden}
+#sidebar h2{padding:16px 20px 8px;font-size:1rem;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;font-size:.75rem}
+
+/* Scenario list */
+.scenario-list{list-style:none;padding:0 12px;overflow-y:auto;flex-shrink:0}
+.scenario-item{padding:10px 12px;margin:4px 0;border-radius:8px;cursor:pointer;transition:all .2s;border:1px solid transparent;display:flex;align-items:center;gap:10px}
+.scenario-item:hover{background:#334155}
+.scenario-item.active{background:#1e3a5f;border-color:#3B82F6}
+.scenario-item.completed{opacity:.6}
+.scenario-item.completed::after{content:'✓';margin-left:auto;color:#10B981;font-weight:bold}
+.sc-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.sc-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sc-name{font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-desc{font-size:.68rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Controls */
+.controls{padding:16px 20px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:12px}
+.ctrl-row{display:flex;gap:8px;align-items:center}
+.ctrl-btn{padding:8px 14px;border:1px solid #475569;border-radius:6px;background:#1e293b;color:#e2e8f0;cursor:pointer;font-size:.8rem;transition:all .15s;display:flex;align-items:center;gap:6px}
+.ctrl-btn:hover{background:#334155;border-color:#60a5fa}
+.ctrl-btn.primary{background:#3B82F6;border-color:#3B82F6;color:#fff}
+.ctrl-btn.primary:hover{background:#2563eb}
+.ctrl-btn.active{background:#475569;border-color:#60a5fa}
+.ctrl-btn:disabled{opacity:.4;cursor:not-allowed}
+.speed-btns{display:flex;gap:0}
+.speed-btns .ctrl-btn{border-radius:0;margin:0 -1px}
+.speed-btns .ctrl-btn:first-child{border-radius:6px 0 0 6px}
+.speed-btns .ctrl-btn:last-child{border-radius:0 6px 6px 0}
+
+/* Narration */
+.narration{flex:1;padding:16px 20px;border-top:1px solid #334155;overflow-y:auto;min-height:0}
+.narr-step{font-size:.82rem;color:#cbd5e1;line-height:1.5}
+.narr-step .narr-label{color:#FACC15;font-weight:600;display:block;margin-bottom:4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em}
+.narr-step .narr-text{display:block}
+.narr-rule{margin-top:12px;padding:10px 14px;background:#064e3b;border:1px solid #10B981;border-radius:8px;font-size:.78rem;color:#6ee7b7;line-height:1.4}
+.narr-rule::before{content:'💡 ';font-size:.9rem}
+.narr-example{margin-top:8px;padding:10px 12px;background:#1a1a2e;border:1px solid #334155;border-radius:8px;font-size:.76rem;color:#e2e8f0;line-height:1.6}
+.narr-example::before{content:'📌 Ejemplo práctico:';display:block;font-size:.65rem;color:#FACC15;font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.narr-example em{color:#7dd3fc;font-style:normal;font-weight:600}
+
+/* Legend */
+#legend{padding:12px 20px;border-top:1px solid #334155;display:flex;flex-wrap:wrap;gap:10px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:.7rem;color:#94a3b8}
+.legend-dot{width:10px;height:10px;border-radius:3px}
+
+/* ── SVG Styles ── */
+.maze-path{stroke:#1e3a5f;stroke-width:24;stroke-linecap:round;fill:none}
+.maze-path-inner{stroke:#0f172a;stroke-width:18;stroke-linecap:round;fill:none}
+.flow-path{stroke:none;stroke-width:3;stroke-linecap:round;fill:none;opacity:0}
+.flow-path.visible{opacity:1;stroke-dasharray:8 4;animation:dashFlow 1s linear infinite}
+@keyframes dashFlow{to{stroke-dashoffset:-12}}
+
+.node-box{rx:8;ry:8;stroke-width:2;cursor:pointer;transition:filter .3s}
+.node-box:hover{filter:brightness(1.3)}
+.node-box.glow{filter:drop-shadow(0 0 12px var(--glow-color)) brightness(1.3)}
+.node-label{font-family:'Segoe UI',system-ui,sans-serif;font-size:11px;fill:#fff;text-anchor:middle;dominant-baseline:central;pointer-events:none;font-weight:600}
+.node-sublabel{font-family:'Segoe UI',system-ui,sans-serif;font-size:8px;fill:rgba(255,255,255,.6);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+
+.layer-label{font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;fill:#94a3b8;text-anchor:start;dominant-baseline:auto;text-transform:uppercase;letter-spacing:.1em;font-weight:700}
+
+/* Character */
+.character{transition:opacity .3s}
+.char-body{transition:r .1s}
+@keyframes charBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes charShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+
+/* Particles */
+.particle{pointer-events:none}
+
+/* ── Intro overlay ── */
+#intro{position:fixed;inset:0;background:rgba(15,23,42,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity .5s}
+#intro.hidden{opacity:0;pointer-events:none}
+#intro h1{font-size:2rem;margin-bottom:8px}
+#intro h1 span{color:#FACC15}
+#intro p{color:#94a3b8;margin-bottom:24px;text-align:center;max-width:480px;line-height:1.5}
+#intro .start-btn{padding:14px 36px;background:#3B82F6;color:#fff;border:none;border-radius:10px;font-size:1.1rem;cursor:pointer;font-weight:600;transition:transform .15s,background .15s}
+#intro .start-btn:hover{background:#2563eb;transform:scale(1.05)}
+
+/* ── Tooltip ── */
+.node-tooltip{position:fixed;background:#1e293b;border:1px solid #475569;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#cbd5e1;pointer-events:none;z-index:50;max-width:220px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;transition:opacity .15s}
+.node-tooltip.show{opacity:1}
+.node-tooltip strong{color:#fff;display:block;margin-bottom:4px}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  #app{flex-direction:column}
+  #sidebar{width:100%;min-width:0;max-height:40vh;border-left:none;border-top:1px solid #334155}
+  .scenario-list{max-height:120px}
+}
+</style>
+</head>
+<body>
+
+<!-- Intro -->
+<div id="intro">
+  <h1>LGS Data Flow — <span>Pac-Man Edition</span></h1>
+  <p>Observa cómo los requests viajan a través de toda la arquitectura del LGS Admin Panel: Components → Hooks → Routes → Services → Repositories → PostgreSQL</p>
+  <button class="start-btn" onclick="startApp()">▶ Iniciar</button>
+</div>
+
+<div id="app">
+  <!-- Board -->
+  <div id="board-area">
+    <div id="header">
+      <h1>LGS Data Flow — <span>Pac-Man</span></h1>
+    </div>
+    <div id="svg-wrap">
+      <svg id="board" viewBox="0 0 1050 750" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="glowStrong">
+            <feGaussianBlur stdDeviation="6" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g id="paths-layer"></g>
+        <g id="nodes-layer"></g>
+        <g id="particles-layer"></g>
+        <g id="character-layer"></g>
+        <g id="bubble-layer"></g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <h2>Escenarios</h2>
+    <ul class="scenario-list" id="scenario-list"></ul>
+    <div class="controls">
+      <div class="ctrl-row">
+        <button class="ctrl-btn primary" id="btn-play" onclick="togglePlay()">▶ Play</button>
+        <button class="ctrl-btn" id="btn-autoplay" onclick="toggleAutoPlay()">⟳ Auto Play</button>
+        <button class="ctrl-btn" onclick="resetScenario()">↺ Reset</button>
+      </div>
+      <div class="ctrl-row">
+        <span style="font-size:.72rem;color:#64748b;width:60px">Velocidad:</span>
+        <div class="speed-btns">
+          <button class="ctrl-btn active" data-speed="1" onclick="setSpeed(1,this)">1x</button>
+          <button class="ctrl-btn" data-speed="2" onclick="setSpeed(2,this)">2x</button>
+          <button class="ctrl-btn" data-speed="3" onclick="setSpeed(3,this)">3x</button>
+        </div>
+      </div>
+    </div>
+    <h2>Narración</h2>
+    <div class="narration" id="narration">
+      <div class="narr-step">
+        <span class="narr-label">Selecciona un escenario</span>
+        <span class="narr-text">Haz click en un escenario de la lista o presiona "Auto Play" para ver todos los flujos.</span>
+      </div>
+    </div>
+    <div id="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#F97316"></div>Component</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ec4899"></div>Hook</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div>API Route</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#10B981"></div>Service</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div>Repository</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8B5CF6"></div>Database</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#06B6D4"></div>Lib (shared)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#EF4444"></div>Error</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div class="node-tooltip" id="tooltip"></div>
+
+<script>
+/* ════════════════════════════════════════════
+   CONFIG
+   ════════════════════════════════════════════ */
+const COLORS = {
+  component: '#F97316',
+  hook: '#ec4899',
+  route: '#3B82F6',
+  service: '#10B981',
+  repo: '#F59E0B',
+  db: '#8B5CF6',
+  lib: '#06B6D4',
+  request: '#94a3b8',
+  error: '#EF4444'
+};
+
+/* ── Node positions in SVG viewBox 1050×680 ── */
+const NODES = {
+  // Request entry (y=30)
+  request:       { x: 470, y: 30,  w: 100, h: 30, label: 'REQUEST',           type: 'request', tip: 'Punto de entrada: el usuario interactúa con la app en su navegador' },
+
+  // Components (y=110) — las "pantallas" que el usuario ve
+  cStudent:      { x: 100, y: 110, w: 96,  h: 26, label: 'StudentTabs',       type: 'component', tip: 'Pantalla: ficha del estudiante con tabs (General, Académica, Contrato, WhatsApp, Comentarios)' },
+  cCalendar:     { x: 255, y: 110, w: 100, h: 26, label: 'CalendarView',      type: 'component', tip: 'Pantalla: calendario mensual de sesiones con navegación y filtros' },
+  cPanel:        { x: 410, y: 110, w: 100, h: 26, label: 'PanelEstud.',       type: 'component', tip: 'Pantalla: panel de auto-servicio del estudiante (reservar clases, ver progreso, materiales)' },
+  cSearch:       { x: 555, y: 110, w: 82,  h: 26, label: 'SearchBar',         type: 'component', tip: 'Pantalla: barra de búsqueda global en el header del dashboard' },
+  cDashboard:    { x: 695, y: 110, w: 108, h: 26, label: 'DashboardCards',    type: 'component', tip: 'Pantalla: tarjetas de estadísticas del inicio (usuarios, sesiones, top estudiantes)' },
+  cPermissions:  { x: 850, y: 110, w: 104, h: 26, label: 'PermGuard',         type: 'component', tip: 'Pantalla: PermissionGuard — muestra u oculta secciones según los permisos del usuario' },
+
+  // Hooks (y=195) — los "mensajeros" que piden datos
+  hStudent:      { x: 100, y: 195, w: 92,  h: 26, label: 'useStudent',        type: 'hook', tip: 'Mensajero: pide perfil, historial académico, progreso, OnHold y extensiones del estudiante' },
+  hCalendar:     { x: 255, y: 195, w: 92,  h: 26, label: 'useCalendar',       type: 'hook', tip: 'Mensajero: pide eventos del calendario, bookings, inscripciones y conteos' },
+  hPanel:        { x: 410, y: 195, w: 100, h: 26, label: 'usePanelEst.',      type: 'hook', tip: 'Mensajero: pide eventos disponibles, estadísticas, progreso y materiales del estudiante' },
+  hSearch:       { x: 555, y: 195, w: 82,  h: 26, label: 'useSearch',         type: 'hook', tip: 'Mensajero: busca en PEOPLE + ACADEMICA cuando el usuario presiona la lupita o Enter' },
+  hDashboard:    { x: 695, y: 195, w: 100, h: 26, label: 'useDashboard',      type: 'hook', tip: 'Mensajero: pide estadísticas del dashboard con auto-refresh cada 10 minutos' },
+  hPermissions:  { x: 850, y: 195, w: 110, h: 26, label: 'usePermissions',    type: 'hook', tip: 'Mensajero: carga los permisos RBAC del usuario para controlar qué puede ver y hacer' },
+
+  // API Routes (y=285) — las "puertas" del servidor
+  rStudents:     { x: 75,  y: 285, w: 86,  h: 26, label: '/students/[id]',    type: 'route', tip: 'GET /students/[id] — Perfil completo del estudiante (ACADEMICA + PEOPLE)' },
+  rCalendar:     { x: 190, y: 285, w: 76,  h: 26, label: '/calendar',         type: 'route', tip: 'GET/POST /calendar — CRUD de eventos del calendario con bookings' },
+  rBook:         { x: 305, y: 285, w: 88,  h: 26, label: '/panel/book',       type: 'route', tip: 'POST /panel-estudiante/book — Auto-reserva de clases por estudiantes' },
+  rOnhold:       { x: 425, y: 285, w: 96,  h: 26, label: '/students/onhold',  type: 'route', tip: 'POST /students/onhold — Activar/desactivar pausa del contrato' },
+  rSearch:       { x: 540, y: 285, w: 66,  h: 26, label: '/search',           type: 'route', tip: 'GET /search — Búsqueda unificada en PEOPLE + ACADEMICA' },
+  rDashboard:    { x: 640, y: 285, w: 82,  h: 26, label: '/dashboard',        type: 'route', tip: 'GET /dashboard/stats — Estadísticas del panel principal' },
+  rNiveles:      { x: 745, y: 285, w: 72,  h: 26, label: '/niveles',          type: 'route', tip: 'GET /niveles — Niveles académicos con steps, material y clubs' },
+  rPermissions:  { x: 850, y: 285, w: 82,  h: 26, label: '/permissions',      type: 'route', tip: 'GET /permissions — Permisos RBAC del usuario desde ROL_PERMISOS' },
+
+  // Services (y=395) — los "cerebros" con lógica de negocio
+  sStudent:      { x: 100, y: 395, w: 106, h: 28, label: 'StudentService',    type: 'service', tip: 'Cerebro: busca en ACADEMICA, si no encuentra busca en PEOPLE, combina datos del perfil' },
+  sCalendar:     { x: 250, y: 395, w: 108, h: 28, label: 'CalendarService',   type: 'service', tip: 'Cerebro: crear/editar/eliminar eventos del calendario con bookings asociados' },
+  sBooking:      { x: 400, y: 395, w: 108, h: 28, label: 'BookingService',    type: 'service', tip: 'Cerebro: valida capacidad, duplicados, límites semanales, horarios antes de reservar' },
+  sContract:     { x: 545, y: 395, w: 110, h: 28, label: 'ContractService',   type: 'service', tip: 'Cerebro: OnHold, extensiones manuales/automáticas, expiración de contratos' },
+  sDashboard:    { x: 695, y: 395, w: 116, h: 28, label: 'DashboardService',  type: 'service', tip: 'Cerebro: consultas paralelas a múltiples tablas para KPIs del dashboard' },
+  sSearch:       { x: 840, y: 395, w: 96,  h: 28, label: 'SearchService',     type: 'service', tip: 'Cerebro: búsqueda paralela en PEOPLE + ACADEMICA con deduplicación' },
+
+  // Lib (right sidebar) — herramientas compartidas
+  libHelpers:    { x: 975, y: 315, w: 68,  h: 24, label: 'handler()',         type: 'lib', tip: 'Herramienta compartida: como un "guardia" en la puerta de cada ruta. Si algo sale mal, él responde con un mensaje de error en vez de que la app se rompa.' },
+  libWhatsapp:   { x: 975, y: 380, w: 78,  h: 24, label: 'WhatsApp',          type: 'lib', tip: 'Herramienta compartida: envía mensajes de WhatsApp vía Whapi.cloud (bienvenida, OTP, contratos)' },
+  libIdGen:      { x: 975, y: 445, w: 76,  h: 24, label: 'id-generator',      type: 'lib', tip: 'Herramienta compartida: genera IDs únicos para eventos, bookings, personas y comentarios' },
+  libPool:       { x: 975, y: 510, w: 56,  h: 24, label: 'pool',             type: 'lib', tip: 'Herramienta compartida: conexión a PostgreSQL (Digital Ocean) con SSL. SOLO los repositorios lo usan' },
+
+  // Repositories (y=515) — los "traductores" a SQL
+  repoPeople:    { x: 80,  y: 515, w: 104, h: 26, label: 'PeopleRepo',        type: 'repo', tip: 'Traductor: tabla PEOPLE — titulares, beneficiarios, contratos, OnHold, consentimiento' },
+  repoAcademica: { x: 220, y: 515, w: 112, h: 26, label: 'AcademicaRepo',    type: 'repo', tip: 'Traductor: tabla ACADEMICA — registros académicos (nivel, step, nivelParalelo)' },
+  repoCalendar:  { x: 365, y: 515, w: 106, h: 26, label: 'CalendarRepo',     type: 'repo', tip: 'Traductor: tabla CALENDARIO — eventos SESSION/CLUB con advisor, Zoom, límites' },
+  repoBooking:   { x: 505, y: 515, w: 104, h: 26, label: 'BookingRepo',      type: 'repo', tip: 'Traductor: tabla ACADEMICA_BOOKINGS — inscripciones, asistencia, evaluaciones' },
+  repoNiveles:   { x: 640, y: 515, w: 98,  h: 26, label: 'NivelesRepo',      type: 'repo', tip: 'Traductor: tabla NIVELES — niveles académicos con steps, material DO Spaces, clubs' },
+  repoRoles:     { x: 770, y: 515, w: 90,  h: 26, label: 'RolesRepo',        type: 'repo', tip: 'Traductor: tablas ROL_PERMISOS + USUARIOS_ROLES — roles y permisos RBAC' },
+  repoAdvisor:   { x: 885, y: 515, w: 96,  h: 26, label: 'AdvisorRepo',      type: 'repo', tip: 'Traductor: tabla ADVISORS — profesores con nombre, email, zoom, estadísticas' },
+
+  // Database (y=640)
+  database:      { x: 470, y: 640, w: 130, h: 34, label: 'PostgreSQL',        type: 'db', tip: 'Almacén: aquí viven TODOS los datos de forma permanente. Todo SQL usa $1, $2... (nunca texto directo)' },
+
+  // Error node (hidden)
+  errorNode:     { x: 640, y: 235, w: 80, h: 26, label: '403 Error',          type: 'error', tip: 'Acceso denegado — el rol del usuario no tiene el permiso requerido', hidden: true }
+};
+
+/* ── Edges ── */
+const EDGES = [
+  // Request → Components
+  ['request','cStudent'],['request','cCalendar'],['request','cPanel'],
+  ['request','cSearch'],['request','cDashboard'],['request','cPermissions'],
+  // Components → Hooks
+  ['cStudent','hStudent'],['cCalendar','hCalendar'],['cPanel','hPanel'],
+  ['cSearch','hSearch'],['cDashboard','hDashboard'],['cPermissions','hPermissions'],
+  // Hooks → Routes
+  ['hStudent','rStudents'],['hStudent','rOnhold'],
+  ['hCalendar','rCalendar'],
+  ['hPanel','rBook'],['hPanel','rNiveles'],
+  ['hSearch','rSearch'],
+  ['hDashboard','rDashboard'],
+  ['hPermissions','rPermissions'],
+  // Routes → Services
+  ['rStudents','sStudent'],
+  ['rCalendar','sCalendar'],
+  ['rBook','sBooking'],
+  ['rOnhold','sContract'],
+  ['rSearch','sSearch'],
+  ['rDashboard','sDashboard'],
+  // Simple routes direct to repo (no service)
+  ['rNiveles','repoNiveles'],
+  ['rPermissions','repoRoles'],
+  // Services → Repos
+  ['sStudent','repoPeople'],['sStudent','repoAcademica'],
+  ['sCalendar','repoCalendar'],['sCalendar','repoBooking'],
+  ['sBooking','repoBooking'],['sBooking','repoCalendar'],
+  ['sContract','repoPeople'],
+  ['sDashboard','repoPeople'],['sDashboard','repoCalendar'],['sDashboard','repoBooking'],
+  ['sSearch','repoPeople'],['sSearch','repoAcademica'],
+  // All repos → Database
+  ['repoPeople','database'],['repoAcademica','database'],['repoCalendar','database'],
+  ['repoBooking','database'],['repoNiveles','database'],['repoRoles','database'],
+  ['repoAdvisor','database'],
+  // Lib connections (visual only)
+  ['libPool','database'],
+  // Error (hidden edge)
+  ['hPermissions','errorNode']
+];
+
+/* ── 7 Scenarios ── */
+const SCENARIOS = [
+  {
+    id: 'niveles',
+    name: 'GET /niveles',
+    subtitle: 'El Camino Corto',
+    icon: '📚',
+    color: '#06B6D4',
+    steps: [
+      { from: 'request', to: 'cPanel',
+        narr: 'Una estudiante abre el Panel del Estudiante para ver su material de estudio.',
+        code: 'La estudiante <em>María</em> abre su panel de auto-servicio. La pantalla PanelEstudiante se carga y la sección de materiales necesita datos.' },
+      { from: 'cPanel', to: 'hPanel',
+        narr: 'La pantalla MaterialsList le pide al hook usePanelEstudiante que traiga los datos.',
+        code: 'MaterialsList necesita los niveles y materiales. Le dice al mensajero (hook): <em>"Tráeme los datos del nivel BN1"</em>.' },
+      { from: 'hPanel', to: 'rNiveles',
+        narr: 'El hook hace fetch a /api/postgres/niveles. Es una consulta simple de datos de referencia.',
+        code: 'El hook llama a <em>fetch("/api/postgres/niveles?code=BN1")</em> para obtener los steps y materiales del nivel actual de María.' },
+      { from: 'rNiveles', to: 'repoNiveles',
+        narr: 'La ruta va DIRECTO al NivelesRepository — no necesita servicio para datos de referencia.',
+        code: 'Como solo es una consulta a la tabla NIVELES, <em>no se necesita lógica de negocio</em>. La ruta pide los datos directamente al repositorio.' },
+      { from: 'repoNiveles', to: 'database',
+        narr: 'NivelesRepository ejecuta SELECT con SQL parametrizado.',
+        code: 'El repositorio ejecuta: <em>SELECT * FROM "NIVELES" WHERE code = $1</em>. La DB busca el nivel BN1 con sus steps y material de DO Spaces.' },
+    ],
+    returnSteps: [
+      { from: 'database', to: 'repoNiveles',
+        narr: 'PostgreSQL devuelve el nivel con sus steps y materiales.',
+        code: 'La DB retorna: <em>BN1 con Steps 1-5, materialUsuario: ["materials/BN1-Step1.pdf", ...], clubs: ["TRAINING"]</em>.' },
+      { from: 'repoNiveles', to: 'rNiveles',
+        narr: 'El repositorio retorna los datos a la ruta.',
+        code: 'NivelesRepo deserializa los arrays de material y clubs que vienen como JSONB de PostgreSQL.' },
+      { from: 'rNiveles', to: 'hPanel',
+        narr: 'La ruta responde con JSON al hook.',
+        code: 'La ruta envuelve la respuesta con <em>handler()</em> que estandariza el formato de respuesta.' },
+      { from: 'hPanel', to: 'cPanel',
+        narr: 'El hook entrega los datos a la pantalla.',
+        code: 'React Query guarda los datos en caché. La pantalla MaterialsList recibe los datos actualizados.' },
+      { from: 'cPanel', to: 'request',
+        narr: 'La pantalla muestra la lista de materiales. ¡Listo!',
+        code: 'María ve sus materiales: <em>"BN1 Step 1.pdf", "BN1 Step 2.pdf"</em>... Puede hacer click para descargar cada PDF.' },
+    ],
+    rule: 'Para datos de referencia (niveles, roles), Route → Repository es válido. No se necesita Service.'
+  },
+  {
+    id: 'student',
+    name: 'GET /students/[id]',
+    subtitle: 'El Viaje Complejo',
+    icon: '🎓',
+    color: '#3B82F6',
+    steps: [
+      { from: 'request', to: 'cStudent',
+        narr: 'Un admin abre la ficha de un estudiante.',
+        code: 'El advisor <em>Carlos</em> hace click en "Ana Martínez" desde la búsqueda. Se abre la pantalla StudentTabs con sus tabs.' },
+      { from: 'cStudent', to: 'hStudent',
+        narr: 'La pantalla StudentTabs le pide al hook useStudent que traiga el perfil completo.',
+        code: 'StudentTabs se monta y le dice al mensajero: <em>"Tráeme todo sobre Ana Martínez: datos personales, académicos, contrato"</em>.' },
+      { from: 'hStudent', to: 'rStudents',
+        narr: 'El hook hace fetch a /api/postgres/students/abc123.',
+        code: 'El hook llama al servidor con la ID del estudiante. La ruta API verifica la sesión con NextAuth.' },
+      { from: 'rStudents', to: 'sStudent',
+        narr: 'La ruta delega a StudentService. Necesita combinar datos de DOS tablas.',
+        code: 'Como el perfil requiere datos de <em>ACADEMICA y PEOPLE</em>, la ruta necesita un servicio que sepa combinarlos.' },
+      { from: 'sStudent', to: 'repoAcademica',
+        narr: 'StudentService busca PRIMERO en ACADEMICA (datos académicos).',
+        code: 'El servicio pregunta: <em>"¿Existe Ana en ACADEMICA?"</em>. ACADEMICA tiene el nivel (BN2), step (Step 7) y nivel paralelo (ESS).' },
+      { from: 'repoAcademica', to: 'database',
+        narr: 'AcademicaRepository ejecuta la consulta.',
+        code: 'SELECT * FROM "ACADEMICA" WHERE _id = $1. La DB busca el registro académico de Ana.' },
+      { from: 'sStudent', to: 'repoPeople',
+        narr: 'También busca en PEOPLE para datos personales y de contrato.',
+        code: 'Ahora busca en PEOPLE: <em>"Dame nombre, documento, contrato, OnHold, extensiones de Ana"</em>.' },
+      { from: 'repoPeople', to: 'database',
+        narr: 'PeopleRepository ejecuta SELECT con campos JSONB.',
+        code: 'La DB retorna con campos como <em>onHoldHistory</em>, <em>extensionHistory</em> y <em>comentarios</em> (todos JSONB).' },
+    ],
+    returnSteps: [
+      { from: 'database', to: 'repoPeople',
+        narr: 'PostgreSQL devuelve el registro de PEOPLE.',
+        code: 'La DB retorna: <em>Ana Martínez, documento 1234567, contrato vigente hasta 2026-06-30, OnHold: false</em>.' },
+      { from: 'repoPeople', to: 'sStudent',
+        narr: 'El repositorio retorna los datos al servicio.',
+        code: 'PeopleRepo deserializa los campos JSONB (onHoldHistory, extensionHistory, comentarios).' },
+      { from: 'sStudent', to: 'rStudents',
+        narr: 'StudentService COMBINA los datos de ambas tablas en un perfil completo.',
+        code: 'El servicio fusiona: académico (nivel BN2, step 7, ESS) + personal (nombre, contrato, vigencia). <em>Una sola respuesta con todo</em>.' },
+      { from: 'rStudents', to: 'hStudent',
+        narr: 'La ruta responde al hook con el perfil combinado.',
+        code: 'La ruta devuelve el JSON. React Query cachea con staleTime de 5 minutos.' },
+      { from: 'hStudent', to: 'cStudent',
+        narr: 'El hook entrega los datos a la pantalla.',
+        code: 'StudentTabs recibe el perfil completo y puede mostrar <em>todos los tabs</em>.' },
+      { from: 'cStudent', to: 'request',
+        narr: 'La pantalla se renderiza con toda la información. ¡Perfil completo!',
+        code: 'Carlos ve la ficha completa: <em>tabs General, Académica, Contrato, WhatsApp, Comentarios</em>. Todo de dos tablas.' },
+    ],
+    rule: 'Cuando se necesitan datos de MÚLTIPLES tablas, el Service orquesta la combinación. Las rutas NO combinan datos.'
+  },
+  {
+    id: 'booking',
+    name: 'POST /panel/book',
+    subtitle: 'Reservar una Clase',
+    icon: '📅',
+    color: '#10B981',
+    steps: [
+      { from: 'request', to: 'cPanel',
+        narr: 'Una estudiante reserva una clase desde su panel de auto-servicio.',
+        code: 'La estudiante <em>Sofía</em> abre el wizard de reserva: elige fecha → tipo (SESSION) → evento (BN2 con Carlos 3pm) → confirma.' },
+      { from: 'cPanel', to: 'hPanel',
+        narr: 'La pantalla le dice al hook que reserve la clase seleccionada.',
+        code: 'Sofía hace click en "Confirmar". La pantalla le pasa al mensajero: <em>"Reserva el evento evt-123 para Sofía"</em>.' },
+      { from: 'hPanel', to: 'rBook',
+        narr: 'El hook envía POST a /api/postgres/panel-estudiante/book.',
+        code: 'El hook envía: <em>{ eventoId: "evt-123", estudianteId: "sof-456" }</em>. El servidor necesita validar MUCHAS reglas.' },
+      { from: 'rBook', to: 'sBooking',
+        narr: 'La ruta delega a BookingService. Las validaciones son COMPLEJAS.',
+        code: 'BookingService debe verificar <em>6 reglas</em>: capacidad, no duplicado, límites semanales (2 sesiones/3 clubs), no misma hora, mínimo 30 min antes.' },
+      { from: 'sBooking', to: 'repoCalendar',
+        narr: 'Primero verifica el evento: ¿existe? ¿tiene capacidad?',
+        code: 'Consulta CALENDARIO: <em>"¿El evento evt-123 existe y tiene cupos disponibles?"</em>' },
+      { from: 'repoCalendar', to: 'database',
+        narr: 'CalendarRepository consulta el evento.',
+        code: 'SELECT *, "limiteUsuarios" FROM "CALENDARIO" WHERE _id = $1. El evento tiene <em>limiteUsuarios: 8</em>.' },
+      { from: 'sBooking', to: 'repoBooking',
+        narr: 'Luego verifica: ¿ya inscrita? ¿conflicto de horario? ¿excede límites semanales?',
+        code: 'Consulta BOOKINGS: <em>"¿Sofía ya tiene booking aquí? ¿Tiene otra clase a las 3pm? ¿Cuántas sesiones esta semana?"</em>' },
+      { from: 'repoBooking', to: 'database',
+        narr: 'BookingRepository ejecuta queries de validación.',
+        code: 'La DB responde: <em>No está inscrita, sin conflicto de horario, tiene 1 sesión esta semana (límite: 2)</em>. ¡Todo OK!' },
+      { from: 'sBooking', to: 'repoBooking',
+        narr: '✅ Validaciones pasadas. Crea el booking.',
+        code: 'INSERT INTO "ACADEMICA_BOOKINGS" con <em>_id generado por id-generator</em>, eventoId, estudianteId.' },
+      { from: 'repoBooking', to: 'database',
+        narr: 'BookingRepository ejecuta el INSERT.',
+        code: 'La DB inserta el booking. Sofía queda inscrita oficialmente en la clase.' },
+    ],
+    returnSteps: [
+      { from: 'database', to: 'repoBooking',
+        narr: 'PostgreSQL confirma la creación del booking.',
+        code: 'La DB confirma: <em>booking bk-789 creado para Sofía en evento BN2 con Carlos</em>.' },
+      { from: 'repoBooking', to: 'sBooking',
+        narr: 'El repositorio retorna al servicio.',
+        code: 'BookingService recibe confirmación. <em>Las 6 validaciones pasaron y el booking se creó</em>.' },
+      { from: 'sBooking', to: 'rBook',
+        narr: 'BookingService retorna el resultado a la ruta.',
+        code: 'El servicio retorna: <em>{ success: true, booking: { evento: "BN2 con Carlos 3pm" } }</em>.' },
+      { from: 'rBook', to: 'hPanel',
+        narr: 'La ruta responde con éxito al hook.',
+        code: 'React Query <em>invalida</em> las queries de eventos para que se refresquen.' },
+      { from: 'hPanel', to: 'cPanel',
+        narr: 'El hook actualiza la pantalla.',
+        code: 'La pantalla recibe la confirmación y actualiza la vista.' },
+      { from: 'cPanel', to: 'request',
+        narr: 'La pantalla muestra confirmación. ¡Clase reservada!',
+        code: 'Sofía ve: <em>"¡Clase reservada! BN2 con Carlos hoy a las 3pm"</em>. Aparece en "Próxima Clase" con link de Zoom.' },
+    ],
+    rule: 'Operaciones con múltiples validaciones REQUIEREN un Service. El Service es el guardián de las reglas de negocio.'
+  },
+  {
+    id: 'onhold',
+    name: 'POST /students/onhold',
+    subtitle: 'Activar OnHold',
+    icon: '⏸',
+    color: '#F59E0B',
+    steps: [
+      { from: 'request', to: 'cStudent',
+        narr: 'Un admin activa OnHold (pausa) para un estudiante que se va de vacaciones.',
+        code: 'El admin <em>Roberto</em> abre la ficha de "Pedro Gómez" y hace click en "Activar OnHold".' },
+      { from: 'cStudent', to: 'hStudent',
+        narr: 'La pantalla StudentOnHold le pasa al hook los datos de la pausa.',
+        code: 'La pantalla le dice al mensajero: <em>"Pausa a Pedro del 1 al 30 de abril. Motivo: Vacaciones"</em>.' },
+      { from: 'hStudent', to: 'rOnhold',
+        narr: 'El hook envía POST a /api/postgres/students/onhold.',
+        code: 'El hook envía: <em>{ studentId: "ped-123", setOnHold: true, fechaOnHold: "2026-04-01", fechaFinOnHold: "2026-04-30" }</em>.' },
+      { from: 'rOnhold', to: 'sContract',
+        narr: 'La ruta delega a ContractService. La lógica de contratos es delicada.',
+        code: 'Activar OnHold implica: actualizar estado, guardar historial JSONB, incrementar contador. <em>El servicio coordina todo</em>.' },
+      { from: 'sContract', to: 'repoPeople',
+        narr: 'ContractService actualiza PEOPLE con los campos de OnHold.',
+        code: 'Actualiza Pedro: <em>estadoInactivo=true, fechas de pausa, onHoldCount++, nuevo entry en onHoldHistory</em>.' },
+      { from: 'repoPeople', to: 'database',
+        narr: 'PeopleRepository ejecuta UPDATE con JSONB append.',
+        code: 'UPDATE "PEOPLE" SET "estadoInactivo"=true, "onHoldHistory"="onHoldHistory" || $2::jsonb. <em>El historial crece sin perder datos</em>.' },
+    ],
+    returnSteps: [
+      { from: 'database', to: 'repoPeople',
+        narr: 'PostgreSQL confirma el UPDATE.',
+        code: 'La DB confirma: <em>Pedro Gómez ahora tiene estadoInactivo=true, onHoldCount=1</em>.' },
+      { from: 'repoPeople', to: 'sContract',
+        narr: 'El repositorio retorna al servicio.',
+        code: 'ContractService confirma éxito. <em>Al desactivar el OnHold, el contrato se extenderá automáticamente +30 días</em>.' },
+      { from: 'sContract', to: 'rOnhold',
+        narr: 'ContractService retorna el resultado.',
+        code: 'El servicio retorna: <em>{ success: true, diasPausados: 30, onHoldCount: 1 }</em>.' },
+      { from: 'rOnhold', to: 'hStudent',
+        narr: 'La ruta responde al hook.',
+        code: 'React Query invalida el perfil del estudiante para que se refresque.' },
+      { from: 'hStudent', to: 'cStudent',
+        narr: 'El hook actualiza la pantalla.',
+        code: 'StudentOnHold recibe la confirmación y muestra el <em>badge de "En Pausa"</em>.' },
+      { from: 'cStudent', to: 'request',
+        narr: 'La pantalla muestra el estado actualizado. ¡OnHold activado!',
+        code: 'Roberto ve: <em>"Pausado del 1 al 30 de abril. Motivo: Vacaciones"</em>. Al reactivar, el contrato se extiende automáticamente.' },
+    ],
+    rule: 'OnHold toca campos JSONB complejos (historial, contadores). El Service coordina la actualización atómica.'
+  },
+  {
+    id: 'dashboard',
+    name: 'GET /dashboard',
+    subtitle: 'Dashboard Ejecutivo',
+    icon: '📊',
+    color: '#8B5CF6',
+    steps: [
+      { from: 'request', to: 'cDashboard',
+        narr: 'Un admin abre el dashboard principal.',
+        code: 'El admin <em>Laura</em> hace login y ve la página de inicio. Las tarjetas de estadísticas se cargan.' },
+      { from: 'cDashboard', to: 'hDashboard',
+        narr: 'La pantalla DashboardCards le pide al hook que traiga las estadísticas.',
+        code: 'DashboardCards se monta y le dice al mensajero: <em>"Tráeme total usuarios, sesiones hoy, top estudiantes"</em>.' },
+      { from: 'hDashboard', to: 'rDashboard',
+        narr: 'El hook hace fetch a /api/dashboard/stats.',
+        code: 'El hook llama al servidor. React Query tiene staleTime de 5 min y auto-refresh cada 10 min.' },
+      { from: 'rDashboard', to: 'sDashboard',
+        narr: 'La ruta delega a DashboardService. Necesita datos de MÚLTIPLES tablas.',
+        code: 'El dashboard muestra 5 KPIs + Top 5 Estudiantes. <em>Cada dato viene de una tabla diferente</em>.' },
+      { from: 'sDashboard', to: 'repoPeople',
+        narr: 'Consulta PEOPLE para total de usuarios e inactivos.',
+        code: 'Pide a PeopleRepo: <em>"¿Cuántos usuarios hay? ¿Cuántos están inactivos?"</em>' },
+      { from: 'repoPeople', to: 'database',
+        narr: 'PeopleRepository cuenta usuarios.',
+        code: 'SELECT COUNT(*) FROM "PEOPLE". <em>Total: 9,130 usuarios, 45 inactivos</em>.' },
+      { from: 'sDashboard', to: 'repoCalendar',
+        narr: 'Consulta CALENDARIO para sesiones de hoy.',
+        code: 'Pide a CalendarRepo: <em>"¿Cuántos eventos hay HOY? ¿Cuántos advisors?"</em>' },
+      { from: 'repoCalendar', to: 'database',
+        narr: 'CalendarRepository cuenta eventos del día.',
+        code: 'SELECT COUNT(*) FROM "CALENDARIO" WHERE dia = CURRENT_DATE. <em>12 sesiones, 5 advisors</em>.' },
+      { from: 'sDashboard', to: 'repoBooking',
+        narr: 'Consulta BOOKINGS para top 5 estudiantes del mes.',
+        code: 'Pide a BookingRepo: <em>"¿Quiénes son los 5 con más asistencias este mes?"</em>' },
+      { from: 'repoBooking', to: 'database',
+        narr: 'BookingRepository ejecuta queries con GROUP BY.',
+        code: 'SELECT "estudianteId", COUNT(*) FROM "ACADEMICA_BOOKINGS" WHERE asistencia=true GROUP BY 1 LIMIT 5.' },
+    ],
+    returnSteps: [
+      { from: 'database', to: 'repoBooking',
+        narr: 'PostgreSQL devuelve el top 5.',
+        code: 'La DB retorna los 5 mejores: <em>María (18 clases), Juan (15), Ana (14)...</em>' },
+      { from: 'repoBooking', to: 'sDashboard',
+        narr: 'Los repositorios retornan todos los datos al servicio.',
+        code: 'DashboardService tiene las 5 piezas: <em>total usuarios, inactivos, sesiones hoy, inscritos, top 5</em>.' },
+      { from: 'sDashboard', to: 'rDashboard',
+        narr: 'DashboardService combina todo en un solo objeto.',
+        code: 'El servicio arma: <em>{ totalUsuarios: 9130, inactivos: 45, sesionesHoy: 12, topEstudiantes: [...] }</em>.' },
+      { from: 'rDashboard', to: 'hDashboard',
+        narr: 'La ruta responde con todas las estadísticas.',
+        code: 'El hook recibe los datos y React Query los cachea.' },
+      { from: 'hDashboard', to: 'cDashboard',
+        narr: 'El hook entrega los datos a la pantalla.',
+        code: 'DashboardCards recibe los KPIs y el ranking de estudiantes.' },
+      { from: 'cDashboard', to: 'request',
+        narr: 'Las tarjetas del dashboard se muestran. ¡Estadísticas listas!',
+        code: 'Laura ve: <em>9,130 usuarios | 45 inactivos | 12 sesiones hoy</em>. Abajo, el Top 5 con barras de progreso.' },
+    ],
+    rule: 'Los dashboards agregan datos de MÚLTIPLES repositorios — el Service combina queries en paralelo.'
+  },
+  {
+    id: 'authfail',
+    name: 'Auth Fallido',
+    subtitle: 'El Muro',
+    icon: '🔒',
+    color: '#EF4444',
+    steps: [
+      { from: 'request', to: 'cPermissions',
+        narr: 'Un usuario con rol READONLY intenta acceder a una sección restringida.',
+        code: 'El usuario <em>Diego</em> tiene rol READONLY (solo 2 permisos). Intenta abrir <em>"Agenda Sesiones"</em> desde el menú.' },
+      { from: 'cPermissions', to: 'hPermissions',
+        narr: 'PermissionGuard carga los permisos del usuario para verificar acceso.',
+        code: 'PermissionGuard usa <em>usePermissions()</em> para cargar la lista de permisos de Diego desde ROL_PERMISOS.' },
+      { from: 'hPermissions', to: 'errorNode',
+        narr: '❌ ¡BLOQUEADO! READONLY no tiene ACADEMICO.AGENDA.VER_CALENDARIO. Error 403.',
+        code: 'El hook carga los permisos: READONLY solo tiene 2 y <em>VER_CALENDARIO no es uno de ellos</em>. PermissionGuard bloquea.' },
+    ],
+    returnSteps: [
+      { from: 'errorNode', to: 'cPermissions',
+        narr: 'PermissionGuard oculta el contenido o muestra "No tienes permisos".',
+        code: 'PermissionGuard con <em>showDefaultMessage={true}</em> muestra: "No tienes permisos para esta sección". Sin él, simplemente oculta.' },
+      { from: 'cPermissions', to: 'request',
+        narr: 'Diego no puede ver la agenda. El menú lateral tampoco le muestra esa opción.',
+        code: 'En el menú lateral, DashboardLayout <em>filtra las opciones</em> según permisos. "Agenda Sesiones" ni siquiera aparece para READONLY.' },
+    ],
+    rule: 'usePermissions + PermissionGuard actúan como GUARDIANES. El middleware también bloquea a nivel de ruta si alguien accede por URL directa.',
+    isError: true
+  },
+  {
+    id: 'search',
+    name: 'GET /search',
+    subtitle: 'Búsqueda Global',
+    icon: '🔍',
+    color: '#FACC15',
+    steps: [
+      { from: 'request', to: 'cSearch',
+        narr: 'Un admin escribe en la barra de búsqueda global del header.',
+        code: 'El admin <em>Laura</em> escribe "Ana Mart" en la SearchBar del header.' },
+      { from: 'cSearch', to: 'hSearch',
+        narr: 'Laura presiona la lupita (o Enter) y la pantalla activa el hook.',
+        code: 'La SearchBar le dice al mensajero: <em>"Busca Ana Mart"</em>. La búsqueda solo se dispara con el botón o Enter, no mientras escribe.' },
+      { from: 'hSearch', to: 'rSearch',
+        narr: 'El hook hace fetch a /api/postgres/search?q=Ana+Mart.',
+        code: 'Solo busca si hay <em>mínimo 2 caracteres</em>. "Ana Mart" cumple. El hook llama al servidor.' },
+      { from: 'rSearch', to: 'sSearch',
+        narr: 'La ruta delega a SearchService. La búsqueda es PARALELA en dos tablas.',
+        code: 'SearchService ejecuta búsquedas en <em>PEOPLE y ACADEMICA simultáneamente</em>. Esto duplica la velocidad.' },
+      { from: 'sSearch', to: 'repoPeople',
+        narr: 'SearchService busca en PEOPLE: titulares y beneficiarios.',
+        code: 'Busca en PEOPLE: <em>"¿Hay alguien cuyo nombre o documento contenga \'Ana Mart\'?"</em>.' },
+      { from: 'repoPeople', to: 'database',
+        narr: 'PeopleRepository ejecuta búsqueda.',
+        code: 'SELECT * FROM "PEOPLE" WHERE "primerNombre" ILIKE $1 OR "primerApellido" ILIKE $1. <em>Encuentra 3 resultados</em>.' },
+      { from: 'sSearch', to: 'repoAcademica',
+        narr: 'EN PARALELO, busca también en ACADEMICA.',
+        code: 'Busca registros académicos que coincidan. Esto encuentra estudiantes que pueden no estar en PEOPLE.' },
+      { from: 'repoAcademica', to: 'database',
+        narr: 'AcademicaRepository ejecuta la misma búsqueda.',
+        code: 'SELECT * FROM "ACADEMICA" WHERE "primerNombre" ILIKE $1. <em>Encuentra 2 resultados</em>.' },
+    ],
+    returnSteps: [
+      { from: 'database', to: 'repoAcademica',
+        narr: 'PostgreSQL devuelve los resultados de ambas tablas.',
+        code: 'PEOPLE: <em>Ana Martínez (titular), Ana María (beneficiaria)</em>. ACADEMICA: <em>Ana Martínez (BN2), Ana Martín (BN1)</em>.' },
+      { from: 'repoAcademica', to: 'sSearch',
+        narr: 'Los repositorios retornan ambos sets de resultados.',
+        code: 'SearchService recibe 5 resultados totales de las dos búsquedas paralelas. Ahora necesita <em>deduplicar</em>.' },
+      { from: 'sSearch', to: 'rSearch',
+        narr: 'SearchService deduplica y agrega badges de tipo.',
+        code: 'Ana Martínez aparece en ambas tablas, se fusiona. Resultado final: <em>3 personas únicas con badges TITULAR y BENEFICIARIO</em>.' },
+      { from: 'rSearch', to: 'hSearch',
+        narr: 'La ruta responde con los resultados limpios.',
+        code: 'El hook recibe los 3 resultados deduplicados con tipo para mostrar badges de colores.' },
+      { from: 'hSearch', to: 'cSearch',
+        narr: 'El hook entrega los datos a la pantalla.',
+        code: 'SearchBar recibe los resultados y abre el dropdown.' },
+      { from: 'cSearch', to: 'request',
+        narr: 'El dropdown muestra resultados con navegación por teclado.',
+        code: 'Laura ve: <em>Ana Martínez (TITULAR), Ana María (BENEFICIARIO), Ana Martín (BENEFICIARIO)</em>. Puede navegar con ↑↓ y Enter.' },
+    ],
+    rule: 'Búsquedas multi-tabla usan consultas en paralelo en el Service. El Service deduplica resultados de diferentes fuentes.'
+  }
+];
+
+/* ════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════ */
+let state = {
+  currentScenario: null,
+  currentStepIndex: -1,
+  isPlaying: false,
+  isPaused: false,
+  speed: 1,
+  autoPlay: false,
+  phase: 'forward',
+  animFrame: null,
+  charPos: { x: 0, y: 0 },
+  charTarget: { x: 0, y: 0 },
+  charProgress: 0,
+  particles: [],
+  completedScenarios: new Set(),
+  glowingNodes: new Set(),
+  stepTimer: null,
+  isWaiting: false
+};
+
+/* ════════════════════════════════════════════
+   RENDERING
+   ════════════════════════════════════════════ */
+const svgNS = 'http://www.w3.org/2000/svg';
+
+function getNodeColor(type) {
+  return COLORS[type] || COLORS.request;
+}
+
+function renderBoard() {
+  const pathsLayer = document.getElementById('paths-layer');
+  const nodesLayer = document.getElementById('nodes-layer');
+  pathsLayer.innerHTML = '';
+  nodesLayer.innerHTML = '';
+
+  // Layer labels with tooltips
+  const layers = [
+    { y: 12,  label: 'ENTRY',         tip: 'El punto de partida: el usuario hace click en un botón o abre una página en su navegador.' },
+    { y: 82,  label: 'COMPONENTS',     tip: 'Las "pantallas" de la app. Todo lo que el usuario ve: botones, tablas, formularios, modals. Viven en src/components/.' },
+    { y: 167, label: 'HOOKS',          tip: 'Los "mensajeros" de la app. Cuando la pantalla necesita datos, el hook se encarga de pedirlos al servidor y avisar cuando lleguen.' },
+    { y: 257, label: 'API ROUTES',     tip: 'Las "puertas" del servidor. Cada puerta tiene una dirección (URL) y solo acepta ciertos tipos de peticiones. Reciben, delegan y responden.' },
+    { y: 365, label: 'SERVICES',       tip: 'Los "cerebros" de la app. Aquí viven las reglas del negocio: qué validar, cómo combinar datos de varias fuentes, y qué hacer en cada caso.' },
+    { y: 487, label: 'REPOSITORIES',   tip: 'Los "traductores". Convierten las peticiones del código en preguntas que la base de datos entiende (SQL). Son los ÚNICOS que hablan con la base de datos.' },
+    { y: 610, label: 'DATABASE',       tip: 'El "almacén" donde se guardan todos los datos: estudiantes, clases, contratos, asistencias. Todo vive aquí de forma permanente.' },
+    { y: 290, x: 960, label: 'LIB',   tip: 'Las "herramientas compartidas". Funciones que cualquier capa puede usar: envío de WhatsApp, generador de IDs, manejo de errores, conexión a la DB.' }
+  ];
+  layers.forEach(l => {
+    const g = document.createElementNS(svgNS, 'g');
+    g.style.cursor = 'pointer';
+
+    const lx = l.x || 12;
+    const bg = document.createElementNS(svgNS, 'rect');
+    bg.setAttribute('x', String(lx - 6));
+    bg.setAttribute('y', String(l.y - 10));
+    bg.setAttribute('width', '110');
+    bg.setAttribute('height', '16');
+    bg.setAttribute('fill', 'transparent');
+    g.appendChild(bg);
+
+    const txt = document.createElementNS(svgNS, 'text');
+    txt.setAttribute('x', String(lx));
+    txt.setAttribute('y', String(l.y));
+    txt.classList.add('layer-label');
+    txt.textContent = l.label;
+    g.appendChild(txt);
+
+    g.addEventListener('mouseenter', (e) => showTooltip(e, { label: l.label, tip: l.tip }));
+    g.addEventListener('mousemove', (e) => moveTooltip(e));
+    g.addEventListener('mouseleave', hideTooltip);
+
+    nodesLayer.appendChild(g);
+  });
+
+  // Draw edges (maze paths)
+  EDGES.forEach(([fromId, toId]) => {
+    const from = NODES[fromId];
+    const to = NODES[toId];
+    if (!from || !to) return;
+    if (from.hidden || to.hidden) return;
+
+    const outer = document.createElementNS(svgNS, 'line');
+    outer.setAttribute('x1', from.x); outer.setAttribute('y1', from.y);
+    outer.setAttribute('x2', to.x); outer.setAttribute('y2', to.y);
+    outer.classList.add('maze-path');
+    pathsLayer.appendChild(outer);
+
+    const inner = document.createElementNS(svgNS, 'line');
+    inner.setAttribute('x1', from.x); inner.setAttribute('y1', from.y);
+    inner.setAttribute('x2', to.x); inner.setAttribute('y2', to.y);
+    inner.classList.add('maze-path-inner');
+    pathsLayer.appendChild(inner);
+  });
+
+  // Draw nodes
+  Object.entries(NODES).forEach(([id, node]) => {
+    if (node.hidden) return;
+
+    const g = document.createElementNS(svgNS, 'g');
+    g.setAttribute('data-node-id', id);
+
+    const rect = document.createElementNS(svgNS, 'rect');
+    const color = getNodeColor(node.type);
+    rect.setAttribute('x', node.x - node.w / 2);
+    rect.setAttribute('y', node.y - node.h / 2);
+    rect.setAttribute('width', node.w);
+    rect.setAttribute('height', node.h);
+    rect.setAttribute('fill', color);
+    rect.setAttribute('stroke', color);
+    rect.setAttribute('stroke-opacity', '0.5');
+    rect.classList.add('node-box');
+    rect.style.setProperty('--glow-color', color);
+    g.appendChild(rect);
+
+    const label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('x', node.x);
+    label.setAttribute('y', node.y);
+    label.classList.add('node-label');
+    label.textContent = node.label;
+    if (node.w < 85) label.setAttribute('font-size', '9');
+    g.appendChild(label);
+
+    g.addEventListener('mouseenter', (e) => showTooltip(e, node));
+    g.addEventListener('mousemove', (e) => moveTooltip(e));
+    g.addEventListener('mouseleave', hideTooltip);
+
+    nodesLayer.appendChild(g);
+  });
+}
+
+/* ── Tooltip ── */
+const tooltipEl = document.getElementById('tooltip');
+function showTooltip(e, node) {
+  tooltipEl.innerHTML = `<strong>${node.label}</strong>${node.tip}`;
+  tooltipEl.classList.add('show');
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  tooltipEl.style.left = (e.clientX + 14) + 'px';
+  tooltipEl.style.top = (e.clientY - 10) + 'px';
+}
+function hideTooltip() {
+  tooltipEl.classList.remove('show');
+}
+
+/* ════════════════════════════════════════════
+   SCENARIO LIST
+   ════════════════════════════════════════════ */
+function renderScenarioList() {
+  const list = document.getElementById('scenario-list');
+  list.innerHTML = '';
+  SCENARIOS.forEach((sc, i) => {
+    const li = document.createElement('li');
+    li.className = 'scenario-item' + (state.currentScenario === sc ? ' active' : '') + (state.completedScenarios.has(sc.id) ? ' completed' : '');
+    li.innerHTML = `
+      <div class="sc-icon" style="background:${sc.color}20;color:${sc.color};border:2px solid ${sc.color}">${sc.icon}</div>
+      <div class="sc-info">
+        <span class="sc-name">${sc.name}</span>
+        <span class="sc-desc">${sc.subtitle}</span>
+      </div>`;
+    li.addEventListener('click', () => selectScenario(i));
+    list.appendChild(li);
+  });
+}
+
+/* ════════════════════════════════════════════
+   CHARACTER & ANIMATION
+   ════════════════════════════════════════════ */
+function createCharacter(color, icon) {
+  const charLayer = document.getElementById('character-layer');
+  charLayer.innerHTML = '';
+
+  const g = document.createElementNS(svgNS, 'g');
+  g.classList.add('character');
+  g.setAttribute('id', 'char');
+
+  const body = document.createElementNS(svgNS, 'circle');
+  body.setAttribute('r', '14');
+  body.setAttribute('fill', color);
+  body.setAttribute('filter', 'url(#glowStrong)');
+  body.classList.add('char-body');
+  g.appendChild(body);
+
+  const mouth = document.createElementNS(svgNS, 'path');
+  mouth.setAttribute('fill', '#0f172a');
+  mouth.setAttribute('id', 'char-mouth');
+  g.appendChild(mouth);
+
+  const txt = document.createElementNS(svgNS, 'text');
+  txt.setAttribute('x', '0');
+  txt.setAttribute('y', '1');
+  txt.setAttribute('text-anchor', 'middle');
+  txt.setAttribute('dominant-baseline', 'central');
+  txt.setAttribute('font-size', '12');
+  txt.setAttribute('fill', '#fff');
+  txt.setAttribute('pointer-events', 'none');
+  txt.textContent = icon;
+  g.appendChild(txt);
+
+  g.style.cursor = 'pointer';
+  g.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (state.isPlaying || state.isPaused) togglePlay();
+  });
+
+  charLayer.appendChild(g);
+  return g;
+}
+
+function updateCharacterPos(x, y) {
+  const char = document.getElementById('char');
+  if (!char) return;
+  char.setAttribute('transform', `translate(${x},${y})`);
+
+  // Move bubble with character
+  positionBubble(x, y);
+
+  const mouth = document.getElementById('char-mouth');
+  if (mouth) {
+    const t = Date.now() / 150;
+    const mouthAngle = 15 + Math.abs(Math.sin(t)) * 30;
+    const rad = mouthAngle * Math.PI / 180;
+    const r = 14;
+    const dx = state.charTarget.x - state.charPos.x;
+    const dy = state.charTarget.y - state.charPos.y;
+    let angle = Math.atan2(dy, dx);
+    const x1 = Math.cos(angle - rad) * r;
+    const y1 = Math.sin(angle - rad) * r;
+    const x2 = Math.cos(angle + rad) * r;
+    const y2 = Math.sin(angle + rad) * r;
+    mouth.setAttribute('d', `M0,0 L${x1},${y1} A${r},${r} 0 0,0 ${x2},${y2} Z`);
+  }
+}
+
+function spawnParticle(x, y, color) {
+  const particlesLayer = document.getElementById('particles-layer');
+  const c = document.createElementNS(svgNS, 'circle');
+  c.setAttribute('cx', x);
+  c.setAttribute('cy', y);
+  c.setAttribute('r', '3');
+  c.setAttribute('fill', color);
+  c.setAttribute('opacity', '0.7');
+  c.classList.add('particle');
+  particlesLayer.appendChild(c);
+  state.particles.push({ el: c, life: 1, decay: 0.03 + Math.random() * 0.02 });
+}
+
+function updateParticles() {
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.life -= p.decay;
+    if (p.life <= 0) {
+      p.el.remove();
+      state.particles.splice(i, 1);
+    } else {
+      p.el.setAttribute('opacity', String(p.life * 0.6));
+      p.el.setAttribute('r', String(3 * p.life));
+    }
+  }
+}
+
+function clearParticles() {
+  state.particles.forEach(p => p.el.remove());
+  state.particles = [];
+}
+
+/* ── Glow nodes ── */
+function setNodeGlow(nodeId, on) {
+  const g = document.querySelector(`[data-node-id="${nodeId}"]`);
+  if (!g) return;
+  const rect = g.querySelector('.node-box');
+  if (on) {
+    rect.classList.add('glow');
+    rect.setAttribute('filter', 'url(#glowStrong)');
+    state.glowingNodes.add(nodeId);
+  } else {
+    rect.classList.remove('glow');
+    rect.removeAttribute('filter');
+    state.glowingNodes.delete(nodeId);
+  }
+}
+
+function clearAllGlow() {
+  state.glowingNodes.forEach(id => setNodeGlow(id, false));
+}
+
+/* ── Show hidden error node ── */
+function showErrorNode(show) {
+  if (show) {
+    const nodesLayer = document.getElementById('nodes-layer');
+    const node = NODES.errorNode;
+    const existing = document.querySelector('[data-node-id="errorNode"]');
+    if (existing) existing.remove();
+
+    const g = document.createElementNS(svgNS, 'g');
+    g.setAttribute('data-node-id', 'errorNode');
+
+    const rect = document.createElementNS(svgNS, 'rect');
+    rect.setAttribute('x', node.x - node.w / 2);
+    rect.setAttribute('y', node.y - node.h / 2);
+    rect.setAttribute('width', node.w);
+    rect.setAttribute('height', node.h);
+    rect.setAttribute('fill', COLORS.error);
+    rect.setAttribute('stroke', COLORS.error);
+    rect.setAttribute('stroke-opacity', '0.5');
+    rect.setAttribute('rx', '8');
+    rect.setAttribute('ry', '8');
+    rect.classList.add('node-box');
+    rect.style.setProperty('--glow-color', COLORS.error);
+    g.appendChild(rect);
+
+    const label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('x', node.x);
+    label.setAttribute('y', node.y);
+    label.classList.add('node-label');
+    label.textContent = node.label;
+    g.appendChild(label);
+
+    // Draw path from hPermissions to errorNode
+    const pathsLayer = document.getElementById('paths-layer');
+    const from = NODES.hPermissions;
+
+    const outer = document.createElementNS(svgNS, 'line');
+    outer.setAttribute('x1', from.x); outer.setAttribute('y1', from.y);
+    outer.setAttribute('x2', node.x); outer.setAttribute('y2', node.y);
+    outer.classList.add('maze-path');
+    outer.setAttribute('data-error-path', 'true');
+    outer.style.stroke = '#4a1525';
+    pathsLayer.appendChild(outer);
+
+    const inner = document.createElementNS(svgNS, 'line');
+    inner.setAttribute('x1', from.x); inner.setAttribute('y1', from.y);
+    inner.setAttribute('x2', node.x); inner.setAttribute('y2', node.y);
+    inner.classList.add('maze-path-inner');
+    inner.setAttribute('data-error-path', 'true');
+    pathsLayer.appendChild(inner);
+
+    nodesLayer.appendChild(g);
+  } else {
+    const el = document.querySelector('[data-node-id="errorNode"]');
+    if (el) el.remove();
+    document.querySelectorAll('[data-error-path]').forEach(p => p.remove());
+  }
+}
+
+/* ════════════════════════════════════════════
+   ANIMATION LOOP
+   ════════════════════════════════════════════ */
+const MOVE_SPEED = 0.008;
+
+function animationLoop() {
+  if (!state.isPlaying || state.isPaused) {
+    state.animFrame = requestAnimationFrame(animationLoop);
+    updateParticles();
+    const char = document.getElementById('char');
+    if (char) {
+      const cx = parseFloat(char.getAttribute('transform')?.match(/translate\(([^,]+)/)?.[1] || 0);
+      const cy = parseFloat(char.getAttribute('transform')?.match(/,([^)]+)/)?.[1] || 0);
+      updateCharacterPos(cx, cy);
+    }
+    return;
+  }
+
+  state.charProgress += MOVE_SPEED * state.speed;
+
+  if (state.charProgress >= 1) {
+    state.charProgress = 0;
+    const cx = state.charTarget.x;
+    const cy = state.charTarget.y;
+    updateCharacterPos(cx, cy);
+    state.charPos = { ...state.charTarget };
+
+    const scenario = state.currentScenario;
+    const steps = state.phase === 'forward' ? scenario.steps : scenario.returnSteps;
+    const step = steps[state.currentStepIndex];
+    if (step) {
+      setNodeGlow(step.to, true);
+    }
+
+    state.isPlaying = false;
+    state.isWaiting = true;
+    const delay = state.phase === 'return' ? 1200 / state.speed : 2200 / state.speed;
+    state.stepTimer = setTimeout(() => {
+      state.isWaiting = false;
+      state.stepTimer = null;
+      advanceStep();
+    }, delay);
+  } else {
+    const x = state.charPos.x + (state.charTarget.x - state.charPos.x) * state.charProgress;
+    const y = state.charPos.y + (state.charTarget.y - state.charPos.y) * state.charProgress;
+    updateCharacterPos(x, y);
+
+    if (Math.random() < 0.4) {
+      const sc = state.currentScenario;
+      spawnParticle(
+        x + (Math.random() - 0.5) * 6,
+        y + (Math.random() - 0.5) * 6,
+        sc ? sc.color : '#fff'
+      );
+    }
+  }
+
+  updateParticles();
+  state.animFrame = requestAnimationFrame(animationLoop);
+}
+
+/* ════════════════════════════════════════════
+   SCENARIO CONTROL
+   ════════════════════════════════════════════ */
+function selectScenario(index) {
+  stopAnimation();
+  clearAllGlow();
+  clearParticles();
+  showErrorNode(false);
+
+  const sc = SCENARIOS[index];
+  state.currentScenario = sc;
+  state.currentStepIndex = -1;
+  state.phase = 'forward';
+  state.isPlaying = false;
+  state.isPaused = false;
+
+  state.charPos = { x: NODES.request.x, y: NODES.request.y };
+  state.charTarget = { ...state.charPos };
+  createCharacter(sc.color, sc.icon);
+  updateCharacterPos(state.charPos.x, state.charPos.y);
+  setNodeGlow('request', true);
+
+  if (sc.isError) showErrorNode(true);
+
+  renderScenarioList();
+  updateNarration(`▶ ${sc.name} — ${sc.subtitle}`, 'Presiona Play para iniciar la animación.', null);
+  updatePlayButton();
+}
+
+function togglePlay() {
+  if (!state.currentScenario) {
+    selectScenario(0);
+  }
+
+  if (state.isPaused) {
+    state.isPaused = false;
+    if (state.isWaiting) {
+      const delay = state.phase === 'return' ? 1200 / state.speed : 2200 / state.speed;
+      state.stepTimer = setTimeout(() => {
+        state.isWaiting = false;
+        state.stepTimer = null;
+        advanceStep();
+      }, delay);
+    } else {
+      state.isPlaying = true;
+    }
+    updatePlayButton();
+    return;
+  }
+
+  if (state.isPlaying || state.isWaiting) {
+    if (state.stepTimer) {
+      clearTimeout(state.stepTimer);
+      state.stepTimer = null;
+    }
+    state.isPaused = true;
+    state.isPlaying = false;
+    updatePlayButton();
+    return;
+  }
+
+  if (state.currentStepIndex === -1) {
+    advanceStep();
+  } else {
+    state.isPlaying = true;
+  }
+  updatePlayButton();
+}
+
+function advanceStep() {
+  const sc = state.currentScenario;
+  if (!sc) return;
+
+  const steps = state.phase === 'forward' ? sc.steps : sc.returnSteps;
+  state.currentStepIndex++;
+
+  if (state.currentStepIndex >= steps.length) {
+    if (state.phase === 'forward' && sc.returnSteps && sc.returnSteps.length > 0) {
+      state.phase = 'return';
+      state.currentStepIndex = 0;
+      const step = sc.returnSteps[0];
+      startMove(step);
+      updateNarration('↩ Respuesta', step.narr, null, step.code);
+    } else {
+      finishScenario();
+    }
+    return;
+  }
+
+  const step = steps[state.currentStepIndex];
+  startMove(step);
+
+  const phaseLabel = state.phase === 'forward' ? `Paso ${state.currentStepIndex + 1}/${steps.length}` : '↩ Respuesta';
+  updateNarration(phaseLabel, step.narr, null, step.code);
+}
+
+function startMove(step) {
+  const fromNode = NODES[step.from];
+  const toNode = NODES[step.to];
+  if (!fromNode || !toNode) return;
+
+  state.charPos = { x: fromNode.x, y: fromNode.y };
+  state.charTarget = { x: toNode.x, y: toNode.y };
+  state.charProgress = 0;
+  state.isPlaying = true;
+  state.isPaused = false;
+
+  highlightPath(step.from, step.to);
+}
+
+function highlightPath(fromId, toId) {
+  document.querySelectorAll('.flow-path').forEach(p => p.remove());
+
+  const from = NODES[fromId];
+  const to = NODES[toId];
+  if (!from || !to) return;
+
+  const sc = state.currentScenario;
+  const pathsLayer = document.getElementById('paths-layer');
+
+  const line = document.createElementNS(svgNS, 'line');
+  line.setAttribute('x1', from.x); line.setAttribute('y1', from.y);
+  line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
+  line.classList.add('flow-path', 'visible');
+  line.style.stroke = sc ? sc.color : '#fff';
+  pathsLayer.appendChild(line);
+}
+
+function finishScenario() {
+  state.isPlaying = false;
+  state.isPaused = false;
+  const sc = state.currentScenario;
+  if (!sc) return;
+
+  state.completedScenarios.add(sc.id);
+  renderScenarioList();
+  updateNarration('✓ Completado', `${sc.name} — ${sc.subtitle}`, sc.rule);
+  updatePlayButton();
+
+  if (state.autoPlay) {
+    const idx = SCENARIOS.indexOf(sc);
+    const nextIdx = idx + 1;
+    if (nextIdx < SCENARIOS.length) {
+      setTimeout(() => {
+        selectScenario(nextIdx);
+        setTimeout(() => togglePlay(), 1500);
+      }, 4000 / state.speed);
+    } else {
+      state.autoPlay = false;
+      updateAutoPlayButton();
+      updateNarration(
+        '🎉 ¡Todos los flujos completados!',
+        'Has visto los 7 escenarios de la arquitectura completa del LGS Admin Panel.',
+        'Las 5 reglas de oro: 1) Las pantallas (Components) solo hablan con hooks, nunca con el servidor. 2) Los hooks solo hacen fetch, nunca SQL. 3) Las rutas API reciben y delegan, nunca tienen lógica. 4) Los servicios son los cerebros — validan, combinan y coordinan. 5) Solo los repositorios ejecutan SQL contra PostgreSQL.'
+      );
+    }
+  }
+}
+
+function resetScenario() {
+  if (state.currentScenario) {
+    const idx = SCENARIOS.indexOf(state.currentScenario);
+    selectScenario(idx);
+  }
+}
+
+function stopAnimation() {
+  state.isPlaying = false;
+  state.isPaused = false;
+  state.isWaiting = false;
+  if (state.stepTimer) { clearTimeout(state.stepTimer); state.stepTimer = null; }
+  document.querySelectorAll('.flow-path').forEach(p => p.remove());
+  hideBubble();
+  const charLayer = document.getElementById('character-layer');
+  if (charLayer) charLayer.innerHTML = '';
+}
+
+/* ── Controls ── */
+function setSpeed(s, btn) {
+  state.speed = s;
+  document.querySelectorAll('.speed-btns .ctrl-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function toggleAutoPlay() {
+  if (state.autoPlay) {
+    state.autoPlay = false;
+    updateAutoPlayButton();
+    return;
+  }
+  state.autoPlay = true;
+  updateAutoPlayButton();
+  let startIdx = 0;
+  for (let i = 0; i < SCENARIOS.length; i++) {
+    if (!state.completedScenarios.has(SCENARIOS[i].id)) {
+      startIdx = i;
+      break;
+    }
+  }
+  selectScenario(startIdx);
+  setTimeout(() => togglePlay(), 300);
+}
+
+function updatePlayButton() {
+  const btn = document.getElementById('btn-play');
+  if (state.isPaused) {
+    btn.textContent = '▶ Resume';
+  } else if (state.isPlaying || state.isWaiting) {
+    btn.textContent = '⏸ Pause';
+  } else {
+    btn.textContent = '▶ Play';
+  }
+}
+
+function updateAutoPlayButton() {
+  const btn = document.getElementById('btn-autoplay');
+  if (state.autoPlay) {
+    btn.classList.add('active');
+    btn.textContent = '⏹ Stop Auto';
+  } else {
+    btn.classList.remove('active');
+    btn.textContent = '⟳ Auto Play';
+  }
+}
+
+/* ── Narration ── */
+function updateNarration(label, text, rule, code) {
+  const narr = document.getElementById('narration');
+  let html = `<div class="narr-step"><span class="narr-label">${label}</span><span class="narr-text">${text}</span></div>`;
+  if (code) {
+    html += `<div class="narr-example">${code}</div>`;
+  }
+  if (rule) {
+    html += `<div class="narr-rule">${rule}</div>`;
+  }
+  narr.innerHTML = html;
+
+  // Update SVG bubble above character
+  updateBubble(label, text);
+}
+
+function updateBubble(label, text) {
+  const layer = document.getElementById('bubble-layer');
+  if (!layer) return;
+  layer.innerHTML = '';
+
+  // Strip HTML tags for SVG text
+  const cleanText = text.replace(/<[^>]+>/g, '');
+  // Truncate if too long
+  const maxLen = 90;
+  const displayText = cleanText.length > maxLen ? cleanText.substring(0, maxLen) + '…' : cleanText;
+
+  const g = document.createElementNS(svgNS, 'g');
+  g.setAttribute('id', 'speech-bubble');
+
+  // Wrap text into lines of ~45 chars
+  const words = displayText.split(' ');
+  const lines = [];
+  let currentLine = '';
+  for (const word of words) {
+    if ((currentLine + ' ' + word).trim().length > 45) {
+      lines.push(currentLine.trim());
+      currentLine = word;
+    } else {
+      currentLine = (currentLine + ' ' + word).trim();
+    }
+  }
+  if (currentLine) lines.push(currentLine.trim());
+
+  const lineHeight = 14;
+  const padX = 12, padY = 8;
+  const labelHeight = 14;
+  const bubbleH = padY + labelHeight + lines.length * lineHeight + padY;
+  const bubbleW = 280;
+  const tailH = 8;
+
+  // Background rect
+  const rect = document.createElementNS(svgNS, 'rect');
+  rect.setAttribute('x', String(-bubbleW / 2));
+  rect.setAttribute('y', String(-bubbleH - tailH));
+  rect.setAttribute('width', String(bubbleW));
+  rect.setAttribute('height', String(bubbleH));
+  rect.setAttribute('rx', '10');
+  rect.setAttribute('ry', '10');
+  rect.setAttribute('fill', '#1e293b');
+  rect.setAttribute('fill-opacity', '0.95');
+  rect.setAttribute('stroke', '#475569');
+  rect.setAttribute('stroke-width', '1');
+  g.appendChild(rect);
+
+  // Tail (triangle pointing down to character)
+  const tail = document.createElementNS(svgNS, 'polygon');
+  tail.setAttribute('points', `-8,-${tailH} 8,-${tailH} 0,2`);
+  tail.setAttribute('fill', '#1e293b');
+  tail.setAttribute('fill-opacity', '0.95');
+  g.appendChild(tail);
+
+  // Label text
+  const lblEl = document.createElementNS(svgNS, 'text');
+  lblEl.setAttribute('x', String(-bubbleW / 2 + padX));
+  lblEl.setAttribute('y', String(-bubbleH - tailH + padY + 10));
+  lblEl.setAttribute('font-family', "'Segoe UI',system-ui,sans-serif");
+  lblEl.setAttribute('font-size', '10');
+  lblEl.setAttribute('fill', '#FACC15');
+  lblEl.setAttribute('font-weight', '700');
+  lblEl.setAttribute('text-transform', 'uppercase');
+  lblEl.setAttribute('letter-spacing', '0.04em');
+  lblEl.textContent = label.replace(/[<>]/g, '');
+  g.appendChild(lblEl);
+
+  // Body text lines
+  lines.forEach((line, i) => {
+    const tEl = document.createElementNS(svgNS, 'text');
+    tEl.setAttribute('x', String(-bubbleW / 2 + padX));
+    tEl.setAttribute('y', String(-bubbleH - tailH + padY + labelHeight + 4 + (i + 1) * lineHeight));
+    tEl.setAttribute('font-family', "'Segoe UI',system-ui,sans-serif");
+    tEl.setAttribute('font-size', '11');
+    tEl.setAttribute('fill', '#cbd5e1');
+    tEl.textContent = line;
+    g.appendChild(tEl);
+  });
+
+  layer.appendChild(g);
+
+  // Position at current character location
+  const char = document.getElementById('char');
+  if (char) {
+    const match = char.getAttribute('transform')?.match(/translate\(([^,]+),([^)]+)\)/);
+    if (match) {
+      positionBubble(parseFloat(match[1]), parseFloat(match[2]));
+    }
+  }
+}
+
+function positionBubble(charX, charY) {
+  const bubble = document.getElementById('speech-bubble');
+  if (!bubble) return;
+
+  // Clamp X so bubble stays within viewBox (0 to 1050)
+  const halfW = 140;
+  let bx = charX;
+  if (bx - halfW < 10) bx = halfW + 10;
+  if (bx + halfW > 940) bx = 940 - halfW;
+
+  // Position above the character (offset by ~22px for character radius + gap)
+  bubble.setAttribute('transform', `translate(${bx},${charY - 22})`);
+}
+
+function hideBubble() {
+  const layer = document.getElementById('bubble-layer');
+  if (layer) layer.innerHTML = '';
+}
+
+/* ════════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+   ════════════════════════════════════════════ */
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    togglePlay();
+  } else if (e.code === 'KeyR') {
+    resetScenario();
+  } else if (e.code === 'Digit1') setSpeed(1, document.querySelector('[data-speed="1"]'));
+  else if (e.code === 'Digit2') setSpeed(2, document.querySelector('[data-speed="2"]'));
+  else if (e.code === 'Digit3') setSpeed(3, document.querySelector('[data-speed="3"]'));
+  else if (e.code === 'ArrowDown' || e.code === 'ArrowRight') {
+    e.preventDefault();
+    const idx = state.currentScenario ? SCENARIOS.indexOf(state.currentScenario) : -1;
+    if (idx < SCENARIOS.length - 1) selectScenario(idx + 1);
+  } else if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') {
+    e.preventDefault();
+    const idx = state.currentScenario ? SCENARIOS.indexOf(state.currentScenario) : 1;
+    if (idx > 0) selectScenario(idx - 1);
+  }
+});
+
+/* ════════════════════════════════════════════
+   INIT
+   ════════════════════════════════════════════ */
+function startApp() {
+  document.getElementById('intro').classList.add('hidden');
+  setTimeout(() => document.getElementById('intro').style.display = 'none', 500);
+}
+
+function init() {
+  renderBoard();
+  renderScenarioList();
+  state.animFrame = requestAnimationFrame(animationLoop);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
