@@ -54,26 +54,40 @@ export default function MaterialInteractivoPage() {
   const [error, setError] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
 
-  // 1) Carga metadata
+  // 1) Carga metadata — con reintento si BD esta saturada (500 esporadico)
   useEffect(() => {
     let cancelled = false
     setError(null)
-    fetch(`/api/postgres/libros-interactivos/${encodeURIComponent(nivel)}${previewQsFirst}`)
-      .then(r => r.json())
-      .then((json: Metadata) => {
-        if (cancelled) return
-        if (!json?.available) {
-          setMeta({ available: false, featureActive: json?.featureActive })
-        } else {
-          setMeta(json)
+
+    const load = async () => {
+      for (let i = 0; i < 3; i++) {
+        try {
+          const r = await fetch(`/api/postgres/libros-interactivos/${encodeURIComponent(nivel)}${previewQsFirst}`, { cache: 'no-store' })
+          if (r.status === 500 && i < 2) {
+            await new Promise(res => setTimeout(res, 1500 * (i + 1)))
+            continue
+          }
+          const json: Metadata = await r.json()
+          if (cancelled) return
+          if (!json?.available) {
+            setMeta({ available: false, featureActive: json?.featureActive })
+          } else {
+            setMeta(json)
+          }
+          return
+        } catch (e) {
+          if (i === 2) {
+            if (!cancelled) setError('No se pudo cargar el material')
+            return
+          }
+          await new Promise(res => setTimeout(res, 1500 * (i + 1)))
         }
-      })
-      .catch(() => {
-        if (cancelled) return
-        setError('No se pudo cargar el material')
-      })
+      }
+    }
+    load()
+
     return () => { cancelled = true }
-  }, [nivel])
+  }, [nivel, previewQsFirst])
 
   const total = meta?.totalPaginas ?? 0
   const tieneAudio = useMemo(

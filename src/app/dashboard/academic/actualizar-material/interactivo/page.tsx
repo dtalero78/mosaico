@@ -35,6 +35,37 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
+/**
+ * Fetch tolerante a respuestas no-JSON (servidor a veces devuelve HTML de
+ * error 500 cuando la BD está saturada de slots). Reintenta con backoff
+ * simple si detecta un error retriable (500 / connection slots / database).
+ */
+async function jsonFetchRetry(input: RequestInfo, init?: RequestInit, retries = 2): Promise<any> {
+  let lastErr: any
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const r = await fetch(input, init)
+      const txt = await r.text()
+      let j: any = null
+      try { j = txt ? JSON.parse(txt) : null } catch {}
+      if (!r.ok || j?.success === false) {
+        const msg = j?.error || `HTTP ${r.status}${txt ? ': ' + txt.slice(0, 160) : ''}`
+        throw new Error(msg)
+      }
+      return j
+    } catch (e: any) {
+      lastErr = e
+      const msg = (e?.message || '').toLowerCase()
+      const isRetriable = msg.includes('500') || msg.includes('database') ||
+                          msg.includes('connection') || msg.includes('reserved') ||
+                          msg.includes('failed to fetch')
+      if (!isRetriable || i === retries) throw e
+      await new Promise(r => setTimeout(r, 1500 * (i + 1)))
+    }
+  }
+  throw lastErr
+}
+
 interface LibroAudio {
   pagina: number
   key: string
@@ -79,9 +110,7 @@ function Content() {
     setLoading(true)
     setError(null)
     try {
-      const r = await fetch('/api/admin/libros-interactivos')
-      const j = await r.json()
-      if (!j?.success) throw new Error(j?.error || 'Error cargando catálogo')
+      const j = await jsonFetchRetry('/api/admin/libros-interactivos')
       setLibros(j.libros || [])
       setFeatureActive(Boolean(j.featureActive))
     } catch (e: any) {
@@ -96,13 +125,11 @@ function Content() {
   const toggleFlag = async () => {
     setSavingFlag(true)
     try {
-      const r = await fetch('/api/admin/libros-interactivos/feature-flag', {
+      const j = await jsonFetchRetry('/api/admin/libros-interactivos/feature-flag', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !featureActive }),
       })
-      const j = await r.json()
-      if (!j?.success) throw new Error(j?.error || 'Error')
       setFeatureActive(j.active)
     } catch (e: any) {
       alert(e?.message || 'Error')
@@ -227,7 +254,7 @@ function SeccionRangos({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
 
   const save = async (n: NivelBinding) => {
     try {
-      const r = await fetch(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/binding`, {
+      await jsonFetchRetry(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/binding`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -237,8 +264,6 @@ function SeccionRangos({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
           libroPaginaFin: n.libroPaginaFin,
         }),
       })
-      const j = await r.json()
-      if (!j?.success) throw new Error(j?.error || 'Error')
       onReload()
     } catch (e: any) { alert(e?.message || 'Error') }
   }
@@ -337,12 +362,11 @@ function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
     if (!file) { alert('Selecciona un archivo MP3'); return }
     setUploading(true)
     try {
-      const presign = await fetch(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/audios/presign`, {
+      const presign = await jsonFetchRetry(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/audios/presign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pagina: paginaNueva, contentType: file.type || 'audio/mpeg' }),
-      }).then(r => r.json())
-      if (!presign?.success) throw new Error(presign?.error || 'Error presign')
+      })
 
       const put = await fetch(presign.presignedUrl, {
         method: 'PUT',
@@ -351,12 +375,11 @@ function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
       })
       if (!put.ok) throw new Error(`Upload S3 falló (${put.status})`)
 
-      const post = await fetch(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/audios`, {
+      await jsonFetchRetry(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/audios`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pagina: paginaNueva, key: presign.key }),
-      }).then(r => r.json())
-      if (!post?.success) throw new Error(post?.error || 'Error registrando audio')
+      })
 
       setFile(null); setPaginaNueva('')
       onReload()
@@ -370,10 +393,9 @@ function SeccionAudios({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
   const eliminar = async (pagina: number) => {
     if (!confirm(`¿Eliminar el audio de la página ${pagina}?`)) return
     try {
-      const r = await fetch(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/audios?pagina=${pagina}`, {
+      await jsonFetchRetry(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/audios?pagina=${pagina}`, {
         method: 'DELETE',
-      }).then(r => r.json())
-      if (!r?.success) throw new Error(r?.error || 'Error')
+      })
       onReload()
     } catch (e: any) {
       alert(e?.message || 'Error')
