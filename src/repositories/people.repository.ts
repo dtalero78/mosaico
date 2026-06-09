@@ -383,11 +383,12 @@ class PeopleRepositoryClass extends BaseRepository {
 
   async countActive(): Promise<number> {
     // Excluye contratos de prueba (PRB-) del conteo del dashboard.
-    return this.count(`WHERE "estadoInactivo" = false AND COALESCE("contrato",'') NOT LIKE 'PRB-%'`);
+    // Sin COALESCE en el WHERE — bloquea uso de índices sobre "contrato".
+    return this.count(`WHERE "estadoInactivo" = false AND ("contrato" IS NULL OR "contrato" NOT LIKE 'PRB-%')`);
   }
 
   async countInactive(): Promise<number> {
-    return this.count(`WHERE "estadoInactivo" = true AND COALESCE("contrato",'') NOT LIKE 'PRB-%'`);
+    return this.count(`WHERE "estadoInactivo" = true AND ("contrato" IS NULL OR "contrato" NOT LIKE 'PRB-%')`);
   }
 
   // ── Panel Estudiante helpers ──
