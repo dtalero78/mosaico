@@ -32,6 +32,7 @@ interface Nivel {
   code: string
   steps: string[]
   clubs: string[]
+  orden?: number | null
 }
 
 interface StepOption {
@@ -356,6 +357,44 @@ export default function EventModal({
   // Para CLUB: si se pasa `clubPrefixFilter`, filtra las opciones para que
   // solo aparezcan las del mismo tipo de club (ej. solo KARAOKE si el base
   // es KARAOKE). Esto impide mezclar tipos en un grupo compartido.
+  // ─────────────────────────────────────────────────────────────────────
+  // Helpers para AUTO-SUGERENCIA del step pedagógico al agregar un nivel
+  // adicional al grupo compartido.
+  //
+  // Regla: para grupos compartidos, el step debería avanzar +5 por cada
+  // nivel consecutivo dentro de la misma etapa (BN1→BN2 = +5, BN1→BN3 = +10,
+  // P1→P3 = +10, etc.). El "5" es el tamaño estándar de cada nivel del
+  // programa (cada nivel tiene 5 steps).
+  //
+  // Ej: base = CLUB LISTENING BN1 Step 3
+  //   - agregar BN2 → sugiere "LISTENING - Step 8" (3 + 5)
+  //   - agregar BN3 → sugiere "LISTENING - Step 13" (3 + 10)
+  //
+  // Si la opción sugerida NO existe en los clubs/steps del nivel adicional
+  // (datos faltantes en NIVELES), dejamos el dropdown vacío y el admin elige.
+  // ─────────────────────────────────────────────────────────────────────
+
+  /** Extrae el número del step. "Step 3" → 3, "LISTENING - Step 16" → 16, null si no matchea. */
+  const extractStepNumber = (stepStr: string): number | null => {
+    const m = (stepStr || '').match(/Step\s+(\d+)/i)
+    return m ? parseInt(m[1], 10) : null
+  }
+
+  /** Reemplaza el número del step preservando el prefijo del club.
+   *  "LISTENING - Step 3" + 8 → "LISTENING - Step 8". */
+  const replaceStepNumber = (stepStr: string, newN: number): string => {
+    return (stepStr || '').replace(/Step\s+\d+/i, `Step ${newN}`)
+  }
+
+  /** Calcula el offset pedagógico entre dos niveles usando NIVELES.orden.
+   *  Devuelve 0 si no encuentra los niveles (no aplica auto-sugerencia). */
+  const calcStepOffset = (baseNivelCode: string, adicNivelCode: string): number => {
+    const ordBase = niveles.find(n => n.code === baseNivelCode)?.orden
+    const ordAdic = niveles.find(n => n.code === adicNivelCode)?.orden
+    if (typeof ordBase !== 'number' || typeof ordAdic !== 'number') return 0
+    return 5 * (ordAdic - ordBase)
+  }
+
   const getOptionsForNivelTipo = (
     nivelCode: string,
     tipo: 'SESSION' | 'CLUB',
@@ -413,8 +452,25 @@ export default function EventModal({
   }
   const actualizarNivelCompartido = (idx: number, nivel: string) => {
     const options = getOptionsForNivelTipo(nivel, formData.evento, baseClubPrefix)
+
+    // Auto-sugerencia del step pedagógico equivalente.
+    // baseStepRaw para CLUB es "LISTENING - Step 3", para SESSION es "Step 5".
+    const baseStepRaw = formData.nombreEvento || ''
+    const baseStepN = extractStepNumber(baseStepRaw)
+    const baseNivelCode = formData.tituloONivel
+    const offset = calcStepOffset(baseNivelCode, nivel)
+    let stepSugerido = ''
+    if (baseStepN != null && offset !== 0) {
+      const sugeridoN = baseStepN + offset
+      const sugeridoStr = replaceStepNumber(baseStepRaw, sugeridoN)
+      // Solo aplicamos si la opción realmente existe en este nivel
+      if (options.some(o => o.value === sugeridoStr)) {
+        stepSugerido = sugeridoStr
+      }
+    }
+
     setCompartidoCon(compartidoCon.map((c, i) =>
-      i === idx ? { ...c, nivel, step: '', options } : c
+      i === idx ? { ...c, nivel, step: stepSugerido, options } : c
     ))
   }
   const actualizarStepCompartido = (idx: number, step: string) => {
