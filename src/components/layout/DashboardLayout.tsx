@@ -748,10 +748,12 @@ function SidebarContent({
     <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white px-6 pb-4">
       {/* Logo */}
       <div className="flex h-16 shrink-0 items-center">
-        <div className="h-8 w-8 rounded bg-primary-600 flex items-center justify-center">
-          <span className="text-white font-bold">LGS</span>
-        </div>
-        <span className="ml-2 text-xl font-bold text-gray-900">Admin Panel</span>
+        <img
+          src="/logo.jpeg"
+          alt="MOSAICO"
+          className="h-9 w-auto"
+        />
+        <span className="ml-2 text-xl font-bold text-gray-900">MOSAICO</span>
       </div>
 
       {/* Navigation */}

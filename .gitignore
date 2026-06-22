@@ -37,6 +37,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# MOSAICO — artefactos de transpilación temporal (seed de roles)
+.mosaico-tmp/
+
 # wix legacy files
 wix-legacy-pages/
 src/wix-pages/

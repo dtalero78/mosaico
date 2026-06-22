@@ -9,8 +9,8 @@ const figtree = Figtree({
 })
 
 export const metadata: Metadata = {
-  title: 'LGS Admin Panel',
-  description: 'Panel administrativo completo para Let\'s Go Speak',
+  title: 'MOSAICO',
+  description: 'Panel administrativo MOSAICO',
 }
 
 export default function RootLayout({

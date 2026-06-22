@@ -115,7 +115,7 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
             <p className="text-sm text-gray-700">
               Los datos ingresados no coinciden con los registrados en nuestra plataforma.
             </p>
-            <p className="text-sm text-gray-500">Por seguridad, contacta a Let's Go Speak para restablecer tu contraseña.</p>
+            <p className="text-sm text-gray-500">Por seguridad, contacta a MOSAICO para restablecer tu contraseña.</p>
           </div>
           <div className="px-6 py-4 bg-gray-50 border-t flex justify-end">
             <button type="button" onClick={onClose}

@@ -184,7 +184,7 @@ export default function LoginPage() {
             <h2 className="text-lg font-semibold text-gray-900">Contrato vencido</h2>
           </div>
           <p className="text-sm text-gray-600 mb-5">
-            Tu contrato ha vencido y el acceso ha sido desactivado. Comunícate con Let's Go Speak para renovar tu plan.
+            Tu contrato ha vencido y el acceso ha sido desactivado. Comunícate con MOSAICO para renovar tu plan.
           </p>
           <button
             type="button"
@@ -251,8 +251,8 @@ export default function LoginPage() {
 
         <div>
           <img
-            src="/logo.png"
-            alt="Let's Go Speak"
+            src="/logo.jpeg"
+            alt="MOSAICO"
             className="mx-auto h-24 w-auto"
           />
           <p className="mt-4 text-center text-sm text-gray-600">

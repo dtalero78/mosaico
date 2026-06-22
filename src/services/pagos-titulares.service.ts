@@ -460,7 +460,7 @@ export const pagosTitularesService = {
     const periodo      = fmtDate(pago.fechaVencimiento);
     const recibeConforme = (pago.validadoPor || '—').toString();
     const baseUrl = process.env.NEXTAUTH_URL || 'https://lgs-plataforma.com';
-    const logoUrl = `${baseUrl}/logo.png`;
+    const logoUrl = `${baseUrl}/logo.jpeg`;
 
     const htmlContent = `<!DOCTYPE html>
 <html lang="es">
