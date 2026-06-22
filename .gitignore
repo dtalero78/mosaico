@@ -40,6 +40,10 @@ next-env.d.ts
 # MOSAICO — artefactos de transpilación temporal (seed de roles)
 .mosaico-tmp/
 
+# MOSAICO — spec de Digital Ocean con secretos (DATABASE_URL, claves). El spec
+# real vive en DO; no se versiona con credenciales en claro.
+.do/mosaico.app.yaml
+
 # wix legacy files
 wix-legacy-pages/
 src/wix-pages/
