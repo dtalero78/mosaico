@@ -163,7 +163,7 @@ export default function MatriculasPage() {
           .watermark::after {
             content: ''; position: fixed; top: 50%; left: 50%;
             transform: translate(-50%,-50%) rotate(-25deg);
-            width: 380px; height: 380px; background: url('/logo.jpeg') center/contain no-repeat;
+            width: 380px; height: 380px; background: url('/logo.png') center/contain no-repeat;
             opacity: 0.04; z-index: 0; pointer-events: none;
           }
         }
@@ -176,7 +176,7 @@ export default function MatriculasPage() {
         <div className="print-header items-start justify-between mb-6 pb-4 border-b-2 border-indigo-600">
           <div className="flex items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.jpeg" alt="MOSAICO" className="h-14 w-auto" />
+            <img src="/logo.png" alt="MOSAICO" className="h-14 w-auto" />
             <div>
               <p className="text-xs text-gray-500">MOSAICO — Informe de Matrículas</p>
               <p className="text-xs text-gray-400">Generado: {new Date().toLocaleString('es-CO')} · Por: {session?.user?.name || session?.user?.email}</p>
@@ -193,7 +193,7 @@ export default function MatriculasPage() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.jpeg" alt="MOSAICO" className="h-10 w-auto" />
+              <img src="/logo.png" alt="MOSAICO" className="h-10 w-auto" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Matrículas</h1>
                 <p className="text-sm text-gray-500">Estado de contratos: por aprobar, vigentes, finalizados y usuarios académicos.</p>

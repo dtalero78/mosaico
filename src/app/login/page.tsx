@@ -251,7 +251,7 @@ export default function LoginPage() {
 
         <div>
           <img
-            src="/logo.jpeg"
+            src="/logo.png"
             alt="MOSAICO"
             className="mx-auto h-24 w-auto"
           />

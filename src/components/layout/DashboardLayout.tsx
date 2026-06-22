@@ -749,7 +749,7 @@ function SidebarContent({
       {/* Logo */}
       <div className="flex h-16 shrink-0 items-center">
         <img
-          src="/logo.jpeg"
+          src="/logo.png"
           alt="MOSAICO"
           className="h-9 w-auto"
         />

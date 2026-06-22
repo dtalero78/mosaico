@@ -172,7 +172,7 @@ export default function InfoAcademicUserPage() {
             position: fixed; top: 50%; left: 50%;
             transform: translate(-50%,-50%) rotate(-25deg);
             width: 380px; height: 380px;
-            background: url('/logo.jpeg') center/contain no-repeat;
+            background: url('/logo.png') center/contain no-repeat;
             opacity: 0.04; z-index: 0; pointer-events: none;
           }
 
@@ -250,7 +250,7 @@ export default function InfoAcademicUserPage() {
             <div className="print-header items-start justify-between mb-6 pb-4 border-b-2 border-blue-600">
               <div className="flex items-center gap-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.jpeg" alt="MOSAICO" className="h-14 w-auto" />
+                <img src="/logo.png" alt="MOSAICO" className="h-14 w-auto" />
                 <div>
                   <p className="text-xs text-gray-500">MOSAICO — Plataforma Académica</p>
                   <p className="text-xs text-gray-400">Generado: {new Date().toLocaleString('es-CO')} · Por: {session?.user?.name || session?.user?.email}</p>
@@ -268,7 +268,7 @@ export default function InfoAcademicUserPage() {
             <div className="no-print bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.jpeg" alt="MOSAICO" className="h-12 w-auto" />
+                <img src="/logo.png" alt="MOSAICO" className="h-12 w-auto" />
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">
                     Reporte Académico — {data.student.nombre}
