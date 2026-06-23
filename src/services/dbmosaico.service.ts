@@ -1,12 +1,12 @@
 /**
- * DBLGS Service - Business Logic Layer
+ * DBMOSAICO Service - Business Logic Layer
  *
  * Validates table/column names against whitelists from information_schema,
  * builds dynamic filters, handles type coercion, and delegates to repository.
  */
 
 import 'server-only';
-import { DblgsRepository, ColumnMeta } from '@/repositories/dblgs.repository';
+import { DbmosaicoRepository, ColumnMeta } from '@/repositories/dbmosaico.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ const TABLES_CACHE_TTL = 60_000; // 1 minute
 
 // ── Service ────────────────────────────────────────────────────────
 
-class DblgsServiceClass {
+class DbmosaicoServiceClass {
 
   // ── Validation helpers ─────────────────────────────────────────
 
@@ -52,7 +52,7 @@ class DblgsServiceClass {
     if (Date.now() - validTablesCache.timestamp < TABLES_CACHE_TTL && validTablesCache.tables.length > 0) {
       return validTablesCache.tables;
     }
-    const tables = await DblgsRepository.listTables();
+    const tables = await DbmosaicoRepository.listTables();
     validTablesCache = { tables, timestamp: Date.now() };
     return tables;
   }
@@ -233,8 +233,8 @@ class DblgsServiceClass {
   async getTableSchema(table: string): Promise<SchemaResult> {
     await this.assertValidTable(table);
     const [columns, rowCount] = await Promise.all([
-      DblgsRepository.getTableSchema(table),
-      DblgsRepository.getRowCount(table),
+      DbmosaicoRepository.getTableSchema(table),
+      DbmosaicoRepository.getRowCount(table),
     ]);
     // Inject virtual columns for special tables
     const enrichedColumns = this.injectVirtualColumns(table, columns);
@@ -244,7 +244,7 @@ class DblgsServiceClass {
   async readRows(table: string, options: ReadOptions): Promise<PaginatedResult> {
     await this.assertValidTable(table);
 
-    const schema = await DblgsRepository.getTableSchema(table);
+    const schema = await DbmosaicoRepository.getTableSchema(table);
     const enrichedSchema = this.injectVirtualColumns(table, schema);
 
     // Validate sortBy column (use enrichedSchema to allow sorting by virtual columns)
@@ -263,7 +263,7 @@ class DblgsServiceClass {
 
     // For exports, skip count query to reduce DB load
     if (options.export) {
-      const rows = await DblgsRepository.readRows(table, whereClause, values, sortCol, sortDir as 'ASC' | 'DESC', pageSize, offset);
+      const rows = await DbmosaicoRepository.readRows(table, whereClause, values, sortCol, sortDir as 'ASC' | 'DESC', pageSize, offset);
       return {
         table,
         rows,
@@ -277,8 +277,8 @@ class DblgsServiceClass {
 
     // Execute queries in parallel
     const [rows, total] = await Promise.all([
-      DblgsRepository.readRows(table, whereClause, values, sortCol, sortDir as 'ASC' | 'DESC', pageSize, offset),
-      DblgsRepository.countFilteredRows(table, whereClause, values),
+      DbmosaicoRepository.readRows(table, whereClause, values, sortCol, sortDir as 'ASC' | 'DESC', pageSize, offset),
+      DbmosaicoRepository.countFilteredRows(table, whereClause, values),
     ]);
 
     return {
@@ -295,7 +295,7 @@ class DblgsServiceClass {
   async insertRow(table: string, data: Record<string, any>): Promise<any> {
     await this.assertValidTable(table);
 
-    const schema = await DblgsRepository.getTableSchema(table);
+    const schema = await DbmosaicoRepository.getTableSchema(table);
     const schemaColNames = new Set(schema.map(c => c.name));
 
     // Filter to valid columns only and coerce types
@@ -315,7 +315,7 @@ class DblgsServiceClass {
     // Auto-generate _id if missing and column exists
     if (schemaColNames.has('_id') && !columns.includes('_id')) {
       columns.push('_id');
-      values.push(`dblgs_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`);
+      values.push(`dbmosaico_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`);
     }
 
     // Add timestamps if columns exist
@@ -332,13 +332,13 @@ class DblgsServiceClass {
       throw new ValidationError('No hay columnas válidas para insertar');
     }
 
-    return DblgsRepository.insertRow(table, columns, values);
+    return DbmosaicoRepository.insertRow(table, columns, values);
   }
 
   async updateCell(table: string, rowId: string, column: string, value: any): Promise<any> {
     await this.assertValidTable(table);
 
-    const schema = await DblgsRepository.getTableSchema(table);
+    const schema = await DbmosaicoRepository.getTableSchema(table);
     const enrichedSchema = this.injectVirtualColumns(table, schema);
 
     // Check if this is a virtual column (exists in enriched but not in real schema)
@@ -351,7 +351,7 @@ class DblgsServiceClass {
     const hasUpdatedDateCol = schema.some(c => c.name === '_updatedDate');
 
     const coerced = this.coerceValue(value, col);
-    const result = await DblgsRepository.updateCell(table, rowId, column, coerced, hasUpdatedDateCol);
+    const result = await DbmosaicoRepository.updateCell(table, rowId, column, coerced, hasUpdatedDateCol);
 
     if (!result) {
       throw new NotFoundError(table, rowId);
@@ -370,8 +370,8 @@ class DblgsServiceClass {
       throw new ValidationError('No se pueden eliminar más de 100 filas a la vez');
     }
 
-    return DblgsRepository.deleteRows(table, ids);
+    return DbmosaicoRepository.deleteRows(table, ids);
   }
 }
 
-export const DblgsService = new DblgsServiceClass();
+export const DbmosaicoService = new DbmosaicoServiceClass();

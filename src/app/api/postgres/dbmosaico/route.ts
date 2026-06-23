@@ -1,5 +1,5 @@
 /**
- * GET /api/postgres/dblgs
+ * GET /api/postgres/dbmosaico
  *
  * Database viewer metadata endpoints:
  *   ?action=list-tables  → list all tables
@@ -9,7 +9,7 @@
  */
 
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { DblgsService } from '@/services/dblgs.service';
+import { DbmosaicoService } from '@/services/dbmosaico.service';
 import { ForbiddenError, ValidationError } from '@/lib/errors';
 import { Role } from '@/types/permissions';
 
@@ -28,14 +28,14 @@ export const GET = handlerWithAuth(async (request, _context, session) => {
   const action = searchParams.get('action') || 'list-tables';
 
   if (action === 'list-tables') {
-    const tables = await DblgsService.listTables();
+    const tables = await DbmosaicoService.listTables();
     return successResponse({ tables });
   }
 
   if (action === 'schema') {
     const table = searchParams.get('table');
     if (!table) throw new ValidationError('Parámetro "table" es requerido');
-    const schema = await DblgsService.getTableSchema(table);
+    const schema = await DbmosaicoService.getTableSchema(table);
     return successResponse(schema);
   }
 

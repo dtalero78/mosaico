@@ -1,5 +1,5 @@
 /**
- * DBLGS Repository - Dynamic Database Access
+ * DBMOSAICO Repository - Dynamic Database Access
  *
  * Provides raw SQL access to any table dynamically.
  * Uses information_schema for table/column introspection.
@@ -55,7 +55,7 @@ function mapPgTypeToSimple(udtName: string): string {
 
 // ── Repository ─────────────────────────────────────────────────────
 
-class DblgsRepositoryClass {
+class DbmosaicoRepositoryClass {
 
   /**
    * List all base tables in the public schema
@@ -252,4 +252,4 @@ class DblgsRepositoryClass {
   }
 }
 
-export const DblgsRepository = new DblgsRepositoryClass();
+export const DbmosaicoRepository = new DbmosaicoRepositoryClass();

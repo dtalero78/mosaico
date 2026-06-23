@@ -1,5 +1,5 @@
 /**
- * DBLGS Hooks - React Query v3 data fetching for database viewer
+ * DBMOSAICO Hooks - React Query v3 data fetching for database viewer
  *
  * Provides hooks for listing tables, reading schema, CRUD operations.
  * Uses the api utility from use-api.ts and react-hot-toast for notifications.
@@ -14,28 +14,28 @@ import toast from 'react-hot-toast';
 // ── Query keys ─────────────────────────────────────────────────────
 
 const keys = {
-  tables: ['dblgs', 'tables'] as const,
-  schema: (table: string) => ['dblgs', 'schema', table] as const,
-  rows: (table: string, params: string) => ['dblgs', 'rows', table, params] as const,
+  tables: ['dbmosaico', 'tables'] as const,
+  schema: (table: string) => ['dbmosaico', 'schema', table] as const,
+  rows: (table: string, params: string) => ['dbmosaico', 'rows', table, params] as const,
 };
 
 // ── Queries ────────────────────────────────────────────────────────
 
-export function useDblgsTables() {
+export function useDbmosaicoTables() {
   return useQuery(keys.tables, () =>
-    api.get<{ success: boolean; tables: string[] }>('/api/postgres/dblgs?action=list-tables')
+    api.get<{ success: boolean; tables: string[] }>('/api/postgres/dbmosaico?action=list-tables')
   );
 }
 
-export function useDblgsSchema(table: string | null) {
+export function useDbmosaicoSchema(table: string | null) {
   return useQuery(
     keys.schema(table!),
-    () => api.get(`/api/postgres/dblgs?action=schema&table=${encodeURIComponent(table!)}`),
+    () => api.get(`/api/postgres/dbmosaico?action=schema&table=${encodeURIComponent(table!)}`),
     { enabled: !!table }
   );
 }
 
-export function useDblgsRows(table: string | null, params: Record<string, any>) {
+export function useDbmosaicoRows(table: string | null, params: Record<string, any>) {
   const searchParams = new URLSearchParams(
     Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== '' && v !== null)
@@ -44,7 +44,7 @@ export function useDblgsRows(table: string | null, params: Record<string, any>) 
 
   return useQuery(
     keys.rows(table!, searchParams),
-    () => api.get(`/api/postgres/dblgs/${encodeURIComponent(table!)}?${searchParams}`),
+    () => api.get(`/api/postgres/dbmosaico/${encodeURIComponent(table!)}?${searchParams}`),
     {
       enabled: !!table,
       keepPreviousData: true,
@@ -58,10 +58,10 @@ export function useUpdateCell(table: string | null) {
   const qc = useQueryClient();
   return useMutation(
     (payload: { rowId: string; column: string; value: any }) =>
-      api.patch(`/api/postgres/dblgs/${encodeURIComponent(table!)}`, payload),
+      api.patch(`/api/postgres/dbmosaico/${encodeURIComponent(table!)}`, payload),
     {
       onSuccess: () => {
-        qc.invalidateQueries(['dblgs', 'rows', table]);
+        qc.invalidateQueries(['dbmosaico', 'rows', table]);
         toast.success('Celda actualizada');
       },
       onError: (err) => handleApiError(err, 'Error actualizando celda'),
@@ -73,10 +73,10 @@ export function useInsertRow(table: string | null) {
   const qc = useQueryClient();
   return useMutation(
     (row: Record<string, any>) =>
-      api.post(`/api/postgres/dblgs/${encodeURIComponent(table!)}`, { row }),
+      api.post(`/api/postgres/dbmosaico/${encodeURIComponent(table!)}`, { row }),
     {
       onSuccess: () => {
-        qc.invalidateQueries(['dblgs', 'rows', table]);
+        qc.invalidateQueries(['dbmosaico', 'rows', table]);
         qc.invalidateQueries(keys.schema(table!)); // rowCount changed
         toast.success('Fila creada exitosamente');
       },
@@ -89,10 +89,10 @@ export function useDeleteRows(table: string | null) {
   const qc = useQueryClient();
   return useMutation(
     (ids: string[]) =>
-      api.delete(`/api/postgres/dblgs/${encodeURIComponent(table!)}`, { ids }),
+      api.delete(`/api/postgres/dbmosaico/${encodeURIComponent(table!)}`, { ids }),
     {
       onSuccess: (data: any) => {
-        qc.invalidateQueries(['dblgs', 'rows', table]);
+        qc.invalidateQueries(['dbmosaico', 'rows', table]);
         qc.invalidateQueries(keys.schema(table!)); // rowCount changed
         toast.success(`${data.deletedCount} fila(s) eliminada(s)`);
       },

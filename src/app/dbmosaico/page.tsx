@@ -1,5 +1,5 @@
 /**
- * /dblgs - Database Viewer & Editor
+ * /dbmosaico - Database Viewer & Editor
  *
  * Standalone page (outside DashboardLayout) that provides a Wix-like
  * spreadsheet interface for viewing and editing PostgreSQL tables.
@@ -14,13 +14,13 @@ import { useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import toast, { Toaster } from 'react-hot-toast';
 import {
-  useDblgsTables,
-  useDblgsSchema,
-  useDblgsRows,
+  useDbmosaicoTables,
+  useDbmosaicoSchema,
+  useDbmosaicoRows,
   useUpdateCell,
   useInsertRow,
   useDeleteRows,
-} from '@/hooks/use-dblgs';
+} from '@/hooks/use-dbmosaico';
 import { Role } from '@/types/permissions';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ interface SavedView {
 
 // ── Saved Views localStorage helpers ──────────────────────────────
 
-const VIEWS_STORAGE_KEY = 'dblgs-saved-views';
+const VIEWS_STORAGE_KEY = 'dbmosaico-saved-views';
 
 function loadViews(): SavedView[] {
   try {
@@ -62,21 +62,21 @@ function persistViews(views: SavedView[]) {
 
 // ── Session state persistence (table + active view) ───────────────
 
-const SESSION_KEY = 'dblgs-session';
+const SESSION_KEY = 'dbmosaico-session';
 
-interface DblgsSession {
+interface DbmosaicoSession {
   table: string | null;
   activeViewId: string | null;
 }
 
-function loadSession(): DblgsSession {
+function loadSession(): DbmosaicoSession {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     return raw ? JSON.parse(raw) : { table: null, activeViewId: null };
   } catch { return { table: null, activeViewId: null }; }
 }
 
-function persistSession(session: DblgsSession) {
+function persistSession(session: DbmosaicoSession) {
   try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch {}
 }
 
@@ -145,18 +145,18 @@ const queryClient = new QueryClient({
 
 // ── Main page wrapper (provides QueryClient) ──────────────────────
 
-export default function DblgsPageWrapper() {
+export default function DbmosaicoPageWrapper() {
   return (
     <QueryClientProvider client={queryClient}>
       <Toaster position="top-right" />
-      <DblgsPage />
+      <DbmosaicoPage />
     </QueryClientProvider>
   );
 }
 
-// ── DblgsPage Component ────────────────────────────────────────────
+// ── DbmosaicoPage Component ────────────────────────────────────────────
 
-function DblgsPage() {
+function DbmosaicoPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -242,9 +242,9 @@ function DblgsPage() {
   }, [filters]);
 
   // ── Data hooks ──────────────────────────────────────────────────
-  const { data: tablesData, isLoading: tablesLoading } = useDblgsTables();
-  const { data: schemaData } = useDblgsSchema(selectedTable);
-  const { data: rowsData, isLoading: rowsLoading, isFetching } = useDblgsRows(selectedTable, {
+  const { data: tablesData, isLoading: tablesLoading } = useDbmosaicoTables();
+  const { data: schemaData } = useDbmosaicoSchema(selectedTable);
+  const { data: rowsData, isLoading: rowsLoading, isFetching } = useDbmosaicoRows(selectedTable, {
     page, pageSize, sortBy, sortDir,
     search: debouncedSearch || undefined,
     filters: Object.keys(debouncedFilters).length > 0 ? debouncedFilters : undefined,
@@ -560,7 +560,7 @@ function DblgsPage() {
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (Object.keys(debouncedFilters).length > 0) params.set('filters', JSON.stringify(debouncedFilters));
 
-      const res = await fetch(`/api/postgres/dblgs/${encodeURIComponent(selectedTable)}?${params.toString()}`);
+      const res = await fetch(`/api/postgres/dbmosaico/${encodeURIComponent(selectedTable)}?${params.toString()}`);
       if (!res.ok) throw new Error('Error al exportar');
       const data = await res.json();
       const exportRows: any[] = data.rows || [];
@@ -626,7 +626,7 @@ function DblgsPage() {
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-lg font-semibold text-gray-900">Base de Datos LGS</h1>
+            <h1 className="text-lg font-semibold text-gray-900">Base de Datos MOSAICO</h1>
             <select
               value={selectedTable || ''}
               onChange={e => handleTableChange(e.target.value)}
