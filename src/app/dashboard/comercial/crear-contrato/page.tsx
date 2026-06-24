@@ -69,6 +69,71 @@ interface Beneficiario {
   fechaNacimiento: string;
   email?: string;
   celular?: string;
+  campaign?: string;
+  tipoCurso?: string;
+  horarioCurso?: string;
+}
+
+interface CursoRow {
+  campaign: string;
+  tipoCurso: string;
+  horarioCurso: string;
+  paraMenores: boolean;
+}
+
+/**
+ * Tres dropdowns en cascada (campaña → curso → horario) alimentados por
+ * CURSOS_CAMPAIGN. `adultsOnly` oculta cursos `paraMenores` (cuando el titular
+ * es el beneficiario: solo IMPULSA/DANSHI/SENPAI).
+ */
+function CursoCampaignFields({
+  rows, values, onPatch, adultsOnly = false,
+}: {
+  rows: CursoRow[];
+  values: { campaign?: string; tipoCurso?: string; horarioCurso?: string };
+  onPatch: (patch: { campaign?: string; tipoCurso?: string; horarioCurso?: string }) => void;
+  adultsOnly?: boolean;
+}) {
+  const campaign = values.campaign || '';
+  const tipoCurso = values.tipoCurso || '';
+  const horarioCurso = values.horarioCurso || '';
+  const campaigns = Array.from(new Set(rows.map(r => r.campaign)));
+  const cursos = Array.from(new Set(
+    rows.filter(r => r.campaign === campaign && (!adultsOnly || !r.paraMenores)).map(r => r.tipoCurso)
+  ));
+  const horarios = Array.from(new Set(
+    rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso).map(r => r.horarioCurso)
+  ));
+  const sel = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed';
+  const lbl = 'block text-sm font-medium text-gray-700 mb-1';
+  return (
+    <>
+      <div>
+        <label className={lbl}>Campaña *</label>
+        <select className={sel} value={campaign}
+          onChange={(e) => onPatch({ campaign: e.target.value, tipoCurso: '', horarioCurso: '' })}>
+          <option value="">Seleccionar...</option>
+          {campaigns.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className={lbl}>Tipo de Curso *</label>
+        <select className={sel} value={tipoCurso} disabled={!campaign}
+          onChange={(e) => onPatch({ tipoCurso: e.target.value, horarioCurso: '' })}>
+          <option value="">Seleccionar...</option>
+          {cursos.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className={lbl}>Horario *</label>
+        <select className={sel} value={horarioCurso} disabled={!tipoCurso}
+          onChange={(e) => onPatch({ horarioCurso: e.target.value })}>
+          <option value="">Seleccionar...</option>
+          {horarios.map(h => <option key={h} value={h}>{h}</option>)}
+        </select>
+      </div>
+    </>
+  );
 }
 
 export default function CrearContratoPage() {
@@ -97,7 +162,7 @@ function CrearContratoContent() {
     numeroId: '',
     plataforma: '',
     fechaNacimiento: '',
-    pais: 'Colombia',
+    pais: 'Chile',
     domicilio: '',
     ciudad: '',
     celular: '',
@@ -112,7 +177,15 @@ function CrearContratoContent() {
     telRefUno: '',
     referenciaDos: '',
     parentezcoRefDos: '',
-    telRefDos: ''
+    telRefDos: '',
+    // MOSAICO — curso (cuando el titular es beneficiario) + apoderado + flag Impulsa
+    esCursoImpulsa: false,
+    campaign: '',
+    tipoCurso: '',
+    horarioCurso: '',
+    apoderado: '',
+    apoderadoTelefono: '',
+    apoderadoMail: ''
   });
 
   const [financial, setFinancial] = useState({
@@ -129,6 +202,8 @@ function CrearContratoContent() {
 
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([]);
   const [titularEsBeneficiario, setTitularEsBeneficiario] = useState(false);
+  const [titularEsApoderado, setTitularEsApoderado] = useState(false);
+  const [cursosCampaign, setCursosCampaign] = useState<CursoRow[]>([]);
   const [contrato, setContrato] = useState('');
   const [loadingContrato, setLoadingContrato] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
@@ -145,13 +220,21 @@ function CrearContratoContent() {
     saveTimer.current = setTimeout(() => {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({
-          titular, financial, beneficiarios, titularEsBeneficiario, currentStep, contrato, esContratoPrueba,
+          titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba,
           savedAt: Date.now()
         }))
       } catch {}
     }, 500)
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
-  }, [titular, financial, beneficiarios, titularEsBeneficiario, currentStep, contrato, esContratoPrueba])
+  }, [titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba])
+
+  // Cargar catálogo de cursos/horarios por campaña (CURSOS_CAMPAIGN)
+  useEffect(() => {
+    fetch('/api/postgres/cursos-campaign')
+      .then(r => r.ok ? r.json() : { rows: [] })
+      .then(d => setCursosCampaign(Array.isArray(d.rows) ? d.rows : []))
+      .catch(() => setCursosCampaign([]))
+  }, [])
 
   // Restore draft on mount
   useEffect(() => {
@@ -183,6 +266,7 @@ function CrearContratoContent() {
       if (draft.financial) setFinancial(draft.financial)
       if (draft.beneficiarios) setBeneficiarios(draft.beneficiarios)
       if (draft.titularEsBeneficiario !== undefined) setTitularEsBeneficiario(draft.titularEsBeneficiario)
+      if (draft.titularEsApoderado !== undefined) setTitularEsApoderado(draft.titularEsApoderado)
       if (draft.currentStep) setCurrentStep(draft.currentStep)
       if (draft.contrato) setContrato(draft.contrato)
       if (draft.esContratoPrueba !== undefined) setEsContratoPrueba(draft.esContratoPrueba)
@@ -202,14 +286,14 @@ function CrearContratoContent() {
   // Auto-generate contract number when plataforma or "es prueba" change.
   // Si es prueba → genera PRB-NNNNN-YY (consecutivo independiente).
   // Si no → consecutivo normal del país (sin contaminarse por los PRB-).
-  const fetchNextContractNumber = useCallback(async (plataforma: string, prueba: boolean) => {
+  const fetchNextContractNumber = useCallback(async (plataforma: string, prueba: boolean, impulsa: boolean) => {
     if (!prueba && !plataforma) { setContrato(''); return; }
     setLoadingContrato(true);
     try {
-      const qs = prueba
-        ? `prueba=true`
-        : `plataforma=${encodeURIComponent(plataforma)}`;
-      const res = await fetch(`/api/postgres/contracts/next-number?${qs}`);
+      const qs = new URLSearchParams({ impulsa: impulsa ? 'true' : 'false' });
+      if (prueba) qs.set('prueba', 'true');
+      else qs.set('plataforma', plataforma);
+      const res = await fetch(`/api/postgres/contracts/next-number?${qs.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setContrato(data.contrato);
@@ -222,8 +306,8 @@ function CrearContratoContent() {
   }, []);
 
   useEffect(() => {
-    fetchNextContractNumber(titular.plataforma, esContratoPrueba);
-  }, [titular.plataforma, esContratoPrueba, fetchNextContractNumber]);
+    fetchNextContractNumber(titular.plataforma, esContratoPrueba, titular.esCursoImpulsa);
+  }, [titular.plataforma, esContratoPrueba, titular.esCursoImpulsa, fetchNextContractNumber]);
 
   // Get phone prefix based on selected country (without '+')
   const getPhonePrefix = () => {
@@ -295,7 +379,10 @@ function CrearContratoContent() {
       numeroId: '',
       fechaNacimiento: '',
       email: '',
-      celular: ''
+      celular: '',
+      campaign: '',
+      tipoCurso: '',
+      horarioCurso: ''
     }]);
   };
 
@@ -324,7 +411,10 @@ function CrearContratoContent() {
                titular.primerApellido !== '' &&
                titular.numeroId !== '' &&
                titular.plataforma !== '' &&
-               contrato !== '';
+               contrato !== '' &&
+               // Si el titular es beneficiario, debe elegir campaña/curso/horario
+               (!titularEsBeneficiario ||
+                 (titular.campaign !== '' && titular.tipoCurso !== '' && titular.horarioCurso !== ''));
       case 3:
         return titular.fechaNacimiento !== '' &&
                titular.pais !== '' &&
@@ -378,6 +468,19 @@ function CrearContratoContent() {
 
   // Submit contract
   const handleSubmit = async () => {
+    // Validación final (paso 7): apoderado obligatorio + cursos de beneficiarios
+    if (!titular.apoderado?.trim()) {
+      setError('El nombre del apoderado es obligatorio.');
+      return;
+    }
+    const benefSinCurso = beneficiarios.some(
+      b => !b.campaign || !b.tipoCurso || !b.horarioCurso
+    );
+    if (benefSinCurso) {
+      setError('Cada beneficiario debe tener campaña, tipo de curso y horario.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setSuccess('');
@@ -561,6 +664,28 @@ function CrearContratoContent() {
           {currentStep === 2 && (
             <div className="space-y-4">
               <h2 className="text-xl font-semibold mb-4">Datos Básicos del Titular</h2>
+              {/* Casillas: Impulsa + Titular beneficiario (misma línea) */}
+              <div className="flex flex-wrap items-center gap-x-8 gap-y-2 mb-2">
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={titular.esCursoImpulsa}
+                    onChange={(e) => setTitular({ ...titular, esCursoImpulsa: e.target.checked })}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-base font-semibold text-gray-900">¿Es curso Impulsa?</span>
+                </label>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="titularEsBeneficiario"
+                    checked={titularEsBeneficiario}
+                    onChange={(e) => setTitularEsBeneficiario(e.target.checked)}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-base font-semibold text-gray-900">¿Este titular será beneficiario? (tomará el curso)</span>
+                </label>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -662,23 +787,19 @@ function CrearContratoContent() {
                     )}
                   </div>
                 </div>
-                <div className="col-span-2">
-                  <div className="relative group flex items-center">
-                    <input
-                      type="checkbox"
-                      id="titularEsBeneficiario"
-                      checked={titularEsBeneficiario}
-                      onChange={(e) => setTitularEsBeneficiario(e.target.checked)}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="titularEsBeneficiario" className="ml-2 block text-lg font-bold text-gray-900 cursor-pointer">
-                      ¿Este titular será beneficiario? (tomará clases)
-                    </label>
-                    <span className="invisible group-hover:visible absolute left-0 top-full mt-1 bg-gray-800 text-white text-sm rounded px-3 py-1.5 whitespace-nowrap z-10">
-                      Marque esta opción si el titular también tomará clases de inglés
-                    </span>
+                {titularEsBeneficiario && (
+                  <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Curso del titular (solo IMPULSA / DANSHI / SENPAI)</p>
+                    <div className="grid grid-cols-3 gap-4">
+                      <CursoCampaignFields
+                        rows={cursosCampaign}
+                        adultsOnly
+                        values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso }}
+                        onPatch={(patch) => setTitular({ ...titular, ...patch })}
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -1074,8 +1195,56 @@ function CrearContratoContent() {
           {/* Step 7: Beneficiarios */}
           {currentStep === 7 && (
             <div className="space-y-4">
+              {/* Apoderado del contrato (en la fila del titular) */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h2 className="text-xl font-semibold mb-3">Apoderado y Beneficiarios</h2>
+                <label className="inline-flex items-center cursor-pointer mb-3">
+                  <input
+                    type="checkbox"
+                    checked={titularEsApoderado}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setTitularEsApoderado(checked);
+                      if (checked) {
+                        setTitular((t) => ({
+                          ...t,
+                          apoderado: `${t.primerNombre} ${t.segundoNombre} ${t.primerApellido} ${t.segundoApellido}`.replace(/\s+/g, ' ').trim(),
+                          apoderadoTelefono: getPhonePrefix() + (t.celular || ''),
+                          apoderadoMail: t.email || '',
+                        }));
+                      }
+                    }}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span className="ml-2 text-base font-semibold text-gray-900">¿Titular será apoderado?</span>
+                </label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre apoderado *</label>
+                    <input type="text" value={titular.apoderado} disabled={titularEsApoderado}
+                      onChange={(e) => setTitular({ ...titular, apoderado: e.target.value })}
+                      placeholder="Nombre del apoderado"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                    <input type="tel" value={titular.apoderadoTelefono} disabled={titularEsApoderado}
+                      onChange={(e) => setTitular({ ...titular, apoderadoTelefono: e.target.value })}
+                      placeholder="Teléfono del apoderado"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+                    <input type="email" value={titular.apoderadoMail} disabled={titularEsApoderado}
+                      onChange={(e) => setTitular({ ...titular, apoderadoMail: e.target.value })}
+                      placeholder="correo@ejemplo.com"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Beneficiarios</h2>
+                <h3 className="text-lg font-semibold">Beneficiarios</h3>
                 <button
                   type="button"
                   onClick={addBeneficiario}
@@ -1185,6 +1354,16 @@ function CrearContratoContent() {
                             onChange={(e) => updateBeneficiario(index, 'celular', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                             placeholder="Número sin prefijo"
+                          />
+                        </div>
+                      </div>
+                      <div className="border-t border-gray-100 pt-4 mt-4">
+                        <p className="text-sm font-semibold text-gray-700 mb-3">Curso del beneficiario</p>
+                        <div className="grid grid-cols-3 gap-4">
+                          <CursoCampaignFields
+                            rows={cursosCampaign}
+                            values={{ campaign: beneficiario.campaign, tipoCurso: beneficiario.tipoCurso, horarioCurso: beneficiario.horarioCurso }}
+                            onPatch={(patch) => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, ...patch } : b))}
                           />
                         </div>
                       </div>

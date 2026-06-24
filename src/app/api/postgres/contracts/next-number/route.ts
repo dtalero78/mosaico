@@ -10,60 +10,48 @@ const CODIGOS_PAIS: Record<string, string> = {
   'Perú': '04',
 };
 
+// Primer consecutivo del año/segmento (09000). El siguiente sería 09001, etc.
+const BASE_CONSECUTIVO = 9000;
+
 /**
- * GET /api/postgres/contracts/next-number?plataforma=Chile[&prueba=true]
+ * GET /api/postgres/contracts/next-number?plataforma=Chile&impulsa=true|false[&prueba=true]
  *
- * Devuelve el próximo número de contrato.
+ * Estructura MOSAICO: `<PAIS>-<M5|I6>-NNNNN-YY`
+ *  - PAIS: 01 Chile, 02 Colombia, 03 Ecuador, 04 Perú (igual que LGS).
+ *  - Segmento: `I6` si es curso Impulsa (checkbox), si no `M5`.
+ *  - NNNNN: consecutivo de 5 dígitos con **serie propia por (país + segmento + año)**,
+ *    inicia en 09000 y se reinicia al cambiar de año.
+ *  - YY: dos dígitos del año.
  *
- *  - Sin prueba:   `<CODIGO_PAIS>-NNNNN-YY` (consecutivo del país en el año actual).
- *  - prueba=true:  `PRB-NNNNN-YY` (consecutivo INDEPENDIENTE para contratos de prueba —
- *                  NO afecta el secuencial real). El año en el sufijo es el actual.
- *
- * Importante: el cálculo de MAX para los REALES excluye `PRB-%`, así que los
- * contratos de prueba nunca contaminan el consecutivo del país.
+ * prueba=true → `PRB-<M5|I6>-NNNNN-YY` (serie independiente, no contamina la real).
  */
 export const GET = handler(async (request) => {
   const { searchParams } = new URL(request.url);
   const plataforma = searchParams.get('plataforma');
   const esPrueba   = searchParams.get('prueba') === 'true';
+  const esImpulsa  = searchParams.get('impulsa') === 'true';
 
   const anoActual = new Date().getFullYear().toString().slice(-2);
+  const segmento  = esImpulsa ? 'I6' : 'M5';
 
-  if (esPrueba) {
-    // PRB-NNNNN-YY: consecutivo independiente. Reseteado por año.
-    const patronPrueba = `PRB-%-${anoActual}`;
-    const result = await query(
-      `SELECT MAX(CAST(SPLIT_PART("contrato", '-', 2) AS INTEGER)) AS max_num
-       FROM "PEOPLE"
-       WHERE "contrato" LIKE $1
-         AND SPLIT_PART("contrato", '-', 2) ~ '^[0-9]+$'`,
-      [patronPrueba]
-    );
-    const maxNumero = result.rows[0]?.max_num || 0;
-    const siguiente = (maxNumero + 1).toString().padStart(5, '0');
-    const contrato = `PRB-${siguiente}-${anoActual}`;
-    return successResponse({ contrato, codigoPais: 'PRB', siguiente, ano: anoActual, esPrueba: true });
-  }
+  const prefijo = esPrueba ? 'PRB' : CODIGOS_PAIS[plataforma || ''];
+  if (!esPrueba && !plataforma) throw new ValidationError('plataforma is required');
+  if (!prefijo) throw new ValidationError(`País no válido: ${plataforma}. Válidos: ${Object.keys(CODIGOS_PAIS).join(', ')}`);
 
-  // Contrato REAL
-  if (!plataforma) throw new ValidationError('plataforma is required');
-  const codigoPais = CODIGOS_PAIS[plataforma];
-  if (!codigoPais) throw new ValidationError(`País no válido: ${plataforma}. Válidos: ${Object.keys(CODIGOS_PAIS).join(', ')}`);
-
-  const patron = `${codigoPais}-%-${anoActual}`;
-
+  // Serie por (prefijo + segmento + año); el consecutivo está en la posición 3.
+  const patron = `${prefijo}-${segmento}-%-${anoActual}`;
   const result = await query(
-    `SELECT MAX(CAST(SPLIT_PART("contrato", '-', 2) AS INTEGER)) AS max_num
+    `SELECT MAX(CAST(SPLIT_PART("contrato", '-', 3) AS INTEGER)) AS max_num
      FROM "PEOPLE"
      WHERE "contrato" LIKE $1
-       AND "contrato" NOT LIKE 'PRB-%'
-       AND SPLIT_PART("contrato", '-', 2) ~ '^[0-9]+$'`,
+       AND SPLIT_PART("contrato", '-', 3) ~ '^[0-9]+$'`,
     [patron]
   );
 
-  const maxNumero = result.rows[0]?.max_num || 9999;
-  const siguiente = (maxNumero + 1).toString().padStart(5, '0');
-  const contrato = `${codigoPais}-${siguiente}-${anoActual}`;
+  const maxNumero = result.rows[0]?.max_num;
+  const siguienteNum = maxNumero ? maxNumero + 1 : BASE_CONSECUTIVO;
+  const siguiente = siguienteNum.toString().padStart(5, '0');
+  const contrato = `${prefijo}-${segmento}-${siguiente}-${anoActual}`;
 
-  return successResponse({ contrato, codigoPais, siguiente, ano: anoActual, esPrueba: false });
+  return successResponse({ contrato, codigoPais: prefijo, segmento, siguiente, ano: anoActual, esPrueba, esImpulsa });
 });

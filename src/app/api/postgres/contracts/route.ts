@@ -27,40 +27,31 @@ const CODIGOS_PAIS: Record<string, string> = {
  * - esPrueba=true  → `PRB-NNNNN-YY` (consecutivo INDEPENDIENTE para pruebas,
  *                    NO contamina el secuencial real, plataforma ignorada para el número).
  */
-async function generateContractNumber(plataforma: string, esPrueba: boolean): Promise<string> {
+// Primer consecutivo del año/segmento (09000). El siguiente sería 09001, etc.
+const BASE_CONSECUTIVO = 9000;
+
+/**
+ * Número de contrato MOSAICO: `<PAIS|PRB>-<M5|I6>-NNNNN-YY`.
+ * Segmento I6 si es curso Impulsa, si no M5. Serie propia por
+ * (prefijo + segmento + año); inicia en 09000 y reinicia por año.
+ */
+async function generateContractNumber(plataforma: string, esPrueba: boolean, esImpulsa: boolean): Promise<string> {
   const anoActual = new Date().getFullYear().toString().slice(-2);
+  const segmento  = esImpulsa ? 'I6' : 'M5';
+  const prefijo   = esPrueba ? 'PRB' : CODIGOS_PAIS[plataforma];
+  if (!prefijo) throw new ValidationError(`País no válido: ${plataforma}`);
 
-  if (esPrueba) {
-    const patron = `PRB-%-${anoActual}`;
-    const result = await query(
-      `SELECT MAX(CAST(SPLIT_PART("contrato", '-', 2) AS INTEGER)) AS max_num
-       FROM "PEOPLE"
-       WHERE "contrato" LIKE $1
-         AND SPLIT_PART("contrato", '-', 2) ~ '^[0-9]+$'`,
-      [patron]
-    );
-    const maxNumero = result.rows[0]?.max_num || 0;
-    const siguiente = (maxNumero + 1).toString().padStart(5, '0');
-    return `PRB-${siguiente}-${anoActual}`;
-  }
-
-  const codigoPais = CODIGOS_PAIS[plataforma];
-  if (!codigoPais) throw new ValidationError(`País no válido: ${plataforma}`);
-
-  const patron = `${codigoPais}-%-${anoActual}`;
-
+  const patron = `${prefijo}-${segmento}-%-${anoActual}`;
   const result = await query(
-    `SELECT MAX(CAST(SPLIT_PART("contrato", '-', 2) AS INTEGER)) AS max_num
+    `SELECT MAX(CAST(SPLIT_PART("contrato", '-', 3) AS INTEGER)) AS max_num
      FROM "PEOPLE"
      WHERE "contrato" LIKE $1
-       AND "contrato" NOT LIKE 'PRB-%'
-       AND SPLIT_PART("contrato", '-', 2) ~ '^[0-9]+$'`,
+       AND SPLIT_PART("contrato", '-', 3) ~ '^[0-9]+$'`,
     [patron]
   );
-
-  const maxNumero = result.rows[0]?.max_num || 9999;
-  const siguiente = (maxNumero + 1).toString().padStart(5, '0');
-  return `${codigoPais}-${siguiente}-${anoActual}`;
+  const maxNumero = result.rows[0]?.max_num;
+  const siguiente = (maxNumero ? maxNumero + 1 : BASE_CONSECUTIVO).toString().padStart(5, '0');
+  return `${prefijo}-${segmento}-${siguiente}-${anoActual}`;
 }
 
 const VALID_TIPO_PLAN = ['Contado', 'Credito', 'Colaborador'] as const;
@@ -87,9 +78,31 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     throw new ValidationError(`tipoPlan debe ser uno de: ${VALID_TIPO_PLAN.join(', ')}`);
   }
 
+  // Regla MOSAICO: el numeroId SOLO puede compartirse en el caso
+  // "titular es beneficiario" (fila TITULAR + fila BENEFICIARIO generada
+  // server-side a partir del titular). Cualquier otro numeroId duplicado —
+  // repetido en el formulario o ya existente en PEOPLE — se rechaza.
+  const incomingIds: string[] = [titular.numeroId, ...((beneficiarios || []).map((b: any) => b?.numeroId))]
+    .filter((x: any) => typeof x === 'string' && x.trim() !== '');
+  // El numeroId del titular NO debe venir en la lista de beneficiarios:
+  // la fila titular-beneficiario la crea el servidor, no el formulario.
+  const dupEnFormulario = incomingIds.find((id, i) => incomingIds.indexOf(id) !== i);
+  if (dupEnFormulario) {
+    throw new ValidationError(`numeroId duplicado en el formulario: ${dupEnFormulario}. Solo el titular puede ser su propio beneficiario (marque "¿Este titular será beneficiario?").`);
+  }
+  if (incomingIds.length > 0) {
+    const yaExiste = await query(
+      `SELECT DISTINCT "numeroId" FROM "PEOPLE" WHERE "numeroId" = ANY($1)`,
+      [incomingIds]
+    );
+    if (yaExiste.rows.length > 0) {
+      throw new ValidationError(`numeroId ya registrado: ${yaExiste.rows.map((r: any) => r.numeroId).join(', ')}. El numeroId solo puede compartirse entre un titular y su propia inscripción como beneficiario.`);
+    }
+  }
+
   // Generate contract number server-side to avoid race conditions.
   // Si es prueba → PRB-NNNNN-YY (consecutivo independiente, no afecta el real).
-  const contrato = await generateContractNumber(titular.plataforma, esPrueba);
+  const contrato = await generateContractNumber(titular.plataforma, esPrueba, titular?.esCursoImpulsa === true);
 
   // Calculate finalContrato = today + vigencia months
   const vigenciaMeses = parseInt(financial?.vigencia || '0', 10);
@@ -109,8 +122,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       "email", "celular", "telefono", "fechaNacimiento", "domicilio", "ciudad",
       "plataforma", "ingresos", "empresa", "cargo", "genero",
       "referenciaUno", "parentezcoRefUno", "telefonoRefUno", "referenciaDos", "parentezcoRefDos", "telefonoRefDos",
-      "asesor", "tipoUsuario", "contrato", "vigencia", "fechaContrato", "finalContrato", "plan", "origen", "_createdDate", "_updatedDate")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'TITULAR',$25,$26,NOW(),$27::date,$28,'POSTGRES',NOW(),NOW()) RETURNING *`,
+      "asesor", "tipoUsuario", "contrato", "vigencia", "fechaContrato", "finalContrato", "plan",
+      "apoderado", "apoderadoTelefono", "apoderadoMail", "esCursoImpulsa", "origen", "_createdDate", "_updatedDate")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'TITULAR',$25,$26,NOW(),$27::date,$28,$29,$30,$31,$32,'POSTGRES',NOW(),NOW()) RETURNING *`,
     [titularId, titular.numeroId, titular.primerNombre, titular.segundoNombre || null,
      titular.primerApellido, titular.segundoApellido || null,
      titular.email || null, titular.celular || null, titular.telefono || null,
@@ -118,7 +132,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
      titular.plataforma || null, titular.ingresos || null, titular.empresa || null, titular.cargo || null, titular.genero || null,
      titular.referenciaUno || null, titular.parentezcoRefUno || null, titular.telRefUno || null,
      titular.referenciaDos || null, titular.parentezcoRefDos || null, titular.telRefDos || null,
-     titular.asesor || null, contrato, financial?.vigencia || null, finalContrato, tipoPlan]
+     titular.asesor || null, contrato, financial?.vigencia || null, finalContrato, tipoPlan,
+     titular.apoderado || null, titular.apoderadoTelefono || null, titular.apoderadoMail || null, titular.esCursoImpulsa === true]
   );
   created.titular = titularResult.rows[0];
 
@@ -135,6 +150,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       fechaNacimiento: titular.fechaNacimiento,
       email: titular.email,
       celular: titular.celular,
+      tipoCurso: titular.tipoCurso,
+      horarioCurso: titular.horarioCurso,
+      campaign: titular.campaign,
     });
   }
 
@@ -149,12 +167,13 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
         "email", "celular", "fechaNacimiento", "titularId",
         "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
-        "vigencia", "fechaContrato", "finalContrato", "origen", "_createdDate", "_updatedDate")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,false,$13,NOW(),$14::date,'POSTGRES',NOW(),NOW()) RETURNING *`,
+        "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "origen", "_createdDate", "_updatedDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,false,$13,NOW(),$14::date,$15,$16,$17,'POSTGRES',NOW(),NOW()) RETURNING *`,
       [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
        b.primerApellido, b.segundoApellido || null,
        b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
-       contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato]
+       contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato,
+       b.tipoCurso || null, b.horarioCurso || null, b.campaign || null]
     );
     created.beneficiarios.push(benefResult.rows[0]);
   }
