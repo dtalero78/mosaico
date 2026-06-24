@@ -79,6 +79,8 @@ interface CursoRow {
   tipoCurso: string;
   horarioCurso: string;
   paraMenores: boolean;
+  numeroUsuarios?: number;
+  usuInscritos?: number;
 }
 
 /**
@@ -101,9 +103,8 @@ function CursoCampaignFields({
   const cursos = Array.from(new Set(
     rows.filter(r => r.campaign === campaign && (!adultsOnly || !r.paraMenores)).map(r => r.tipoCurso)
   ));
-  const horarios = Array.from(new Set(
-    rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso).map(r => r.horarioCurso)
-  ));
+  // Una fila por (campaña, tipoCurso, horario) → cupos por horario
+  const horarioRows = rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso);
   const sel = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed';
   const lbl = 'block text-sm font-medium text-gray-700 mb-1';
   return (
@@ -129,7 +130,16 @@ function CursoCampaignFields({
         <select className={sel} value={horarioCurso} disabled={!tipoCurso}
           onChange={(e) => onPatch({ horarioCurso: e.target.value })}>
           <option value="">Seleccionar...</option>
-          {horarios.map(h => <option key={h} value={h}>{h}</option>)}
+          {horarioRows.map(r => {
+            const cap = r.numeroUsuarios ?? 0;
+            const cupos = cap - (r.usuInscritos ?? 0);
+            const full = cap > 0 && cupos <= 0;
+            return (
+              <option key={r.horarioCurso} value={r.horarioCurso} disabled={full}>
+                {r.horarioCurso} — {full ? 'FULL' : `${cupos} cupos`}
+              </option>
+            );
+          })}
         </select>
       </div>
     </>

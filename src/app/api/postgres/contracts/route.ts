@@ -178,6 +178,24 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     created.beneficiarios.push(benefResult.rows[0]);
   }
 
+  // 3b. Incrementar usuInscritos (+1) en CURSOS_CAMPAIGN por cada inscrito en un
+  //     curso (campaign + tipoCurso + horarioCurso). Best-effort: si falla, no
+  //     rompe la creación del contrato (log y se continúa).
+  try {
+    for (const b of allBeneficiarios) {
+      if (b.campaign && b.tipoCurso && b.horarioCurso) {
+        await query(
+          `UPDATE "CURSOS_CAMPAIGN"
+             SET "usuInscritos" = COALESCE("usuInscritos", 0) + 1, "_updatedDate" = NOW()
+           WHERE "campaign" = $1 AND "tipoCurso" = $2 AND "horarioCurso" = $3`,
+          [b.campaign, b.tipoCurso, b.horarioCurso]
+        );
+      }
+    }
+  } catch (err: any) {
+    console.warn('[contracts] no se pudo incrementar usuInscritos:', err?.message || err);
+  }
+
   // 4. Create FINANCIERO if financial data present
   if (financial && financial.totalPlan) {
     const finResult = await query(

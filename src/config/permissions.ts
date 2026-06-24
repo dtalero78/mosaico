@@ -558,6 +558,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Ver Eventos Administrativos de cualquier advisor',
     description: 'Acceso al listado completo de eventos administrativos sin restricción de advisor. Cada advisor siempre ve los suyos sin necesidad de este permiso.',
   },
+  {
+    code: AcademicoPermission.CAMPANA_CREAR,
+    module: Module.ACADEMICO,
+    section: 'Crea Campaña',
+    name: 'Página "Crea Campaña" — crear campañas y cursos',
+    description: 'Acceso a /dashboard/academic/crear-campana. Crear campañas con sus cursos (tipo de curso, horario, fechas, cupos) en CURSOS_CAMPAIGN. Estos cursos alimentan los dropdowns del wizard de Crear Contrato. Pensado para SUPER_ADMIN / ADMIN / COORDINADOR_ACADEMICO.',
+  },
 
   // ========== INFORMES MODULE ==========
   // Abuelo: muestra el grupo Informes en el sidebar. Cada informe se habilita

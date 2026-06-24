@@ -168,6 +168,9 @@ export enum AcademicoPermission {
   ADMIN_EVENTS_GESTIONAR  = 'ACADEMICO.ADMIN_EVENTS.GESTIONAR',  // crear/editar/eliminar
   ADMIN_EVENTS_REGISTRAR  = 'ACADEMICO.ADMIN_EVENTS.REGISTRAR',  // advisor registra timeout+notas
   ADMIN_EVENTS_VER_TODOS  = 'ACADEMICO.ADMIN_EVENTS.VER_TODOS',  // ver de cualquier advisor
+
+  // Crea Campaña — gestión de campañas/cursos (CURSOS_CAMPAIGN)
+  CAMPANA_CREAR = 'ACADEMICO.CAMPANA.CREAR',
 }
 
 /**
