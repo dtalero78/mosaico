@@ -81,6 +81,10 @@ interface CursoRow {
   paraMenores: boolean;
   numeroUsuarios?: number;
   usuInscritos?: number;
+  salon?: string | null;
+  inicioCurso?: string | null;
+  finalCurso?: string | null;
+  finalCampaign?: string | null;
 }
 
 /**
@@ -105,6 +109,8 @@ function CursoCampaignFields({
   ));
   // Una fila por (campaña, tipoCurso, horario) → cupos por horario
   const horarioRows = rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso);
+  const selectedRow = horarioRows.find(r => r.horarioCurso === horarioCurso);
+  const fmtDate = (d?: string | null) => (d ? String(d).slice(0, 10) : '—');
   const sel = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed';
   const lbl = 'block text-sm font-medium text-gray-700 mb-1';
   return (
@@ -142,6 +148,18 @@ function CursoCampaignFields({
           })}
         </select>
       </div>
+      {selectedRow && (
+        <>
+          <div>
+            <label className={lbl}>Salón</label>
+            <input type="text" value={selectedRow.salon || '—'} disabled className={sel} />
+          </div>
+          <div>
+            <label className={lbl}>Final del curso</label>
+            <input type="text" value={fmtDate(selectedRow.finalCurso)} disabled className={sel} />
+          </div>
+        </>
+      )}
     </>
   );
 }
@@ -433,6 +451,12 @@ function CrearContratoContent() {
       return 'Este correo ya lo tiene otro beneficiario.';
     }
     return '';
+  };
+
+  // Salón del curso seleccionado (desde el catálogo CURSOS_CAMPAIGN).
+  const salonFor = (campaign?: string, tipoCurso?: string, horarioCurso?: string): string => {
+    const r = cursosCampaign.find(x => x.campaign === campaign && x.tipoCurso === tipoCurso && x.horarioCurso === horarioCurso);
+    return r?.salon || '';
   };
 
   // Advertencia (no bloquea): el celular del beneficiario es igual al del titular.
@@ -1569,7 +1593,7 @@ function CrearContratoContent() {
                     <p>{`${titular.primerNombre} ${titular.segundoNombre} ${titular.primerApellido} ${titular.segundoApellido}`.replace(/\s+/g, ' ').trim()}</p>
                     <p className="text-gray-500">ID: {titular.numeroId} · {titular.plataforma}</p>
                     {titularEsBeneficiario && (
-                      <p className="text-primary-700 mt-1">Toma el curso: <b>{titular.campaign} · {titular.tipoCurso} · {titular.horarioCurso}</b></p>
+                      <p className="text-primary-700 mt-1">Toma el curso: <b>{titular.campaign} · {titular.tipoCurso} · {titular.horarioCurso}</b>{salonFor(titular.campaign, titular.tipoCurso, titular.horarioCurso) ? ` · Salón ${salonFor(titular.campaign, titular.tipoCurso, titular.horarioCurso)}` : ''}</p>
                     )}
                   </div>
 
@@ -1592,7 +1616,7 @@ function CrearContratoContent() {
                         {beneficiarios.map((b, i) => (
                           <li key={i}>
                             {`${b.primerNombre} ${b.primerApellido}`.trim()} <span className="text-gray-500">(ID {b.numeroId})</span>
-                            <span className="block text-gray-500">{b.campaign} · {b.tipoCurso} · {b.horarioCurso}</span>
+                            <span className="block text-gray-500">{b.campaign} · {b.tipoCurso} · {b.horarioCurso}{salonFor(b.campaign, b.tipoCurso, b.horarioCurso) ? ` · Salón ${salonFor(b.campaign, b.tipoCurso, b.horarioCurso)}` : ''}</span>
                           </li>
                         ))}
                       </ul>

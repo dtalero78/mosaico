@@ -163,17 +163,26 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // 3. Create each BENEFICIARIO in PEOPLE (sin nivel/step — se asigna manualmente después)
   for (const b of allBeneficiarios) {
     const benefId = ids.person();
+    // Resolver el salón del curso (fuente única: CURSOS_CAMPAIGN)
+    let salon: string | null = null;
+    if (b.campaign && b.tipoCurso && b.horarioCurso) {
+      const salonRow = await query(
+        `SELECT "salon" FROM "CURSOS_CAMPAIGN" WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
+        [b.campaign, b.tipoCurso, b.horarioCurso]
+      );
+      salon = salonRow.rows[0]?.salon || null;
+    }
     const benefResult = await query(
       `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
         "email", "celular", "fechaNacimiento", "titularId",
         "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
-        "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "origen", "_createdDate", "_updatedDate")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,false,$13,NOW(),$14::date,$15,$16,$17,'POSTGRES',NOW(),NOW()) RETURNING *`,
+        "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "origen", "_createdDate", "_updatedDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,false,$13,NOW(),$14::date,$15,$16,$17,$18,'POSTGRES',NOW(),NOW()) RETURNING *`,
       [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
        b.primerApellido, b.segundoApellido || null,
        b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
        contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato,
-       b.tipoCurso || null, b.horarioCurso || null, b.campaign || null]
+       b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon]
     );
     created.beneficiarios.push(benefResult.rows[0]);
   }

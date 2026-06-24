@@ -16,11 +16,13 @@ const { Pool } = require('pg');
 
 const COLUMNS = [
   ['inicioCampania', 'DATE'],
+  ['finalCampaign', 'DATE'],
   ['inicioCurso', 'DATE'],
   ['duracionCurso', 'INTEGER'],
   ['finalCurso', 'DATE'],
   ['numeroUsuarios', 'INTEGER'],
   ['usuInscritos', 'INTEGER DEFAULT 0'],
+  ['salon', 'VARCHAR(120)'],
 ];
 
 (async () => {

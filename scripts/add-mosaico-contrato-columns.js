@@ -26,6 +26,7 @@ const COLUMNS = [
   ['apoderadoMail', 'VARCHAR(255)'],
   ['esCursoImpulsa', 'BOOLEAN DEFAULT false'],
   ['extemporanea', 'BOOLEAN DEFAULT false'],
+  ['salon', 'VARCHAR(120)'],
 ];
 
 (async () => {
