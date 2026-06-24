@@ -401,6 +401,9 @@ function CrearContratoContent() {
     setBeneficiarios(updatedBeneficiarios);
   };
 
+  // Email válido: requiere @ y un dominio con punto (algo@dominio.tld)
+  const isValidEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
+
   // Validate current step
   const validateStep = (step: number): boolean => {
     switch (step) {
@@ -422,8 +425,8 @@ function CrearContratoContent() {
                titular.ciudad !== '' &&
                titular.celular !== '';
       case 4:
-        return titular.ingresos !== '' &&
-               titular.email !== '' &&
+        return Number(titular.ingresos) > 0 &&
+               isValidEmail(titular.email) &&
                titular.genero !== '';
       case 5:
         return titular.referenciaUno !== '' &&
@@ -896,9 +899,11 @@ function CrearContratoContent() {
                   </label>
                   <input
                     type="text"
-                    value={titular.ingresos}
-                    onChange={(e) => setTitular({...titular, ingresos: e.target.value})}
+                    inputMode="numeric"
+                    value={titular.ingresos ? formatNumber(titular.ingresos) : ''}
+                    onChange={(e) => handleNumericChange('ingresos', e.target.value, setTitular)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="0"
                   />
                 </div>
                 <div>
@@ -909,8 +914,14 @@ function CrearContratoContent() {
                     type="email"
                     value={titular.email}
                     onChange={(e) => setTitular({...titular, email: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                      titular.email !== '' && !isValidEmail(titular.email) ? 'border-red-400' : 'border-gray-300'
+                    }`}
+                    placeholder="correo@dominio.com"
                   />
+                  {titular.email !== '' && !isValidEmail(titular.email) && (
+                    <p className="mt-1 text-xs text-red-600">Ingrese un correo válido (debe incluir @ y dominio).</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
