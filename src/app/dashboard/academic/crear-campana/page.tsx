@@ -43,6 +43,10 @@ function CrearCampanaContent() {
   const [existing, setExisting] = useState<any[]>([])
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  // Edición / borrado de cursos ya guardados (tabla "Campañas existentes")
+  const [editRow, setEditRow] = useState<any | null>(null)
+  const [deleting, setDeleting] = useState<any | null>(null)
+  const [rowBusy, setRowBusy] = useState(false)
 
   const loadExisting = useCallback(() => {
     fetch('/api/postgres/campaigns')
@@ -110,6 +114,51 @@ function CrearCampanaContent() {
       { header: 'Cupos', accessor: (r: any) => r.numeroUsuarios ?? 0 },
       { header: 'Inscritos', accessor: (r: any) => r.usuInscritos ?? 0 },
     ], `campanas_${new Date().toISOString().slice(0, 10)}`)
+  }
+
+  // --- Edición de cursos guardados ---
+  const editFinalCurso = editRow && editRow.inicioCurso && editRow.duracionCurso > 0
+    ? addMonths(editRow.inicioCurso, editRow.duracionCurso + 1) : ''
+
+  const openEdit = (r: any) => setEditRow({
+    ...r,
+    salon: r.salon || '',
+    inicioCurso: r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : '',
+    inicioCampania: r.inicioCampania ? String(r.inicioCampania).slice(0, 10) : '',
+    finalCampaign: r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '',
+    duracionCurso: r.duracionCurso || 0,
+    numeroUsuarios: r.numeroUsuarios || 0,
+    activa: r.activa !== false,
+  })
+
+  const saveEdit = async () => {
+    if (!editRow) return
+    setRowBusy(true); setMsg(null)
+    try {
+      const res = await fetch(`/api/postgres/campaigns/${editRow._id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipoCurso: editRow.tipoCurso, salon: editRow.salon, horarioCurso: editRow.horarioCurso,
+          inicioCurso: editRow.inicioCurso || null, duracionCurso: editRow.duracionCurso,
+          numeroUsuarios: editRow.numeroUsuarios, inicioCampania: editRow.inicioCampania || null,
+          finalCampaign: editRow.finalCampaign || null, activa: editRow.activa,
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Error al editar el curso')
+      setEditRow(null); setMsg({ type: 'ok', text: 'Curso actualizado.' }); loadExisting()
+    } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setRowBusy(false) }
+  }
+
+  const doDelete = async () => {
+    if (!deleting) return
+    setRowBusy(true); setMsg(null)
+    try {
+      const res = await fetch(`/api/postgres/campaigns/${deleting._id}`, { method: 'DELETE' })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Error al eliminar el curso')
+      setDeleting(null); setMsg({ type: 'ok', text: 'Curso eliminado.' }); loadExisting()
+    } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setRowBusy(false) }
   }
 
   const horariosOpts = horariosFor(form.tipoCurso)
@@ -260,7 +309,7 @@ function CrearCampanaContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b">
-                  <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th>
+                  <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -280,6 +329,14 @@ function CrearCampanaContent() {
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${full ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                           {full ? 'FULL' : `${(r.numeroUsuarios ?? 0) - (r.usuInscritos ?? 0)} cupos`}
                         </span>
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <button type="button" onClick={() => openEdit(r)} className="text-primary-600 hover:text-primary-700 mr-2" title="Editar curso">
+                          <PencilSquareIcon className="h-5 w-5 inline" />
+                        </button>
+                        <button type="button" onClick={() => setDeleting(r)} className="text-red-600 hover:text-red-700" title="Eliminar curso">
+                          <TrashIcon className="h-5 w-5 inline" />
+                        </button>
                       </td>
                     </tr>
                   )
@@ -306,6 +363,88 @@ function CrearCampanaContent() {
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setConfirmOpen(false)} className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
               <button type="button" onClick={confirmAdd} className="px-4 py-2 text-sm rounded-md text-white bg-primary-600 hover:bg-primary-700">{editing ? 'Guardar cambios' : 'Confirmar y agregar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: editar curso guardado */}
+      {editRow && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Editar curso — {editRow.campaign}</h3>
+            <p className="text-xs text-gray-500 mb-4">Inscritos actuales: {editRow.usuInscritos ?? 0}</p>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className={lblCls}>Tipo de curso *</label>
+                <select value={editRow.tipoCurso} onChange={e => setEditRow({ ...editRow, tipoCurso: e.target.value, horarioCurso: '' })} className={inputCls}>
+                  {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}{esMenores(t) ? ' (menores)' : ''}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lblCls}>Salón</label>
+                <input type="text" value={editRow.salon} onChange={e => setEditRow({ ...editRow, salon: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Horario *</label>
+                <select value={editRow.horarioCurso} onChange={e => setEditRow({ ...editRow, horarioCurso: e.target.value })} className={inputCls}>
+                  <option value="">Seleccionar...</option>
+                  {horariosFor(editRow.tipoCurso).map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lblCls}>N° de usuarios (cupos) *</label>
+                <input type="number" min={1} value={editRow.numeroUsuarios || ''} onChange={e => setEditRow({ ...editRow, numeroUsuarios: parseInt(e.target.value || '0', 10) || 0 })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Inicio del curso</label>
+                <input type="date" value={editRow.inicioCurso} onChange={e => setEditRow({ ...editRow, inicioCurso: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Duración (meses)</label>
+                <input type="number" min={1} value={editRow.duracionCurso || ''} onChange={e => setEditRow({ ...editRow, duracionCurso: parseInt(e.target.value || '0', 10) || 0 })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Final del curso (calculado)</label>
+                <input type="text" value={editFinalCurso} disabled className={inputCls} placeholder="—" />
+              </div>
+              <div>
+                <label className={lblCls}>Inicio campaña</label>
+                <input type="date" value={editRow.inicioCampania} onChange={e => setEditRow({ ...editRow, inicioCampania: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Cierre matrícula</label>
+                <input type="date" value={editRow.finalCampaign} onChange={e => setEditRow({ ...editRow, finalCampaign: e.target.value })} className={inputCls} />
+              </div>
+            </div>
+            <label className="inline-flex items-center mt-4 cursor-pointer">
+              <input type="checkbox" checked={editRow.activa} onChange={e => setEditRow({ ...editRow, activa: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+              <span className="ml-2 text-sm text-gray-700">Activa (visible en el wizard de contratos)</span>
+            </label>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditRow(null)} className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button type="button" onClick={saveEdit} disabled={rowBusy} className="px-4 py-2 text-sm rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
+                {rowBusy ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: eliminar curso guardado */}
+      {deleting && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Eliminar curso</h3>
+            <p className="text-sm text-gray-600 mb-5">
+              ¿Eliminar el curso <b>{deleting.tipoCurso} · {deleting.horarioCurso}</b> de la campaña <b>{deleting.campaign}</b>?
+              {(deleting.usuInscritos ?? 0) > 0 && <span className="block mt-2 text-red-600">⚠️ Tiene {deleting.usuInscritos} inscrito(s). Ya no aparecerá en el wizard.</span>}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setDeleting(null)} className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button type="button" onClick={doDelete} disabled={rowBusy} className="px-4 py-2 text-sm rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
+                {rowBusy ? 'Eliminando...' : 'Eliminar'}
+              </button>
             </div>
           </div>
         </div>
