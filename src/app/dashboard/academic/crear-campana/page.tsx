@@ -169,6 +169,8 @@ function CrearCampanaContent() {
               {horariosOpts.map(h => <option key={h} value={h}>{h}</option>)}
             </select>
           </div>
+        </div>
+        <div className="grid grid-cols-4 gap-4 mt-4">
           <div>
             <label className={lblCls}>N° de usuarios (cupos) *</label>
             <input type="number" min={1} value={form.numeroUsuarios || ''} onChange={e => setForm({ ...form, numeroUsuarios: parseInt(e.target.value || '0', 10) || 0 })} className={inputCls} />
