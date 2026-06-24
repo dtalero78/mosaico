@@ -214,12 +214,18 @@ function CrearContratoContent() {
   const [titularEsBeneficiario, setTitularEsBeneficiario] = useState(false);
   const [titularEsApoderado, setTitularEsApoderado] = useState(false);
   const [cursosCampaign, setCursosCampaign] = useState<CursoRow[]>([]);
+  // Modal de confirmación paso 2: ni Impulsa ni titular-beneficiario marcados
+  const [showSinCursoModal, setShowSinCursoModal] = useState(false);
+  // Modal resumen antes de crear el contrato (paso 7)
+  const [showResumenModal, setShowResumenModal] = useState(false);
   const [contrato, setContrato] = useState('');
   const [loadingContrato, setLoadingContrato] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   // Contrato de prueba: prefijo PRB- en el número, no afecta el consecutivo
   // real, queda visible con badge naranja y se descarta de informes.
   const [esContratoPrueba, setEsContratoPrueba] = useState(false);
+  // Extemporánea: marca el contrato como matrícula fuera de plazo (PEOPLE.extemporanea)
+  const [esExtemporanea, setEsExtemporanea] = useState(false);
   const draftRestored = useRef(false);
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -230,13 +236,13 @@ function CrearContratoContent() {
     saveTimer.current = setTimeout(() => {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({
-          titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba,
+          titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba, esExtemporanea,
           savedAt: Date.now()
         }))
       } catch {}
     }, 500)
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
-  }, [titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba])
+  }, [titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba, esExtemporanea])
 
   // Cargar catálogo de cursos/horarios por campaña (CURSOS_CAMPAIGN)
   useEffect(() => {
@@ -280,6 +286,7 @@ function CrearContratoContent() {
       if (draft.currentStep) setCurrentStep(draft.currentStep)
       if (draft.contrato) setContrato(draft.contrato)
       if (draft.esContratoPrueba !== undefined) setEsContratoPrueba(draft.esContratoPrueba)
+      if (draft.esExtemporanea !== undefined) setEsExtemporanea(draft.esExtemporanea)
       delete (window as any).__contractDraft
     }
     setShowDraftBanner(false)
@@ -414,6 +421,27 @@ function CrearContratoContent() {
   // Email válido: requiere @ y un dominio con punto (algo@dominio.tld)
   const isValidEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
 
+  const normStr = (s?: string) => (s || '').trim().toLowerCase();
+
+  // Error de email de un beneficiario: no puede ser el del titular (salvo que el
+  // titular sea beneficiario) ni el de otro beneficiario. Devuelve '' si OK.
+  const benefEmailError = (index: number): string => {
+    const email = normStr(beneficiarios[index]?.email);
+    if (!email) return '';
+    if (!titularEsBeneficiario && email === normStr(titular.email)) return 'El correo no puede ser el mismo del titular.';
+    if (beneficiarios.some((b, j) => j !== index && normStr(b.email) && normStr(b.email) === email)) {
+      return 'Este correo ya lo tiene otro beneficiario.';
+    }
+    return '';
+  };
+
+  // Advertencia (no bloquea): el celular del beneficiario es igual al del titular.
+  const benefCelularWarn = (index: number): boolean => {
+    const cel = (beneficiarios[index]?.celular || '').trim();
+    if (!cel || titularEsBeneficiario) return false;
+    return cel === (titular.celular || '').trim();
+  };
+
   // Validate current step
   const validateStep = (step: number): boolean => {
     switch (step) {
@@ -462,6 +490,14 @@ function CrearContratoContent() {
 
     setError('');
 
+    // Paso 2: si alguna de las casillas (Impulsa / titular-beneficiario) NO está
+    // marcada, confirmar. El modal advierte específicamente de la(s) no marcada(s).
+    // Solo avanza directo cuando AMBAS están marcadas.
+    if (currentStep === 2 && !(titular.esCursoImpulsa && titularEsBeneficiario)) {
+      setShowSinCursoModal(true);
+      return;
+    }
+
     if (currentStep === 3) {
       calculateBalance();
     }
@@ -480,7 +516,28 @@ function CrearContratoContent() {
   };
 
   // Submit contract
+  // Valida el paso final y abre el modal resumen (en vez de crear directo).
+  const requestSubmit = () => {
+    if (!titular.apoderado?.trim()) {
+      setError('El nombre del apoderado es obligatorio.');
+      return;
+    }
+    if (beneficiarios.some(b => !b.campaign || !b.tipoCurso || !b.horarioCurso)) {
+      setError('Cada beneficiario debe tener campaña, tipo de curso y horario.');
+      return;
+    }
+    // Email de beneficiarios: no puede repetir el del titular ni el de otro beneficiario.
+    const idxEmail = beneficiarios.findIndex((_, i) => benefEmailError(i) !== '');
+    if (idxEmail >= 0) {
+      setError(`Beneficiario ${idxEmail + 1}: ${benefEmailError(idxEmail)}`);
+      return;
+    }
+    setError('');
+    setShowResumenModal(true);
+  };
+
   const handleSubmit = async () => {
+    setShowResumenModal(false);
     // Validación final (paso 7): apoderado obligatorio + cursos de beneficiarios
     if (!titular.apoderado?.trim()) {
       setError('El nombre del apoderado es obligatorio.');
@@ -512,7 +569,8 @@ function CrearContratoContent() {
           contrato,
           titular: {
             ...titular,
-            celular: getPhonePrefix() + titular.celular
+            celular: getPhonePrefix() + titular.celular,
+            extemporanea: esExtemporanea,
           },
           financial,
           beneficiarios: beneficiarios.map(b => ({
@@ -560,23 +618,41 @@ function CrearContratoContent() {
             <h1 className="text-3xl font-bold text-gray-900">Crear Contrato</h1>
             <p className="mt-2 text-gray-600">Complete el formulario para crear un nuevo contrato</p>
           </div>
-          {/* Checkbox de contrato de prueba — naranja, prominente */}
-          <label
-            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-colors select-none ${
-              esContratoPrueba
-                ? 'bg-orange-100 border-orange-500 text-orange-800 shadow-sm'
-                : 'bg-white border-orange-300 text-orange-700 hover:bg-orange-50'
-            }`}
-            title="Los contratos de prueba reciben prefijo PRB- y se descartan automáticamente de los informes. Pueden borrarse en Mantenimiento > Usuarios > Contratos Prueba."
-          >
-            <input
-              type="checkbox"
-              checked={esContratoPrueba}
-              onChange={e => setEsContratoPrueba(e.target.checked)}
-              className="h-4 w-4 rounded border-orange-400 text-orange-600 focus:ring-orange-500"
-            />
-            <span className="text-sm font-semibold">🧪 Contrato de prueba</span>
-          </label>
+          {/* Checkboxes: Contrato de prueba (naranja) + Extemporánea (rojo) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <label
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-colors select-none ${
+                esContratoPrueba
+                  ? 'bg-orange-100 border-orange-500 text-orange-800 shadow-sm'
+                  : 'bg-white border-orange-300 text-orange-700 hover:bg-orange-50'
+              }`}
+              title="Los contratos de prueba reciben prefijo PRB- y se descartan automáticamente de los informes. Pueden borrarse en Mantenimiento > Usuarios > Contratos Prueba."
+            >
+              <input
+                type="checkbox"
+                checked={esContratoPrueba}
+                onChange={e => setEsContratoPrueba(e.target.checked)}
+                className="h-4 w-4 rounded border-orange-400 text-orange-600 focus:ring-orange-500"
+              />
+              <span className="text-sm font-semibold">🧪 Contrato de prueba</span>
+            </label>
+            <label
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-colors select-none ${
+                esExtemporanea
+                  ? 'bg-red-100 border-red-500 text-red-800 shadow-sm'
+                  : 'bg-white border-red-300 text-red-700 hover:bg-red-50'
+              }`}
+              title="Marca la matrícula como extemporánea (fuera de plazo). Se guarda en PEOPLE.extemporanea."
+            >
+              <input
+                type="checkbox"
+                checked={esExtemporanea}
+                onChange={e => setEsExtemporanea(e.target.checked)}
+                className="h-4 w-4 rounded border-red-400 text-red-600 focus:ring-red-500"
+              />
+              <span className="text-sm font-semibold">⏰ EXTEMPORÁNEA</span>
+            </label>
+          </div>
         </div>
 
         {/* Banner persistente cuando está marcado, para que el comercial no lo olvide */}
@@ -1364,8 +1440,13 @@ function CrearContratoContent() {
                             type="email"
                             value={beneficiario.email}
                             onChange={(e) => updateBeneficiario(index, 'email', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                              benefEmailError(index) ? 'border-red-400' : 'border-gray-300'
+                            }`}
                           />
+                          {benefEmailError(index) && (
+                            <p className="mt-1 text-xs text-red-600">{benefEmailError(index)}</p>
+                          )}
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Celular * ({getPhonePrefix()})</label>
@@ -1373,9 +1454,14 @@ function CrearContratoContent() {
                             type="tel"
                             value={beneficiario.celular}
                             onChange={(e) => updateBeneficiario(index, 'celular', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                              benefCelularWarn(index) ? 'border-amber-400' : 'border-gray-300'
+                            }`}
                             placeholder="Número sin prefijo"
                           />
+                          {benefCelularWarn(index) && (
+                            <p className="mt-1 text-xs text-amber-600">⚠️ Mismo celular que el titular. Verifica que sea correcto.</p>
+                          )}
                         </div>
                       </div>
                       <div className="border-t border-gray-100 pt-4 mt-4">
@@ -1409,6 +1495,123 @@ function CrearContratoContent() {
             </div>
           )}
 
+          {/* Modal: advierte de la(s) casilla(s) no marcada(s) (Impulsa / titular-beneficiario) */}
+          {showSinCursoModal && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                  <span>⚠️</span> Confirma antes de continuar
+                </h3>
+                <div className="text-sm text-gray-600 space-y-3 mb-6">
+                  {!titular.esCursoImpulsa && (
+                    <p>No marcaste <b>"¿Es curso Impulsa?"</b>: ¿estás seguro de que <b>ningún beneficiario tomará un curso Impulsa</b>? (el contrato no será Impulsa).</p>
+                  )}
+                  {!titularEsBeneficiario && (
+                    <p>El titular <b>no está marcado como beneficiario</b>: ¿estás seguro de que <b>no tomará ningún curso</b>? Solo quedará como responsable del contrato.</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {!titularEsBeneficiario && (
+                    <button
+                      type="button"
+                      onClick={() => { setTitularEsBeneficiario(true); setShowSinCursoModal(false); }}
+                      className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg"
+                    >
+                      Marcar al titular como beneficiario
+                    </button>
+                  )}
+                  {!titular.esCursoImpulsa && (
+                    <button
+                      type="button"
+                      onClick={() => { setTitular({ ...titular, esCursoImpulsa: true }); setShowSinCursoModal(false); }}
+                      className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg"
+                    >
+                      Marcar como curso Impulsa
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setShowSinCursoModal(false); setCurrentStep(3); }}
+                    className="w-full py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg"
+                  >
+                    Aceptar y seguir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSinCursoModal(false)}
+                    className="w-full py-2 px-4 text-gray-400 hover:text-gray-600 text-sm"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal resumen antes de crear el contrato */}
+          {showResumenModal && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Resumen del contrato</h3>
+                <p className="text-sm text-gray-500 mb-4">Revisa los datos antes de crear el contrato.</p>
+
+                <div className="text-sm text-gray-700 space-y-4">
+                  {/* Flags */}
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-semibold">N° {contrato || '—'}</span>
+                    {esContratoPrueba && <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-700 text-xs font-semibold">🧪 Prueba</span>}
+                    {esExtemporanea && <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs font-semibold">⏰ Extemporánea</span>}
+                  </div>
+
+                  {/* Titular */}
+                  <div>
+                    <p className="font-semibold text-gray-900">Titular</p>
+                    <p>{`${titular.primerNombre} ${titular.segundoNombre} ${titular.primerApellido} ${titular.segundoApellido}`.replace(/\s+/g, ' ').trim()}</p>
+                    <p className="text-gray-500">ID: {titular.numeroId} · {titular.plataforma}</p>
+                    {titularEsBeneficiario && (
+                      <p className="text-primary-700 mt-1">Toma el curso: <b>{titular.campaign} · {titular.tipoCurso} · {titular.horarioCurso}</b></p>
+                    )}
+                  </div>
+
+                  {/* Apoderado */}
+                  <div>
+                    <p className="font-semibold text-gray-900">Apoderado</p>
+                    <p>{titular.apoderado || '—'}{titularEsApoderado ? ' (el titular)' : ''}</p>
+                    {(titular.apoderadoTelefono || titular.apoderadoMail) && (
+                      <p className="text-gray-500">{titular.apoderadoTelefono || ''}{titular.apoderadoTelefono && titular.apoderadoMail ? ' · ' : ''}{titular.apoderadoMail || ''}</p>
+                    )}
+                  </div>
+
+                  {/* Beneficiarios */}
+                  <div>
+                    <p className="font-semibold text-gray-900">Beneficiarios ({beneficiarios.length})</p>
+                    {beneficiarios.length === 0 ? (
+                      <p className="text-gray-500">{titularEsBeneficiario ? 'Solo el titular toma el curso.' : 'Sin beneficiarios.'}</p>
+                    ) : (
+                      <ul className="list-disc pl-5 space-y-1">
+                        {beneficiarios.map((b, i) => (
+                          <li key={i}>
+                            {`${b.primerNombre} ${b.primerApellido}`.trim()} <span className="text-gray-500">(ID {b.numeroId})</span>
+                            <span className="block text-gray-500">{b.campaign} · {b.tipoCurso} · {b.horarioCurso}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end gap-2">
+                  <button type="button" onClick={() => setShowResumenModal(false)}
+                    className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+                  <button type="button" onClick={handleSubmit} disabled={loading}
+                    className="px-4 py-2 text-sm rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50">
+                    {loading ? 'Creando...' : 'Confirmar y crear contrato'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Navigation buttons */}
           <div className="mt-6 flex justify-between">
             {currentStep > 1 && (
@@ -1436,7 +1639,7 @@ function CrearContratoContent() {
             ) : (
               <button
                 type="button"
-                onClick={handleSubmit}
+                onClick={requestSubmit}
                 disabled={loading}
                 className="ml-auto inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
