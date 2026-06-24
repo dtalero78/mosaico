@@ -14,11 +14,19 @@ import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-cam
  */
 export const GET = handlerWithAuth(async (_request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.CAMPANA_CREAR);
+  // Orden: campañas más recientes primero (por la fecha de creación más reciente
+  // de la campaña) → tipo de curso en orden YOJI/OKINA/KODOMO/DANSHI/SENPAI/IMPULSA
+  // → salón ascendente.
   const result = await query(
     `SELECT "_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","horarioCurso","inicioCurso",
             "duracionCurso","finalCurso","numeroUsuarios","usuInscritos","paraMenores","activa"
      FROM "CURSOS_CAMPAIGN"
-     ORDER BY "campaign", "tipoCurso", "horarioCurso"`
+     ORDER BY
+       MAX("_createdDate") OVER (PARTITION BY "campaign") DESC,
+       "campaign",
+       CASE "tipoCurso" WHEN 'YOJI' THEN 1 WHEN 'OKINA' THEN 2 WHEN 'KODOMO' THEN 3
+                        WHEN 'DANSHI' THEN 4 WHEN 'SENPAI' THEN 5 WHEN 'IMPULSA' THEN 6 ELSE 9 END,
+       "salon"`
   );
   return successResponse({ rows: result.rows });
 });

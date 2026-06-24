@@ -19,7 +19,10 @@ export const GET = handler(async () => {
             COALESCE("usuInscritos", 0)   AS "usuInscritos"
      FROM "CURSOS_CAMPAIGN"
      WHERE "activa" = true
-     ORDER BY "campaign", "tipoCurso", "horarioCurso"`
+     ORDER BY "campaign",
+       CASE "tipoCurso" WHEN 'YOJI' THEN 1 WHEN 'OKINA' THEN 2 WHEN 'KODOMO' THEN 3
+                        WHEN 'DANSHI' THEN 4 WHEN 'SENPAI' THEN 5 WHEN 'IMPULSA' THEN 6 ELSE 9 END,
+       "salon", "horarioCurso"`
   );
   return successResponse({ rows: result.rows });
 });

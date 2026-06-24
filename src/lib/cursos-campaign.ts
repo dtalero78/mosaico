@@ -3,12 +3,18 @@
  * Sin 'server-only' — lo usan el wizard de contratos y el admin Crea Campaña.
  */
 
-// Tipos de curso en ORDEN pedagógico (menores → adultos).
-export const TIPOS_CURSO = ['YOJI', 'KODOMO', 'OKINA', 'DANSHI', 'SENPAI', 'IMPULSA'] as const;
+// Tipos de curso en ORDEN de visualización (menores → adultos).
+export const TIPOS_CURSO = ['YOJI', 'OKINA', 'KODOMO', 'DANSHI', 'SENPAI', 'IMPULSA'] as const;
 export type TipoCurso = typeof TIPOS_CURSO[number];
 
 // Cursos para menores de edad (no seleccionables cuando el titular es el beneficiario).
-export const CURSOS_MENORES: TipoCurso[] = ['YOJI', 'KODOMO', 'OKINA'];
+export const CURSOS_MENORES: TipoCurso[] = ['YOJI', 'OKINA', 'KODOMO'];
+
+// Posición canónica para ordenar (1-based); desconocidos al final.
+export function ordenTipoCurso(tipo: string): number {
+  const i = (TIPOS_CURSO as readonly string[]).indexOf(tipo);
+  return i < 0 ? 999 : i + 1;
+}
 
 export function esMenores(tipo: string): boolean {
   return CURSOS_MENORES.includes(tipo as TipoCurso);
@@ -18,8 +24,8 @@ export function esImpulsa(tipo: string): boolean {
 }
 
 // Horarios disponibles por tipo de curso (catálogo fijo).
-// Franjas de semana: 17:00-18:00, 18:15-19:15, 19:30-20:30. Sábados: 09-11 y 11-13.
-const HORARIOS_REGULARES = [
+// Menores (YOJI/OKINA/KODOMO): 17:00-18:00, 18:15-19:15, 19:30-20:30. Sábados 09-11 / 11-13.
+const HORARIOS_MENORES = [
   'LUN-MIÉ 17:00-18:00',
   'LUN-MIÉ 18:15-19:15',
   'LUN-MIÉ 19:30-20:30',
@@ -29,11 +35,26 @@ const HORARIOS_REGULARES = [
   'SÁB 09:00-11:00',
   'SÁB 11:00-13:00',
 ];
+const HORARIOS_DANSHI = [
+  'LUN-MIÉ 19:00-19:50',
+  'MAR-JUE 19:00-19:50',
+  'SÁB 09:00-11:00',
+  'SÁB 11:00-13:00',
+];
+const HORARIOS_SENPAI = [
+  'LUN-MIÉ 20:00-20:50',
+  'MAR-JUE 20:00-20:50',
+  'SÁB 09:00-11:00',
+  'SÁB 11:00-13:00',
+];
 const HORARIOS_IMPULSA = ['LUN-MIÉ-VIE 20:00-21:00'];
 
 export function horariosFor(tipo: string): string[] {
   if (!tipo) return [];
-  return esImpulsa(tipo) ? HORARIOS_IMPULSA : HORARIOS_REGULARES;
+  if (tipo === 'IMPULSA') return HORARIOS_IMPULSA;
+  if (tipo === 'DANSHI') return HORARIOS_DANSHI;
+  if (tipo === 'SENPAI') return HORARIOS_SENPAI;
+  return HORARIOS_MENORES; // YOJI / OKINA / KODOMO
 }
 
 /** Suma `meses` a una fecha ISO (YYYY-MM-DD) manejando el overflow de fin de mes. */
