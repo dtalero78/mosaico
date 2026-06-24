@@ -34,7 +34,13 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   const tipoCurso = body.tipoCurso !== undefined ? String(body.tipoCurso) : row.tipoCurso;
   if (!(TIPOS_CURSO as readonly string[]).includes(tipoCurso)) throw new ValidationError(`Tipo de curso inválido: ${tipoCurso}`);
   const horarioCurso = body.horarioCurso !== undefined ? String(body.horarioCurso) : row.horarioCurso;
-  if (!horariosFor(tipoCurso).includes(horarioCurso)) throw new ValidationError(`Horario inválido para ${tipoCurso}: ${horarioCurso}`);
+  // Grandfathering: si no cambian tipo ni horario, se acepta el valor guardado
+  // aunque ya no esté en el catálogo (cursos creados con horarios antiguos).
+  // Solo se valida contra el catálogo cuando el horario o el tipo cambian.
+  const tipoOHorarioCambio = horarioCurso !== row.horarioCurso || tipoCurso !== row.tipoCurso;
+  if (tipoOHorarioCambio && !horariosFor(tipoCurso).includes(horarioCurso)) {
+    throw new ValidationError(`Horario inválido para ${tipoCurso}: ${horarioCurso}`);
+  }
 
   const salon = body.salon !== undefined ? (String(body.salon).trim() || null) : row.salon;
   const inicioCurso = body.inicioCurso !== undefined ? (isDate(body.inicioCurso) ? body.inicioCurso : null) : (row.inicioCurso ? String(row.inicioCurso).slice(0, 10) : null);

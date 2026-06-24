@@ -45,6 +45,7 @@ function CrearCampanaContent() {
   const [saving, setSaving] = useState(false)
   // Edición / borrado de cursos ya guardados (tabla "Campañas existentes")
   const [editRow, setEditRow] = useState<any | null>(null)
+  const [editMsg, setEditMsg] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<any | null>(null)
   const [rowBusy, setRowBusy] = useState(false)
 
@@ -120,7 +121,7 @@ function CrearCampanaContent() {
   const editFinalCurso = editRow && editRow.inicioCurso && editRow.duracionCurso > 0
     ? addMonths(editRow.inicioCurso, editRow.duracionCurso + 1) : ''
 
-  const openEdit = (r: any) => setEditRow({
+  const openEdit = (r: any) => { setEditMsg(null); setEditRow({
     ...r,
     salon: r.salon || '',
     inicioCurso: r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : '',
@@ -129,11 +130,11 @@ function CrearCampanaContent() {
     duracionCurso: r.duracionCurso || 0,
     numeroUsuarios: r.numeroUsuarios || 0,
     activa: r.activa !== false,
-  })
+  }) }
 
   const saveEdit = async () => {
     if (!editRow) return
-    setRowBusy(true); setMsg(null)
+    setRowBusy(true); setEditMsg(null)
     try {
       const res = await fetch(`/api/postgres/campaigns/${editRow._id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -147,7 +148,18 @@ function CrearCampanaContent() {
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Error al editar el curso')
       setEditRow(null); setMsg({ type: 'ok', text: 'Curso actualizado.' }); loadExisting()
-    } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setRowBusy(false) }
+    } catch (e: any) { setEditMsg(e.message) } finally { setRowBusy(false) }
+  }
+
+  // Agregar curso(s) a una campaña existente: precarga nombre + fechas en el
+  // formulario de arriba; el upsert del POST suma los cursos nuevos a esa campaña.
+  const addCursoToCampaign = (r: any) => {
+    setCampaign(r.campaign)
+    setInicioCampania(r.inicioCampania ? String(r.inicioCampania).slice(0, 10) : '')
+    setFinalCampaign(r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '')
+    setCursos([]); setForm(EMPTY); setEditIndex(null)
+    setMsg({ type: 'ok', text: `Agregando cursos a "${r.campaign}". Agrega el/los curso(s) abajo y pulsa "Crear Campaña" (se suman a la campaña).` })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const doDelete = async () => {
@@ -331,6 +343,9 @@ function CrearCampanaContent() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap">
+                        <button type="button" onClick={() => addCursoToCampaign(r)} className="text-accent-600 hover:text-accent-700 mr-2 text-xs font-semibold" title="Agregar curso a esta campaña">
+                          + curso
+                        </button>
                         <button type="button" onClick={() => openEdit(r)} className="text-primary-600 hover:text-primary-700 mr-2" title="Editar curso">
                           <PencilSquareIcon className="h-5 w-5 inline" />
                         </button>
@@ -374,6 +389,9 @@ function CrearCampanaContent() {
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-gray-900 mb-1">Editar curso — {editRow.campaign}</h3>
             <p className="text-xs text-gray-500 mb-4">Inscritos actuales: {editRow.usuInscritos ?? 0}</p>
+            {editMsg && (
+              <div className="mb-4 p-2.5 rounded-md text-sm bg-red-50 border border-red-200 text-red-700">{editMsg}</div>
+            )}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className={lblCls}>Tipo de curso *</label>
@@ -389,7 +407,10 @@ function CrearCampanaContent() {
                 <label className={lblCls}>Horario *</label>
                 <select value={editRow.horarioCurso} onChange={e => setEditRow({ ...editRow, horarioCurso: e.target.value })} className={inputCls}>
                   <option value="">Seleccionar...</option>
-                  {horariosFor(editRow.tipoCurso).map(h => <option key={h} value={h}>{h}</option>)}
+                  {(editRow.horarioCurso && !horariosFor(editRow.tipoCurso).includes(editRow.horarioCurso)
+                    ? [editRow.horarioCurso, ...horariosFor(editRow.tipoCurso)]
+                    : horariosFor(editRow.tipoCurso)
+                  ).map(h => <option key={h} value={h}>{h}{editRow.horarioCurso === h && !horariosFor(editRow.tipoCurso).includes(h) ? ' (actual)' : ''}</option>)}
                 </select>
               </div>
               <div>
