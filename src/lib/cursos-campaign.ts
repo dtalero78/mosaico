@@ -18,13 +18,16 @@ export function esImpulsa(tipo: string): boolean {
 }
 
 // Horarios disponibles por tipo de curso (catálogo fijo).
+// Franjas de semana: 17:00-18:00, 18:15-19:15, 19:30-20:30. Sábados: 09-11 y 11-13.
 const HORARIOS_REGULARES = [
   'LUN-MIÉ 17:00-18:00',
-  'LUN-MIÉ 18:00-19:00',
-  'LUN-MIÉ 19:00-20:00',
+  'LUN-MIÉ 18:15-19:15',
+  'LUN-MIÉ 19:30-20:30',
   'MAR-JUE 17:00-18:00',
-  'MAR-JUE 18:00-19:00',
-  'MAR-JUE 19:00-20:00',
+  'MAR-JUE 18:15-19:15',
+  'MAR-JUE 19:30-20:30',
+  'SÁB 09:00-11:00',
+  'SÁB 11:00-13:00',
 ];
 const HORARIOS_IMPULSA = ['LUN-MIÉ-VIE 20:00-21:00'];
 
