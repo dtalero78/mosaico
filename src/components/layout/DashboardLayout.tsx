@@ -39,10 +39,10 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Calendario Sesiones', href: '/dashboard/academic/agenda-sesiones' },
       { name: 'Sesiones semana', href: '/dashboard/academic/agenda-academica' },
       { name: 'Guías', href: '/dashboard/academic/advisors' },
-      // Si el usuario logueado ES advisor, su email va en la URL para abrir SU panel.
+      // Si el usuario logueado ES guía, su email va en la URL para abrir SU panel.
       // Para coordinadores/admins el link va SIN email — el panel auto-selecciona
-      // el primer advisor del dropdown (si pasamos el email del coordinador, el
-      // endpoint /by-email retorna 404 y la página muestra "Error al buscar advisor").
+      // el primer guía del dropdown (si pasamos el email del coordinador, el
+      // endpoint /by-email retorna 404 y la página muestra un error de guía no encontrado).
       { name: 'Panel Guía', href: userRole === 'GUIA'
         ? `/panel-advisor?email=${encodeURIComponent(userEmail)}`
         : '/panel-advisor' },
@@ -566,7 +566,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         return mPerms ? hasAnyPermission(mPerms) : false
       }
 
-      // Sub-grupos de Informes (Asistencia, Programación, Advisors, Académica,
+      // Sub-grupos de Informes (Asistencia, Programación, Guías, Académica,
       // Planta, Estadísticas): modelo de 2 marcas — la sección se muestra si le
       // queda ≥1 ítem visible tras el filtrado de nivel 3 (no necesita permiso
       // propio de sección). Basta marcar el abuelo "Informes" + el ítem.
