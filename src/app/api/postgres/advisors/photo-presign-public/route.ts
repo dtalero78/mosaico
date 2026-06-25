@@ -8,10 +8,11 @@ import { ValidationError } from '@/lib/errors';
 /**
  * POST /api/postgres/advisors/photo-presign-public
  *
- * Public presigned PUT URL for advisor photo during registration (/nuevo-advisor).
- * No auth required since /nuevo-advisor is a public page.
+ * Public presigned PUT URL for guía photo during registration (/nuevo-guia).
+ * No auth required since /nuevo-guia is a public page.
  * Uses a temp key (fotosAdvisors/new_{timestamp}.ext) — the create endpoint
- * renames/references this key in ADVISORS.fotoAdvisor after creation.
+ * references this key in GUIAS.fotoAdvisor after creation.
+ * Nota MOSAICO: foto opcional (DO Spaces dormido sin claves).
  *
  * Body: { tempKey, contentType }
  */

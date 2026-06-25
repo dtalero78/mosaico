@@ -26,7 +26,7 @@ interface FormData {
 
 type FormErrors = Partial<Record<keyof FormData | 'foto', string>>
 
-export default function NuevoAdvisorPage() {
+export default function NuevoGuiaPage() {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<FormData>({
     primerNombre: '', primerApellido: '', numeroId: '', domicilio: '',
@@ -59,7 +59,7 @@ export default function NuevoAdvisorPage() {
     setErrors(prev => { const c = { ...prev }; delete c.foto; return c })
   }
 
-  // Upload photo to DO Spaces via presigned URL (temp key using timestamp — advisor ID not known yet)
+  // Upload photo to DO Spaces via presigned URL (temp key using timestamp — guía ID not known yet)
   const uploadFoto = async (): Promise<string | null> => {
     if (!fotoFile) return null
     setUploading(true)
@@ -109,8 +109,8 @@ export default function NuevoAdvisorPage() {
     if (currentStep === 3) {
       if (!form.fechaNacimiento) e.fechaNacimiento = 'Requerido'
       if (!form.zoom.trim())     e.zoom = 'Requerido'
-      // Foto obligatoria — debe haber un fotoKey (ya subida) o un fotoFile pendiente
-      if (!form.fotoKey && !fotoFile) e.fotoKey = 'La foto de perfil es obligatoria'
+      // Foto OPCIONAL en MOSAICO: DO Spaces está dormido (sin claves), así que no se
+      // exige. Cuando se configuren las claves de Spaces se puede volver obligatoria.
     }
     setErrors(e)
     return Object.keys(e).length === 0
@@ -151,7 +151,7 @@ export default function NuevoAdvisorPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-accent-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -159,7 +159,7 @@ export default function NuevoAdvisorPage() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Registro Creado</h2>
-          <p className="text-gray-600 mb-1">Tu cuenta de advisor ha sido creada exitosamente.</p>
+          <p className="text-gray-600 mb-1">Tu cuenta de guía ha sido creada exitosamente.</p>
           <p className="text-sm text-gray-500">Puedes cerrar esta pagina.</p>
         </div>
       </div>
@@ -167,12 +167,12 @@ export default function NuevoAdvisorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-accent-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden">
         {/* Header */}
-        <div className="bg-indigo-600 px-6 py-5 text-white">
-          <h1 className="text-xl font-bold">Registro de Advisor</h1>
-          <p className="text-indigo-200 text-sm mt-1">Let&apos;s Go Speak</p>
+        <div className="bg-primary-600 px-6 py-5 text-white">
+          <h1 className="text-xl font-bold">Registro de Guía</h1>
+          <p className="text-primary-200 text-sm mt-1">MOSAICO</p>
         </div>
 
         {/* Progress */}
@@ -181,7 +181,7 @@ export default function NuevoAdvisorPage() {
             {[1, 2, 3].map(s => (
               <div key={s} className="flex-1 flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0
-                  ${s < step ? 'bg-green-500 text-white' : s === step ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                  ${s < step ? 'bg-green-500 text-white' : s === step ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
                   {s < step
                     ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                     : s}
@@ -225,7 +225,7 @@ export default function NuevoAdvisorPage() {
             <div className="space-y-4">
               <Field label="Email" value={form.email}
                 onChange={v => updateField('email', v)} error={errors.email}
-                placeholder="advisor@email.com" type="email" required />
+                placeholder="guia@email.com" type="email" required />
               {/* Contraseña con toggle ver/ocultar */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -237,7 +237,7 @@ export default function NuevoAdvisorPage() {
                     value={form.clave}
                     onChange={e => updateField('clave', e.target.value)}
                     placeholder="Mínimo 4 caracteres"
-                    className={`w-full px-3 py-2.5 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${errors.clave ? 'border-red-400' : 'border-gray-300'}`}
+                    className={`w-full px-3 py-2.5 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.clave ? 'border-red-400' : 'border-gray-300'}`}
                   />
                   <button type="button" onClick={() => setShowPass(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -255,8 +255,8 @@ export default function NuevoAdvisorPage() {
                   País <span className="text-red-500">*</span>
                 </label>
                 <select value={form.pais} onChange={e => updateField('pais', e.target.value)}
-                  title="País del advisor"
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${errors.pais ? 'border-red-400' : 'border-gray-300'}`}>
+                  title="País del guía"
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.pais ? 'border-red-400' : 'border-gray-300'}`}>
                   <option value="">Seleccionar país</option>
                   {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
@@ -271,12 +271,12 @@ export default function NuevoAdvisorPage() {
               {/* Foto */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Foto de perfil <span className="text-red-500">*</span>
+                  Foto de perfil <span className="text-gray-400 font-normal">(opcional)</span>
                 </label>
                 <div className="flex items-center gap-4">
                   <div
                     className={`w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-2 cursor-pointer hover:opacity-90 transition flex-shrink-0 ${
-                      errors.fotoKey ? 'border-red-400' : 'border-indigo-200'
+                      errors.fotoKey ? 'border-red-400' : 'border-primary-200'
                     }`}
                     onClick={() => fileRef.current?.click()}
                   >
@@ -290,7 +290,7 @@ export default function NuevoAdvisorPage() {
                   </div>
                   <div>
                     <button type="button" onClick={() => fileRef.current?.click()}
-                      className="px-3 py-1.5 text-sm border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-50 transition">
+                      className="px-3 py-1.5 text-sm border border-primary-300 text-primary-600 rounded-lg hover:bg-primary-50 transition">
                       {fotoPreview ? 'Cambiar foto' : 'Subir foto'}
                     </button>
                     <p className="text-xs text-gray-400 mt-1">JPG, PNG, WEBP</p>
@@ -302,13 +302,13 @@ export default function NuevoAdvisorPage() {
               </div>
 
               <div>
-                <label htmlFor="na-fecha" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="ng-fecha" className="block text-sm font-medium text-gray-700 mb-1">
                   Fecha de Nacimiento <span className="text-red-500">*</span>
                 </label>
-                <input id="na-fecha" type="date" value={form.fechaNacimiento}
+                <input id="ng-fecha" type="date" value={form.fechaNacimiento}
                   onChange={e => updateField('fechaNacimiento', e.target.value)}
-                  title="Fecha de nacimiento del advisor"
-                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${errors.fechaNacimiento ? 'border-red-400' : 'border-gray-300'}`}
+                  title="Fecha de nacimiento del guía"
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${errors.fechaNacimiento ? 'border-red-400' : 'border-gray-300'}`}
                 />
                 {errors.fechaNacimiento && <p className="text-red-500 text-xs mt-1">{errors.fechaNacimiento}</p>}
               </div>
@@ -342,9 +342,9 @@ export default function NuevoAdvisorPage() {
               : <div />
             }
             {step < 3
-              ? <button type="button" onClick={handleNext} className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">Siguiente</button>
+              ? <button type="button" onClick={handleNext} className="px-6 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors">Siguiente</button>
               : <button type="button" onClick={handleSubmit} disabled={submitting || uploading}
-                  className="px-6 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50">
+                  className="px-6 py-2.5 bg-accent-600 text-white text-sm font-medium rounded-lg hover:bg-accent-700 transition-colors disabled:opacity-50">
                   {submitting || uploading ? 'Procesando...' : 'Crear Registro'}
                 </button>
             }
@@ -369,7 +369,7 @@ function Field({
       <input
         type={type} value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ${error ? 'border-red-400' : 'border-gray-300'}`}
+        className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${error ? 'border-red-400' : 'border-gray-300'}`}
       />
       {hint && !error && <p className="text-gray-400 text-xs mt-1">{hint}</p>}
       {error && <p className="text-red-500 text-xs mt-1">{error}</p>}

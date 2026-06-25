@@ -7,7 +7,8 @@ import { queryOne } from '@/lib/postgres';
 
 /**
  * POST /api/postgres/advisors/create
- * Creates a new advisor in the ADVISORS table and optionally in USUARIOS_ROLES.
+ * MOSAICO: crea un nuevo GUÍA en la tabla GUIAS (vía AdvisorRepository → GUIAS) y su
+ * cuenta de login en USUARIOS_ROLES con rol GUIA. Lo usa la página pública /nuevo-guia.
  */
 export const POST = handler(async (request: Request) => {
   const body = await request.json();
@@ -16,9 +17,7 @@ export const POST = handler(async (request: Request) => {
   if (!primerNombre?.trim()) throw new ValidationError('primerNombre es requerido');
   if (!primerApellido?.trim()) throw new ValidationError('primerApellido es requerido');
   if (!email?.trim()) throw new ValidationError('email es requerido');
-  // Foto obligatoria — body.fotoKey es la key del archivo en DO Spaces
-  // (la sube el frontend via /api/postgres/advisors/photo-presign-public).
-  if (!body.fotoKey?.trim()) throw new ValidationError('La foto de perfil es obligatoria');
+  // MOSAICO: foto OPCIONAL (DO Spaces dormido). body.fotoKey llega solo si se subió.
 
   const emailLower = email.trim().toLowerCase();
   const numeroIdNorm = body.numeroId?.trim().toUpperCase() || null;
@@ -29,7 +28,7 @@ export const POST = handler(async (request: Request) => {
 
   // 1) Email — en ADVISORS o USUARIOS_ROLES (cualquiera de las dos lo bloquea)
   const advByEmail = await AdvisorRepository.findByEmail(emailLower);
-  if (advByEmail) throw new ConflictError('Ya existe un advisor registrado con ese correo');
+  if (advByEmail) throw new ConflictError('Ya existe un guía registrado con ese correo');
 
   const userByEmail = await queryOne<{ _id: string; nombre: string | null; rol: string }>(
     `SELECT "_id","nombre","rol" FROM "USUARIOS_ROLES"
@@ -56,17 +55,17 @@ export const POST = handler(async (request: Request) => {
     }
   }
 
-  // 3) Link de Zoom — debe ser único en ADVISORS (no se valida en USUARIOS_ROLES;
+  // 3) Link de Zoom — debe ser único en GUIAS (no se valida en USUARIOS_ROLES;
   // el campo linkZoom de ahí no se usa como fuente de verdad).
   if (zoomNorm) {
     const advByZoom = await queryOne<{ _id: string; nombreCompleto: string | null }>(
-      `SELECT "_id","nombreCompleto" FROM "ADVISORS"
+      `SELECT "_id","nombreCompleto" FROM "GUIAS"
         WHERE TRIM("zoom") = TRIM($1) LIMIT 1`,
       [zoomNorm]
     );
     if (advByZoom) {
       throw new ConflictError(
-        `Ese link de Zoom ya está asignado a otro advisor${advByZoom.nombreCompleto ? ' (' + advByZoom.nombreCompleto + ')' : ''}`
+        `Ese link de Zoom ya está asignado a otro guía${advByZoom.nombreCompleto ? ' (' + advByZoom.nombreCompleto + ')' : ''}`
       );
     }
   }
@@ -88,8 +87,8 @@ export const POST = handler(async (request: Request) => {
     fechaNacimiento: body.fechaNacimiento?.trim() || undefined,
   });
 
-  // Also create USUARIOS_ROLES entry so the advisor can log in
-  const password = body.clave?.trim() || 'LGS2026';
+  // Also create USUARIOS_ROLES entry so the guía can log in (rol GUIA)
+  const password = body.clave?.trim() || 'MOSAICO2026';
   const inserted = await queryOne<{ _id: string }>(
     `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numberid", "_createdDate", "_updatedDate")
      VALUES ($1, $2, $3, $4, 'GUIA', true, $5, NOW(), NOW())
@@ -98,7 +97,7 @@ export const POST = handler(async (request: Request) => {
     [ids.advisor(), emailLower, password, nombreCompleto, numeroIdNorm]
   );
 
-  // Relación formal ADVISORS -> USUARIOS_ROLES (análoga a ACADEMICA.usuarioId).
+  // Relación formal GUIAS -> USUARIOS_ROLES (análoga a ACADEMICA.usuarioId).
   // Si hubo conflicto (la cuenta ya existía), resolvemos su _id por email.
   let usuarioRolId = inserted?._id ?? null;
   if (!usuarioRolId) {
@@ -110,10 +109,10 @@ export const POST = handler(async (request: Request) => {
   }
   if (usuarioRolId) {
     await queryOne(
-      `UPDATE "ADVISORS" SET "usuarioRolId" = $1, "_updatedDate" = NOW() WHERE "_id" = $2`,
+      `UPDATE "GUIAS" SET "usuarioRolId" = $1, "_updatedDate" = NOW() WHERE "_id" = $2`,
       [usuarioRolId, advisorId]
     );
   }
 
-  return successResponse({ advisor: { ...(advisor as any), usuarioRolId }, message: 'Advisor creado exitosamente' });
+  return successResponse({ advisor: { ...(advisor as any), usuarioRolId }, message: 'Guía creado exitosamente' });
 });

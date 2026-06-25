@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/contrato') ||
     pathname.startsWith('/nuevo-usuario') ||
-    pathname.startsWith('/nuevo-advisor') ||
+    pathname.startsWith('/nuevo-guia') ||
     pathname.includes('.')
   ) {
     return NextResponse.next()
