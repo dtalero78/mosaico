@@ -19,7 +19,7 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   if (!id) throw new ValidationError('id requerido');
 
   const cur = await query(
-    `SELECT "_id","campaign","tipoCurso","horarioCurso","salon","numeroUsuarios","usuInscritos",
+    `SELECT "_id","campaign","tipoCurso","horarioCurso","salon","guia","numeroUsuarios","usuInscritos",
             "paraMenores","activa","duracionCurso",
             "inicioCurso"::text AS "inicioCurso", "inicioCampania"::text AS "inicioCampania",
             "finalCampaign"::text AS "finalCampaign"
@@ -43,6 +43,7 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   }
 
   const salon = body.salon !== undefined ? (String(body.salon).trim() || null) : row.salon;
+  const guia = body.guia !== undefined ? (String(body.guia).trim() || null) : row.guia;
   const inicioCurso = body.inicioCurso !== undefined ? (isDate(body.inicioCurso) ? body.inicioCurso : null) : (row.inicioCurso ? String(row.inicioCurso).slice(0, 10) : null);
   const duracion = body.duracionCurso !== undefined ? (parseInt(String(body.duracionCurso), 10) || 0) : (row.duracionCurso || 0);
   const numeroUsuarios = body.numeroUsuarios !== undefined ? (parseInt(String(body.numeroUsuarios), 10) || 0) : (row.numeroUsuarios || 0);
@@ -64,11 +65,11 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
 
   const upd = await query(
     `UPDATE "CURSOS_CAMPAIGN" SET
-       "tipoCurso"=$1, "horarioCurso"=$2, "salon"=$3, "inicioCurso"=$4, "duracionCurso"=$5,
-       "finalCurso"=$6, "numeroUsuarios"=$7, "inicioCampania"=$8, "finalCampaign"=$9,
-       "paraMenores"=$10, "activa"=$11, "_updatedDate"=NOW()
-     WHERE "_id"=$12 RETURNING *`,
-    [tipoCurso, horarioCurso, salon, inicioCurso, duracion, finalCurso, numeroUsuarios, inicioCampania, finalCampaign, esMenores(tipoCurso), activa, id]
+       "tipoCurso"=$1, "horarioCurso"=$2, "salon"=$3, "guia"=$4, "inicioCurso"=$5, "duracionCurso"=$6,
+       "finalCurso"=$7, "numeroUsuarios"=$8, "inicioCampania"=$9, "finalCampaign"=$10,
+       "paraMenores"=$11, "activa"=$12, "_updatedDate"=NOW()
+     WHERE "_id"=$13 RETURNING *`,
+    [tipoCurso, horarioCurso, salon, guia, inicioCurso, duracion, finalCurso, numeroUsuarios, inicioCampania, finalCampaign, esMenores(tipoCurso), activa, id]
   );
   return successResponse({ curso: upd.rows[0] });
 });

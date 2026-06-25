@@ -13,7 +13,7 @@ import { query } from '@/lib/postgres';
  */
 export const GET = handler(async () => {
   const result = await query(
-    `SELECT "campaign", "tipoCurso", "horarioCurso", "paraMenores", "salon",
+    `SELECT "campaign", "tipoCurso", "horarioCurso", "paraMenores", "salon", "guia",
             "inicioCurso", "finalCurso", "finalCampaign",
             COALESCE("numeroUsuarios", 0) AS "numeroUsuarios",
             COALESCE("usuInscritos", 0)   AS "usuInscritos"

@@ -18,7 +18,7 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
   // de la campaña) → tipo de curso en orden YOJI/OKINA/KODOMO/DANSHI/SENPAI/IMPULSA
   // → salón ascendente.
   const result = await query(
-    `SELECT "_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","horarioCurso","inicioCurso",
+    `SELECT "_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","guia","horarioCurso","inicioCurso",
             "duracionCurso","finalCurso","numeroUsuarios","usuInscritos","paraMenores","activa"
      FROM "CURSOS_CAMPAIGN"
      ORDER BY
@@ -51,6 +51,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     if (!horariosFor(tipo).includes(horario)) throw new ValidationError(`Horario inválido para ${tipo}: ${horario}`);
 
     const salon = (c?.salon ? String(c.salon).trim() : null) || null;
+    const guia = (c?.guia ? String(c.guia).trim() : null) || null;
     const inicioCurso = isDate(c?.inicioCurso) ? c.inicioCurso : null;
     const duracion = parseInt(String(c?.duracionCurso ?? 0), 10) || 0;
     // Final del curso = inicio + (duración + 1) meses.
@@ -60,16 +61,16 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
     const r = await query(
       `INSERT INTO "CURSOS_CAMPAIGN"
-         ("_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","horarioCurso","inicioCurso","duracionCurso","finalCurso","numeroUsuarios","usuInscritos","paraMenores","activa","_createdDate","_updatedDate")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,0,$12,true,NOW(),NOW())
+         ("_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","guia","horarioCurso","inicioCurso","duracionCurso","finalCurso","numeroUsuarios","usuInscritos","paraMenores","activa","_createdDate","_updatedDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,true,NOW(),NOW())
        ON CONFLICT ("campaign","tipoCurso","horarioCurso") DO UPDATE SET
          "inicioCampania"=EXCLUDED."inicioCampania", "finalCampaign"=EXCLUDED."finalCampaign",
-         "salon"=EXCLUDED."salon", "inicioCurso"=EXCLUDED."inicioCurso",
+         "salon"=EXCLUDED."salon", "guia"=EXCLUDED."guia", "inicioCurso"=EXCLUDED."inicioCurso",
          "duracionCurso"=EXCLUDED."duracionCurso", "finalCurso"=EXCLUDED."finalCurso",
          "numeroUsuarios"=EXCLUDED."numeroUsuarios", "paraMenores"=EXCLUDED."paraMenores",
          "activa"=true, "_updatedDate"=NOW()
        RETURNING *`,
-      [`ccp_${randomUUID()}`, nombre, inicioCamp, finalCamp, tipo, salon, horario, inicioCurso, duracion, finalCurso, numeroUsuarios, esMenores(tipo)]
+      [`ccp_${randomUUID()}`, nombre, inicioCamp, finalCamp, tipo, salon, guia, horario, inicioCurso, duracion, finalCurso, numeroUsuarios, esMenores(tipo)]
     );
     creados.push(r.rows[0]);
   }

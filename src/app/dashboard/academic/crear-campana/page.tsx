@@ -11,6 +11,7 @@ import { PlusIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon } from '@heroi
 interface CursoDraft {
   tipoCurso: string
   salon: string
+  guia: string
   horarioCurso: string
   inicioCurso: string
   duracionCurso: number
@@ -18,7 +19,7 @@ interface CursoDraft {
   numeroUsuarios: number
 }
 
-const EMPTY: CursoDraft = { tipoCurso: '', salon: '', horarioCurso: '', inicioCurso: '', duracionCurso: 0, finalCurso: '', numeroUsuarios: 0 }
+const EMPTY: CursoDraft = { tipoCurso: '', salon: '', guia: '', horarioCurso: '', inicioCurso: '', duracionCurso: 0, finalCurso: '', numeroUsuarios: 0 }
 const inputCls = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100'
 const lblCls = 'block text-sm font-medium text-gray-700 mb-1'
 
@@ -48,6 +49,23 @@ function CrearCampanaContent() {
   const [editMsg, setEditMsg] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<any | null>(null)
   const [rowBusy, setRowBusy] = useState(false)
+  // Pestañas + filtros del Reporte (inputs = draft; se aplican con "Aplicar filtros")
+  const [activeTab, setActiveTab] = useState<'gestion' | 'reporte'>('gestion')
+  const [repNombre, setRepNombre] = useState('')
+  const [repCurso, setRepCurso] = useState('')
+  const [repDesde, setRepDesde] = useState('')
+  const [repHasta, setRepHasta] = useState('')
+  const [repEstado, setRepEstado] = useState<'todos' | 'finalizada' | 'progreso'>('todos')
+  const [applied, setApplied] = useState<{ nombre: string; curso: string; desde: string; hasta: string; estado: 'todos' | 'finalizada' | 'progreso' }>({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' })
+  const aplicarFiltros = () => setApplied({ nombre: repNombre, curso: repCurso, desde: repDesde, hasta: repHasta, estado: repEstado })
+  const limpiarFiltros = () => { setRepNombre(''); setRepCurso(''); setRepDesde(''); setRepHasta(''); setRepEstado('todos'); setApplied({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' }) }
+
+  const [guias, setGuias] = useState<{ _id: string; nombreCompleto: string }[]>([])
+  const guiaNombre = useCallback((id: any) => {
+    if (!id) return '—'
+    const g = guias.find(x => x._id === id)
+    return g ? g.nombreCompleto : String(id)
+  }, [guias])
 
   const loadExisting = useCallback(() => {
     fetch('/api/postgres/campaigns')
@@ -56,6 +74,12 @@ function CrearCampanaContent() {
       .catch(() => {})
   }, [])
   useEffect(() => { loadExisting() }, [loadExisting])
+  useEffect(() => {
+    fetch('/api/postgres/guias')
+      .then(r => (r.ok ? r.json() : { guias: [] }))
+      .then(d => setGuias(Array.isArray(d.guias) ? d.guias.map((a: any) => ({ _id: a._id, nombreCompleto: a.nombreCompleto || `${a.primerNombre || ''} ${a.primerApellido || ''}`.trim() || a.email || a._id })) : []))
+      .catch(() => {})
+  }, [])
 
   // Final del curso = inicio + (duración + 1) meses.
   const finalCurso = form.inicioCurso && form.duracionCurso > 0 ? addMonths(form.inicioCurso, form.duracionCurso + 1) : ''
@@ -106,6 +130,7 @@ function CrearCampanaContent() {
       { header: 'Campaña', accessor: (r: any) => r.campaign },
       { header: 'Tipo', accessor: (r: any) => r.tipoCurso },
       { header: 'Salón', accessor: (r: any) => r.salon || '' },
+      { header: 'Guía', accessor: (r: any) => guiaNombre(r.guia) },
       { header: 'Horario', accessor: (r: any) => r.horarioCurso },
       { header: 'Inicio campaña', accessor: (r: any) => (r.inicioCampania ? String(r.inicioCampania).slice(0, 10) : '') },
       { header: 'Final campaña', accessor: (r: any) => (r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '') },
@@ -139,7 +164,7 @@ function CrearCampanaContent() {
       const res = await fetch(`/api/postgres/campaigns/${editRow._id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tipoCurso: editRow.tipoCurso, salon: editRow.salon, horarioCurso: editRow.horarioCurso,
+          tipoCurso: editRow.tipoCurso, salon: editRow.salon, guia: editRow.guia || null, horarioCurso: editRow.horarioCurso,
           inicioCurso: editRow.inicioCurso || null, duracionCurso: editRow.duracionCurso,
           numeroUsuarios: editRow.numeroUsuarios, inicioCampania: editRow.inicioCampania || null,
           finalCampaign: editRow.finalCampaign || null, activa: editRow.activa,
@@ -176,11 +201,64 @@ function CrearCampanaContent() {
   const horariosOpts = horariosFor(form.tipoCurso)
   const editing = editIndex !== null
 
+  // --- Reporte: estado de cada curso por fecha + filtros ---
+  const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
+  // Finalizada si la última fecha del curso (final curso, o cierre de matrícula
+  // si no hay final curso) ya pasó respecto a hoy; si no, En progreso.
+  const rowEstado = (r: any): 'finalizada' | 'progreso' => {
+    const end = (r.finalCurso ? String(r.finalCurso).slice(0, 10) : '') || (r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '')
+    return end && end < todayStr ? 'finalizada' : 'progreso'
+  }
+  const reporteRows = existing.filter((r: any) => {
+    if (applied.nombre.trim() && !String(r.campaign || '').toLowerCase().includes(applied.nombre.trim().toLowerCase())) return false
+    if (applied.curso && String(r.tipoCurso || '') !== applied.curso) return false
+    const ini = r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : ''
+    if (applied.desde && (!ini || ini < applied.desde)) return false
+    if (applied.hasta && (!ini || ini > applied.hasta)) return false
+    if (applied.estado !== 'todos' && rowEstado(r) !== applied.estado) return false
+    return true
+  })
+
+  const handleReporteCSV = () => {
+    exportToExcel(reporteRows, [
+      { header: 'Campaña', accessor: (r: any) => r.campaign },
+      { header: 'Tipo', accessor: (r: any) => r.tipoCurso },
+      { header: 'Salón', accessor: (r: any) => r.salon || '' },
+      { header: 'Guía', accessor: (r: any) => guiaNombre(r.guia) },
+      { header: 'Horario', accessor: (r: any) => r.horarioCurso },
+      { header: 'Inicio curso', accessor: (r: any) => (r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : '') },
+      { header: 'Final curso', accessor: (r: any) => (r.finalCurso ? String(r.finalCurso).slice(0, 10) : '') },
+      { header: 'Cierre matríc.', accessor: (r: any) => (r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '') },
+      { header: 'Cupos', accessor: (r: any) => `${r.usuInscritos ?? 0}/${r.numeroUsuarios ?? 0}` },
+      { header: 'Estado', accessor: (r: any) => (rowEstado(r) === 'finalizada' ? 'Finalizada' : 'En progreso') },
+    ], `reporte_campanas_${todayStr}`)
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Gestión Campañas</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Campañas</h1>
         <p className="mt-2 text-gray-600">Crea campañas con sus cursos. Estos cursos alimentan el wizard de Crear Contrato.</p>
+      </div>
+
+      {/* Pestañas */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex gap-6">
+          {([['gestion', 'Gestión'], ['reporte', 'Reporte']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={`py-2 px-1 border-b-2 text-sm font-medium transition-colors ${
+                activeTab === key
+                  ? 'border-primary-600 text-primary-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {msg && (
@@ -188,6 +266,8 @@ function CrearCampanaContent() {
           {msg.text}
         </div>
       )}
+
+      {activeTab === 'gestion' && (<>
 
       {/* Datos de la campaña */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
@@ -211,10 +291,10 @@ function CrearCampanaContent() {
       {/* Agregar / editar curso */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
         <h2 className="text-lg font-semibold mb-4">{editing ? `Editar curso #${editIndex! + 1}` : 'Agregar curso'}</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           <div>
             <label className={lblCls}>Tipo de curso *</label>
-            <select value={form.tipoCurso} onChange={e => setForm({ ...form, tipoCurso: e.target.value, horarioCurso: '' })} className={inputCls}>
+            <select value={form.tipoCurso} onChange={e => setForm({ ...form, tipoCurso: e.target.value, horarioCurso: '' })} className={inputCls} title="Tipo de curso">
               <option value="">Seleccionar...</option>
               {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}{esMenores(t) ? ' (menores)' : ''}</option>)}
             </select>
@@ -224,8 +304,15 @@ function CrearCampanaContent() {
             <input type="text" value={form.salon} onChange={e => setForm({ ...form, salon: e.target.value })} className={inputCls} placeholder="Ej. Salón A / Aula 3" />
           </div>
           <div>
+            <label className={lblCls}>Guía</label>
+            <select value={form.guia} onChange={e => setForm({ ...form, guia: e.target.value })} className={inputCls} title="Guía del curso">
+              <option value="">Seleccionar...</option>
+              {guias.map(g => <option key={g._id} value={g._id}>{g.nombreCompleto}</option>)}
+            </select>
+          </div>
+          <div>
             <label className={lblCls}>Horario *</label>
-            <select value={form.horarioCurso} disabled={!form.tipoCurso} onChange={e => setForm({ ...form, horarioCurso: e.target.value })} className={inputCls}>
+            <select value={form.horarioCurso} disabled={!form.tipoCurso} onChange={e => setForm({ ...form, horarioCurso: e.target.value })} className={inputCls} title="Horario">
               <option value="">Seleccionar...</option>
               {horariosOpts.map(h => <option key={h} value={h}>{h}</option>)}
             </select>
@@ -269,7 +356,7 @@ function CrearCampanaContent() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500 border-b">
-                <th className="py-2">Tipo</th><th>Salón</th><th>Horario</th><th>Inicio</th><th>Duración</th><th>Final</th><th>Cupos</th><th></th>
+                <th className="py-2">Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio</th><th>Duración</th><th>Final</th><th>Cupos</th><th aria-label="Acciones"></th>
               </tr>
             </thead>
             <tbody>
@@ -277,6 +364,7 @@ function CrearCampanaContent() {
                 <tr key={i} className={`border-b last:border-0 ${editIndex === i ? 'bg-primary-50' : ''}`}>
                   <td className="py-2 font-medium">{c.tipoCurso}</td>
                   <td>{c.salon || '—'}</td>
+                  <td>{guiaNombre(c.guia)}</td>
                   <td>{c.horarioCurso}</td>
                   <td>{c.inicioCurso}</td>
                   <td>{c.duracionCurso} mes(es)</td>
@@ -321,25 +409,31 @@ function CrearCampanaContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b">
-                  <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th><th>Acciones</th>
+                  <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {existing.map((r: any) => {
                   const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
+                  const finalizada = rowEstado(r) === 'finalizada'
                   return (
                     <tr key={r._id} className="border-b last:border-0">
                       <td className="py-2 font-medium">{r.campaign}</td>
                       <td>{r.tipoCurso}</td>
                       <td>{r.salon || '—'}</td>
+                      <td>{guiaNombre(r.guia)}</td>
                       <td>{r.horarioCurso}</td>
                       <td>{r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : '—'}</td>
                       <td>{r.finalCurso ? String(r.finalCurso).slice(0, 10) : '—'}</td>
                       <td>{r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '—'}</td>
-                      <td>{r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}</td>
                       <td>
-                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${full ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                          {full ? 'FULL' : `${(r.numeroUsuarios ?? 0) - (r.usuInscritos ?? 0)} cupos`}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${full ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                          {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${finalizada ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                          {finalizada ? 'Finalizada' : 'En progreso'}
                         </span>
                       </td>
                       <td className="whitespace-nowrap">
@@ -362,6 +456,105 @@ function CrearCampanaContent() {
         )}
       </div>
 
+      </>)}
+
+      {activeTab === 'reporte' && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+          {/* Filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+            <div>
+              <label className={lblCls}>Nombre campaña</label>
+              <input type="text" value={repNombre} onChange={e => setRepNombre(e.target.value)} className={inputCls} placeholder="Buscar..." />
+            </div>
+            <div>
+              <label className={lblCls}>Curso</label>
+              <select value={repCurso} onChange={e => setRepCurso(e.target.value)} className={inputCls} title="Filtrar por tipo de curso">
+                <option value="">Todos</option>
+                {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={lblCls}>Fecha inicial (inicio curso ≥)</label>
+              <input type="date" value={repDesde} onChange={e => setRepDesde(e.target.value)} className={inputCls} title="Inicio de curso desde" />
+            </div>
+            <div>
+              <label className={lblCls}>Fecha final (inicio curso ≤)</label>
+              <input type="date" value={repHasta} onChange={e => setRepHasta(e.target.value)} className={inputCls} title="Inicio de curso hasta" />
+            </div>
+            <div>
+              <label className={lblCls}>Estado</label>
+              <select value={repEstado} onChange={e => setRepEstado(e.target.value as any)} className={inputCls} title="Filtrar por estado">
+                <option value="todos">Todos</option>
+                <option value="finalizada">Finalizada</option>
+                <option value="progreso">En progreso</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={aplicarFiltros}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                Aplicar filtros
+              </button>
+              <button type="button" onClick={limpiarFiltros}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
+                Limpiar filtros
+              </button>
+              <p className="ml-2 text-sm text-gray-500">{reporteRows.length} curso(s)</p>
+            </div>
+            {reporteRows.length > 0 && (
+              <button type="button" onClick={handleReporteCSV}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-green-200 bg-green-100 text-green-700 hover:bg-green-200">
+                <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
+              </button>
+            )}
+          </div>
+
+          {reporteRows.length === 0 ? (
+            <p className="text-gray-500 text-sm">No hay cursos que coincidan con los filtros.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b">
+                    <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reporteRows.map((r: any) => {
+                    const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
+                    const finalizada = rowEstado(r) === 'finalizada'
+                    return (
+                      <tr key={r._id} className="border-b last:border-0">
+                        <td className="py-2 font-medium">{r.campaign}</td>
+                        <td>{r.tipoCurso}</td>
+                        <td>{r.salon || '—'}</td>
+                        <td>{guiaNombre(r.guia)}</td>
+                        <td>{r.horarioCurso}</td>
+                        <td>{r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : '—'}</td>
+                        <td>{r.finalCurso ? String(r.finalCurso).slice(0, 10) : '—'}</td>
+                        <td>{r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '—'}</td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${full ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                            {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${finalizada ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                            {finalizada ? 'Finalizada' : 'En progreso'}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modal de confirmación al agregar/editar curso */}
       {confirmOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -370,6 +563,7 @@ function CrearCampanaContent() {
             <div className="text-sm text-gray-700 space-y-1 mb-5">
               <p><b>Tipo:</b> {form.tipoCurso}{esMenores(form.tipoCurso) ? ' (menores)' : ''}</p>
               <p><b>Salón:</b> {form.salon || '—'}</p>
+              <p><b>Guía:</b> {guiaNombre(form.guia)}</p>
               <p><b>Horario:</b> {form.horarioCurso}</p>
               <p><b>Inicio:</b> {form.inicioCurso} · <b>Duración:</b> {form.duracionCurso} mes(es)</p>
               <p><b>Final:</b> {finalCurso || '—'}</p>
@@ -402,6 +596,13 @@ function CrearCampanaContent() {
               <div>
                 <label className={lblCls}>Salón</label>
                 <input type="text" value={editRow.salon} onChange={e => setEditRow({ ...editRow, salon: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Guía</label>
+                <select value={editRow.guia || ''} onChange={e => setEditRow({ ...editRow, guia: e.target.value })} className={inputCls} title="Guía del curso">
+                  <option value="">Seleccionar...</option>
+                  {guias.map(g => <option key={g._id} value={g._id}>{g.nombreCompleto}</option>)}
+                </select>
               </div>
               <div>
                 <label className={lblCls}>Horario *</label>
