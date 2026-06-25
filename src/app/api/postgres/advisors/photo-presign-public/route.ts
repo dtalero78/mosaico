@@ -10,7 +10,7 @@ import { ValidationError } from '@/lib/errors';
  *
  * Public presigned PUT URL for guía photo during registration (/nuevo-guia).
  * No auth required since /nuevo-guia is a public page.
- * Uses a temp key (fotosAdvisors/new_{timestamp}.ext) — the create endpoint
+ * Uses a temp key (fotoGuia/new_{timestamp}.ext) — the create endpoint
  * references this key in GUIAS.fotoAdvisor after creation.
  *
  * Body: { tempKey, contentType }
@@ -18,7 +18,7 @@ import { ValidationError } from '@/lib/errors';
 export const POST = handler(async (request) => {
   const { tempKey, contentType } = await request.json();
 
-  if (!tempKey?.startsWith('fotosAdvisors/')) throw new ValidationError('key inválido');
+  if (!tempKey?.startsWith('fotoGuia/')) throw new ValidationError('key inválido');
 
   const command = new PutObjectCommand({
     Bucket: SPACES_BUCKET,

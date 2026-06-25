@@ -65,7 +65,7 @@ export default function NuevoGuiaPage() {
     setUploading(true)
     try {
       const ext = fotoFile.type.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'
-      const tempKey = `fotosAdvisors/new_${Date.now()}.${ext}`
+      const tempKey = `fotoGuia/new_${Date.now()}.${ext}`
       // Get presigned PUT URL directly from spaces config
       const presignRes = await fetch('/api/postgres/advisors/photo-presign-public', {
         method: 'POST',
