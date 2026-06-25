@@ -66,8 +66,8 @@ export default function AgendaAcademicaPage() {
   const [batchProgress, setBatchProgress] = useState<{current: number, total: number, eventsInBatch: number} | null>(null)
 
   // Estados para caché
-  const CACHE_TTL = 30 * 60 * 1000 // 30 minutos
-  const CACHE_KEY_PREFIX = 'agenda_academica_'
+  const CACHE_TTL = 5 * 60 * 1000 // 5 min (antes 30 — evita datos viejos tras cambios)
+  const CACHE_KEY_PREFIX = 'agenda_academica_v2_'
 
   // Evitar re-renders innecesarios con useMemo
   const dateRange = useMemo(() => {

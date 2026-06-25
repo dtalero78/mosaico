@@ -45,8 +45,10 @@ interface SessionCacheEntry {
   timestamp: number
 }
 const SESSION_CACHE = new Map<string, SessionCacheEntry>()
-const SESSION_CACHE_TTL = 4 * 60 * 60 * 1000 // 4 horas
-const CACHE_KEY_PREFIX = 'agenda_sesiones_'
+const SESSION_CACHE_TTL = 5 * 60 * 1000 // 5 min (antes 4h — evita ver datos viejos tras cambios)
+// v2: versionar la clave invalida los cachés viejos (ej. meses cacheados vacíos antes
+// de generar los eventos de campaña). Subir el sufijo fuerza recarga desde el servidor.
+const CACHE_KEY_PREFIX = 'agenda_sesiones_v2_'
 
 export default function AgendaSesionesPage() {
   // Estados principales
@@ -207,9 +209,12 @@ export default function AgendaSesionesPage() {
     loadInitialDataWithCache()
   }, [])
 
-  // Recargar eventos cuando cambia el mes (solo si ya tenemos advisors y no es la carga inicial)
+  // Recargar eventos cuando cambia el mes (basta con tener advisors/guías cargados).
+  // NOTA: antes exigía además `events.length > 0`, lo que rompía la navegación cuando
+  // el mes inicial no tenía eventos (ej. campañas que empiezan meses después) — el
+  // array quedaba vacío y ningún otro mes volvía a cargar.
   useEffect(() => {
-    if (advisors.length > 0 && events.length > 0) {
+    if (advisors.length > 0) {
       console.log('🔄 Mes cambió, verificando caché para:', currentMonth.toISOString().split('T')[0])
       loadMonthEventsWithCache()
     }
