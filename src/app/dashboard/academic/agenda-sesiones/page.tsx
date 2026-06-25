@@ -824,7 +824,7 @@ export default function AgendaSesionesPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">📅 Calendario de Eventos</h1>
             <p className="mt-2 text-sm text-gray-700">
-              Gestión completa de sesiones, clubs y eventos
+              Gestión completa de sesiones, talleres y eventos
             </p>
           </div>
 
@@ -950,7 +950,7 @@ export default function AgendaSesionesPage() {
                 <div className="flex items-center">
                   <div className="text-2xl mr-3">🎯</div>
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900">Clubs</h3>
+                    <h3 className="text-lg font-medium text-gray-900">Talleres</h3>
                     <p className="text-3xl font-bold text-green-600">
                       {events.filter(e => (e.evento || e.tipo) === 'CLUB').length}
                     </p>
