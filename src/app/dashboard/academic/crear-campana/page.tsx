@@ -353,7 +353,7 @@ function CrearCampanaContent() {
       {cursos.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
           <h2 className="text-lg font-semibold mb-4">Cursos de la campaña ({cursos.length})</h2>
-          <table className="w-full text-sm">
+          <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
             <thead>
               <tr className="text-left text-gray-500 border-b">
                 <th className="py-2">Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio</th><th>Duración</th><th>Final</th><th>Cupos</th><th aria-label="Acciones"></th>
@@ -406,7 +406,7 @@ function CrearCampanaContent() {
           <p className="text-gray-500 text-sm">Aún no hay cursos/campañas creados.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
               <thead>
                 <tr className="text-left text-gray-500 border-b">
                   <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th><th>Acciones</th>
@@ -515,7 +515,7 @@ function CrearCampanaContent() {
             <p className="text-gray-500 text-sm">No hay cursos que coincidan con los filtros.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
                 <thead>
                   <tr className="text-left text-gray-500 border-b">
                     <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th>
