@@ -223,7 +223,7 @@ export default function EventDetailModal({ event, isOpen, onClose, advisors, adv
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEventBadgeColor(event.evento || event.tipo || '')}`}>
-                    {event.evento || event.tipo}
+                    {(event.evento || event.tipo) === 'CLUB' ? 'TALLER' : (event.evento || event.tipo)}
                   </span>
                   <span className="font-medium">{event.tituloONivel}</span>
                 </div>
@@ -282,7 +282,7 @@ export default function EventDetailModal({ event, isOpen, onClose, advisors, adv
           {/* Right Column - Advisor Details */}
           <div className="space-y-4">
             <div>
-              <h4 className="font-medium text-gray-900 mb-2">Información del Advisor</h4>
+              <h4 className="font-medium text-gray-900 mb-2">Información del Guía</h4>
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <UserIcon className="h-4 w-4 text-gray-500" />

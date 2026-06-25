@@ -257,7 +257,7 @@ export default function DailyAgenda({
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`badge ${getEventBadge(event.evento || event.tipo || '')}`}>
-                              {event.evento || event.tipo}
+                              {(event.evento || event.tipo) === 'CLUB' ? 'TALLER' : (event.evento || event.tipo)}
                             </span>
                             <span className="font-medium text-sm">
                               {event.tituloONivel}
@@ -266,7 +266,7 @@ export default function DailyAgenda({
 
                           <div className="text-sm text-gray-600 space-y-1">
                             <div>
-                              <span className="font-medium">Advisor:</span>{' '}
+                              <span className="font-medium">Guía:</span>{' '}
                               {getAdvisorId(event) ? (
                                 <Link
                                   href={`/advisor/${getAdvisorId(event)}`}
@@ -368,7 +368,7 @@ export default function DailyAgenda({
               </span>
             </div>
             <div>
-              <span className="text-gray-500">Clubs:</span>
+              <span className="text-gray-500">Talleres:</span>
               <span className="ml-2 font-medium">
                 {filteredEvents.filter(e => (e.evento || e.tipo) === 'CLUB').length}
               </span>

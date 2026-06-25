@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-campaign';
+import { generarEventosCurso, eliminarEventosCurso } from '@/services/cursos-campaign-eventos.service';
 
 /**
  * PATCH /api/postgres/campaigns/[id]  → edita un curso de campaña (CURSOS_CAMPAIGN).
@@ -71,6 +72,11 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
      WHERE "_id"=$13 RETURNING *`,
     [tipoCurso, horarioCurso, salon, guia, inicioCurso, duracion, finalCurso, numeroUsuarios, inicioCampania, finalCampaign, esMenores(tipoCurso), activa, id]
   );
+  // Regenerar eventos de CALENDARIO del curso con los nuevos datos.
+  await generarEventosCurso({
+    _id: id, campaign: row.campaign, tipoCurso, salon, guia,
+    horarioCurso, inicioCurso, finalCurso, numeroUsuarios,
+  });
   return successResponse({ curso: upd.rows[0] });
 });
 
@@ -80,5 +86,7 @@ export const DELETE = handlerWithAuth(async (_request, ctx: any, session) => {
   if (!id) throw new ValidationError('id requerido');
   const del = await query(`DELETE FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1 RETURNING "_id"`, [id]);
   if (del.rows.length === 0) throw new NotFoundError('Curso de campaña no encontrado');
+  // Eliminar los eventos de CALENDARIO generados por este curso.
+  await eliminarEventosCurso(id);
   return successResponse({ deleted: id });
 });

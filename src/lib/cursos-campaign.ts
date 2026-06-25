@@ -57,6 +57,52 @@ export function horariosFor(tipo: string): string[] {
   return HORARIOS_MENORES; // YOJI / OKINA / KODOMO
 }
 
+// Días de la semana de los horarios → índice JS (0=Dom..6=Sáb). Tolera con/sin acento.
+const DIA_SEMANA: Record<string, number> = {
+  DOM: 0, LUN: 1, MAR: 2, MIE: 3, 'MIÉ': 3, JUE: 4, VIE: 5, SAB: 6, 'SÁB': 6,
+};
+
+/**
+ * Parsea un horario del catálogo (ej. "LUN-MIÉ 17:00-18:00", "SÁB 09:00-11:00",
+ * "LUN-MIÉ-VIE 20:00-21:00") en sus días de la semana y la hora de inicio.
+ * Devuelve null si no se puede interpretar.
+ */
+export function parseHorario(horario: string): { dias: number[]; hora: string } | null {
+  if (!horario) return null;
+  const parts = String(horario).trim().split(/\s+/);
+  if (parts.length < 2) return null;
+  const diasTok = parts[0];
+  const rango = parts[1];
+  const dias = diasTok.split('-')
+    .map(d => DIA_SEMANA[d.toUpperCase()])
+    .filter(n => n !== undefined);
+  const hora = (rango.split('-')[0] || '').trim(); // "17:00"
+  if (dias.length === 0 || !/^\d{1,2}:\d{2}$/.test(hora)) return null;
+  return { dias, hora };
+}
+
+/**
+ * Lista todas las fechas (YYYY-MM-DD) entre `inicio` y `fin` (inclusive) cuyo día
+ * de la semana esté en `dias`. Usa aritmética UTC para evitar desfases de zona.
+ */
+export function fechasEntre(inicio: string, fin: string, dias: number[]): string[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio) || !/^\d{4}-\d{2}-\d{2}$/.test(fin)) return [];
+  const set = new Set(dias);
+  const out: string[] = [];
+  const [iy, im, id] = inicio.split('-').map(Number);
+  const [fy, fm, fd] = fin.split('-').map(Number);
+  let cur = Date.UTC(iy, im - 1, id);
+  const end = Date.UTC(fy, fm - 1, fd);
+  let guard = 0;
+  while (cur <= end && guard < 4000) {
+    const d = new Date(cur);
+    if (set.has(d.getUTCDay())) out.push(d.toISOString().slice(0, 10));
+    cur += 86400000;
+    guard++;
+  }
+  return out;
+}
+
 /** Suma `meses` a una fecha ISO (YYYY-MM-DD) manejando el overflow de fin de mes. */
 export function addMonths(isoDate: string, meses: number): string {
   if (!isoDate || !Number.isFinite(meses)) return '';

@@ -35,7 +35,7 @@ class CalendarioRepositoryClass extends BaseRepository {
               a."nombreCompleto" as "advisorNombreCompleto",
               a."email" as "advisorEmail"
        FROM "CALENDARIO" c
-       LEFT JOIN "ADVISORS" a ON c."advisor" = a."_id"
+       LEFT JOIN "GUIAS" a ON c."advisor" = a."_id"
        WHERE c."_id" = $1`,
       [id]
     );
@@ -104,7 +104,7 @@ class CalendarioRepositoryClass extends BaseRepository {
               a."nombreCompleto" as "advisorNombreCompleto",
               a."email" as "advisorEmail"
        FROM "CALENDARIO" c
-       LEFT JOIN "ADVISORS" a ON c."advisor" = a."_id"
+       LEFT JOIN "GUIAS" a ON c."advisor" = a."_id"
        ${whereClause}
        ORDER BY c."dia" ASC, c."_createdDate" ASC
        ${limitClause}`,
@@ -205,7 +205,7 @@ class CalendarioRepositoryClass extends BaseRepository {
               COUNT(DISTINCT CASE WHEN b."asistio" = true THEN b."_id" END) as "asistenciasCount",
               COUNT(DISTINCT CASE WHEN b."asistio" = false THEN b."_id" END) as "ausenciasCount"
        FROM "CALENDARIO" c
-       LEFT JOIN "ADVISORS" a ON c."advisor" = a."_id"
+       LEFT JOIN "GUIAS" a ON c."advisor" = a."_id"
        LEFT JOIN "ACADEMICA_BOOKINGS" b ON c."_id" = b."eventoId" OR c."_id" = b."idEvento"
        ${whereClause}
        GROUP BY c."_id", a."primerNombre", a."primerApellido", a."nombreCompleto"
@@ -228,7 +228,7 @@ class CalendarioRepositoryClass extends BaseRepository {
               a."primerApellido" AS "advisorPrimerApellido",
               a."nombreCompleto" AS "advisorNombreCompleto"
          FROM "CALENDARIO" c
-         LEFT JOIN "ADVISORS" a ON c."advisor" = a."_id"
+         LEFT JOIN "GUIAS" a ON c."advisor" = a."_id"
         WHERE c."_id" = $1
            OR c."eventoCompartidoId" = (
               SELECT "eventoCompartidoId" FROM "CALENDARIO"

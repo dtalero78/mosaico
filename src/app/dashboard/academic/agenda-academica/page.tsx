@@ -574,7 +574,7 @@ export default function AgendaAcademicaPage() {
                           className={`text-xs p-2 rounded-md border mb-1 cursor-pointer transition-colors ${getEventColor(event.evento || event.tipo || '')}`}
                         >
                           <div className="font-medium truncate">
-                            {event.evento || event.tipo} - {event.tituloONivel}
+                            {(event.evento || event.tipo) === 'CLUB' ? 'TALLER' : (event.evento || event.tipo)} - {event.tituloONivel}
                           </div>
                           {event.nombreEvento && (
                             <div className="truncate opacity-75">

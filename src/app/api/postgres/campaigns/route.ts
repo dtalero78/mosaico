@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-campaign';
+import { generarEventosCurso } from '@/services/cursos-campaign-eventos.service';
 
 /**
  * GET /api/postgres/campaigns  → lista de cursos/campañas (admin Crea Campaña).
@@ -73,6 +74,12 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       [`ccp_${randomUUID()}`, nombre, inicioCamp, finalCamp, tipo, salon, guia, horario, inicioCurso, duracion, finalCurso, numeroUsuarios, esMenores(tipo)]
     );
     creados.push(r.rows[0]);
+
+    // Generar los eventos de CALENDARIO para este curso (sesiones por horario+fechas).
+    await generarEventosCurso({
+      _id: r.rows[0]._id, campaign: nombre, tipoCurso: tipo, salon, guia,
+      horarioCurso: horario, inicioCurso, finalCurso, numeroUsuarios,
+    });
   }
 
   return successResponse({ campaign: nombre, creados: creados.length, cursos: creados });

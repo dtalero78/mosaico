@@ -113,7 +113,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
         ]
       },
       {
-        name: 'Advisors', isSubmenu: true, children: [
+        name: 'Guías', isSubmenu: true, children: [
           { name: 'Sesiones', href: '/dashboard/informes/advisors/sesiones', newTab: true },
           { name: 'Jumps', href: '/dashboard/informes/advisors/jumps', newTab: true },
           { name: 'Training', href: '/dashboard/informes/advisors/training', newTab: true },
@@ -125,7 +125,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       },
       {
         name: 'Académica', isSubmenu: true, children: [
-          { name: 'Horas Advisor', href: '/dashboard/informes/academica/horas-advisor', newTab: true },
+          { name: 'Horas Guía', href: '/dashboard/informes/academica/horas-advisor', newTab: true },
           { name: 'Hold & Vigencias', href: '/dashboard/informes/academica/hold-vigencias', newTab: true },
           { name: 'Conciliación Steps', href: '/dashboard/informes/academica/conciliacion-steps', newTab: true },
           { name: 'Por Vencer', href: '/dashboard/informes/academica/por-vencer', newTab: true },
@@ -141,7 +141,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       },
       {
         name: 'Planta', isSubmenu: true, children: [
-          { name: 'Advisors', href: '/dashboard/informes/planta/advisors', newTab: true },
+          { name: 'Guías', href: '/dashboard/informes/planta/advisors', newTab: true },
           { name: 'Administrativos', href: '/dashboard/informes/planta/administrativos', newTab: true },
         ]
       },

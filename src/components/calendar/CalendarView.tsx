@@ -81,7 +81,8 @@ export default function CalendarView({
 
   // Resolver tipo de evento: soporta ambos campos (evento de Wix, tipo de Postgres)
   const getEventType = (event: CalendarEvent): string => {
-    return event.evento || event.tipo || ''
+    const t = event.evento || event.tipo || ''
+    return t === 'CLUB' ? 'TALLER' : t  // MOSAICO: CLUB se muestra como TALLER
   }
 
   // Función para obtener el color según el tipo de evento
@@ -90,6 +91,7 @@ export default function CalendarView({
       case 'SESSION':
         return 'bg-blue-100 text-blue-800'
       case 'CLUB':
+      case 'TALLER':
         return 'bg-green-100 text-green-800'
       case 'WELCOME':
         return 'bg-purple-100 text-purple-800'
@@ -172,7 +174,7 @@ export default function CalendarView({
                   <div
                     key={event._id}
                     className={`text-xs px-1 py-0.5 rounded ${getEventColor(getEventType(event))}`}
-                    title={`${getEventType(event)} - ${event.tituloONivel} ${event.nombreEvento || ''}\nAdvisor: ${event.advisorNombre || 'Sin asignar'}\nInscritos: ${event.inscritos || 0}/${event.limiteUsuarios}\nAsistieron: ${event.asistieron || 0}`}
+                    title={`${getEventType(event)} - ${event.tituloONivel} ${event.nombreEvento || ''}\nGuía: ${event.advisorNombre || 'Sin asignar'}\nInscritos: ${event.inscritos || 0}/${event.limiteUsuarios}\nAsistieron: ${event.asistieron || 0}`}
                   >
                     <div className="truncate">
                       {format(new Date(event.dia), 'HH:mm')} {getEventType(event)}
@@ -205,7 +207,7 @@ export default function CalendarView({
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded bg-green-100"></span>
-          <span className="text-gray-600">CLUB</span>
+          <span className="text-gray-600">TALLER</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded bg-purple-100"></span>
