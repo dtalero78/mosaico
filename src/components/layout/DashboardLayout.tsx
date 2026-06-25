@@ -49,7 +49,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Actualizar Material', href: '/dashboard/academic/actualizar-material', newTab: true },
       { name: 'Control Horas', href: '/dashboard/academic/control-horas' },
       { name: 'Eventos Administrativos', href: '/dashboard/academic/eventos-administrativos', newTab: true },
-      { name: 'Crea Campaña', href: '/dashboard/academic/crear-campana', newTab: true },
+      { name: 'Campañas', href: '/dashboard/academic/crear-campana', newTab: true },
       { name: 'Sesiones sin gestión', href: '/dashboard/academic/sesiones-sin-gestion', newTab: true },
       { name: 'Evaluaciones Jump', href: '/dashboard/academic/jump-evaluaciones' },
       { name: 'Performance Evaluation', href: '/dashboard/academic/performance-evaluation', newTab: true },
