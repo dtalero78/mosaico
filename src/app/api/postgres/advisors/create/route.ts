@@ -92,7 +92,7 @@ export const POST = handler(async (request: Request) => {
   const password = body.clave?.trim() || 'LGS2026';
   const inserted = await queryOne<{ _id: string }>(
     `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numberid", "_createdDate", "_updatedDate")
-     VALUES ($1, $2, $3, $4, 'ADVISOR', true, $5, NOW(), NOW())
+     VALUES ($1, $2, $3, $4, 'GUIA', true, $5, NOW(), NOW())
      ON CONFLICT ("email") DO NOTHING
      RETURNING "_id"`,
     [ids.advisor(), emailLower, password, nombreCompleto, numeroIdNorm]

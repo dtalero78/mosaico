@@ -91,11 +91,11 @@ function PanelAdvisorContent() {
   // (por searchParams.get('email') || session.email cuando el rol es ADVISOR).
   // El dropdown sólo aparece para roles NO-ADVISOR con el permiso.
   const { hasPermission } = usePermissions()
-  const canPickOtherAdvisor = hasPermission(AcademicoPermission.ADVISOR_VER_ENLACE) && userRole !== 'ADVISOR'
+  const canPickOtherAdvisor = hasPermission(AcademicoPermission.ADVISOR_VER_ENLACE) && userRole !== 'GUIA'
 
   // Get email from URL params; fall back to session email for logged-in ADVISORs
   const advisorEmail = searchParams.get('email') || (
-    userRole === 'ADVISOR' ? session?.user?.email ?? null : null
+    userRole === 'GUIA' ? session?.user?.email ?? null : null
   )
 
   // Lista de advisors para el selector (sólo se carga si tiene el permiso)

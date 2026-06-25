@@ -26,7 +26,7 @@ export default async function HomePage() {
   // ADVISOR: dashboard personalizado del mes corriente (KPIs + heatmap + 2 donuts),
   // datos filtrados por su _id resuelto desde el email de sesión.
   // No ve los stats globales ni las gráficas IA (que son agregados de plataforma).
-  if (userRole === 'ADVISOR') {
+  if (userRole === 'GUIA') {
     return (
       <DashboardLayout>
         <AdvisorDashboard />

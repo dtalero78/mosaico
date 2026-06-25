@@ -28,7 +28,9 @@ export enum Module {
 export enum Role {
   SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
-  ADVISOR = 'ADVISOR',
+  // MOSAICO: el rol "advisor" se llama GUIA. La key del enum se mantiene (ADVISOR)
+  // para no tocar las ~refs Role.ADVISOR; solo cambia el valor (igual que RECAUDOS_ASIST='RECAUDO_ASIST').
+  ADVISOR = 'GUIA',
   COMERCIAL = 'COMERCIAL',
   APROBADOR = 'APROBADOR',
   APROBACION_GESTOR = 'APROBACION_GESTOR',

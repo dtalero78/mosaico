@@ -139,7 +139,7 @@ const testUsers = [
     email: 'advisor@lgs.com',
     password: 'Test123!',
     name: 'Advisor',
-    role: 'ADVISOR',
+    role: 'GUIA',
   },
   {
     id: '4',

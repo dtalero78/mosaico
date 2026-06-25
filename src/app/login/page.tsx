@@ -123,8 +123,8 @@ export default function LoginPage() {
           console.log('🔍 Login successful - Role:', userRole, 'Email:', userEmail)
 
           // Redirect advisors to their panel with email as URL param
-          if (userRole === 'ADVISOR') {
-            console.log('✅ Redirecting ADVISOR to panel-advisor with email:', userEmail)
+          if (userRole === 'GUIA') {
+            console.log('✅ Redirecting GUIA to panel-advisor with email:', userEmail)
             router.push(`/panel-advisor?email=${encodeURIComponent(userEmail || '')}`)
           } else if (userRole === 'ESTUDIANTE') {
             console.log('✅ Redirecting ESTUDIANTE to panel-estudiante')

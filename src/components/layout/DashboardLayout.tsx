@@ -43,7 +43,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       // Para coordinadores/admins el link va SIN email — el panel auto-selecciona
       // el primer advisor del dropdown (si pasamos el email del coordinador, el
       // endpoint /by-email retorna 404 y la página muestra "Error al buscar advisor").
-      { name: 'Panel Advisor', href: userRole === 'ADVISOR'
+      { name: 'Panel Guía', href: userRole === 'GUIA'
         ? `/panel-advisor?email=${encodeURIComponent(userEmail)}`
         : '/panel-advisor' },
       { name: 'Actualizar Material', href: '/dashboard/academic/actualizar-material', newTab: true },

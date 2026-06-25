@@ -13,7 +13,7 @@ export default async function PanelAdvisorLayout({ children }: { children: React
   const role = (session?.user as any)?.role;
   const email = session?.user?.email;
 
-  if (role === 'ADVISOR' && email) {
+  if (role === 'GUIA' && email) {
     const ur = await queryOne<{ perfilActualizado: string | null }>(
       `SELECT "perfilActualizado" FROM "USUARIOS_ROLES" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
       [email]
