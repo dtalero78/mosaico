@@ -16,7 +16,7 @@ export const GET = handlerWithAuth(async (request) => {
   const key = searchParams.get('key');
 
   if (!key) throw new ValidationError('key es requerido');
-  const ALLOWED_PREFIXES = ['materials/', 'fotosAdvisors/', 'fotos/'];
+  const ALLOWED_PREFIXES = ['materials/', 'fotosAdvisors/', 'fotoGuia/', 'fotos/'];
   if (!ALLOWED_PREFIXES.some(p => key.startsWith(p))) throw new ValidationError('key inválido');
 
   const command = new GetObjectCommand({ Bucket: SPACES_BUCKET, Key: key });
