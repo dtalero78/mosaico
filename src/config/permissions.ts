@@ -479,6 +479,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Columna "Estadísticas"',
     description: 'Ver estadísticas de rendimiento por advisor',
   },
+  {
+    code: AcademicoPermission.GUIA_EDITAR,
+    module: Module.ACADEMICO,
+    section: 'Advisors',
+    name: 'Editar Guía (detalle)',
+    description: 'Editar la info del guía al abrir su detalle (nombre, contacto, foto, etc.). Sin este permiso, el detalle se ve en solo lectura. Ver requiere "Lista de Advisors".',
+  },
 
   // -- Página: Actualizar Material (/dashboard/academic/actualizar-material) --
   {
