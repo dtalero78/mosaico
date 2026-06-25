@@ -126,12 +126,13 @@ export default function NuevoGuiaPage() {
     setSubmitting(true)
     setApiError(null)
     try {
-      // Upload photo first if provided
+      // Subir foto si se eligió. Best-effort: si falla (DO Spaces dormido en MOSAICO),
+      // se crea el guía SIN foto en vez de bloquear (la foto es opcional).
       let fotoKey = form.fotoKey
       if (fotoFile && !fotoKey) {
         const key = await uploadFoto()
-        if (!key) { setSubmitting(false); return }
-        fotoKey = key
+        if (key) fotoKey = key
+        else setErrors(prev => { const c = { ...prev }; delete c.foto; return c })
       }
 
       const res = await fetch('/api/postgres/advisors/create', {
