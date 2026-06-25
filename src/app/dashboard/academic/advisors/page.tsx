@@ -22,7 +22,7 @@ interface Advisor {
 type TabType = 'list' | 'statistics'
 
 const tabs = [
-  { id: 'list' as TabType, name: 'Lista de Advisors', icon: UsersIcon },
+  { id: 'list' as TabType, name: 'Lista de Guías', icon: UsersIcon },
   { id: 'statistics' as TabType, name: 'Estadísticas', icon: ChartBarIcon },
 ]
 
@@ -83,9 +83,9 @@ export default function AdvisorsPage() {
         <div className="space-y-6">
           {/* Header */}
           <div className="border-b border-gray-200 pb-4">
-            <h1 className="text-2xl font-bold text-gray-900">Advisors</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Guías</h1>
             <p className="mt-2 text-sm text-gray-600">
-              Gestión y visualización de todos los advisors del sistema
+              Gestión y visualización de todos los guías del sistema
             </p>
           </div>
 

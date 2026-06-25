@@ -1,7 +1,9 @@
 /**
  * Advisor Repository
  *
- * All SQL for the ADVISORS table.
+ * MOSAICO: los "advisors" son los GUÍAS. La tabla ADVISORS no existe en mosaico-db;
+ * este repositorio opera sobre la tabla GUIAS (mismos campos). Así la lista de Guías,
+ * el lookup por email del Panel Guía y las búsquedas por nombre usan GUIAS.
  */
 
 import 'server-only';
@@ -17,7 +19,7 @@ const ADVISOR_COLUMNS = `
 
 class AdvisorRepositoryClass extends BaseRepository {
   constructor() {
-    super('ADVISORS');
+    super('GUIAS');
   }
 
   /**
@@ -30,7 +32,7 @@ class AdvisorRepositoryClass extends BaseRepository {
 
     return queryMany(
       `SELECT ${ADVISOR_COLUMNS}
-       FROM "ADVISORS"
+       FROM "GUIAS"
        ${whereClause}
        ORDER BY "nombreCompleto" ASC NULLS LAST`
     );
@@ -43,7 +45,7 @@ class AdvisorRepositoryClass extends BaseRepository {
     // case-insensitive + TRIM para tolerar emails con espacios al borde o
     // mayúsculas distintas entre USUARIOS_ROLES.email y ADVISORS.email.
     return queryOne(
-      `SELECT ${ADVISOR_COLUMNS} FROM "ADVISORS"
+      `SELECT ${ADVISOR_COLUMNS} FROM "GUIAS"
         WHERE LOWER(TRIM("email")) = LOWER(TRIM($1)) LIMIT 1`,
       [email]
     );
@@ -54,7 +56,7 @@ class AdvisorRepositoryClass extends BaseRepository {
    */
   async findByIdOrEmail(idOrEmail: string) {
     return queryOne(
-      `SELECT ${ADVISOR_COLUMNS} FROM "ADVISORS"
+      `SELECT ${ADVISOR_COLUMNS} FROM "GUIAS"
         WHERE "_id" = $1 OR LOWER(TRIM("email")) = LOWER(TRIM($1)) LIMIT 1`,
       [idOrEmail]
     );
@@ -65,7 +67,7 @@ class AdvisorRepositoryClass extends BaseRepository {
    */
   async getNameById(id: string): Promise<string | null> {
     const row = await queryOne<{ nombreCompleto: string }>(
-      `SELECT "nombreCompleto" FROM "ADVISORS" WHERE "_id" = $1`,
+      `SELECT "nombreCompleto" FROM "GUIAS" WHERE "_id" = $1`,
       [id]
     );
     return row?.nombreCompleto ?? null;
@@ -88,7 +90,7 @@ class AdvisorRepositoryClass extends BaseRepository {
     fechaNacimiento?: string;
   }) {
     return queryOne(
-      `INSERT INTO "ADVISORS" (
+      `INSERT INTO "GUIAS" (
         "_id", "primerNombre", "primerApellido", "nombreCompleto",
         "email", "zoom", "telefono", "pais", "domicilioadvisor", "fotoAdvisor", "fechaNacimiento", "activo",
         "_createdDate", "_updatedDate"
@@ -109,7 +111,7 @@ class AdvisorRepositoryClass extends BaseRepository {
    * Update allowed fields on an advisor record
    */
   async updateFields(id: string, body: Record<string, any>, allowedFields: string[]) {
-    const built = buildDynamicUpdate('ADVISORS', body, allowedFields);
+    const built = buildDynamicUpdate('GUIAS', body, allowedFields);
     if (!built) return null;
     built.values.push(id);
     const row = await queryOne(built.query, built.values);
