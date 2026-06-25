@@ -35,6 +35,7 @@ interface Advisor {
   primerApellido: string
   email?: string
   telefono?: string
+  pais?: string
   numeroId?: string
   zoom?: string
   fotoAdvisor?: string | null
@@ -85,7 +86,7 @@ export default function AdvisorsList({
       {loading && (
         <div className="flex justify-center items-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-          <span className="ml-2 text-gray-600">Cargando advisors...</span>
+          <span className="ml-2 text-gray-600">Cargando guías...</span>
         </div>
       )}
 
@@ -118,10 +119,10 @@ export default function AdvisorsList({
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-gray-900">
-                Lista de Advisors
+                Lista de Guías
               </h3>
               <span className="text-sm text-gray-500">
-                {filteredAdvisors.length} de {advisors.length} advisor{filteredAdvisors.length !== 1 ? 's' : ''}
+                {filteredAdvisors.length} de {advisors.length} guía{filteredAdvisors.length !== 1 ? 's' : ''}
               </span>
             </div>
           </div>
@@ -130,10 +131,10 @@ export default function AdvisorsList({
             <div className="px-4 py-12 text-center">
               <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">
-                No se encontraron advisors
+                No se encontraron guías
               </h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchTerm ? 'Intenta con otro término de búsqueda.' : 'No hay advisors registrados en el sistema.'}
+                {searchTerm ? 'Intenta con otro término de búsqueda.' : 'No hay guías registrados en el sistema.'}
               </p>
             </div>
           ) : (
@@ -142,10 +143,16 @@ export default function AdvisorsList({
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Advisor
+                      Guía
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Email
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Teléfono
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      País
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Zoom
@@ -179,6 +186,12 @@ export default function AdvisorsList({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {advisor.email || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {advisor.telefono || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {advisor.pais || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {advisor.zoom ? (

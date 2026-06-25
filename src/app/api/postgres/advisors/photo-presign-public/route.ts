@@ -12,7 +12,6 @@ import { ValidationError } from '@/lib/errors';
  * No auth required since /nuevo-guia is a public page.
  * Uses a temp key (fotosAdvisors/new_{timestamp}.ext) — the create endpoint
  * references this key in GUIAS.fotoAdvisor after creation.
- * Nota MOSAICO: foto opcional (DO Spaces dormido sin claves).
  *
  * Body: { tempKey, contentType }
  */

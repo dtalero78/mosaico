@@ -109,8 +109,8 @@ export default function NuevoGuiaPage() {
     if (currentStep === 3) {
       if (!form.fechaNacimiento) e.fechaNacimiento = 'Requerido'
       if (!form.zoom.trim())     e.zoom = 'Requerido'
-      // Foto OPCIONAL en MOSAICO: DO Spaces está dormido (sin claves), así que no se
-      // exige. Cuando se configuren las claves de Spaces se puede volver obligatoria.
+      // Foto obligatoria — debe haber un fotoKey (ya subida) o un fotoFile pendiente.
+      if (!form.fotoKey && !fotoFile) e.fotoKey = 'La foto de perfil es obligatoria'
     }
     setErrors(e)
     return Object.keys(e).length === 0
@@ -126,13 +126,12 @@ export default function NuevoGuiaPage() {
     setSubmitting(true)
     setApiError(null)
     try {
-      // Subir foto si se eligió. Best-effort: si falla (DO Spaces dormido en MOSAICO),
-      // se crea el guía SIN foto en vez de bloquear (la foto es opcional).
+      // Subir foto (obligatoria). Si la subida falla, se aborta la creación.
       let fotoKey = form.fotoKey
       if (fotoFile && !fotoKey) {
         const key = await uploadFoto()
-        if (key) fotoKey = key
-        else setErrors(prev => { const c = { ...prev }; delete c.foto; return c })
+        if (!key) { setSubmitting(false); return }
+        fotoKey = key
       }
 
       const res = await fetch('/api/postgres/advisors/create', {
@@ -272,7 +271,7 @@ export default function NuevoGuiaPage() {
               {/* Foto */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Foto de perfil <span className="text-gray-400 font-normal">(opcional)</span>
+                  Foto de perfil <span className="text-red-500">*</span>
                 </label>
                 <div className="flex items-center gap-4">
                   <div

@@ -17,7 +17,9 @@ export const POST = handler(async (request: Request) => {
   if (!primerNombre?.trim()) throw new ValidationError('primerNombre es requerido');
   if (!primerApellido?.trim()) throw new ValidationError('primerApellido es requerido');
   if (!email?.trim()) throw new ValidationError('email es requerido');
-  // MOSAICO: foto OPCIONAL (DO Spaces dormido). body.fotoKey llega solo si se subió.
+  // Foto obligatoria — body.fotoKey es la key del archivo en DO Spaces
+  // (la sube el frontend via /api/postgres/advisors/photo-presign-public).
+  if (!body.fotoKey?.trim()) throw new ValidationError('La foto de perfil es obligatoria');
 
   const emailLower = email.trim().toLowerCase();
   const numeroIdNorm = body.numeroId?.trim().toUpperCase() || null;
