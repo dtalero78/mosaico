@@ -225,7 +225,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
           nivel = nr.rows[0]?.code || '';
           step = nr.rows[0]?.step || '';
         }
-        // studentId es NOT NULL en ACADEMICA = el propio _id (los bookings usan ACADEMICA._id).
+        // studentId/peopleId/usuarioId son FK a PEOPLE(_id) = el PEOPLE del beneficiario.
+        // (Los bookings, en cambio, usan ACADEMICA._id como su studentId — otra tabla.)
         const academicId = ids.academic();
         await client.query(
           `INSERT INTO "ACADEMICA" (
@@ -233,7 +234,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
              "email", "celular", "nivel", "step", "plataforma", "estadoInactivo", "tipoUsuario",
              "contrato", "usuarioId", "peopleId", "campaign", "curso", "inicioCurso", "userLogin",
              "_createdDate", "_updatedDate"
-           ) VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'BENEFICIARIO',$12,$13,$14,$15,$16,$17::date,$18,NOW(),NOW())`,
+           ) VALUES ($1,$13,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'BENEFICIARIO',$12,$13,$14,$15,$16,$17::date,$18,NOW(),NOW())`,
           [academicId, b.numeroId, b.primerNombre, b.segundoNombre || null,
            b.primerApellido, b.segundoApellido || null,
            b.email || null, b.celular || null, nivel, step, titular.plataforma || null,

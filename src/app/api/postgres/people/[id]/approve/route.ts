@@ -113,7 +113,7 @@ async function approveOnePerson(
           "contrato", "usuarioId", "peopleId",
           "_createdDate", "_updatedDate"
         ) VALUES (
-          $1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, 'BENEFICIARIO', $12, $13, $13, NOW(), NOW()
+          $1, $13, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, 'BENEFICIARIO', $12, $13, $13, NOW(), NOW()
         )`,
         [
           academicId,
