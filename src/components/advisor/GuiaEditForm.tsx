@@ -50,7 +50,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
         setForm({
           primerNombre: g.primerNombre || '', primerApellido: g.primerApellido || '',
           numeroId: g.numeroId || '', domicilio: g.domicilio || '', email: g.email || '',
-          clave: '', telefono: g.telefono || '', pais: g.pais || '', zoom: g.zoom || '',
+          clave: g.clave || '', telefono: g.telefono || '', pais: g.pais || '', zoom: g.zoom || '',
           fechaNacimiento: g.fechaNacimiento ? String(g.fechaNacimiento).slice(0, 10) : '',
           fotoAdvisor: g.fotoAdvisor || null,
         })
@@ -189,7 +189,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
             <Field label="Teléfono" value={form.telefono} onChange={v => set('telefono', v.replace(/[^\d]/g, ''))} cls={inputCls} />
             <Field label="Email *" value={form.email} onChange={v => set('email', v)} error={errors.email} type="email" cls={inputCls} />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña <span className="text-gray-400 font-normal">(dejar vacío para no cambiar)</span></label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña <span className="text-gray-400 font-normal">(👁 para ver · edítala para cambiarla)</span></label>
               <div className="relative">
                 <input type={showPass ? 'text' : 'password'} value={form.clave} onChange={e => set('clave', e.target.value)}
                   placeholder="••••••" className={inputCls(errors.clave) + ' pr-10'} />

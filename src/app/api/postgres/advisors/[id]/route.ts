@@ -16,12 +16,14 @@ export const GET = handlerWithAuth(async (_request, ctx: any, session) => {
   await requirePermission(session, AcademicoPermission.LISTA_ADVISORS_VER);
   const id = ctx?.params?.id;
   if (!id) throw new ValidationError('id requerido');
-  // NO se devuelve "clave" (password) por seguridad — el form la deja vacía.
+  // Se devuelve la clave (texto plano legacy) — el password real de login está en
+  // USUARIOS_ROLES.password; si no, se cae a GUIAS.clave.
   const row = await queryOne(
     `SELECT g."_id", g."primerNombre", g."primerApellido", g."nombreCompleto", g."email",
             g."telefono", g."pais", g."domicilioadvisor" AS "domicilio", g."zoom",
             g."fechaNacimiento"::text AS "fechaNacimiento", g."fotoAdvisor",
-            g."usuarioRolId", u."numberid" AS "numeroId"
+            g."usuarioRolId", u."numberid" AS "numeroId",
+            COALESCE(u."password", g."clave") AS "clave"
        FROM "GUIAS" g
        LEFT JOIN "USUARIOS_ROLES" u ON u."_id" = g."usuarioRolId"
       WHERE g."_id" = $1`,
