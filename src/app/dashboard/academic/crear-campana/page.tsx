@@ -55,8 +55,8 @@ function CrearCampanaContent() {
   const [repCurso, setRepCurso] = useState('')
   const [repDesde, setRepDesde] = useState('')
   const [repHasta, setRepHasta] = useState('')
-  const [repEstado, setRepEstado] = useState<'todos' | 'finalizada' | 'progreso'>('todos')
-  const [applied, setApplied] = useState<{ nombre: string; curso: string; desde: string; hasta: string; estado: 'todos' | 'finalizada' | 'progreso' }>({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' })
+  const [repEstado, setRepEstado] = useState<'todos' | 'matricula' | 'activo' | 'cerrado'>('todos')
+  const [applied, setApplied] = useState<{ nombre: string; curso: string; desde: string; hasta: string; estado: 'todos' | 'matricula' | 'activo' | 'cerrado' }>({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' })
   const aplicarFiltros = () => setApplied({ nombre: repNombre, curso: repCurso, desde: repDesde, hasta: repHasta, estado: repEstado })
   const limpiarFiltros = () => { setRepNombre(''); setRepCurso(''); setRepDesde(''); setRepHasta(''); setRepEstado('todos'); setApplied({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' }) }
 
@@ -203,12 +203,20 @@ function CrearCampanaContent() {
 
   // --- Reporte: estado de cada curso por fecha + filtros ---
   const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
-  // Finalizada si la última fecha del curso (final curso, o cierre de matrícula
-  // si no hay final curso) ya pasó respecto a hoy; si no, En progreso.
-  const rowEstado = (r: any): 'finalizada' | 'progreso' => {
-    const end = (r.finalCurso ? String(r.finalCurso).slice(0, 10) : '') || (r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '')
-    return end && end < todayStr ? 'finalizada' : 'progreso'
+  // Estado por fechas: Cerrado (finalCurso < hoy) / En matrícula (cierre de matrícula
+  // aún no pasa) / Activo (matrícula cerrada pero curso en progreso).
+  const rowEstado = (r: any): 'matricula' | 'activo' | 'cerrado' => {
+    const fc = r.finalCurso ? String(r.finalCurso).slice(0, 10) : ''
+    const fcamp = r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : ''
+    if (fc && fc < todayStr) return 'cerrado'
+    if (fcamp && fcamp >= todayStr) return 'matricula'
+    return 'activo'
   }
+  const ESTADO_META = {
+    matricula: { label: 'En matrícula', cls: 'bg-blue-100 text-blue-700' },
+    activo:    { label: 'Activo',       cls: 'bg-green-100 text-green-700' },
+    cerrado:   { label: 'Cerrado',      cls: 'bg-gray-200 text-gray-700' },
+  } as const
   const reporteRows = existing.filter((r: any) => {
     if (applied.nombre.trim() && !String(r.campaign || '').toLowerCase().includes(applied.nombre.trim().toLowerCase())) return false
     if (applied.curso && String(r.tipoCurso || '') !== applied.curso) return false
@@ -230,7 +238,7 @@ function CrearCampanaContent() {
       { header: 'Final curso', accessor: (r: any) => (r.finalCurso ? String(r.finalCurso).slice(0, 10) : '') },
       { header: 'Cierre matríc.', accessor: (r: any) => (r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '') },
       { header: 'Cupos', accessor: (r: any) => `${r.usuInscritos ?? 0}/${r.numeroUsuarios ?? 0}` },
-      { header: 'Estado', accessor: (r: any) => (rowEstado(r) === 'finalizada' ? 'Finalizada' : 'En progreso') },
+      { header: 'Estado', accessor: (r: any) => ESTADO_META[rowEstado(r)].label },
     ], `reporte_campanas_${todayStr}`)
   }
 
@@ -415,7 +423,7 @@ function CrearCampanaContent() {
               <tbody>
                 {existing.map((r: any) => {
                   const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
-                  const finalizada = rowEstado(r) === 'finalizada'
+                  const est = rowEstado(r)
                   return (
                     <tr key={r._id} className="border-b last:border-0">
                       <td className="py-2 font-medium">{r.campaign}</td>
@@ -432,8 +440,8 @@ function CrearCampanaContent() {
                         </span>
                       </td>
                       <td>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${finalizada ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                          {finalizada ? 'Finalizada' : 'En progreso'}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_META[est].cls}`}>
+                          {ESTADO_META[est].label}
                         </span>
                       </td>
                       <td className="whitespace-nowrap">
@@ -485,8 +493,9 @@ function CrearCampanaContent() {
               <label className={lblCls}>Estado</label>
               <select value={repEstado} onChange={e => setRepEstado(e.target.value as any)} className={inputCls} title="Filtrar por estado">
                 <option value="todos">Todos</option>
-                <option value="finalizada">Finalizada</option>
-                <option value="progreso">En progreso</option>
+                <option value="matricula">En matrícula</option>
+                <option value="activo">Activo</option>
+                <option value="cerrado">Cerrado</option>
               </select>
             </div>
           </div>
@@ -524,7 +533,7 @@ function CrearCampanaContent() {
                 <tbody>
                   {reporteRows.map((r: any) => {
                     const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
-                    const finalizada = rowEstado(r) === 'finalizada'
+                    const est = rowEstado(r)
                     return (
                       <tr key={r._id} className="border-b last:border-0">
                         <td className="py-2 font-medium">{r.campaign}</td>
@@ -541,8 +550,8 @@ function CrearCampanaContent() {
                           </span>
                         </td>
                         <td>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${finalizada ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
-                            {finalizada ? 'Finalizada' : 'En progreso'}
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_META[est].cls}`}>
+                            {ESTADO_META[est].label}
                           </span>
                         </td>
                       </tr>
