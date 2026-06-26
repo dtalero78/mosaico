@@ -107,13 +107,13 @@ async function approveOnePerson(
       academicId = ids.academic();
       await query(
         `INSERT INTO "ACADEMICA" (
-          "_id", "numeroId", "primerNombre", "segundoNombre",
+          "_id", "studentId", "numeroId", "primerNombre", "segundoNombre",
           "primerApellido", "segundoApellido", "email", "celular",
-          "nivel", "step", "plataforma", "estadoInactivo",
-          "contrato", "usuarioId",
+          "nivel", "step", "plataforma", "estadoInactivo", "tipoUsuario",
+          "contrato", "usuarioId", "peopleId",
           "_createdDate", "_updatedDate"
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12, $13, NOW(), NOW()
+          $1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, 'BENEFICIARIO', $12, $13, $13, NOW(), NOW()
         )`,
         [
           academicId,

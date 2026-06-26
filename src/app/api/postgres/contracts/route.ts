@@ -213,24 +213,28 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       //     nivel/step se leen de NIVELES por curso (NIVELES vacío → quedan en blanco).
       const exA = await client.query(`SELECT "_id" FROM "ACADEMICA" WHERE "numeroId"=$1 LIMIT 1`, [b.numeroId]);
       if (exA.rows.length === 0) {
-        let nivel: string | null = null;
-        let step: string | null = null;
+        // nivel/step se leen de NIVELES por curso (primer módulo/lección). Son NOT NULL,
+        // así que si el curso aún no está sembrado en NIVELES se usa '' (no null).
+        let nivel = '';
+        let step = '';
         if (b.tipoCurso) {
           const nr = await client.query(
             `SELECT "code", "step" FROM "NIVELES" WHERE "curso"=$1 ORDER BY "orden" NULLS LAST, "step" LIMIT 1`,
             [b.tipoCurso]
           );
-          nivel = nr.rows[0]?.code || null;
-          step = nr.rows[0]?.step || null;
+          nivel = nr.rows[0]?.code || '';
+          step = nr.rows[0]?.step || '';
         }
+        // studentId es NOT NULL en ACADEMICA = el propio _id (los bookings usan ACADEMICA._id).
+        const academicId = ids.academic();
         await client.query(
           `INSERT INTO "ACADEMICA" (
-             "_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
-             "email", "celular", "nivel", "step", "plataforma", "estadoInactivo",
+             "_id", "studentId", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
+             "email", "celular", "nivel", "step", "plataforma", "estadoInactivo", "tipoUsuario",
              "contrato", "usuarioId", "peopleId", "campaign", "curso", "inicioCurso", "userLogin",
              "_createdDate", "_updatedDate"
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,$12,$13,$14,$15,$16,$17::date,$18,NOW(),NOW())`,
-          [ids.academic(), b.numeroId, b.primerNombre, b.segundoNombre || null,
+           ) VALUES ($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'BENEFICIARIO',$12,$13,$14,$15,$16,$17::date,$18,NOW(),NOW())`,
+          [academicId, b.numeroId, b.primerNombre, b.segundoNombre || null,
            b.primerApellido, b.segundoApellido || null,
            b.email || null, b.celular || null, nivel, step, titular.plataforma || null,
            contrato, benefId, benefId, b.campaign || null, b.tipoCurso || null, inicioCurso, userLogin]
