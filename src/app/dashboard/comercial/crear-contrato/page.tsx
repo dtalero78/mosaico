@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { ComercialPermission } from '@/types/permissions'
-import { cursosVisiblesContrato } from '@/lib/cursos-campaign'
+import { cursosVisiblesContrato, esMenores } from '@/lib/cursos-campaign'
 import { generateUserLogin } from '@/lib/user-login'
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 
@@ -483,10 +483,13 @@ function CrearContratoContent() {
 
   // Error de email de un beneficiario: no puede ser el del titular (salvo que el
   // titular sea beneficiario) ni el de otro beneficiario. Devuelve '' si OK.
+  // EXCEPCIÓN MOSAICO: en cursos de menores (YOJI/OKINA/KODOMO) el contacto es el
+  // del apoderado/titular, así que el email SÍ puede coincidir con el del titular.
   const benefEmailError = (index: number): string => {
     const email = normStr(beneficiarios[index]?.email);
     if (!email) return '';
-    if (!titularEsBeneficiario && email === normStr(titular.email)) return 'El correo no puede ser el mismo del titular.';
+    const cursoMenores = esMenores(beneficiarios[index]?.tipoCurso || '');
+    if (!titularEsBeneficiario && !cursoMenores && email === normStr(titular.email)) return 'El correo no puede ser el mismo del titular.';
     if (beneficiarios.some((b, j) => j !== index && normStr(b.email) && normStr(b.email) === email)) {
       return 'Este correo ya lo tiene otro beneficiario.';
     }
@@ -500,9 +503,12 @@ function CrearContratoContent() {
   };
 
   // Advertencia (no bloquea): el celular del beneficiario es igual al del titular.
+  // EXCEPCIÓN MOSAICO: en cursos de menores (YOJI/OKINA/KODOMO) el celular es el del
+  // apoderado/titular, así que no se advierte.
   const benefCelularWarn = (index: number): boolean => {
     const cel = (beneficiarios[index]?.celular || '').trim();
     if (!cel || titularEsBeneficiario) return false;
+    if (esMenores(beneficiarios[index]?.tipoCurso || '')) return false;
     return cel === (titular.celular || '').trim();
   };
 
