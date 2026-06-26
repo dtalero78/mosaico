@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { ComercialPermission } from '@/types/permissions'
+import { cursosVisiblesContrato } from '@/lib/cursos-campaign'
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 
 // Country prefixes
@@ -245,6 +246,9 @@ function CrearContratoContent() {
   const [esContratoPrueba, setEsContratoPrueba] = useState(false);
   // Extemporánea: marca el contrato como matrícula fuera de plazo (PEOPLE.extemporanea)
   const [esExtemporanea, setEsExtemporanea] = useState(false);
+  // Cursos visibles según EXTEMPORÁNEA: NO → solo "En matrícula"; SÍ → "Activo" de la campaña
+  // inmediatamente anterior, cursos iniciados hace ≤ 2 semanas. Luego CursoCampaignFields filtra por Impulsa.
+  const cursosVisibles = useMemo(() => cursosVisiblesContrato(cursosCampaign, esExtemporanea), [cursosCampaign, esExtemporanea]);
   const draftRestored = useRef(false);
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -672,7 +676,12 @@ function CrearContratoContent() {
               <input
                 type="checkbox"
                 checked={esExtemporanea}
-                onChange={e => setEsExtemporanea(e.target.checked)}
+                onChange={e => {
+                  setEsExtemporanea(e.target.checked)
+                  // Cambia el set de cursos visibles → limpiar selecciones de curso
+                  setTitular({ ...titular, campaign: '', tipoCurso: '', horarioCurso: '' })
+                  setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' })))
+                }}
                 className="h-4 w-4 rounded border-red-400 text-red-600 focus:ring-red-500"
               />
               <span className="text-sm font-semibold">⏰ EXTEMPORÁNEA</span>
@@ -911,7 +920,7 @@ function CrearContratoContent() {
                     <p className="text-sm font-semibold text-gray-700 mb-3">Curso del titular ({titular.esCursoImpulsa ? 'solo IMPULSA' : 'YOJI / OKINA / KODOMO / DANSHI / SENPAI'})</p>
                     <div className="grid grid-cols-3 gap-4">
                       <CursoCampaignFields
-                        rows={cursosCampaign}
+                        rows={cursosVisibles}
                         esImpulsa={titular.esCursoImpulsa}
                         values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso }}
                         onPatch={(patch) => setTitular({ ...titular, ...patch })}
@@ -1498,7 +1507,7 @@ function CrearContratoContent() {
                         <p className="text-sm font-semibold text-gray-700 mb-3">Curso del beneficiario ({titular.esCursoImpulsa ? 'solo IMPULSA' : 'YOJI / OKINA / KODOMO / DANSHI / SENPAI'})</p>
                         <div className="grid grid-cols-3 gap-4">
                           <CursoCampaignFields
-                            rows={cursosCampaign}
+                            rows={cursosVisibles}
                             esImpulsa={titular.esCursoImpulsa}
                             values={{ campaign: beneficiario.campaign, tipoCurso: beneficiario.tipoCurso, horarioCurso: beneficiario.horarioCurso }}
                             onPatch={(patch) => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, ...patch } : b))}

@@ -103,6 +103,78 @@ export function fechasEntre(inicio: string, fin: string, dias: number[]): string
   return out;
 }
 
+// Nombre de campaña = <MES><DD><AAAA> (mes en letras, día y año en números).
+const MESES_ES: Record<string, number> = {
+  ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6,
+  JULIO: 7, AGOSTO: 8, SEPTIEMBRE: 9, OCTUBRE: 10, NOVIEMBRE: 11, DICIEMBRE: 12,
+};
+
+/** "AGOSTO172026" → "2026-08-17"; "JUNIO082026" → "2026-06-08". null si no parsea. */
+export function campaignNameToDate(name: string): string | null {
+  const m = String(name || '').toUpperCase().match(/^([A-Z]+)(\d{1,2})(\d{4})$/);
+  if (!m) return null;
+  const mes = MESES_ES[m[1]];
+  if (!mes) return null;
+  const dia = parseInt(m[2], 10), anio = parseInt(m[3], 10);
+  if (!dia || dia > 31) return null;
+  return `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
+/**
+ * Cursos visibles en Crear Contrato según la casilla EXTEMPORÁNEA.
+ * - NO extemporánea → solo cursos de campañas "En matrícula" (cierre de matrícula >= hoy).
+ * - Extemporánea → cursos "Activo" de la campaña inmediatamente ANTERIOR a la "En matrícula"
+ *   (doble comparación: nombre-fecha de campaña + fechas reales; finalCampaign < inicio de la
+ *   "En matrícula"), excluyendo cursos cuyo inicio fue hace MÁS de 2 semanas. Vacío si no aplica.
+ */
+export function cursosVisiblesContrato<T extends { campaign?: string; inicioCurso?: any; finalCurso?: any; finalCampaign?: any }>(
+  rows: T[], extemporanea: boolean
+): T[] {
+  const hoy = new Date().toLocaleDateString('en-CA');
+  const sl = (v: any) => (v ? String(v).slice(0, 10) : '');
+  const fcamp = (r: T) => sl(r.finalCampaign);
+  const fcurso = (r: T) => sl(r.finalCurso);
+  const ini = (r: T) => sl(r.inicioCurso);
+
+  if (!extemporanea) {
+    return rows.filter(r => { const f = fcamp(r); return !!f && f >= hoy; });
+  }
+
+  // Agregado por campaña
+  const byCamp = new Map<string, { finalCampaign: string; nameDate: string | null; inicioMin: string }>();
+  for (const r of rows) {
+    const c = r.campaign; if (!c) continue;
+    const i = ini(r);
+    const cur = byCamp.get(c);
+    if (!cur) byCamp.set(c, { finalCampaign: fcamp(r), nameDate: campaignNameToDate(c), inicioMin: i });
+    else if (i && (!cur.inicioMin || i < cur.inicioMin)) cur.inicioMin = i;
+  }
+
+  // E = campaña "En matrícula" (finalCampaign >= hoy). Si varias, la próxima (menor nameDate).
+  const enMat = Array.from(byCamp.entries()).filter(([, v]) => v.finalCampaign && v.finalCampaign >= hoy);
+  if (enMat.length === 0) return [];
+  enMat.sort((a, b) => ((a[1].nameDate || '9999') < (b[1].nameDate || '9999') ? -1 : 1));
+  const [, ev] = enMat[0];
+  const eInicio = ev.nameDate || ev.inicioMin; // "inicio de cursos de la campaña en matrícula"
+
+  // Candidatas: nameDate < E.nameDate, finalCampaign < E.inicio, y con cursos Activos
+  const candidatas = Array.from(byCamp.entries()).filter(([c, v]) => {
+    if (ev.nameDate && v.nameDate && !(v.nameDate < ev.nameDate)) return false;
+    if (eInicio && v.finalCampaign && !(v.finalCampaign < eInicio)) return false;
+    return rows.some(r => r.campaign === c && fcamp(r) < hoy && fcurso(r) >= hoy);
+  });
+  if (candidatas.length === 0) return [];
+  // Inmediatamente anterior = mayor nameDate
+  candidatas.sort((a, b) => ((a[1].nameDate || '') > (b[1].nameDate || '') ? -1 : 1));
+  const target = candidatas[0][0];
+
+  // Límite: el curso no debe haber empezado hace más de 2 semanas
+  const lim = new Date(); lim.setDate(lim.getDate() - 14);
+  const limStr = lim.toLocaleDateString('en-CA');
+
+  return rows.filter(r => r.campaign === target && fcurso(r) >= hoy && ini(r) && ini(r) >= limStr);
+}
+
 /** Suma `meses` a una fecha ISO (YYYY-MM-DD) manejando el overflow de fin de mes. */
 export function addMonths(isoDate: string, meses: number): string {
   if (!isoDate || !Number.isFinite(meses)) return '';
