@@ -89,23 +89,24 @@ interface CursoRow {
 
 /**
  * Tres dropdowns en cascada (campaña → curso → horario) alimentados por
- * CURSOS_CAMPAIGN. `adultsOnly` oculta cursos `paraMenores` (cuando el titular
- * es el beneficiario: solo IMPULSA/DANSHI/SENPAI).
+ * CURSOS_CAMPAIGN. Filtro por `esImpulsa`: si true muestra SOLO cursos IMPULSA;
+ * si false muestra solo los NO-Impulsa (YOJI/OKINA/KODOMO/DANSHI/SENPAI).
+ * Aplica igual al titular-beneficiario y a los beneficiarios.
  */
 function CursoCampaignFields({
-  rows, values, onPatch, adultsOnly = false,
+  rows, values, onPatch, esImpulsa = false,
 }: {
   rows: CursoRow[];
   values: { campaign?: string; tipoCurso?: string; horarioCurso?: string };
   onPatch: (patch: { campaign?: string; tipoCurso?: string; horarioCurso?: string }) => void;
-  adultsOnly?: boolean;
+  esImpulsa?: boolean;
 }) {
   const campaign = values.campaign || '';
   const tipoCurso = values.tipoCurso || '';
   const horarioCurso = values.horarioCurso || '';
   const campaigns = Array.from(new Set(rows.map(r => r.campaign)));
   const cursos = Array.from(new Set(
-    rows.filter(r => r.campaign === campaign && (!adultsOnly || !r.paraMenores)).map(r => r.tipoCurso)
+    rows.filter(r => r.campaign === campaign && (esImpulsa ? r.tipoCurso === 'IMPULSA' : r.tipoCurso !== 'IMPULSA')).map(r => r.tipoCurso)
   ));
   // Una fila por (campaña, tipoCurso, horario) → cupos por horario
   const horarioRows = rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso);
@@ -783,7 +784,12 @@ function CrearContratoContent() {
                   <input
                     type="checkbox"
                     checked={titular.esCursoImpulsa}
-                    onChange={(e) => setTitular({ ...titular, esCursoImpulsa: e.target.checked })}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      // Al cambiar Impulsa cambian los cursos válidos → limpiar selecciones de curso.
+                      setTitular({ ...titular, esCursoImpulsa: v, campaign: '', tipoCurso: '', horarioCurso: '' });
+                      setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' })));
+                    }}
                     className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   />
                   <span className="ml-2 text-base font-semibold text-gray-900">¿Es curso Impulsa?</span>
@@ -902,11 +908,11 @@ function CrearContratoContent() {
                 </div>
                 {titularEsBeneficiario && (
                   <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
-                    <p className="text-sm font-semibold text-gray-700 mb-3">Curso del titular (solo IMPULSA / DANSHI / SENPAI)</p>
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Curso del titular ({titular.esCursoImpulsa ? 'solo IMPULSA' : 'YOJI / OKINA / KODOMO / DANSHI / SENPAI'})</p>
                     <div className="grid grid-cols-3 gap-4">
                       <CursoCampaignFields
                         rows={cursosCampaign}
-                        adultsOnly
+                        esImpulsa={titular.esCursoImpulsa}
                         values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso }}
                         onPatch={(patch) => setTitular({ ...titular, ...patch })}
                       />
@@ -1489,10 +1495,11 @@ function CrearContratoContent() {
                         </div>
                       </div>
                       <div className="border-t border-gray-100 pt-4 mt-4">
-                        <p className="text-sm font-semibold text-gray-700 mb-3">Curso del beneficiario</p>
+                        <p className="text-sm font-semibold text-gray-700 mb-3">Curso del beneficiario ({titular.esCursoImpulsa ? 'solo IMPULSA' : 'YOJI / OKINA / KODOMO / DANSHI / SENPAI'})</p>
                         <div className="grid grid-cols-3 gap-4">
                           <CursoCampaignFields
                             rows={cursosCampaign}
+                            esImpulsa={titular.esCursoImpulsa}
                             values={{ campaign: beneficiario.campaign, tipoCurso: beneficiario.tipoCurso, horarioCurso: beneficiario.horarioCurso }}
                             onPatch={(patch) => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, ...patch } : b))}
                           />
@@ -1547,7 +1554,11 @@ function CrearContratoContent() {
                   {!titular.esCursoImpulsa && (
                     <button
                       type="button"
-                      onClick={() => { setTitular({ ...titular, esCursoImpulsa: true }); setShowSinCursoModal(false); }}
+                      onClick={() => {
+                        setTitular({ ...titular, esCursoImpulsa: true, campaign: '', tipoCurso: '', horarioCurso: '' });
+                        setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' })));
+                        setShowSinCursoModal(false);
+                      }}
                       className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg"
                     >
                       Marcar como curso Impulsa
