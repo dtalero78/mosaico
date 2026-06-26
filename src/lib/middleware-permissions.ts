@@ -185,6 +185,16 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
     'COMERCIAL.PROSPECTOS.VER' as Permission,
   ],
 
+  // Comercial - Consulta de Cursos (read-only)
+  '/dashboard/comercial/consulta-cursos': [
+    'COMERCIAL.CONSULTA_CURSOS' as Permission,
+  ],
+
+  // Comercial - Subir Lote de Personas (CSV)
+  '/subir-lote': [
+    'COMERCIAL.SUBIR_LOTE' as Permission,
+  ],
+
   // Informes — rutas específicas por grupo
   // Nivel 3 — cada reporte con su permiso específico (nieto)
   '/dashboard/informes/asistencia/sesiones-clubes': ['INFORMES.ASISTENCIA.SESIONES' as Permission],

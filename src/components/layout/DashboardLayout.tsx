@@ -76,7 +76,8 @@ const getNavigation = (userEmail: string, userRole: string) => [
     icon: UsersIcon,
     children: [
       { name: 'Crear Contrato', href: '/dashboard/comercial/crear-contrato' },
-      { name: 'Subir Lote', href: '/subir-lote', superAdminOnly: true },
+      { name: 'Consulta cursos', href: '/dashboard/comercial/consulta-cursos', newTab: true },
+      { name: 'Subir Lote', href: '/subir-lote' },
     ],
   },
   {
@@ -335,8 +336,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ComercialPermission.DESCARGAR,
       ComercialPermission.APROBACION_AUTONOMA,
     ],
+    '/dashboard/comercial/consulta-cursos': [
+      ComercialPermission.CONSULTA_CURSOS,
+    ],
     '/subir-lote': [
-      ComercialPermission.MODIFICAR_CONTRATO,
+      ComercialPermission.SUBIR_LOTE,
     ],
     '/admin/migrar-contrato': [
       MantenimientoPermission.MIGRAR_CONTRATO,

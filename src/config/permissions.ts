@@ -812,6 +812,22 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Página "Prospectos"',
     description: 'Acceso al pipeline comercial de prospectos',
   },
+  // -- Página: Subir Lote (/subir-lote) --
+  {
+    code: ComercialPermission.SUBIR_LOTE,
+    module: Module.COMERCIAL,
+    section: 'Subir Lote',
+    name: 'Página "Subir Lote de Personas"',
+    description: 'Importar registros a PEOPLE desde un CSV (/subir-lote)',
+  },
+  // -- Página: Consulta de Cursos (/dashboard/comercial/consulta-cursos) --
+  {
+    code: ComercialPermission.CONSULTA_CURSOS,
+    module: Module.COMERCIAL,
+    section: 'Consulta Cursos',
+    name: 'Página "Consulta de Cursos"',
+    description: 'Ver (solo lectura) los cursos de campaña con sus cupos y horarios',
+  },
 
   // ========== APROBACION MODULE (/dashboard/aprobacion) ==========
   {

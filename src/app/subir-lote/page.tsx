@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useRef } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import { PermissionGuard } from '@/components/permissions';
+import { ComercialPermission } from '@/types/permissions';
 
 interface RegistroPeople {
   fila: number;
@@ -308,6 +310,7 @@ export default function SubirLotePage() {
 
   return (
     <DashboardLayout>
+      <PermissionGuard permission={ComercialPermission.SUBIR_LOTE} showDefaultMessage>
       <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', padding: 40, maxWidth: 1400, margin: '0 auto' }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1F2937', marginBottom: 8 }}>
           Subir Lote de Personas
@@ -612,6 +615,7 @@ export default function SubirLotePage() {
           </>
         )}
       </div>
+      </PermissionGuard>
     </DashboardLayout>
   );
 }
