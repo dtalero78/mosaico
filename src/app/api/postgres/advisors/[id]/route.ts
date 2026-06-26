@@ -16,9 +16,11 @@ export const GET = handlerWithAuth(async (_request, ctx: any, session) => {
   await requirePermission(session, AcademicoPermission.LISTA_ADVISORS_VER);
   const id = ctx?.params?.id;
   if (!id) throw new ValidationError('id requerido');
-  // Se devuelve la clave (texto plano legacy) — el password real de login está en
-  // USUARIOS_ROLES.password; si no, se cae a GUIAS.clave.
-  const row = await queryOne(
+  // La clave (texto plano legacy) solo se devuelve a quien puede EDITAR (GUIA_EDITAR);
+  // los de solo-lectura (LISTA_VER) no la reciben.
+  let canSeePassword = false;
+  try { await requirePermission(session, AcademicoPermission.GUIA_EDITAR); canSeePassword = true; } catch { /* solo lectura */ }
+  const row = await queryOne<Record<string, any>>(
     `SELECT g."_id", g."primerNombre", g."primerApellido", g."nombreCompleto", g."email",
             g."telefono", g."pais", g."domicilioadvisor" AS "domicilio", g."zoom",
             g."fechaNacimiento"::text AS "fechaNacimiento", g."fotoAdvisor",
@@ -30,6 +32,7 @@ export const GET = handlerWithAuth(async (_request, ctx: any, session) => {
     [id]
   );
   if (!row) throw new NotFoundError('Guía no encontrado');
+  if (!canSeePassword) row.clave = null; // ocultar a solo-lectura
   return successResponse({ guia: row });
 });
 
