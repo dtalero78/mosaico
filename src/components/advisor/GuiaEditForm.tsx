@@ -126,11 +126,13 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
       })
       const d = await res.json()
       if (!res.ok || !d.success) throw new Error(d.error || 'Error al guardar')
-      setMsg({ type: 'ok', text: 'Cambios guardados.' })
-      setFotoFile(null)
+      // Cerrar y volver a la lista de Guías.
+      router.push('/dashboard/academic/advisors')
+      router.refresh()
     } catch (err: any) {
       setMsg({ type: 'err', text: err.message })
-    } finally { setSaving(false) }
+      setSaving(false)
+    }
   }
 
   if (loading) return <div className="card"><div className="animate-pulse h-40 bg-gray-100 rounded" /></div>
