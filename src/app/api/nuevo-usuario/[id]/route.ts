@@ -40,7 +40,7 @@ export const GET = handler(async (
     `SELECT a."_id", a."numeroId", a."primerNombre", a."segundoNombre",
             a."primerApellido", a."segundoApellido", a."email", a."celular",
             a."nivel", a."step", a."plataforma", a."usuarioId",
-            a."detallesPersonales", a."hobbies", a."foto", a."clave"
+            a."detallesPersonales", a."hobbies", a."foto", a."clave", a."userLogin"
      FROM "ACADEMICA" a
      WHERE a."_id" = $1`,
     [academicId]
@@ -108,6 +108,7 @@ export const GET = handler(async (
       nivel: student.nivel,
       plataforma: student.plataforma,
       foto: student.foto,
+      userLogin: student.userLogin || null,
       detallesPersonales: student.detallesPersonales || null,
       hobbies: student.hobbies || null,
     },

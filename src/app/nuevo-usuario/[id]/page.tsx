@@ -28,6 +28,7 @@ interface StudentData {
   nivel: string
   plataforma: string
   foto: string
+  userLogin?: string
 }
 
 function capitalizeFirstLetter(str: string) {
@@ -243,6 +244,12 @@ export default function NuevoUsuarioPage() {
           <p className="text-gray-600 mb-4">
             {student?.primerNombre}, tu registro ya fue completado anteriormente.
           </p>
+          {student?.userLogin && (
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-3 mb-4 text-left">
+              <p className="text-sm font-medium text-primary-800 mb-1">Tu usuario de ingreso</p>
+              <p className="font-mono tracking-wider text-lg text-primary-900">{student.userLogin}</p>
+            </div>
+          )}
           <p className="text-gray-500 text-sm">
             Si tienes alguna pregunta, contacta a tu asesor.
           </p>
@@ -263,6 +270,13 @@ export default function NuevoUsuarioPage() {
           <p className="text-gray-600 mb-4">
             {student?.primerNombre}, te esperamos en tu sesión Welcome.
           </p>
+          {student?.userLogin && (
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-3 mb-4 text-left">
+              <p className="text-sm font-medium text-primary-800 mb-1">Tu usuario de ingreso</p>
+              <p className="font-mono tracking-wider text-lg text-primary-900">{student.userLogin}</p>
+              <p className="text-xs text-primary-700 mt-1">Ingresa con este usuario y la clave que creaste.</p>
+            </div>
+          )}
           <p className="text-gray-500 text-sm">
             Pronto recibirás más información por WhatsApp.
           </p>
@@ -356,6 +370,25 @@ export default function NuevoUsuarioPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
+
+          {/* Usuario de ingreso (userLogin) — readonly, destacado para que lo recuerde */}
+          {student?.userLogin && (
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
+              <label className="block text-sm font-medium text-primary-800 mb-1">
+                Tu usuario de ingreso
+              </label>
+              <input
+                type="text"
+                value={student.userLogin}
+                readOnly
+                title="Usuario con el que inicias sesión"
+                className="w-full px-3 py-2 border border-primary-200 rounded-lg bg-white text-primary-900 font-mono tracking-wider text-lg cursor-not-allowed"
+              />
+              <p className="text-xs text-primary-700 mt-1">
+                Guárdalo: con este usuario y tu clave ingresarás a la plataforma.
+              </p>
+            </div>
+          )}
 
           {/* Email — readonly */}
           <div>
