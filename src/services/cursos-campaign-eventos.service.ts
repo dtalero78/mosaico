@@ -1,5 +1,5 @@
 import 'server-only';
-import { query } from '@/lib/postgres';
+import { query, transaction } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
 
@@ -97,4 +97,119 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
 
   await query(`INSERT INTO "CALENDARIO" (${cols}) VALUES ${rows.join(', ')}`, params);
   return fechas.length;
+}
+
+export interface BeneficiarioParaBookings {
+  campaign?: string | null;
+  tipoCurso?: string | null;
+  horarioCurso?: string | null;
+  numeroId?: string | null;
+  primerNombre?: string | null;
+  primerApellido?: string | null;
+  celular?: string | null;
+  plataforma?: string | null;
+}
+
+/**
+ * Genera los bookings de un beneficiario en TODOS los eventos de su curso.
+ *
+ * Se invoca en la APROBACIÓN del contrato. Resuelve el curso (campaign + tipoCurso
+ * + horarioCurso → cursoCampaignId), trae todos los eventos de CALENDARIO de ese
+ * curso e inserta un ACADEMICA_BOOKINGS por evento usando el `academicId`
+ * (ACADEMICA._id) como idEstudiante/studentId, subiendo `CALENDARIO.inscritos`.
+ *
+ * Idempotente: no inserta si el beneficiario ya tiene booking en ese evento.
+ * Best-effort desde el caller (no debe romper la aprobación).
+ *
+ * @returns cantidad de bookings creados.
+ */
+export async function generarBookingsBeneficiario(
+  academicId: string,
+  persona: BeneficiarioParaBookings
+): Promise<number> {
+  if (!academicId) return 0;
+  if (!persona.campaign || !persona.tipoCurso || !persona.horarioCurso) return 0;
+
+  // Resolver el curso (cursoCampaignId)
+  const cr = await query(
+    `SELECT "_id" FROM "CURSOS_CAMPAIGN"
+     WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
+    [persona.campaign, persona.tipoCurso, persona.horarioCurso]
+  );
+  const cursoId = cr.rows[0]?._id;
+  if (!cursoId) return 0;
+
+  // Eventos del curso
+  const ev = await query(
+    `SELECT "_id","advisor","dia","hora","tipo","evento","nivel","step",
+            "tituloONivel","nombreEvento","titulo","linkZoom"
+     FROM "CALENDARIO" WHERE "cursoCampaignId"=$1`,
+    [cursoId]
+  );
+  if (ev.rows.length === 0) return 0;
+
+  // Dedupe: eventos donde el beneficiario YA tiene booking
+  const existing = await query(
+    `SELECT "eventoId","idEvento" FROM "ACADEMICA_BOOKINGS"
+     WHERE ("idEstudiante"=$1 OR "studentId"=$1)`,
+    [academicId]
+  );
+  const yaTiene = new Set<string>();
+  for (const r of existing.rows) {
+    if (r.eventoId) yaTiene.add(r.eventoId);
+    if (r.idEvento) yaTiene.add(r.idEvento);
+  }
+
+  let creados = 0;
+  await transaction(async (client) => {
+    for (const e of ev.rows) {
+      if (yaTiene.has(e._id)) continue;
+      const bookingData: Record<string, any> = {
+        _id: ids.booking(),
+        eventoId: e._id,
+        idEvento: e._id,
+        studentId: academicId,
+        idEstudiante: academicId,
+        primerNombre: persona.primerNombre || null,
+        primerApellido: persona.primerApellido || null,
+        numeroId: persona.numeroId || null,
+        celular: persona.celular || null,
+        plataforma: persona.plataforma || null,
+        nivel: e.nivel || e.tituloONivel || null,
+        step: e.step || e.nombreEvento || null,
+        advisor: e.advisor || null,
+        fecha: e.dia,
+        fechaEvento: e.dia,
+        hora: e.hora || null,
+        tipo: e.tipo || e.evento || null,
+        tipoEvento: e.tipo || e.evento || null,
+        linkZoom: e.linkZoom || null,
+        nombreEvento: e.nombreEvento || e.titulo || null,
+        tituloONivel: e.tituloONivel || null,
+        asistio: false,
+        asistencia: false,
+        participacion: false,
+        noAprobo: false,
+        cancelo: false,
+        agendadoPor: 'Sistema (aprobación contrato)',
+        fechaAgendamiento: new Date().toISOString(),
+        origen: 'POSTGRES',
+      };
+      const columns = Object.keys(bookingData);
+      const values = Object.values(bookingData);
+      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+      const columnList = columns.map((c) => `"${c}"`).join(', ');
+      await client.query(
+        `INSERT INTO "ACADEMICA_BOOKINGS" (${columnList}, "_createdDate", "_updatedDate")
+         VALUES (${placeholders}, NOW(), NOW())`,
+        values
+      );
+      await client.query(
+        `UPDATE "CALENDARIO" SET "inscritos" = COALESCE("inscritos",0) + 1, "_updatedDate" = NOW() WHERE "_id" = $1`,
+        [e._id]
+      );
+      creados++;
+    }
+  });
+  return creados;
 }

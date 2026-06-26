@@ -1,6 +1,7 @@
 import 'server-only';
+import { randomUUID } from 'crypto';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { query } from '@/lib/postgres';
+import { query, transaction } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
@@ -115,28 +116,6 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   const created: any = { contrato, titular: null, beneficiarios: [] };
 
-  // 1. Create TITULAR in PEOPLE
-  const titularId = ids.person();
-  const titularResult = await query(
-    `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
-      "email", "celular", "telefono", "fechaNacimiento", "domicilio", "ciudad",
-      "plataforma", "ingresos", "empresa", "cargo", "genero",
-      "referenciaUno", "parentezcoRefUno", "telefonoRefUno", "referenciaDos", "parentezcoRefDos", "telefonoRefDos",
-      "asesor", "tipoUsuario", "contrato", "vigencia", "fechaContrato", "finalContrato", "plan",
-      "apoderado", "apoderadoTelefono", "apoderadoMail", "esCursoImpulsa", "extemporanea", "origen", "_createdDate", "_updatedDate")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'TITULAR',$25,$26,NOW(),$27::date,$28,$29,$30,$31,$32,$33,'POSTGRES',NOW(),NOW()) RETURNING *`,
-    [titularId, titular.numeroId, titular.primerNombre, titular.segundoNombre || null,
-     titular.primerApellido, titular.segundoApellido || null,
-     titular.email || null, titular.celular || null, titular.telefono || null,
-     titular.fechaNacimiento || null, titular.domicilio || null, titular.ciudad || null,
-     titular.plataforma || null, titular.ingresos || null, titular.empresa || null, titular.cargo || null, titular.genero || null,
-     titular.referenciaUno || null, titular.parentezcoRefUno || null, titular.telRefUno || null,
-     titular.referenciaDos || null, titular.parentezcoRefDos || null, titular.telRefDos || null,
-     titular.asesor || null, contrato, financial?.vigencia || null, finalContrato, tipoPlan,
-     titular.apoderado || null, titular.apoderadoTelefono || null, titular.apoderadoMail || null, titular.esCursoImpulsa === true, titular.extemporanea === true]
-  );
-  created.titular = titularResult.rows[0];
-
   // 2. Build beneficiarios list (include titular if titularEsBeneficiario)
   const allBeneficiarios: any[] = [];
 
@@ -160,32 +139,114 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     allBeneficiarios.push(...beneficiarios);
   }
 
-  // 3. Create each BENEFICIARIO in PEOPLE (sin nivel/step — se asigna manualmente después)
-  for (const b of allBeneficiarios) {
-    const benefId = ids.person();
-    // Resolver el salón del curso (fuente única: CURSOS_CAMPAIGN)
-    let salon: string | null = null;
-    if (b.campaign && b.tipoCurso && b.horarioCurso) {
-      const salonRow = await query(
-        `SELECT "salon" FROM "CURSOS_CAMPAIGN" WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
-        [b.campaign, b.tipoCurso, b.horarioCurso]
-      );
-      salon = salonRow.rows[0]?.salon || null;
-    }
-    const benefResult = await query(
+  // 1+3. Crear TITULAR + cada BENEFICIARIO (PEOPLE) y, por beneficiario, su
+  //      ACADEMICA (inactivo) + USUARIOS_ROLES (login bloqueado) — TODO ATÓMICO.
+  //      Si algo falla → no se crea el contrato (no quedan beneficiarios sin ACADEMICA).
+  //      El booking se genera DESPUÉS, en la aprobación.
+  const titularId = ids.person();
+  await transaction(async (client) => {
+    // 1. TITULAR
+    const titularResult = await client.query(
       `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
-        "email", "celular", "fechaNacimiento", "titularId",
-        "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
-        "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "origen", "_createdDate", "_updatedDate")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,false,$13,NOW(),$14::date,$15,$16,$17,$18,'POSTGRES',NOW(),NOW()) RETURNING *`,
-      [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
-       b.primerApellido, b.segundoApellido || null,
-       b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
-       contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato,
-       b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon]
+        "email", "celular", "telefono", "fechaNacimiento", "domicilio", "ciudad",
+        "plataforma", "ingresos", "empresa", "cargo", "genero",
+        "referenciaUno", "parentezcoRefUno", "telefonoRefUno", "referenciaDos", "parentezcoRefDos", "telefonoRefDos",
+        "asesor", "tipoUsuario", "contrato", "vigencia", "fechaContrato", "finalContrato", "plan",
+        "apoderado", "apoderadoTelefono", "apoderadoMail", "esCursoImpulsa", "extemporanea", "origen", "_createdDate", "_updatedDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'TITULAR',$25,$26,NOW(),$27::date,$28,$29,$30,$31,$32,$33,'POSTGRES',NOW(),NOW()) RETURNING *`,
+      [titularId, titular.numeroId, titular.primerNombre, titular.segundoNombre || null,
+       titular.primerApellido, titular.segundoApellido || null,
+       titular.email || null, titular.celular || null, titular.telefono || null,
+       titular.fechaNacimiento || null, titular.domicilio || null, titular.ciudad || null,
+       titular.plataforma || null, titular.ingresos || null, titular.empresa || null, titular.cargo || null, titular.genero || null,
+       titular.referenciaUno || null, titular.parentezcoRefUno || null, titular.telRefUno || null,
+       titular.referenciaDos || null, titular.parentezcoRefDos || null, titular.telRefDos || null,
+       titular.asesor || null, contrato, financial?.vigencia || null, finalContrato, tipoPlan,
+       titular.apoderado || null, titular.apoderadoTelefono || null, titular.apoderadoMail || null, titular.esCursoImpulsa === true, titular.extemporanea === true]
     );
-    created.beneficiarios.push(benefResult.rows[0]);
-  }
+    created.titular = titularResult.rows[0];
+
+    // 3. BENEFICIARIOS — PEOPLE (inactivo) + ACADEMICA (inactivo) + USUARIOS_ROLES (activo=false)
+    for (const b of allBeneficiarios) {
+      const benefId = ids.person();
+      // Resolver el curso desde CURSOS_CAMPAIGN: salón + _id + inicioCurso
+      let salon: string | null = null;
+      let inicioCurso: string | null = null;
+      if (b.campaign && b.tipoCurso && b.horarioCurso) {
+        const cr = await client.query(
+          `SELECT "_id", "salon", "inicioCurso" FROM "CURSOS_CAMPAIGN"
+           WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
+          [b.campaign, b.tipoCurso, b.horarioCurso]
+        );
+        salon = cr.rows[0]?.salon || null;
+        inicioCurso = cr.rows[0]?.inicioCurso || null;
+      }
+
+      // 3a. PEOPLE beneficiario — nace INACTIVO (estadoInactivo=true hasta la aprobación)
+      const benefResult = await client.query(
+        `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
+          "email", "celular", "fechaNacimiento", "titularId",
+          "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
+          "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "origen", "_createdDate", "_updatedDate")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,'POSTGRES',NOW(),NOW()) RETURNING *`,
+        [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
+         b.primerApellido, b.segundoApellido || null,
+         b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
+         contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato,
+         b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon]
+      );
+      created.beneficiarios.push(benefResult.rows[0]);
+
+      // 3b. ACADEMICA del beneficiario — INACTIVO. Un beneficiario = un solo ACADEMICA.
+      //     usuarioId = PEOPLE._id (como el motor) · peopleId = PEOPLE._id (enlace/booking).
+      //     nivel/step se leen de NIVELES por curso (NIVELES vacío → quedan en blanco).
+      const exA = await client.query(`SELECT "_id" FROM "ACADEMICA" WHERE "numeroId"=$1 LIMIT 1`, [b.numeroId]);
+      if (exA.rows.length === 0) {
+        let nivel: string | null = null;
+        let step: string | null = null;
+        if (b.tipoCurso) {
+          const nr = await client.query(
+            `SELECT "code", "step" FROM "NIVELES" WHERE "curso"=$1 ORDER BY "orden" NULLS LAST, "step" LIMIT 1`,
+            [b.tipoCurso]
+          );
+          nivel = nr.rows[0]?.code || null;
+          step = nr.rows[0]?.step || null;
+        }
+        await client.query(
+          `INSERT INTO "ACADEMICA" (
+             "_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
+             "email", "celular", "nivel", "step", "plataforma", "estadoInactivo",
+             "contrato", "usuarioId", "peopleId", "campaign", "curso", "inicioCurso",
+             "_createdDate", "_updatedDate"
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,$12,$13,$14,$15,$16,$17::date,NOW(),NOW())`,
+          [ids.academic(), b.numeroId, b.primerNombre, b.segundoNombre || null,
+           b.primerApellido, b.segundoApellido || null,
+           b.email || null, b.celular || null, nivel, step, titular.plataforma || null,
+           contrato, benefId, benefId, b.campaign || null, b.tipoCurso || null, inicioCurso]
+        );
+      }
+
+      // 3c. USUARIOS_ROLES — login BLOQUEADO (activo=false), clave placeholder=numeroId.
+      //     El beneficiario define su clave real al entrar por el link de crear-perfil
+      //     que llega con la bienvenida. Requiere email (PK lógica). Dedupe por email.
+      if (b.email) {
+        const exU = await client.query(
+          `SELECT "_id" FROM "USUARIOS_ROLES" WHERE LOWER("email")=LOWER($1) LIMIT 1`,
+          [b.email]
+        );
+        if (exU.rows.length === 0) {
+          await client.query(
+            `INSERT INTO "USUARIOS_ROLES" ("_id","email","password","nombre","apellido","celular",
+              "numberid","contrato","plataforma","rol","activo","origen",
+              "fechaCreacion","fechaActualizacion","_createdDate","_updatedDate")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'ESTUDIANTE',false,'POSTGRES',NOW(),NOW(),NOW(),NOW())`,
+            [randomUUID(), b.email, b.numeroId, b.primerNombre, b.primerApellido || null,
+             b.celular || null, b.numeroId, contrato, titular.plataforma || null]
+          );
+        }
+      }
+    }
+  });
 
   // 3b. Incrementar usuInscritos (+1) en CURSOS_CAMPAIGN por cada inscrito en un
   //     curso (campaign + tipoCurso + horarioCurso). Best-effort: si falla, no

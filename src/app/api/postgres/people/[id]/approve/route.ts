@@ -4,6 +4,7 @@ import { query, queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service';
 
 interface ApproveResult {
   personId: string;
@@ -74,16 +75,16 @@ async function approveOnePerson(
 
     const setClause = extraFields.length > 0 ? `, ${extraFields.join(', ')}` : '';
     await query(
-      `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "estado" = 'ACTIVA'${setClause}, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "estado" = 'ACTIVA', "estadoInactivo" = false${setClause}, "_updatedDate" = NOW() WHERE "_id" = $1`,
       [personId, ...extraValues]
     );
   } else {
     await query(
-      `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "estado" = 'ACTIVA', "_updatedDate" = NOW() WHERE "_id" = $1`,
+      `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "estado" = 'ACTIVA', "estadoInactivo" = false, "_updatedDate" = NOW() WHERE "_id" = $1`,
       [personId]
     );
   }
-  console.log(`✅ [Approve] PEOPLE.aprobacion='Aprobado' + estado='ACTIVA'`);
+  console.log(`✅ [Approve] PEOPLE.aprobacion='Aprobado' + estado='ACTIVA' + estadoInactivo=false`);
 
   // Check/Create ACADEMICA record — SÓLO para BENEFICIARIO.
   // Los TITULARES no son estudiantes (no toman clases); su rol es contractual.
@@ -137,6 +138,29 @@ async function approveOnePerson(
     }
   } else {
     console.log(`ℹ️ [Approve] ${person.tipoUsuario} — se omite creación de ACADEMICA (sólo beneficiarios necesitan registro académico)`);
+  }
+
+  // Generar bookings PRECARGADOS en los N eventos del curso del beneficiario.
+  // Best-effort + idempotente: si falla NO rompe la aprobación; si un curso aún no
+  // tiene eventos generados, simplemente no crea bookings (sin error).
+  // ACADEMICA y USUARIOS_ROLES siguen INACTIVOS — el cron los enciende 1 semana
+  // antes de inicioCurso. Aquí sólo se dejan listos los agendamientos.
+  if (person.tipoUsuario === 'BENEFICIARIO' && academicId) {
+    try {
+      const creados = await generarBookingsBeneficiario(academicId, {
+        campaign: person.campaign,
+        tipoCurso: person.tipoCurso,
+        horarioCurso: person.horarioCurso,
+        numeroId: person.numeroId,
+        primerNombre: person.primerNombre,
+        primerApellido: person.primerApellido,
+        celular: person.celular,
+        plataforma: person.plataforma,
+      });
+      console.log(`✅ [Approve] Bookings precargados para ${person.primerNombre}: ${creados}`);
+    } catch (err: any) {
+      console.warn(`⚠️ [Approve] No se pudieron generar bookings para ${personId}:`, err?.message || err);
+    }
   }
 
   // Send WhatsApp welcome message — SÓLO a BENEFICIARIOS.

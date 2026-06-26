@@ -64,6 +64,36 @@ async function executeReconcilePegados() {
 }
 
 /**
+ * Ejecuta el cron de activacion academica (MOSAICO).
+ * Enciende ACADEMICA + login de beneficiarios aprobados 1 semana antes de inicioCurso.
+ */
+async function executeActivateAcademica() {
+  const timestamp = getLocalTimestamp();
+  console.log(`\n[${timestamp}] Ejecutando activate-academica...`);
+
+  try {
+    const response = await fetch(`${NEXTAUTH_URL}/api/cron/activate-academica`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${CRON_SECRET}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      console.log(`[${timestamp}] Completado: ${data.message}`);
+      console.log(`   Procesados: ${data.processed}, Exitosos: ${data.successful}, Fallidos: ${data.failed}`);
+    } else {
+      console.error(`[${timestamp}] Error: ${data.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error(`[${timestamp}] Error de conexion:`, error.message);
+  }
+}
+
+/**
  * Ejecuta el cron de reactivacion de OnHold
  */
 async function executeReactivateOnHold() {
@@ -124,6 +154,12 @@ async function executeExpireContracts() {
 // Programar tareas
 // ================
 
+// Activar academica (MOSAICO): Diariamente a las 01:30 UTC (8:30 PM Colombia)
+cron.schedule('30 1 * * *', executeActivateAcademica, {
+  scheduled: true,
+  timezone: 'UTC'
+});
+
 // Reconciliar pegados (casos limpios): Diariamente a las 02:00 UTC (9:00 PM Colombia)
 cron.schedule('0 2 * * *', executeReconcilePegados, {
   scheduled: true,
@@ -143,6 +179,7 @@ cron.schedule('0 4 * * *', executeExpireContracts, {
 });
 
 console.log('Tareas programadas:');
+console.log('   - activate-academica: Diariamente a las 01:30 UTC (8:30 PM Colombia)');
 console.log('   - reconcile-pegados: Diariamente a las 02:00 UTC (9:00 PM Colombia)');
 console.log('   - reactivate-onhold: Diariamente a las 03:00 UTC (10:00 PM Colombia)');
 console.log('   - expire-contracts: Diariamente a las 04:00 UTC (11:00 PM Colombia)');
@@ -150,9 +187,16 @@ console.log('   - expire-contracts: Diariamente a las 04:00 UTC (11:00 PM Colomb
 // Ejecutar inmediatamente si se pasa el argumento --run-now
 if (process.argv.includes('--run-now')) {
   console.log('\nEjecutando inmediatamente (--run-now)...');
+  executeActivateAcademica();
   executeReconcilePegados();
   executeReactivateOnHold();
   executeExpireContracts();
+}
+
+// Ejecutar solo activate-academica si se pasa --activate-academica
+if (process.argv.includes('--activate-academica')) {
+  console.log('\nEjecutando activate-academica...');
+  executeActivateAcademica();
 }
 
 // Ejecutar solo reconcile-pegados si se pasa --reconcile-pegados
