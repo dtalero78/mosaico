@@ -316,6 +316,7 @@ export enum ComercialPermission {
   // Otros
   SUBIR_LOTE = 'COMERCIAL.SUBIR_LOTE',           // importar personas (CSV) — /subir-lote
   CONSULTA_CURSOS = 'COMERCIAL.CONSULTA_CURSOS', // consulta de cursos de campaña (read-only)
+  CONSULTA_CURSOS_EXPORTAR = 'COMERCIAL.CONSULTA_CURSOS.EXPORTAR', // botón descargar CSV
 }
 
 /**

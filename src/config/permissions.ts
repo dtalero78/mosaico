@@ -826,7 +826,14 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     module: Module.COMERCIAL,
     section: 'Consulta Cursos',
     name: 'Página "Consulta de Cursos"',
-    description: 'Ver (solo lectura) los cursos de campaña con sus cupos y horarios',
+    description: 'Ver (solo lectura) los cursos de campaña con sus cupos, estado y horarios',
+  },
+  {
+    code: ComercialPermission.CONSULTA_CURSOS_EXPORTAR,
+    module: Module.COMERCIAL,
+    section: 'Consulta Cursos',
+    name: '↳ Botón "Descargar CSV"',
+    description: 'Exportar el listado de cursos de campaña a CSV',
   },
 
   // ========== APROBACION MODULE (/dashboard/aprobacion) ==========
