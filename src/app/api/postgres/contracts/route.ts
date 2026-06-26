@@ -4,6 +4,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query, transaction } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
+import { generateUserLogin } from '@/lib/user-login';
 import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
 
 function parseMoney(v: any): number {
@@ -132,6 +133,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       tipoCurso: titular.tipoCurso,
       horarioCurso: titular.horarioCurso,
       campaign: titular.campaign,
+      userLogin: titular.userLogin,
     });
   }
 
@@ -182,18 +184,27 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         inicioCurso = cr.rows[0]?.inicioCurso || null;
       }
 
+      // userLogin del estudiante (viene del wizard; fallback server-side). 10 chars,
+      // es el IDENTIFICADOR DE LOGIN → se garantiza único en USUARIOS_ROLES.
+      let userLogin = String(b.userLogin || generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId)).slice(0, 10);
+      for (let intento = 0; intento < 6; intento++) {
+        const dup = await client.query(`SELECT 1 FROM "USUARIOS_ROLES" WHERE "userLogin"=$1 LIMIT 1`, [userLogin]);
+        if (dup.rows.length === 0) break;
+        userLogin = generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId);
+      }
+
       // 3a. PEOPLE beneficiario — nace INACTIVO (estadoInactivo=true hasta la aprobación)
       const benefResult = await client.query(
         `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
           "email", "celular", "fechaNacimiento", "titularId",
           "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
-          "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "origen", "_createdDate", "_updatedDate")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,'POSTGRES',NOW(),NOW()) RETURNING *`,
+          "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "userLogin", "origen", "_createdDate", "_updatedDate")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,$19,'POSTGRES',NOW(),NOW()) RETURNING *`,
         [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
          b.primerApellido, b.segundoApellido || null,
          b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
          contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato,
-         b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon]
+         b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon, userLogin]
       );
       created.beneficiarios.push(benefResult.rows[0]);
 
@@ -216,19 +227,20 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
           `INSERT INTO "ACADEMICA" (
              "_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
              "email", "celular", "nivel", "step", "plataforma", "estadoInactivo",
-             "contrato", "usuarioId", "peopleId", "campaign", "curso", "inicioCurso",
+             "contrato", "usuarioId", "peopleId", "campaign", "curso", "inicioCurso", "userLogin",
              "_createdDate", "_updatedDate"
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,$12,$13,$14,$15,$16,$17::date,NOW(),NOW())`,
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,$12,$13,$14,$15,$16,$17::date,$18,NOW(),NOW())`,
           [ids.academic(), b.numeroId, b.primerNombre, b.segundoNombre || null,
            b.primerApellido, b.segundoApellido || null,
            b.email || null, b.celular || null, nivel, step, titular.plataforma || null,
-           contrato, benefId, benefId, b.campaign || null, b.tipoCurso || null, inicioCurso]
+           contrato, benefId, benefId, b.campaign || null, b.tipoCurso || null, inicioCurso, userLogin]
         );
       }
 
       // 3c. USUARIOS_ROLES — login BLOQUEADO (activo=false), clave placeholder=numeroId.
-      //     El beneficiario define su clave real al entrar por el link de crear-perfil
-      //     que llega con la bienvenida. Requiere email (PK lógica). Dedupe por email.
+      //     userLogin = identificador de login del estudiante. Requiere email (NOT NULL).
+      //     El beneficiario define su clave real al entrar por el link de crear-perfil.
+      //     Dedupe por email.
       if (b.email) {
         const exU = await client.query(
           `SELECT "_id" FROM "USUARIOS_ROLES" WHERE LOWER("email")=LOWER($1) LIMIT 1`,
@@ -237,11 +249,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         if (exU.rows.length === 0) {
           await client.query(
             `INSERT INTO "USUARIOS_ROLES" ("_id","email","password","nombre","apellido","celular",
-              "numberid","contrato","plataforma","rol","activo","origen",
+              "numberid","contrato","plataforma","userLogin","rol","activo","origen",
               "fechaCreacion","fechaActualizacion","_createdDate","_updatedDate")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'ESTUDIANTE',false,'POSTGRES',NOW(),NOW(),NOW(),NOW())`,
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ESTUDIANTE',false,'POSTGRES',NOW(),NOW(),NOW(),NOW())`,
             [randomUUID(), b.email, b.numeroId, b.primerNombre, b.primerApellido || null,
-             b.celular || null, b.numeroId, contrato, titular.plataforma || null]
+             b.celular || null, b.numeroId, contrato, titular.plataforma || null, userLogin]
           );
         }
       }

@@ -28,10 +28,12 @@ async function verifyUserPostgres(email: string, password: string) {
   try {
     console.log('🔍 [PostgreSQL] Buscando usuario:', email);
 
+    // El identificador puede ser el email (titulares/staff) o el userLogin
+    // (estudiantes MOSAICO). Se busca por cualquiera de los dos.
     const user = await queryOne<UserRole>(
       `SELECT "_id", "email", "password", "nombre", "rol", "activo"
        FROM "USUARIOS_ROLES"
-       WHERE "email" = $1`,
+       WHERE "email" = $1 OR "userLogin" = $1`,
       [email]
     );
 
@@ -41,11 +43,10 @@ async function verifyUserPostgres(email: string, password: string) {
     }
 
     // Look up the user's finalContrato from PEOPLE (TITULAR or BENEFICIARIO,
-    // whichever has it). Used both for the inactivity reason check below and
-    // for an in-line expiration guard for students.
+    // whichever has it). Match by email O userLogin (estudiantes entran por userLogin).
     const peopleRecord = await queryOne<{ finalContrato: string | null; rol?: string }>(
       `SELECT "finalContrato" FROM "PEOPLE"
-       WHERE LOWER("email") = LOWER($1) AND "finalContrato" IS NOT NULL
+       WHERE (LOWER("email") = LOWER($1) OR "userLogin" = $1) AND "finalContrato" IS NOT NULL
        ORDER BY "finalContrato" DESC LIMIT 1`,
       [email]
     );

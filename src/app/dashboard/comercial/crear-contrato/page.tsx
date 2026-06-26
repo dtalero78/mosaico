@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { ComercialPermission } from '@/types/permissions'
 import { cursosVisiblesContrato } from '@/lib/cursos-campaign'
+import { generateUserLogin } from '@/lib/user-login'
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 
 // Country prefixes
@@ -73,6 +74,7 @@ interface Beneficiario {
   campaign?: string;
   tipoCurso?: string;
   horarioCurso?: string;
+  userLogin?: string;
 }
 
 interface CursoRow {
@@ -95,12 +97,13 @@ interface CursoRow {
  * Aplica igual al titular-beneficiario y a los beneficiarios.
  */
 function CursoCampaignFields({
-  rows, values, onPatch, esImpulsa = false,
+  rows, values, onPatch, esImpulsa = false, userLogin,
 }: {
   rows: CursoRow[];
   values: { campaign?: string; tipoCurso?: string; horarioCurso?: string };
   onPatch: (patch: { campaign?: string; tipoCurso?: string; horarioCurso?: string }) => void;
   esImpulsa?: boolean;
+  userLogin?: string;
 }) {
   const campaign = values.campaign || '';
   const tipoCurso = values.tipoCurso || '';
@@ -160,6 +163,10 @@ function CursoCampaignFields({
             <label className={lbl}>Final del curso</label>
             <input type="text" value={fmtDate(selectedRow.finalCurso)} disabled className={sel} />
           </div>
+          <div>
+            <label className={lbl}>Usuario (userLogin)</label>
+            <input type="text" value={userLogin || '—'} disabled className={`${sel} font-mono tracking-wide`} title="Usuario de login generado automáticamente" />
+          </div>
         </>
       )}
     </>
@@ -213,6 +220,7 @@ function CrearContratoContent() {
     campaign: '',
     tipoCurso: '',
     horarioCurso: '',
+    userLogin: '',
     apoderado: '',
     apoderadoTelefono: '',
     apoderadoMail: ''
@@ -266,6 +274,33 @@ function CrearContratoContent() {
     }, 500)
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
   }, [titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba, esExtemporanea])
+
+  // Generar userLogin (10 chars, auto+aleatorio) cuando se define el curso.
+  // Titular-beneficiario: usa los datos del titular.
+  useEffect(() => {
+    if (!titularEsBeneficiario) return
+    if (!(titular.campaign && titular.tipoCurso && titular.horarioCurso)) return
+    if (!titular.primerNombre || !titular.numeroId || titular.userLogin) return
+    setTitular(prev => prev.userLogin
+      ? prev
+      : { ...prev, userLogin: generateUserLogin(prev.primerNombre, prev.primerApellido, prev.numeroId) })
+  }, [titularEsBeneficiario, titular.campaign, titular.tipoCurso, titular.horarioCurso, titular.primerNombre, titular.primerApellido, titular.numeroId, titular.userLogin])
+
+  // Beneficiarios: un userLogin por beneficiario cuando su curso queda definido.
+  useEffect(() => {
+    setBeneficiarios(prev => {
+      let changed = false
+      const next = prev.map(b => {
+        const cursoDef = b.campaign && b.tipoCurso && b.horarioCurso
+        if (cursoDef && b.primerNombre && b.numeroId && !b.userLogin) {
+          changed = true
+          return { ...b, userLogin: generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId) }
+        }
+        return b
+      })
+      return changed ? next : prev
+    })
+  }, [beneficiarios])
 
   // Cargar catálogo de cursos/horarios por campaña (CURSOS_CAMPAIGN)
   useEffect(() => {
@@ -922,6 +957,7 @@ function CrearContratoContent() {
                       <CursoCampaignFields
                         rows={cursosVisibles}
                         esImpulsa={titular.esCursoImpulsa}
+                        userLogin={titular.userLogin}
                         values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso }}
                         onPatch={(patch) => setTitular({ ...titular, ...patch })}
                       />
@@ -1509,6 +1545,7 @@ function CrearContratoContent() {
                           <CursoCampaignFields
                             rows={cursosVisibles}
                             esImpulsa={titular.esCursoImpulsa}
+                            userLogin={beneficiario.userLogin}
                             values={{ campaign: beneficiario.campaign, tipoCurso: beneficiario.tipoCurso, horarioCurso: beneficiario.horarioCurso }}
                             onPatch={(patch) => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, ...patch } : b))}
                           />

@@ -13,7 +13,8 @@ import { XMarkIcon, LockClosedIcon, ExclamationTriangleIcon } from '@heroicons/r
 const BANNER_DISMISSED_KEY = 'lgs_banner_dismissed'
 
 const loginSchema = z.object({
-  email: z.string().email('Email inválido'),
+  // Identificador: correo (titulares/staff) o userLogin (estudiantes MOSAICO).
+  email: z.string().min(3, 'Ingresa tu usuario o correo'),
   password: z.string().min(4, 'La contraseña debe tener al menos 4 caracteres'),
 })
 
@@ -264,14 +265,14 @@ export default function LoginPage() {
           <div className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
+                Usuario o correo
               </label>
               <input
                 {...register('email')}
-                type="email"
-                autoComplete="email"
+                type="text"
+                autoComplete="username"
                 className="input-field"
-                placeholder="tu@email.com"
+                placeholder="usuario o tu@email.com"
               />
               {errors.email && (
                 <p className="mt-1 text-sm text-danger-600">{errors.email.message}</p>
