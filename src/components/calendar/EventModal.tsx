@@ -66,14 +66,23 @@ export default function EventModal({
     fecha: '',
     hora: '',
     evento: 'SESSION' as 'SESSION' | 'CLUB' | 'WELCOME',
-    tituloONivel: '',
-    nombreEvento: '',
+    tituloONivel: '',   // = Módulo (código de NIVELES) o 'Todos'
+    nombreEvento: '',   // = Lección (step) o 'Todos'
     advisor: '',
     observaciones: '',
     limiteUsuarios: 20,
     linkZoom: '',
-    clubStep: ''
+    clubStep: '',
+    // MOSAICO — alcance Campaña → Curso → Salón ('Todos' = comodín)
+    campaign: '',
+    curso: '',
+    salon: '',
   })
+
+  // MOSAICO — catálogo de cursos de campaña + módulos del curso seleccionado
+  const [cursosCampaign, setCursosCampaign] = useState<Array<{ campaign: string; tipoCurso: string; salon?: string }>>([])
+  const [modulosMosaico, setModulosMosaico] = useState<Array<{ code: string; steps: string[] }>>([])
+  const TODOS = 'Todos'
 
   const [niveles, setNiveles] = useState<Nivel[]>([])
   const [codigosNivel, setCodigosNivel] = useState<string[]>([])
@@ -98,6 +107,25 @@ export default function EventModal({
       loadCodigosNivel()
     }
   }, [isOpen])
+
+  // MOSAICO — catálogo de cursos de campaña al abrir
+  useEffect(() => {
+    if (!isOpen) return
+    fetch('/api/postgres/cursos-campaign')
+      .then(r => (r.ok ? r.json() : { rows: [] }))
+      .then(d => setCursosCampaign(Array.isArray(d.rows) ? d.rows : []))
+      .catch(() => setCursosCampaign([]))
+  }, [isOpen])
+
+  // MOSAICO — módulos/lecciones del curso seleccionado (si no es 'Todos')
+  useEffect(() => {
+    const c = formData.curso
+    if (!c || c === TODOS) { setModulosMosaico([]); return }
+    fetch(`/api/postgres/niveles?curso=${encodeURIComponent(c)}`)
+      .then(r => (r.ok ? r.json() : { modulos: [] }))
+      .then(d => setModulosMosaico(Array.isArray(d.modulos) ? d.modulos : []))
+      .catch(() => setModulosMosaico([]))
+  }, [formData.curso])
 
   // Ejecutar cargarNombreStep cuando cambia tipo de evento (si ya hay nivel)
   useEffect(() => {
@@ -178,7 +206,10 @@ export default function EventModal({
         observaciones: editingEvent.observaciones || '',
         limiteUsuarios: editingEvent.limiteUsuarios,
         linkZoom: editingEvent.linkZoom || '',
-        clubStep: ''
+        clubStep: '',
+        campaign: (editingEvent as any).campaign || '',
+        curso: (editingEvent as any).curso || '',
+        salon: (editingEvent as any).salon || '',
       })
 
       const eventType = editingEvent.evento || editingEvent.tipo
@@ -214,7 +245,10 @@ export default function EventModal({
         observaciones: '',
         limiteUsuarios: 20,
         linkZoom: '',
-        clubStep: ''
+        clubStep: '',
+        campaign: '',
+        curso: '',
+        salon: '',
       })
     }
   }, [editingEvent, selectedDate, isOpen])
@@ -583,9 +617,11 @@ export default function EventModal({
     setError(null)
 
     try {
-      // Validaciones básicas
-      if (!formData.fecha || !formData.hora || !formData.tituloONivel || !formData.advisor) {
-        setError('Todos los campos obligatorios deben estar completos')
+      // Validaciones básicas (cascada MOSAICO: Campaña→Curso→Salón→Módulo→Lección)
+      if (!formData.fecha || !formData.hora || !formData.advisor ||
+          !formData.campaign || !formData.curso || !formData.salon ||
+          !formData.tituloONivel || !formData.nombreEvento) {
+        setError('Completa todos los campos obligatorios (Campaña, Curso, Salón, Módulo, Lección, Guía).')
         return
       }
 
@@ -616,6 +652,10 @@ export default function EventModal({
         observaciones: formData.observaciones || undefined,
         limiteUsuarios: Number(formData.limiteUsuarios),
         linkZoom: formData.linkZoom || undefined,
+        // MOSAICO — alcance del evento
+        campaign: formData.campaign || undefined,
+        curso: formData.curso || undefined,
+        salon: formData.salon || undefined,
       }
       if (compartidoConPayload) eventData.compartidoCon = compartidoConPayload
 
@@ -775,186 +815,138 @@ export default function EventModal({
               </div>
             )}
 
-            {/* Fecha */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha *
-              </label>
-              <input
-                type="date"
-                value={formData.fecha}
-                onChange={(e) => handleInputChange('fecha', e.target.value)}
-                className="input w-full"
-                required
-              />
-            </div>
-
-            {/* Hora */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Hora *
-              </label>
-              <select
-                value={formData.hora}
-                onChange={(e) => handleInputChange('hora', e.target.value)}
-                className="input w-full"
-                required
-              >
-                <option value="">Seleccionar hora</option>
-                {hourOptions.map((hour) => (
-                  <option key={hour.value} value={hour.value}>
-                    {hour.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tipo de Evento */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Evento *
-              </label>
-              <select
-                value={formData.evento}
-                onChange={(e) => handleInputChange('evento', e.target.value)}
-                className="input w-full"
-                required
-              >
-                <option value="WELCOME">Welcome</option>
-                <option value="SESSION">Sesión</option>
-                <option value="CLUB">Taller</option>
-              </select>
-            </div>
-
-            {/* Título/Nivel */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Módulo *
-              </label>
-              <select
-                value={formData.tituloONivel}
-                onChange={(e) => handleInputChange('tituloONivel', e.target.value)}
-                className="input w-full"
-                required
-              >
-                <option value="">Seleccionar módulo</option>
-                {codigosNivel.map((codigo) => (
-                  <option key={codigo} value={codigo}>
-                    {codigo}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Club Step (solo para CLUB) */}
-            {showClubStep && (
+            {/* ── Bloque superior: 2 columnas ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              {/* Fecha */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Lección *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fecha *</label>
+                <input type="date" value={formData.fecha} onChange={(e) => handleInputChange('fecha', e.target.value)} className="input w-full" required />
+              </div>
+              {/* Hora */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Hora *</label>
+                <select value={formData.hora} onChange={(e) => handleInputChange('hora', e.target.value)} className="input w-full" required>
+                  <option value="">Seleccionar hora</option>
+                  {hourOptions.map((hour) => (<option key={hour.value} value={hour.value}>{hour.label}</option>))}
+                </select>
+              </div>
+              {/* Tipo de Evento */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Evento *</label>
+                <select value={formData.evento} onChange={(e) => handleInputChange('evento', e.target.value)} className="input w-full" required>
+                  <option value="WELCOME">Welcome</option>
+                  <option value="SESSION">Sesión</option>
+                  <option value="CLUB">Taller</option>
+                </select>
+              </div>
+              {/* Campaña */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Campaña *</label>
                 <select
-                  value={formData.clubStep}
-                  onChange={(e) => handleInputChange('clubStep', e.target.value)}
-                  className="input w-full"
-                  required
+                  value={formData.campaign}
+                  onChange={(e) => setFormData(prev => ({ ...prev, campaign: e.target.value, curso: '', salon: '', tituloONivel: '', nombreEvento: '' }))}
+                  className="input w-full" required
                 >
-                  <option value="">Seleccionar lección</option>
-                  {stepOptions.map((step) => (
-                    <option key={step.value} value={step.value}>
-                      {step.label}
-                    </option>
+                  <option value="">Seleccionar campaña</option>
+                  {Array.from(new Set(cursosCampaign.map(r => r.campaign).filter(Boolean))).map(c => (
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
-            )}
-
-            {/* Nombre del Evento (dinámico según tipo) */}
-            {(formData.evento === 'SESSION' || formData.evento === 'CLUB') && formData.tituloONivel && (
+              {/* Curso */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {formData.evento === 'CLUB' ? 'Taller' : 'Lección'} *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Curso *</label>
+                <select
+                  value={formData.curso} disabled={!formData.campaign}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === TODOS) setFormData(prev => ({ ...prev, curso: TODOS, salon: TODOS, tituloONivel: TODOS, nombreEvento: TODOS }))
+                    else setFormData(prev => ({ ...prev, curso: v, salon: '', tituloONivel: '', nombreEvento: '' }))
+                  }}
+                  className="input w-full" required
+                >
+                  <option value="">Seleccionar curso</option>
+                  <option value={TODOS}>Todos</option>
+                  {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign).map(r => r.tipoCurso).filter(Boolean))).map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Salón */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Salón *</label>
+                <select
+                  value={formData.salon} disabled={!formData.curso || formData.curso === TODOS}
+                  onChange={(e) => handleInputChange('salon', e.target.value)}
+                  className="input w-full" required
+                >
+                  <option value="">Seleccionar salón</option>
+                  <option value={TODOS}>Todos</option>
+                  {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign && r.tipoCurso === formData.curso).map(r => r.salon).filter(Boolean))).map(s => (
+                    <option key={s} value={s as string}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Módulo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Módulo *</label>
+                <select
+                  value={formData.tituloONivel} disabled={!formData.curso || formData.curso === TODOS}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === TODOS) setFormData(prev => ({ ...prev, tituloONivel: TODOS, nombreEvento: TODOS }))
+                    else setFormData(prev => ({ ...prev, tituloONivel: v, nombreEvento: '' }))
+                  }}
+                  className="input w-full" required
+                >
+                  <option value="">Seleccionar módulo</option>
+                  <option value={TODOS}>Todos</option>
+                  {modulosMosaico.map(m => (<option key={m.code} value={m.code}>{m.code}</option>))}
+                </select>
+              </div>
+              {/* Lección */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Lección *</label>
                 <select
                   value={formData.nombreEvento}
+                  disabled={!formData.tituloONivel || formData.tituloONivel === TODOS || formData.curso === TODOS}
                   onChange={(e) => handleInputChange('nombreEvento', e.target.value)}
-                  className="input w-full"
-                  required
+                  className="input w-full" required
                 >
-                  <option value="">
-                    {formData.evento === 'CLUB' ? 'Seleccionar taller' : 'Seleccionar lección'}
-                  </option>
-                  {formData.evento === 'CLUB'
-                    ? clubOptions.map((club) => (
-                        <option key={club.value} value={club.value}>
-                          {club.label}
-                        </option>
-                      ))
-                    : stepOptions.map((step) => (
-                        <option key={step.value} value={step.value}>
-                          {step.label}
-                        </option>
-                      ))
-                  }
+                  <option value="">Seleccionar lección</option>
+                  <option value={TODOS}>Todas</option>
+                  {(modulosMosaico.find(m => m.code === formData.tituloONivel)?.steps || []).map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
                 </select>
               </div>
-            )}
-
-
-            {/* Advisor */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Guía *
-              </label>
-              <select
-                value={formData.advisor}
-                onChange={(e) => handleInputChange('advisor', e.target.value)}
-                className="input w-full"
-                required
-              >
-                <option value="">Seleccionar guía</option>
-                {advisors
-                  .slice()
-                  .sort((a, b) => {
-                    const nameA = `${a.primerNombre} ${a.primerApellido}`.toLowerCase()
-                    const nameB = `${b.primerNombre} ${b.primerApellido}`.toLowerCase()
-                    return nameA.localeCompare(nameB)
-                  })
-                  .map((advisor) => (
-                    <option key={advisor._id} value={advisor._id}>
-                      {advisor.primerNombre} {advisor.primerApellido}
-                    </option>
-                  ))}
-              </select>
+              {/* Límite de Usuarios */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Límite de Usuarios *</label>
+                <input type="number" value={formData.limiteUsuarios} onChange={(e) => handleInputChange('limiteUsuarios', Number(e.target.value))} className="input w-full" min="1" max="100" required />
+              </div>
             </div>
 
-            {/* Límite de Usuarios */}
+            {/* ── Bloque inferior: 1 columna ── */}
+            {/* Guía */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Límite de Usuarios *
-              </label>
-              <input
-                type="number"
-                value={formData.limiteUsuarios}
-                onChange={(e) => handleInputChange('limiteUsuarios', Number(e.target.value))}
-                className="input w-full"
-                min="1"
-                max="100"
-                required
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Guía *</label>
+              <select value={formData.advisor} onChange={(e) => handleInputChange('advisor', e.target.value)} className="input w-full" required>
+                <option value="">Seleccionar guía</option>
+                {advisors.slice().sort((a, b) => {
+                  const nameA = `${a.primerNombre} ${a.primerApellido}`.toLowerCase()
+                  const nameB = `${b.primerNombre} ${b.primerApellido}`.toLowerCase()
+                  return nameA.localeCompare(nameB)
+                }).map((advisor) => (
+                  <option key={advisor._id} value={advisor._id}>{advisor.primerNombre} {advisor.primerApellido}</option>
+                ))}
+              </select>
             </div>
 
             {/* Link Zoom */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Link de Zoom
-              </label>
-              <input
-                type="url"
-                value={formData.linkZoom}
-                onChange={(e) => handleInputChange('linkZoom', e.target.value)}
-                className="input w-full"
-                placeholder="https://zoom.us/..."
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Link de Zoom</label>
+              <input type="url" value={formData.linkZoom} onChange={(e) => handleInputChange('linkZoom', e.target.value)} className="input w-full" placeholder="https://zoom.us/..." />
             </div>
 
             {/* Evento compartido entre niveles — sólo en CREAR */}
