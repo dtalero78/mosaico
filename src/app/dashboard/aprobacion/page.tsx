@@ -283,7 +283,7 @@ export default function AprobacionPage() {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">🛡️ Centro de Aprobaciones</h1>
+            <h1 className="text-2xl font-bold text-gray-900">🛡️ Gestión de Aprobaciones</h1>
             <p className="mt-2 text-sm text-gray-700">
               Gestión de aprobaciones administrativas y contratos
             </p>
