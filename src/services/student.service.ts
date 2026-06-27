@@ -74,6 +74,21 @@ async function enrichWithLoginPassword(profile: any) {
  * @param academicId  ACADEMICA._id
  */
 /**
+ * Primer módulo/lección de un curso (NIVELES por `curso`, ORDER BY orden). Se usa como
+ * fallback cuando PEOPLE no tiene nivel/step (contratos previos al relleno) para que la
+ * promoción aterrice al inicio del curso real.
+ */
+async function resolveFirstModuloLeccion(curso: string | null): Promise<{ nivel: string; step: string }> {
+  if (!curso) return { nivel: '', step: '' };
+  const row = await queryOne<{ code: string; step: string }>(
+    `SELECT "code", "step" FROM "NIVELES" WHERE "curso" = $1
+     ORDER BY "orden" ASC NULLS LAST, "code", "step" LIMIT 1`,
+    [curso]
+  );
+  return { nivel: row?.code || '', step: row?.step || '' };
+}
+
+/**
  * Preview (solo lectura) del curso REAL al que se promovería al beneficiario desde
  * el curso puente WELCOME. No muta nada — alimenta el modal de confirmación.
  */
@@ -101,11 +116,20 @@ export async function previewPromoteFromWelcome(academicId: string) {
   const nombre = [academic.primerNombre, academic.segundoNombre, academic.primerApellido, academic.segundoApellido]
     .filter(Boolean).join(' ').trim();
 
+  // Fallback: si PEOPLE no trae nivel/step, usar el primer módulo/lección del curso real.
+  let destNivel = people.nivel || '';
+  let destStep = people.step || '';
+  if (!destNivel || !destStep) {
+    const first = await resolveFirstModuloLeccion(people.tipoCurso);
+    destNivel = destNivel || first.nivel;
+    destStep = destStep || first.step;
+  }
+
   return {
     nombre,
     numeroId: academic.numeroId || null,
     actual: { curso: academic.curso || null, nivel: academic.nivel || null, step: academic.step || null, salon: academic.salon || null },
-    destino: { campaign: people.campaign || null, curso: people.tipoCurso || null, salon: people.salon || null, nivel: people.nivel || null, step: people.step || null },
+    destino: { campaign: people.campaign || null, curso: people.tipoCurso || null, salon: people.salon || null, nivel: destNivel || null, step: destStep || null },
   };
 }
 
@@ -133,8 +157,17 @@ export async function promoteFromWelcome(
   }
   if (!people) throw new NotFoundError('PEOPLE del beneficiario', academicId);
 
+  // Fallback: si PEOPLE no trae nivel/step, aterrizar en el primer módulo/lección del curso real.
+  let destNivel = people.nivel || '';
+  let destStep = people.step || '';
+  if (!destNivel || !destStep) {
+    const first = await resolveFirstModuloLeccion(people.tipoCurso);
+    destNivel = destNivel || first.nivel;
+    destStep = destStep || first.step;
+  }
+
   const before = `${academic.curso || '—'} / ${academic.nivel || '—'} / ${academic.step || '—'}`;
-  const after = `${people.tipoCurso || '—'} / ${people.nivel || '—'} / ${people.step || '—'}`;
+  const after = `${people.tipoCurso || '—'} / ${destNivel || '—'} / ${destStep || '—'}`;
 
   const entry = {
     fecha: new Date().toISOString(),
@@ -155,8 +188,8 @@ export async function promoteFromWelcome(
       people.campaign || null,
       people.tipoCurso || null,
       people.salon || null,
-      people.nivel || '',
-      people.step || '',
+      destNivel,
+      destStep,
       JSON.stringify([...history, entry]),
     ]
   );
