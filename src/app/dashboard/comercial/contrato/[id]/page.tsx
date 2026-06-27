@@ -803,6 +803,26 @@ export default function ContratoDetailPage() {
               icon={UsersIcon}
               color="bg-green-50 text-green-800"
             >
+              {/* Apoderado del contrato (datos del titular) */}
+              {(titular?.apoderado || titular?.apoderadoTelefono || titular?.apoderadoMail) && (
+                <div className="mb-4 pb-4 border-b border-green-100">
+                  <p className="text-xs font-semibold text-green-700 mb-2">Apoderado</p>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-wide text-gray-500">Nombre</dt>
+                      <dd className="text-sm text-gray-900">{titular?.apoderado || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-wide text-gray-500">Teléfono</dt>
+                      <dd className="text-sm text-gray-900">{titular?.apoderadoTelefono || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-wide text-gray-500">Correo</dt>
+                      <dd className="text-sm text-gray-900">{titular?.apoderadoMail || '—'}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
               {beneficiarios.length === 0 ? (
                 <p className="text-sm text-gray-500 italic">No hay beneficiarios registrados</p>
               ) : (
