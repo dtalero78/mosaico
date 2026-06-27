@@ -73,6 +73,42 @@ async function enrichWithLoginPassword(profile: any) {
  * Idempotente: si PEOPLE no tiene curso real, no rompe. Registra en cambioStepHistory.
  * @param academicId  ACADEMICA._id
  */
+/**
+ * Preview (solo lectura) del curso REAL al que se promovería al beneficiario desde
+ * el curso puente WELCOME. No muta nada — alimenta el modal de confirmación.
+ */
+export async function previewPromoteFromWelcome(academicId: string) {
+  const academic = await queryOne<any>(
+    `SELECT "_id", "peopleId", "numeroId", "primerNombre", "segundoNombre", "primerApellido",
+            "segundoApellido", "curso", "nivel", "step", "salon" FROM "ACADEMICA" WHERE "_id" = $1`,
+    [academicId]
+  );
+  if (!academic) throw new NotFoundError('Registro académico', academicId);
+
+  let people = academic.peopleId
+    ? await queryOne<any>(`SELECT "campaign", "tipoCurso", "salon", "nivel", "step" FROM "PEOPLE" WHERE "_id" = $1`, [academic.peopleId])
+    : null;
+  if (!people) {
+    people = await queryOne<any>(
+      `SELECT "campaign", "tipoCurso", "salon", "nivel", "step" FROM "PEOPLE"
+       WHERE "numeroId" = $1 AND "tipoUsuario" = 'BENEFICIARIO'
+       ORDER BY "_createdDate" DESC NULLS LAST LIMIT 1`,
+      [academic.numeroId]
+    );
+  }
+  if (!people) throw new NotFoundError('PEOPLE del beneficiario', academicId);
+
+  const nombre = [academic.primerNombre, academic.segundoNombre, academic.primerApellido, academic.segundoApellido]
+    .filter(Boolean).join(' ').trim();
+
+  return {
+    nombre,
+    numeroId: academic.numeroId || null,
+    actual: { curso: academic.curso || null, nivel: academic.nivel || null, step: academic.step || null, salon: academic.salon || null },
+    destino: { campaign: people.campaign || null, curso: people.tipoCurso || null, salon: people.salon || null, nivel: people.nivel || null, step: people.step || null },
+  };
+}
+
 export async function promoteFromWelcome(
   academicId: string,
   actor?: { email?: string; nombre?: string }

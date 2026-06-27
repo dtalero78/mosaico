@@ -24,6 +24,13 @@ interface StudentTabsProps {
   isSuspendida?: boolean
 }
 
+interface WelcomePreview {
+  nombre: string
+  numeroId: string | null
+  actual: { curso: string | null; nivel: string | null; step: string | null; salon: string | null }
+  destino: { campaign: string | null; curso: string | null; salon: string | null; nivel: string | null; step: string | null }
+}
+
 const tabs = [
   { id: 'general', name: 'Información General', icon: 'ℹ️' },
   { id: 'academic', name: 'Académica', icon: '📚', hasSubmenu: true },
@@ -40,6 +47,12 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   const [showChangeStepModal, setShowChangeStepModal] = useState(false)
   const [showInicializarModal, setShowInicializarModal] = useState(false)
   const [showCambioStepAuditadoModal, setShowCambioStepAuditadoModal] = useState(false)
+  const [welcomeModal, setWelcomeModal] = useState<{
+    loading: boolean
+    submitting: boolean
+    error: string | null
+    preview: WelcomePreview | null
+  } | null>(null)
   const { hasPermission, hasAnyPermission } = usePermissions()
 
   // Control de acceso: usuario necesita al menos uno de los permisos de Steps para ver el botón
@@ -101,6 +114,19 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     setAcademicView('attendance') // Always show attendance table by default
   }
 
+  const confirmWelcome = () => {
+    setWelcomeModal(prev => prev ? { ...prev, submitting: true, error: null } : prev)
+    fetch(`/api/postgres/students/${student._id}/promote-welcome`, { method: 'POST' })
+      .then(async r => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error((d as any)?.error || 'Error al aprobar Welcome')
+        toast.success('Estudiante promovido a su curso')
+        setWelcomeModal(null)
+        setTimeout(() => window.location.reload(), 700)
+      })
+      .catch(e => setWelcomeModal(prev => prev ? { ...prev, submitting: false, error: e.message || 'Error al aprobar Welcome' } : prev))
+  }
+
   const handleMouseEnter = () => {
     if (closeTimeout) {
       clearTimeout(closeTimeout)
@@ -154,19 +180,18 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
                           <button
                             key={item.id}
                             onClick={() => {
-                              // Aprobar Welcome: promueve al estudiante a su curso real (PEOPLE→ACADEMICA)
+                              // Aprobar Welcome: abre modal de confirmación con el curso destino
                               if (item.id === 'aprobar-welcome') {
                                 setShowAcademicSubmenu(false)
                                 if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
-                                if (!window.confirm('¿Aprobar Welcome? Se promoverá al estudiante a su curso real (curso/salón/módulo/lección desde su registro original).')) return
-                                fetch(`/api/postgres/students/${student._id}/promote-welcome`, { method: 'POST' })
+                                setWelcomeModal({ loading: true, submitting: false, error: null, preview: null })
+                                fetch(`/api/postgres/students/${student._id}/promote-welcome`)
                                   .then(async r => {
                                     const d = await r.json().catch(() => ({}))
-                                    if (!r.ok) throw new Error((d as any)?.error || 'Error al aprobar Welcome')
-                                    toast.success('Estudiante promovido a su curso')
-                                    setTimeout(() => window.location.reload(), 700)
+                                    if (!r.ok) throw new Error((d as any)?.error || 'No se pudo cargar el curso destino')
+                                    setWelcomeModal({ loading: false, submitting: false, error: null, preview: d as WelcomePreview })
                                   })
-                                  .catch(e => toast.error(e.message || 'Error al aprobar Welcome'))
+                                  .catch(e => setWelcomeModal({ loading: false, submitting: false, error: e.message || 'Error', preview: null }))
                                 return
                               }
                               // Si es "change-step" o "inicializar-nivel", abrir modal en lugar de cambiar vista
@@ -275,6 +300,82 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
           onClose={() => setShowCambioStepAuditadoModal(false)}
           onSuccess={() => window.location.reload()}
         />
+      )}
+
+      {/* Modal Aprobar Welcome */}
+      {welcomeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => { if (!welcomeModal.submitting) setWelcomeModal(null) }}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+              <span className="text-xl">✅</span>
+              <h3 className="text-lg font-semibold text-gray-900">Aprobar Welcome</h3>
+            </div>
+
+            <div className="px-6 py-5">
+              {welcomeModal.loading ? (
+                <div className="py-6 text-center text-sm text-gray-500">Cargando curso destino…</div>
+              ) : welcomeModal.error ? (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">
+                  {welcomeModal.error}
+                </div>
+              ) : welcomeModal.preview ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Se promoverá al estudiante del curso puente <strong>WELCOME</strong> a su curso real.
+                    Verifica los datos antes de confirmar.
+                  </p>
+
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Beneficiario</p>
+                    <p className="text-base font-semibold text-gray-900">{welcomeModal.preview.nombre || '—'}</p>
+                    {welcomeModal.preview.numeroId && (
+                      <p className="text-xs text-gray-500">ID: {welcomeModal.preview.numeroId}</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-primary-100 bg-primary-50/60 p-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-primary-700 mb-2">Se promoverá a</p>
+                    <dl className="grid grid-cols-3 gap-y-2 text-sm">
+                      <dt className="text-gray-500">Campaña</dt>
+                      <dd className="col-span-2 font-medium text-gray-900">{welcomeModal.preview.destino.campaign || '—'}</dd>
+                      <dt className="text-gray-500">Curso</dt>
+                      <dd className="col-span-2 font-medium text-gray-900">{welcomeModal.preview.destino.curso || '—'}</dd>
+                      <dt className="text-gray-500">Salón</dt>
+                      <dd className="col-span-2 font-medium text-gray-900">{welcomeModal.preview.destino.salon || '—'}</dd>
+                      <dt className="text-gray-500">Módulo</dt>
+                      <dd className="col-span-2 font-medium text-gray-900">{welcomeModal.preview.destino.nivel || '—'}</dd>
+                      <dt className="text-gray-500">Lección</dt>
+                      <dd className="col-span-2 font-medium text-gray-900">{welcomeModal.preview.destino.step || '—'}</dd>
+                    </dl>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setWelcomeModal(null)}
+                disabled={welcomeModal.submitting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmWelcome}
+                disabled={welcomeModal.loading || welcomeModal.submitting || !welcomeModal.preview}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50"
+              >
+                {welcomeModal.submitting ? 'Promoviendo…' : 'Confirmar y aprobar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
