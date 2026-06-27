@@ -7,7 +7,7 @@ export const GET = handlerWithAuth(async () => {
   const result = await query(
     `SELECT "_id", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
             "numeroId", "contrato", "celular", "email", "plataforma", "tipoUsuario",
-            "aprobacion", "hashConsentimiento", "documentacion",
+            "aprobacion", "hashConsentimiento", "documentacion", "extemporanea",
             "_createdDate", "fechaCreacion"
      FROM "PEOPLE"
      WHERE "tipoUsuario" = 'TITULAR'

@@ -125,6 +125,9 @@ async function PersonContent({ personId, initialTab }: { personId: string; initi
               <span className="badge badge-info">
                 {personData.person.tipoUsuario}
               </span>
+              {(personData.person as any).extemporanea && (
+                <span className="badge bg-red-100 text-red-700">⏰ Extemporánea</span>
+              )}
               {personData.person.aprobacion && (
                 <span className={`badge ${getEstadoBadgeClass(personData.person.aprobacion)}`}>
                   {personData.person.aprobacion === 'FINALIZADA' ? '❌ Aprobada' : personData.person.aprobacion}

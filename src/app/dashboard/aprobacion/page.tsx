@@ -499,6 +499,11 @@ export default function AprobacionPage() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{contrato.contrato}</div>
                           <div className="text-sm text-gray-500">{contrato.plataforma}</div>
+                          {(contrato as any).extemporanea && (
+                            <span className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                              ⏰ Extemporánea
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{contrato.celular}</div>
