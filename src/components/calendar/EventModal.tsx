@@ -821,14 +821,14 @@ export default function EventModal({
                 required
               >
                 <option value="SESSION">Sesión</option>
-                <option value="CLUB">Club</option>
+                <option value="CLUB">Taller</option>
               </select>
             </div>
 
             {/* Título/Nivel */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nivel *
+                Módulo *
               </label>
               <select
                 value={formData.tituloONivel}
@@ -836,7 +836,7 @@ export default function EventModal({
                 className="input w-full"
                 required
               >
-                <option value="">Seleccionar nivel</option>
+                <option value="">Seleccionar módulo</option>
                 {codigosNivel.map((codigo) => (
                   <option key={codigo} value={codigo}>
                     {codigo}
@@ -849,7 +849,7 @@ export default function EventModal({
             {showClubStep && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Step *
+                  Lección *
                 </label>
                 <select
                   value={formData.clubStep}
@@ -857,7 +857,7 @@ export default function EventModal({
                   className="input w-full"
                   required
                 >
-                  <option value="">Seleccionar step</option>
+                  <option value="">Seleccionar lección</option>
                   {stepOptions.map((step) => (
                     <option key={step.value} value={step.value}>
                       {step.label}
@@ -871,7 +871,7 @@ export default function EventModal({
             {(formData.evento === 'SESSION' || formData.evento === 'CLUB') && formData.tituloONivel && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {formData.evento === 'CLUB' ? 'Club' : 'Step'} *
+                  {formData.evento === 'CLUB' ? 'Taller' : 'Lección'} *
                 </label>
                 <select
                   value={formData.nombreEvento}
@@ -880,7 +880,7 @@ export default function EventModal({
                   required
                 >
                   <option value="">
-                    {formData.evento === 'CLUB' ? 'Seleccionar club' : 'Seleccionar step'}
+                    {formData.evento === 'CLUB' ? 'Seleccionar taller' : 'Seleccionar lección'}
                   </option>
                   {formData.evento === 'CLUB'
                     ? clubOptions.map((club) => (
@@ -902,7 +902,7 @@ export default function EventModal({
             {/* Advisor */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Advisor *
+                Guía *
               </label>
               <select
                 value={formData.advisor}
@@ -910,7 +910,7 @@ export default function EventModal({
                 className="input w-full"
                 required
               >
-                <option value="">Seleccionar advisor</option>
+                <option value="">Seleccionar guía</option>
                 {advisors
                   .slice()
                   .sort((a, b) => {
@@ -987,13 +987,13 @@ export default function EventModal({
                     {compartidoCon.map((c, idx) => (
                       <div key={idx} className="flex items-end gap-2 flex-wrap">
                         <div className="flex-1 min-w-[140px]">
-                          <label className="block text-xs text-gray-600 mb-1">Nivel adicional #{idx + 1}</label>
+                          <label className="block text-xs text-gray-600 mb-1">Módulo adicional #{idx + 1}</label>
                           <select
                             value={c.nivel}
                             onChange={e => actualizarNivelCompartido(idx, e.target.value)}
                             className="input w-full"
                           >
-                            <option value="">— Seleccionar nivel —</option>
+                            <option value="">— Seleccionar módulo —</option>
                             {codigosNivel
                               .filter(code => !nivelesUsados.has(code) || code === c.nivel)
                               .map(code => (
@@ -1002,7 +1002,7 @@ export default function EventModal({
                           </select>
                         </div>
                         <div className="flex-1 min-w-[160px]">
-                          <label className="block text-xs text-gray-600 mb-1">Step / Club</label>
+                          <label className="block text-xs text-gray-600 mb-1">Lección / Taller</label>
                           <select
                             value={c.step}
                             onChange={e => actualizarStepCompartido(idx, e.target.value)}
