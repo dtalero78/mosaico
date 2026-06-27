@@ -127,6 +127,18 @@ export default function EventModal({
       .catch(() => setModulosMosaico([]))
   }, [formData.curso])
 
+  // MOSAICO — evento Welcome: Curso='WELCOME' y Salón='Salon 00' fijos (el Módulo será
+  // MOSAICO/IMPULSA, la Lección 'Leccion 00'). Al salir de Welcome se limpia.
+  useEffect(() => {
+    if (formData.evento === 'WELCOME') {
+      setFormData(prev => prev.curso === 'WELCOME'
+        ? prev
+        : ({ ...prev, curso: 'WELCOME', salon: 'Salon 00', tituloONivel: '', nombreEvento: '' }))
+    } else if (formData.curso === 'WELCOME') {
+      setFormData(prev => ({ ...prev, curso: '', salon: '', tituloONivel: '', nombreEvento: '' }))
+    }
+  }, [formData.evento])
+
   // Ejecutar cargarNombreStep cuando cambia tipo de evento (si ya hay nivel)
   useEffect(() => {
     if (formData.tituloONivel) {
@@ -857,7 +869,7 @@ export default function EventModal({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Curso *</label>
                 <select
-                  value={formData.curso} disabled={!formData.campaign}
+                  value={formData.curso} disabled={!formData.campaign || formData.evento === 'WELCOME'}
                   onChange={(e) => {
                     const v = e.target.value
                     if (v === TODOS) setFormData(prev => ({ ...prev, curso: TODOS, salon: TODOS, tituloONivel: TODOS, nombreEvento: TODOS }))
@@ -865,26 +877,38 @@ export default function EventModal({
                   }}
                   className="input w-full" required
                 >
-                  <option value="">Seleccionar curso</option>
-                  <option value={TODOS}>Todos</option>
-                  {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign).map(r => r.tipoCurso).filter(Boolean))).map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {formData.evento === 'WELCOME' ? (
+                    <option value="WELCOME">WELCOME</option>
+                  ) : (
+                    <>
+                      <option value="">Seleccionar curso</option>
+                      <option value={TODOS}>Todos</option>
+                      {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign).map(r => r.tipoCurso).filter(Boolean))).map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
               {/* Salón */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Salón *</label>
                 <select
-                  value={formData.salon} disabled={!formData.curso || formData.curso === TODOS}
+                  value={formData.salon} disabled={!formData.curso || formData.curso === TODOS || formData.evento === 'WELCOME'}
                   onChange={(e) => handleInputChange('salon', e.target.value)}
                   className="input w-full" required
                 >
-                  <option value="">Seleccionar salón</option>
-                  <option value={TODOS}>Todos</option>
-                  {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign && r.tipoCurso === formData.curso).map(r => r.salon).filter(Boolean))).map(s => (
-                    <option key={s} value={s as string}>{s}</option>
-                  ))}
+                  {formData.evento === 'WELCOME' ? (
+                    <option value="Salon 00">Salon 00</option>
+                  ) : (
+                    <>
+                      <option value="">Seleccionar salón</option>
+                      <option value={TODOS}>Todos</option>
+                      {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign && r.tipoCurso === formData.curso).map(r => r.salon).filter(Boolean))).map(s => (
+                        <option key={s} value={s as string}>{s}</option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
               {/* Módulo */}
@@ -900,7 +924,7 @@ export default function EventModal({
                   className="input w-full" required
                 >
                   <option value="">Seleccionar módulo</option>
-                  <option value={TODOS}>Todos</option>
+                  {formData.evento !== 'WELCOME' && <option value={TODOS}>Todos</option>}
                   {modulosMosaico.map(m => (<option key={m.code} value={m.code}>{m.code}</option>))}
                 </select>
               </div>
@@ -914,7 +938,7 @@ export default function EventModal({
                   className="input w-full" required
                 >
                   <option value="">Seleccionar lección</option>
-                  <option value={TODOS}>Todas</option>
+                  {formData.evento !== 'WELCOME' && <option value={TODOS}>Todas</option>}
                   {(modulosMosaico.find(m => m.code === formData.tituloONivel)?.steps || []).map(s => (
                     <option key={s} value={s}>{s}</option>
                   ))}
