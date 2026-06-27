@@ -193,52 +193,55 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         userLogin = generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId);
       }
 
-      // 3a. PEOPLE beneficiario — nace INACTIVO (estadoInactivo=true hasta la aprobación)
+      // Curso REAL → primer módulo/lección (de NIVELES por curso). Va a PEOPLE.
+      // ACADEMICA nace en WELCOME (puente) y se promueve a este curso real luego
+      // (al asistir a la bienvenida o con "Aprobar Welcome").
+      let realNivel = '';
+      let realStep = '';
+      if (b.tipoCurso) {
+        const nr = await client.query(
+          `SELECT "code", "step" FROM "NIVELES" WHERE "curso"=$1 ORDER BY "orden" NULLS LAST, "step" LIMIT 1`,
+          [b.tipoCurso]
+        );
+        realNivel = nr.rows[0]?.code || '';
+        realStep = nr.rows[0]?.step || '';
+      }
+      // Módulo del curso puente WELCOME según el curso real: IMPULSA → IMPULSA, resto → MOSAICO.
+      const welcomeModulo = (b.tipoCurso === 'IMPULSA') ? 'IMPULSA' : 'MOSAICO';
+
+      // 3a. PEOPLE beneficiario — nace INACTIVO. Guarda el CURSO REAL: campaign / tipoCurso /
+      //     salon / nivel(=módulo) / step(=lección). Es la fuente de la promoción.
       const benefResult = await client.query(
         `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
           "email", "celular", "fechaNacimiento", "titularId",
           "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
-          "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "userLogin", "origen", "_createdDate", "_updatedDate")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,$19,'POSTGRES',NOW(),NOW()) RETURNING *`,
+          "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "nivel", "step", "userLogin", "origen", "_createdDate", "_updatedDate")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,$19,$20,$21,'POSTGRES',NOW(),NOW()) RETURNING *`,
         [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
          b.primerApellido, b.segundoApellido || null,
          b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
          contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato,
-         b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon, userLogin]
+         b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon, realNivel, realStep, userLogin]
       );
       created.beneficiarios.push(benefResult.rows[0]);
 
-      // 3b. ACADEMICA del beneficiario — INACTIVO. Un beneficiario = un solo ACADEMICA.
-      //     usuarioId = PEOPLE._id (como el motor) · peopleId = PEOPLE._id (enlace/booking).
-      //     nivel/step se leen de NIVELES por curso (NIVELES vacío → quedan en blanco).
+      // 3b. ACADEMICA del beneficiario — INACTIVO, nace en el curso puente WELCOME:
+      //     curso='WELCOME', nivel=módulo MOSAICO|IMPULSA, step='Leccion 00', salon='Salon 00'.
+      //     usuarioId/peopleId/studentId = PEOPLE._id (FK). Un beneficiario = un solo ACADEMICA.
       const exA = await client.query(`SELECT "_id" FROM "ACADEMICA" WHERE "numeroId"=$1 LIMIT 1`, [b.numeroId]);
       if (exA.rows.length === 0) {
-        // nivel/step se leen de NIVELES por curso (primer módulo/lección). Son NOT NULL,
-        // así que si el curso aún no está sembrado en NIVELES se usa '' (no null).
-        let nivel = '';
-        let step = '';
-        if (b.tipoCurso) {
-          const nr = await client.query(
-            `SELECT "code", "step" FROM "NIVELES" WHERE "curso"=$1 ORDER BY "orden" NULLS LAST, "step" LIMIT 1`,
-            [b.tipoCurso]
-          );
-          nivel = nr.rows[0]?.code || '';
-          step = nr.rows[0]?.step || '';
-        }
-        // studentId/peopleId/usuarioId son FK a PEOPLE(_id) = el PEOPLE del beneficiario.
-        // (Los bookings, en cambio, usan ACADEMICA._id como su studentId — otra tabla.)
         const academicId = ids.academic();
         await client.query(
           `INSERT INTO "ACADEMICA" (
              "_id", "studentId", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
              "email", "celular", "nivel", "step", "plataforma", "estadoInactivo", "tipoUsuario",
-             "contrato", "usuarioId", "peopleId", "campaign", "curso", "inicioCurso", "userLogin",
+             "contrato", "usuarioId", "peopleId", "campaign", "curso", "salon", "inicioCurso", "userLogin",
              "_createdDate", "_updatedDate"
-           ) VALUES ($1,$13,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'BENEFICIARIO',$12,$13,$14,$15,$16,$17::date,$18,NOW(),NOW())`,
+           ) VALUES ($1,$13,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'BENEFICIARIO',$12,$13,$14,$15,'WELCOME','Salon 00',$16::date,$17,NOW(),NOW())`,
           [academicId, b.numeroId, b.primerNombre, b.segundoNombre || null,
            b.primerApellido, b.segundoApellido || null,
-           b.email || null, b.celular || null, nivel, step, titular.plataforma || null,
-           contrato, benefId, benefId, b.campaign || null, b.tipoCurso || null, inicioCurso, userLogin]
+           b.email || null, b.celular || null, welcomeModulo, 'Leccion 00', titular.plataforma || null,
+           contrato, benefId, benefId, b.campaign || null, inicioCurso, userLogin]
         );
       }
 
