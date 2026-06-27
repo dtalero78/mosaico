@@ -117,15 +117,21 @@ export default function EventModal({
       .catch(() => setCursosCampaign([]))
   }, [isOpen])
 
-  // MOSAICO — módulos/lecciones del curso seleccionado (si no es 'Todos')
+  // MOSAICO — módulos/lecciones del curso seleccionado (si no es 'Todos').
+  // Depende de `evento` además de `curso`: cuando el evento es Welcome, el curso a
+  // consultar es siempre 'WELCOME' (lo resolvemos aquí sin esperar a que el efecto
+  // Welcome setee formData.curso — eso evitaba poblar el dropdown en la 1ª selección).
   useEffect(() => {
-    const c = formData.curso
+    if (!isOpen) return
+    const c = formData.evento === 'WELCOME' ? 'WELCOME' : formData.curso
     if (!c || c === TODOS) { setModulosMosaico([]); return }
+    let cancelled = false
     fetch(`/api/postgres/niveles?curso=${encodeURIComponent(c)}`, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : { modulos: [] }))
-      .then(d => setModulosMosaico(Array.isArray(d.modulos) ? d.modulos : []))
-      .catch(() => setModulosMosaico([]))
-  }, [formData.curso])
+      .then(d => { if (!cancelled) setModulosMosaico(Array.isArray(d.modulos) ? d.modulos : []) })
+      .catch(() => { if (!cancelled) setModulosMosaico([]) })
+    return () => { cancelled = true }
+  }, [isOpen, formData.evento, formData.curso])
 
   // MOSAICO — evento Welcome: Curso='WELCOME' y Salón='Salon 00' fijos (el Módulo será
   // MOSAICO/IMPULSA, la Lección 'Leccion 00'). Al salir de Welcome se limpia.
