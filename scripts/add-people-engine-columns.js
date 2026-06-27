@@ -6,6 +6,8 @@
  *   suspenddata   JSONB    (auditoría de suspensión administrativa)
  *   suspendcount  INTEGER  (contador de suspensiones)
  *   documentacion JSONB    (array de documentos del titular/beneficiario)
+ *   comentarios   TEXT     (array de comentarios; el repo lo lee con ::text[] y
+ *                           escribe con array_append(...)::text → tipo TEXT)
  *
  * Uso: node scripts/add-people-engine-columns.js
  * Idempotente: ADD COLUMN IF NOT EXISTS.
@@ -26,6 +28,8 @@ const { Pool } = require('pg');
     console.log('  ✓ PEOPLE."suspendcount" INTEGER DEFAULT 0');
     await pool.query(`ALTER TABLE "PEOPLE" ADD COLUMN IF NOT EXISTS "documentacion" JSONB`);
     console.log('  ✓ PEOPLE."documentacion" JSONB');
+    await pool.query(`ALTER TABLE "PEOPLE" ADD COLUMN IF NOT EXISTS "comentarios" TEXT`);
+    console.log('  ✓ PEOPLE."comentarios" TEXT');
     console.log('✅ Columnas del motor agregadas a PEOPLE.');
   } catch (e) {
     console.error('ERROR:', e.message);
