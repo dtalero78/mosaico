@@ -80,6 +80,8 @@ async function PersonContent({ personId, initialTab }: { personId: string; initi
       estado: person.estadoInactivo ? 'Inactivo' : (person.aprobacion || 'Pendiente'),
       fechaCreacion: person._createdDate,
       nivel: person.nivel,
+      curso: person.tipoCurso,
+      salon: person.salon,
       existeEnAcademica: person.existeEnAcademica,
       estadoInactivo: person.estadoInactivo || false
     }))

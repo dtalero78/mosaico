@@ -206,6 +206,8 @@ export interface Beneficiary {
   fechaCreacion: string
   whatsappSent?: boolean
   estadoInactivo?: boolean
+  curso?: string
+  salon?: string
 }
 
 // Comment types

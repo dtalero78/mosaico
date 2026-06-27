@@ -800,6 +800,16 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
       {/* Beneficiaries Management */}
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-4">Gestión de Beneficiarios</h3>
+        {((person as any).apoderado || (person as any).apoderadoTelefono || (person as any).apoderadoMail) && (
+          <div className="mb-4 bg-white border border-gray-200 rounded-lg p-4">
+            <p className="text-xs font-semibold text-gray-700 mb-2">Apoderado</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-gray-900">
+              <div><span className="block text-[11px] uppercase tracking-wide text-gray-400">Nombre</span>{(person as any).apoderado || '—'}</div>
+              <div><span className="block text-[11px] uppercase tracking-wide text-gray-400">Teléfono</span>{(person as any).apoderadoTelefono || '—'}</div>
+              <div><span className="block text-[11px] uppercase tracking-wide text-gray-400">Correo</span>{(person as any).apoderadoMail || '—'}</div>
+            </div>
+          </div>
+        )}
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
           <div className="space-y-4">
           {currentBeneficiaries.map((beneficiary) => {
@@ -830,6 +840,8 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                   <div className="text-sm text-gray-500 mt-1">
                     ID: {beneficiary.numeroId} • Creado: {formatDate(beneficiary.fechaCreacion)}
                     {beneficiary.celular && ` • Tel: ${beneficiary.celular}`}
+                    {beneficiary.curso && ` • Curso: ${beneficiary.curso}`}
+                    {beneficiary.salon && ` • Salón: ${beneficiary.salon}`}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">

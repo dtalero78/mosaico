@@ -267,6 +267,14 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
                 <p className="mt-1 text-sm text-gray-900">{formatDate(student.fechaNacimiento)}</p>
               </div>
             )}
+            {((student as any).apoderado || (student as any).apoderadoTelefono || (student as any).apoderadoMail) && (
+              <div className="pt-3 border-t border-gray-100">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Apoderado</label>
+                <p className="text-sm text-gray-900">{(student as any).apoderado || '—'}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Tel: {(student as any).apoderadoTelefono || '—'}</p>
+                <p className="text-xs text-gray-500">Correo: {(student as any).apoderadoMail || '—'}</p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -366,6 +374,57 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
                 </span>
               </div>
             )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Usuario</label>
+              <p className="mt-1 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 font-mono tracking-wide">
+                {(student as any).userLogin || '—'}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Clave Login</label>
+              {editingPassword ? (
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Nueva clave"
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { if (newPassword.length >= 4) setShowPasswordConfirm(true); else toast.error('Mínimo 4 caracteres') }}
+                    className="px-3 py-1 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingPassword(false); setNewPassword('') }}
+                    className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                    {displayPassword || '—'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setEditingPassword(true); setNewPassword(displayPassword) }}
+                    className="p-1 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded"
+                    title="Editar clave"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -373,60 +432,32 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
       {/* Academic Information */}
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-4">Información Académica</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Nivel</label>
+            <label className="block text-sm font-medium text-gray-700">Campaña</label>
+            <p className="mt-1 text-sm text-gray-900">{(student as any).campaign || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Curso</label>
             <span className="mt-1 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800">
-              {student.nivel}
+              {(student as any).curso || '—'}
             </span>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Step Actual</label>
+            <label className="block text-sm font-medium text-gray-700">Salón</label>
+            <p className="mt-1 text-sm text-gray-900">{(student as any).salon || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Módulo</label>
+            <span className="mt-1 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800">
+              {student.nivel || '—'}
+            </span>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Lección</label>
             <span className="mt-1 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-accent-100 text-accent-800">
-              {student.step}
+              {student.step || '—'}
             </span>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Clave Login</label>
-            {editingPassword ? (
-              <div className="mt-1 flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Nueva clave"
-                  className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  autoFocus
-                />
-                <button
-                  onClick={() => { if (newPassword.length >= 4) setShowPasswordConfirm(true); else toast.error('Mínimo 4 caracteres') }}
-                  className="px-3 py-1 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-                >
-                  Guardar
-                </button>
-                <button
-                  onClick={() => { setEditingPassword(false); setNewPassword('') }}
-                  className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                >
-                  Cancelar
-                </button>
-              </div>
-            ) : (
-              <div className="mt-1 flex items-center gap-2">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                  {displayPassword || '—'}
-                </span>
-                <button
-                  onClick={() => { setEditingPassword(true); setNewPassword(displayPassword) }}
-                  className="p-1 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded"
-                  title="Editar clave"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </button>
-              </div>
-            )}
           </div>
           {student.asesor && (
             <div>
@@ -459,12 +490,17 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
         <h3 className="text-lg font-medium text-gray-900 mb-4">Información del Sistema</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700">ID del Sistema</label>
+            <label className="block text-sm font-medium text-gray-700">ID del Sistema (ACADEMICA)</label>
             <p className="mt-1 text-sm text-gray-500 font-mono">{student._id}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Fecha de Registro</label>
-            <p className="mt-1 text-sm text-gray-900">{formatDate(student.fechaCreacion)}</p>
+            <label className="block text-sm font-medium text-gray-700">Inicio activación (plataforma)</label>
+            <p className="mt-1 text-sm text-gray-900">
+              {(student as any).inicioCurso
+                ? formatDate(new Date(new Date((student as any).inicioCurso).getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+                : '—'}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">Inicio del curso menos 1 semana</p>
           </div>
         </div>
       </div>

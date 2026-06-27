@@ -82,6 +82,12 @@ async function StudentContent({ studentId }: { studentId: string }) {
                 <span>Programa: {formatEtapaNivelStep(student.nivel, student.step) || 'No asignado'}</span>
                 <EstadoBadge estado={student.estado} prefix="Estado: " />
               </div>
+              {((student as any).campaign || (student as any).curso) && (
+                <div className="mt-1 flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+                  {(student as any).campaign && <span>Campaña: {(student as any).campaign}</span>}
+                  {(student as any).curso && <span>Curso: {(student as any).curso}</span>}
+                </div>
+              )}
             </div>
             <div className="flex flex-col items-end space-y-2">
               <div className="flex items-center space-x-2">

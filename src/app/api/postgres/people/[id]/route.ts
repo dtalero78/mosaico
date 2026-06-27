@@ -86,6 +86,8 @@ export const GET = handler(async (
           "aprobacion",
           "nivel",
           "step",
+          "tipoCurso",
+          "salon",
           "_createdDate"
         FROM "PEOPLE"
         WHERE "contrato" = $1
@@ -119,6 +121,8 @@ export const GET = handler(async (
           estadoInactivo: ben.estadoInactivo || false,
           aprobacion: ben.aprobacion,
           nivel: ben.nivel,
+          tipoCurso: ben.tipoCurso,
+          salon: ben.salon,
           existeEnAcademica: !!academicCheck,
           _createdDate: ben._createdDate,
         });
