@@ -23,7 +23,7 @@ class NivelesRepositoryClass extends BaseRepository {
   async findAll() {
     const rows = await queryMany(
       `SELECT "_id", "code", "step", "description", "esParalelo", "material",
-              "clubs", "steps", "materiales", "orden", "videoUrl", "_createdDate", "_updatedDate"
+              "clubs", "steps", "materiales", "orden", "videoUrl", "curso", "_createdDate", "_updatedDate"
        FROM "NIVELES"
        ORDER BY "orden" ASC NULLS LAST, "code" ASC`
     );
