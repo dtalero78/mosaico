@@ -278,7 +278,7 @@ export default function AprobacionPage() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard permission={AprobacionPermission.ACTUALIZAR}>
+      <PermissionGuard anyPermissions={[AprobacionPermission.CENTRO_VER, AprobacionPermission.ACTUALIZAR]}>
         <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">

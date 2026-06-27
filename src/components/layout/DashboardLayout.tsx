@@ -397,8 +397,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/recaudos/asignacion': [
       RecaudosPermission.ASIGNACION_VER,
     ],
-    // Aprobación
+    // Aprobación — cada ítem con su propio permiso de acceso (VER)
     '/dashboard/aprobacion': [
+      AprobacionPermission.CENTRO_VER,
+      // backward-compat: roles con permisos de acción siguen viendo el ítem
       AprobacionPermission.ACTUALIZAR,
       AprobacionPermission.EXPORTAR_CSV,
       AprobacionPermission.VER_CONTRATO,
@@ -407,12 +409,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       AprobacionPermission.APROBACION_AUTONOMA,
     ],
     '/dashboard/aprobacion/gestion': [
-      AprobacionPermission.ACTUALIZAR,
-      AprobacionPermission.EXPORTAR_CSV,
-      AprobacionPermission.VER_CONTRATO,
-      AprobacionPermission.ENVIAR_PDF,
-      AprobacionPermission.DESCARGAR,
-      AprobacionPermission.APROBACION_AUTONOMA,
+      AprobacionPermission.GESTION_VER,
     ],
   }
 
@@ -470,6 +467,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ComercialPermission.VER_PROSPECTOS,
     ],
     'Aprobación': [
+      // Acceso por ítem (MOSAICO)
+      AprobacionPermission.CENTRO_VER,
+      AprobacionPermission.GESTION_VER,
       // APROBACION.MODIFICAR.*
       AprobacionPermission.ACTUALIZAR,
       AprobacionPermission.EXPORTAR_CSV,

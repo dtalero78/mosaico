@@ -360,6 +360,10 @@ export enum RecaudosPermission {
  * Permisos del módulo APROBACION (Menú Aprobación)
  */
 export enum AprobacionPermission {
+  // Acceso por ítem del submenú Aprobación (MOSAICO)
+  CENTRO_VER = 'APROBACION.CENTRO.VER',
+  GESTION_VER = 'APROBACION.GESTION.VER',
+
   // Modificar (usado en Wix)
   ACTUALIZAR = 'APROBACION.MODIFICAR.ACTUALIZAR',
   EXPORTAR_CSV = 'APROBACION.MODIFICAR.EXPORTAR_CSV',

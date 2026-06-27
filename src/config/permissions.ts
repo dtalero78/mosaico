@@ -838,6 +838,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
 
   // ========== APROBACION MODULE (/dashboard/aprobacion) ==========
   {
+    code: AprobacionPermission.CENTRO_VER,
+    module: Module.APROBACION,
+    section: 'Acceso (ítems del menú)',
+    name: 'Ítem "Centro de Aprobaciones"',
+    description: 'Ver el ítem del submenú y la página Gestión de Aprobaciones (/dashboard/aprobacion)',
+  },
+  {
+    code: AprobacionPermission.GESTION_VER,
+    module: Module.APROBACION,
+    section: 'Acceso (ítems del menú)',
+    name: 'Ítem "Gestión Aprobaciones"',
+    description: 'Ver el ítem del submenú y la página Gestión Aprobaciones (/dashboard/aprobacion/gestion)',
+  },
+  {
     code: AprobacionPermission.ACTUALIZAR,
     module: Module.APROBACION,
     section: 'Lista de Aprobaciones',
