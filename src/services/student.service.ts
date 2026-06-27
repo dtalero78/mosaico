@@ -67,6 +67,68 @@ async function enrichWithLoginPassword(profile: any) {
 }
 
 /**
+ * MOSAICO — Promueve un beneficiario desde el curso puente WELCOME a su curso REAL,
+ * copiando campaign / curso / salón / nivel(módulo) / step(lección) desde PEOPLE a
+ * ACADEMICA. Se dispara al asistir a la bienvenida o con el botón "Aprobar Welcome".
+ * Idempotente: si PEOPLE no tiene curso real, no rompe. Registra en cambioStepHistory.
+ * @param academicId  ACADEMICA._id
+ */
+export async function promoteFromWelcome(
+  academicId: string,
+  actor?: { email?: string; nombre?: string }
+) {
+  const academic = await queryOne<any>(
+    `SELECT "_id", "peopleId", "numeroId", "curso", "nivel", "step", "cambioStepHistory" FROM "ACADEMICA" WHERE "_id" = $1`,
+    [academicId]
+  );
+  if (!academic) throw new NotFoundError('Registro académico', academicId);
+
+  // PEOPLE del beneficiario: por peopleId; fallback por numeroId (BENEFICIARIO).
+  let people = academic.peopleId
+    ? await queryOne<any>(`SELECT "campaign", "tipoCurso", "salon", "nivel", "step" FROM "PEOPLE" WHERE "_id" = $1`, [academic.peopleId])
+    : null;
+  if (!people) {
+    people = await queryOne<any>(
+      `SELECT "campaign", "tipoCurso", "salon", "nivel", "step" FROM "PEOPLE"
+       WHERE "numeroId" = $1 AND "tipoUsuario" = 'BENEFICIARIO'
+       ORDER BY "_createdDate" DESC NULLS LAST LIMIT 1`,
+      [academic.numeroId]
+    );
+  }
+  if (!people) throw new NotFoundError('PEOPLE del beneficiario', academicId);
+
+  const before = `${academic.curso || '—'} / ${academic.nivel || '—'} / ${academic.step || '—'}`;
+  const after = `${people.tipoCurso || '—'} / ${people.nivel || '—'} / ${people.step || '—'}`;
+
+  const entry = {
+    fecha: new Date().toISOString(),
+    accion: 'PROMOCION_WELCOME',
+    de: before,
+    a: after,
+    realizadoPor: actor?.nombre || actor?.email || 'Sistema',
+  };
+  const history = Array.isArray(academic.cambioStepHistory) ? academic.cambioStepHistory : [];
+
+  await query(
+    `UPDATE "ACADEMICA"
+       SET "campaign" = $2, "curso" = $3, "salon" = $4, "nivel" = $5, "step" = $6,
+           "cambioStepHistory" = $7::jsonb, "_updatedDate" = NOW()
+     WHERE "_id" = $1`,
+    [
+      academicId,
+      people.campaign || null,
+      people.tipoCurso || null,
+      people.salon || null,
+      people.nivel || '',
+      people.step || '',
+      JSON.stringify([...history, entry]),
+    ]
+  );
+
+  return { promoted: true, before, after };
+}
+
+/**
  * Get academic history: academic record + class list.
  */
 export async function getAcademicHistory(id: string, limit: number = 100) {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import { Student, Class } from '@/types'
 import { cn } from '@/lib/utils'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -56,6 +57,9 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   // Control de acceso: permiso para inicializar nivel
   const canInicializarNivel = hasPermission(StudentPermission.INICIALIZAR_NIVEL)
 
+  // Control de acceso: permiso para aprobar/promover desde WELCOME
+  const canAprobarWelcome = hasPermission(StudentPermission.APROBAR_WELCOME)
+
   // Filtrar submenu académico basado en permisos
   const academicSubmenu = [
     { id: 'attendance', name: 'Tabla de Asistencia', icon: '📋' },
@@ -64,6 +68,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     ...(canAccessSteps ? [{ id: 'steps', name: 'Gestión de Steps', icon: '📊' }] : []),
     ...(canChangeStep ? [{ id: 'change-step', name: 'Cambiar Step', icon: '👣' }] : []),
     ...(canInicializarNivel ? [{ id: 'inicializar-nivel', name: 'Reiniciar Nivel', icon: '🔄' }] : []),
+    ...(canAprobarWelcome ? [{ id: 'aprobar-welcome', name: 'Aprobar Welcome', icon: '✅' }] : []),
   ]
 
   // Debug: Log student data
@@ -149,6 +154,21 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
                           <button
                             key={item.id}
                             onClick={() => {
+                              // Aprobar Welcome: promueve al estudiante a su curso real (PEOPLE→ACADEMICA)
+                              if (item.id === 'aprobar-welcome') {
+                                setShowAcademicSubmenu(false)
+                                if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
+                                if (!window.confirm('¿Aprobar Welcome? Se promoverá al estudiante a su curso real (curso/salón/módulo/lección desde su registro original).')) return
+                                fetch(`/api/postgres/students/${student._id}/promote-welcome`, { method: 'POST' })
+                                  .then(async r => {
+                                    const d = await r.json().catch(() => ({}))
+                                    if (!r.ok) throw new Error((d as any)?.error || 'Error al aprobar Welcome')
+                                    toast.success('Estudiante promovido a su curso')
+                                    setTimeout(() => window.location.reload(), 700)
+                                  })
+                                  .catch(e => toast.error(e.message || 'Error al aprobar Welcome'))
+                                return
+                              }
                               // Si es "change-step" o "inicializar-nivel", abrir modal en lugar de cambiar vista
                               if (item.id === 'inicializar-nivel') {
                                 setShowInicializarModal(true)

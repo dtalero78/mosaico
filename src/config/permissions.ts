@@ -277,6 +277,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Botón "Reiniciar Nivel"',
     description: 'Reinicia al estudiante al primer step de su nivel actual y borra el historial de bookings del nivel. Solo se puede realizar una vez por estudiante.',
   },
+  {
+    code: StudentPermission.APROBAR_WELCOME,
+    module: Module.STUDENT,
+    section: 'Tab Académica > Gestión Steps',
+    name: 'Botón "Aprobar Welcome"',
+    description: 'Promueve al estudiante desde el curso puente WELCOME a su curso real (copia campaña/curso/salón/módulo/lección desde PEOPLE), aunque no tenga bienvenida agendada ni asistencia.',
+  },
 
   // -- Tab: Contrato --
   {
