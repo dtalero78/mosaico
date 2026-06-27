@@ -111,7 +111,7 @@ export default function EventModal({
   // MOSAICO — catálogo de cursos de campaña al abrir
   useEffect(() => {
     if (!isOpen) return
-    fetch('/api/postgres/cursos-campaign')
+    fetch('/api/postgres/cursos-campaign', { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : { rows: [] }))
       .then(d => setCursosCampaign(Array.isArray(d.rows) ? d.rows : []))
       .catch(() => setCursosCampaign([]))
@@ -121,7 +121,7 @@ export default function EventModal({
   useEffect(() => {
     const c = formData.curso
     if (!c || c === TODOS) { setModulosMosaico([]); return }
-    fetch(`/api/postgres/niveles?curso=${encodeURIComponent(c)}`)
+    fetch(`/api/postgres/niveles?curso=${encodeURIComponent(c)}`, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : { modulos: [] }))
       .then(d => setModulosMosaico(Array.isArray(d.modulos) ? d.modulos : []))
       .catch(() => setModulosMosaico([]))
