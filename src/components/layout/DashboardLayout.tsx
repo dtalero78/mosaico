@@ -82,8 +82,11 @@ const getNavigation = (userEmail: string, userRole: string) => [
   },
   {
     name: 'Aprobación',
-    href: '/dashboard/aprobacion',
     icon: ShieldCheckIcon,
+    children: [
+      { name: 'Centro de Aprobaciones', href: '/dashboard/aprobacion' },
+      { name: 'Gestión Aprobaciones',   href: '/dashboard/aprobacion/gestion' },
+    ],
   },
   {
     name: 'Recaudos',
@@ -396,6 +399,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     // Aprobación
     '/dashboard/aprobacion': [
+      AprobacionPermission.ACTUALIZAR,
+      AprobacionPermission.EXPORTAR_CSV,
+      AprobacionPermission.VER_CONTRATO,
+      AprobacionPermission.ENVIAR_PDF,
+      AprobacionPermission.DESCARGAR,
+      AprobacionPermission.APROBACION_AUTONOMA,
+    ],
+    '/dashboard/aprobacion/gestion': [
       AprobacionPermission.ACTUALIZAR,
       AprobacionPermission.EXPORTAR_CSV,
       AprobacionPermission.VER_CONTRATO,
