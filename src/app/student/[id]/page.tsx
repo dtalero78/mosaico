@@ -79,13 +79,14 @@ async function StudentContent({ studentId }: { studentId: string }) {
               <div className="mt-1 flex items-center flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500">
                 <span>ID: {student.numeroId || 'No disponible'}</span>
                 <span>Contrato: {student.contrato || 'No disponible'}</span>
-                <span>Programa: {formatEtapaNivelStep(student.nivel, student.step) || 'No asignado'}</span>
                 <EstadoBadge estado={student.estado} prefix="Estado: " />
               </div>
-              {((student as any).campaign || (student as any).curso) && (
+              {((student as any).campaign || (student as any).curso || student.nivel || student.step) && (
                 <div className="mt-1 flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
                   {(student as any).campaign && <span>Campaña: {(student as any).campaign}</span>}
                   {(student as any).curso && <span>Curso: {(student as any).curso}</span>}
+                  {student.nivel && <span>Módulo: {student.nivel}</span>}
+                  {student.step && <span>Lección: {student.step}</span>}
                 </div>
               )}
             </div>
