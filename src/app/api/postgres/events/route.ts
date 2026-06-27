@@ -55,6 +55,9 @@ export const POST = handlerWithAuth(async (request) => {
     limiteUsuarios: body.limiteUsuarios || 30,
     club: body.club,
     observaciones: body.observaciones,
+    campaign: body.campaign || null,
+    curso: body.curso || null,
+    salon: body.salon || null,
     compartidoCon,
   });
 

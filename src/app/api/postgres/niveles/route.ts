@@ -2,13 +2,34 @@ import { handler, successResponse } from '@/lib/api-helpers';
 import { NivelesRepository } from '@/repositories/niveles.repository';
 
 /**
- * GET /api/postgres/niveles
+ * GET /api/postgres/niveles[?curso=YOJI]
  *
- * Returns levels grouped by code with steps and clubs arrays.
- * Each row in NIVELES is one step of one level, so we group them.
+ * Sin `curso`: niveles agrupados por code con steps/clubs (motor LGS).
+ * Con `curso` (MOSAICO): devuelve los MÓDULOS (code) y LECCIONES (step) de ese curso,
+ * ordenados por `orden`, en `modulos: [{ code, steps: string[] }]`. NIVELES tiene el
+ * code (módulo) repetido por curso, por eso se filtra por curso para no mezclarlos.
  */
-export const GET = handler(async () => {
+export const GET = handler(async (request: Request) => {
+  const curso = new URL(request.url).searchParams.get('curso');
   const rows = await NivelesRepository.findAll();
+
+  // ── MOSAICO: módulos + lecciones de un curso, ordenados por `orden` ──
+  if (curso) {
+    const delCurso = rows.filter((r: any) => r.curso === curso);
+    const mapMod = new Map<string, { code: string; minOrden: number; steps: Array<{ step: string; orden: number }> }>();
+    for (const r of delCurso) {
+      if (!r.code) continue;
+      const orden = Number(r.orden) || 0;
+      if (!mapMod.has(r.code)) mapMod.set(r.code, { code: r.code, minOrden: orden, steps: [] });
+      const m = mapMod.get(r.code)!;
+      if (orden < m.minOrden) m.minOrden = orden;
+      if (r.step && !m.steps.some(s => s.step === r.step)) m.steps.push({ step: r.step, orden });
+    }
+    const modulos = Array.from(mapMod.values())
+      .sort((a, b) => a.minOrden - b.minOrden)
+      .map(m => ({ code: m.code, steps: m.steps.sort((a, b) => a.orden - b.orden).map(s => s.step) }));
+    return successResponse({ curso, modulos, total: modulos.length });
+  }
 
   // Group rows by code to build a single object per level
   const byCode = new Map<string, any>();

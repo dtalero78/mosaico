@@ -83,6 +83,10 @@ export async function createEvent(data: {
   limiteUsuarios?: number;
   club?: string;
   observaciones?: string;
+  /** MOSAICO — alcance del evento (Campaña → Curso → Salón). 'Todos' = comodín. */
+  campaign?: string;
+  curso?: string;
+  salon?: string;
   /** Niveles adicionales para evento compartido (max MAX_NIVELES_COMPARTIDOS-1). */
   compartidoCon?: Array<{ nivel: string; step?: string; nombreEvento?: string; tituloONivel?: string }>;
 }) {
@@ -149,6 +153,9 @@ export async function createEvent(data: {
     limiteUsuarios: data.limiteUsuarios || 0,
     club: data.club || null,
     observaciones: data.observaciones || null,
+    campaign: data.campaign || null,
+    curso: data.curso || null,
+    salon: data.salon || null,
     eventoCompartidoId,
   };
 
