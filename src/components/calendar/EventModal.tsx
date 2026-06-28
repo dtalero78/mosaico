@@ -144,11 +144,11 @@ export default function EventModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, cursoModulos])
 
-  // MOSAICO — Curso WELCOME: Salón fijo 'Salon 00' (el Módulo será MOSAICO/IMPULSA, la
-  // Lección 'Leccion 00'). Solo asegura el salón si quedó vacío.
+  // MOSAICO — Curso WELCOME: Salón fijo 'Salon 00' y Lección fija 'Leccion 00' (el Módulo
+  // será MOSAICO/IMPULSA). Se fijan en cuanto el curso es WELCOME.
   useEffect(() => {
-    if (formData.curso === 'WELCOME' && formData.salon !== 'Salon 00') {
-      setFormData(prev => ({ ...prev, salon: 'Salon 00' }))
+    if (formData.curso === 'WELCOME' && (formData.salon !== 'Salon 00' || formData.nombreEvento !== 'Leccion 00')) {
+      setFormData(prev => ({ ...prev, salon: 'Salon 00', nombreEvento: 'Leccion 00' }))
     }
   }, [formData.curso])
 
@@ -937,8 +937,9 @@ export default function EventModal({
                   value={formData.tituloONivel} disabled={!formData.curso || formData.curso === TODOS}
                   onChange={(e) => {
                     const v = e.target.value
+                    // WELCOME: la Lección es siempre 'Leccion 00' (se fija al elegir módulo).
                     if (v === TODOS) setFormData(prev => ({ ...prev, tituloONivel: TODOS, nombreEvento: TODOS }))
-                    else setFormData(prev => ({ ...prev, tituloONivel: v, nombreEvento: '' }))
+                    else setFormData(prev => ({ ...prev, tituloONivel: v, nombreEvento: prev.curso === 'WELCOME' ? 'Leccion 00' : '' }))
                   }}
                   className="input w-full" required
                 >
@@ -952,15 +953,21 @@ export default function EventModal({
                 <label className="block text-sm font-medium text-gray-700 mb-2">Lección *</label>
                 <select
                   value={formData.nombreEvento}
-                  disabled={!formData.tituloONivel || formData.tituloONivel === TODOS || formData.curso === TODOS}
+                  disabled={formData.curso === 'WELCOME' || !formData.tituloONivel || formData.tituloONivel === TODOS || formData.curso === TODOS}
                   onChange={(e) => handleInputChange('nombreEvento', e.target.value)}
                   className="input w-full" required
                 >
-                  <option value="">Seleccionar lección</option>
-                  {formData.curso !== 'WELCOME' && <option value={TODOS}>Todas</option>}
-                  {(currentModulos.find(m => m.code === formData.tituloONivel)?.steps || []).map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
+                  {formData.curso === 'WELCOME' ? (
+                    <option value="Leccion 00">Leccion 00</option>
+                  ) : (
+                    <>
+                      <option value="">Seleccionar lección</option>
+                      <option value={TODOS}>Todas</option>
+                      {(currentModulos.find(m => m.code === formData.tituloONivel)?.steps || []).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
               {/* Límite de Usuarios */}
