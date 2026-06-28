@@ -121,7 +121,9 @@ export default function EventModal({
 
   // MOSAICO — curso cuyos módulos debe mostrar el dropdown: 'WELCOME' si el evento es Welcome,
   // si no el curso elegido. Las opciones se derivan del caché por curso.
-  const cursoModulos = formData.evento === 'WELCOME' ? 'WELCOME' : formData.curso
+  // WELCOME es ahora un CURSO más (no un tipo de evento). El curso a mostrar es siempre
+  // formData.curso; sus módulos (MOSAICO/IMPULSA para WELCOME) salen del caché por curso.
+  const cursoModulos = formData.curso
   const currentModulos = modulosByCurso[cursoModulos] || []
 
   // Carga (idempotente) de módulos al caché. No limpia nada: solo agrega/actualiza la clave
@@ -142,17 +144,13 @@ export default function EventModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, cursoModulos])
 
-  // MOSAICO — evento Welcome: Curso='WELCOME' y Salón='Salon 00' fijos (el Módulo será
-  // MOSAICO/IMPULSA, la Lección 'Leccion 00'). Al salir de Welcome se limpia.
+  // MOSAICO — Curso WELCOME: Salón fijo 'Salon 00' (el Módulo será MOSAICO/IMPULSA, la
+  // Lección 'Leccion 00'). Solo asegura el salón si quedó vacío.
   useEffect(() => {
-    if (formData.evento === 'WELCOME') {
-      setFormData(prev => prev.curso === 'WELCOME'
-        ? prev
-        : ({ ...prev, curso: 'WELCOME', salon: 'Salon 00', tituloONivel: '', nombreEvento: '' }))
-    } else if (formData.curso === 'WELCOME') {
-      setFormData(prev => ({ ...prev, curso: '', salon: '', tituloONivel: '', nombreEvento: '' }))
+    if (formData.curso === 'WELCOME' && formData.salon !== 'Salon 00') {
+      setFormData(prev => ({ ...prev, salon: 'Salon 00' }))
     }
-  }, [formData.evento])
+  }, [formData.curso])
 
   // Ejecutar cargarNombreStep cuando cambia tipo de evento (si ya hay nivel)
   useEffect(() => {
@@ -481,11 +479,15 @@ export default function EventModal({
   // el step seleccionado del dropdown). NO se muestra en EDIT — para evitar
   // que el admin "convierta" un evento existente en compartido (eso requiere
   // crear los hermanos desde 0).
-  const compartibleHabilitado = !isEditMode
+  // Los eventos WELCOME (curso WELCOME) NO se comparten entre niveles.
+  const esWelcome = formData.curso === 'WELCOME'
+  const compartibleHabilitado = !isEditMode && !esWelcome
     && isEventoCompartible(formData.evento, formData.nombreEvento)
-  const compartibleMotivo = !isEditMode
-    ? reasonNotCompartible(formData.evento, formData.nombreEvento)
-    : 'Para compartir entre niveles crea un evento nuevo desde 0 — al editar uno existente sólo cambian sus campos.'
+  const compartibleMotivo = isEditMode
+    ? 'Para compartir entre niveles crea un evento nuevo desde 0 — al editar uno existente sólo cambian sus campos.'
+    : esWelcome
+      ? 'Los eventos WELCOME no se comparten entre niveles.'
+      : reasonNotCompartible(formData.evento, formData.nombreEvento)
 
   // Si el toggle queda activo pero el step deja de ser compartible (ej. admin
   // cambió de SESSION Step 5 a Step 6), apagamos el toggle automáticamente.
@@ -865,16 +867,9 @@ export default function EventModal({
                 <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Evento *</label>
                 <select
                   value={formData.evento}
-                  onChange={(e) => {
-                    const ev = e.target.value
-                    handleInputChange('evento', ev)
-                    // Carga imperativa de módulos: Welcome → curso WELCOME; otro tipo → limpia
-                    // (el usuario elegirá un curso, que dispara loadModulos en su onChange).
-                    loadModulos(ev === 'WELCOME' ? 'WELCOME' : '')
-                  }}
+                  onChange={(e) => handleInputChange('evento', e.target.value)}
                   className="input w-full" required
                 >
-                  <option value="WELCOME">Welcome</option>
                   <option value="SESSION">Sesión</option>
                   <option value="CLUB">Taller</option>
                 </select>
@@ -897,36 +892,32 @@ export default function EventModal({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Curso *</label>
                 <select
-                  value={formData.curso} disabled={!formData.campaign || formData.evento === 'WELCOME'}
+                  value={formData.curso} disabled={!formData.campaign}
                   onChange={(e) => {
                     const v = e.target.value
                     if (v === TODOS) setFormData(prev => ({ ...prev, curso: TODOS, salon: TODOS, tituloONivel: TODOS, nombreEvento: TODOS }))
+                    else if (v === 'WELCOME') { setFormData(prev => ({ ...prev, curso: 'WELCOME', salon: 'Salon 00', tituloONivel: '', nombreEvento: '' })); loadModulos('WELCOME') }
                     else { setFormData(prev => ({ ...prev, curso: v, salon: '', tituloONivel: '', nombreEvento: '' })); loadModulos(v) }
                   }}
                   className="input w-full" required
                 >
-                  {formData.evento === 'WELCOME' ? (
-                    <option value="WELCOME">WELCOME</option>
-                  ) : (
-                    <>
-                      <option value="">Seleccionar curso</option>
-                      <option value={TODOS}>Todos</option>
-                      {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign).map(r => r.tipoCurso).filter(Boolean))).map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </>
-                  )}
+                  <option value="">Seleccionar curso</option>
+                  <option value="WELCOME">WELCOME</option>
+                  <option value={TODOS}>Todos</option>
+                  {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign).map(r => r.tipoCurso).filter(Boolean))).map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
               {/* Salón */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Salón *</label>
                 <select
-                  value={formData.salon} disabled={!formData.curso || formData.curso === TODOS || formData.evento === 'WELCOME'}
+                  value={formData.salon} disabled={!formData.curso || formData.curso === TODOS || formData.curso === 'WELCOME'}
                   onChange={(e) => handleInputChange('salon', e.target.value)}
                   className="input w-full" required
                 >
-                  {formData.evento === 'WELCOME' ? (
+                  {formData.curso === 'WELCOME' ? (
                     <option value="Salon 00">Salon 00</option>
                   ) : (
                     <>
@@ -952,7 +943,7 @@ export default function EventModal({
                   className="input w-full" required
                 >
                   <option value="">Seleccionar módulo</option>
-                  {formData.evento !== 'WELCOME' && <option value={TODOS}>Todos</option>}
+                  {formData.curso !== 'WELCOME' && <option value={TODOS}>Todos</option>}
                   {currentModulos.map(m => (<option key={m.code} value={m.code}>{m.code}</option>))}
                 </select>
               </div>
@@ -966,7 +957,7 @@ export default function EventModal({
                   className="input w-full" required
                 >
                   <option value="">Seleccionar lección</option>
-                  {formData.evento !== 'WELCOME' && <option value={TODOS}>Todas</option>}
+                  {formData.curso !== 'WELCOME' && <option value={TODOS}>Todas</option>}
                   {(currentModulos.find(m => m.code === formData.tituloONivel)?.steps || []).map(s => (
                     <option key={s} value={s}>{s}</option>
                   ))}
