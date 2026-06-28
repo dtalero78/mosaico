@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS, extractClubPrefix } from '@/lib/evento-compartido'
@@ -81,7 +81,9 @@ export default function EventModal({
 
   // MOSAICO — catálogo de cursos de campaña + módulos del curso seleccionado
   const [cursosCampaign, setCursosCampaign] = useState<Array<{ campaign: string; tipoCurso: string; salon?: string }>>([])
-  const [modulosMosaico, setModulosMosaico] = useState<Array<{ code: string; steps: string[] }>>([])
+  // Caché de módulos POR CURSO (solo crece, nunca se limpia). El dropdown deriva sus
+  // opciones de modulosByCurso[cursoActual]; así ningún re-render/efecto puede dejarlo vacío.
+  const [modulosByCurso, setModulosByCurso] = useState<Record<string, Array<{ code: string; steps: string[] }>>>({})
   const TODOS = 'Todos'
 
   const [niveles, setNiveles] = useState<Nivel[]>([])
@@ -117,19 +119,28 @@ export default function EventModal({
       .catch(() => setCursosCampaign([]))
   }, [isOpen])
 
-  // MOSAICO — carga IMPERATIVA de módulos/lecciones del curso. Se llama directo en los
-  // onChange de Tipo (Welcome → 'WELCOME') y Curso, y en el preload de edición. Evita la
-  // carrera de los efectos (en prod el dropdown quedaba vacío en la 1ª selección de Welcome).
-  // Un contador descarta respuestas obsoletas si el usuario cambia rápido.
-  const modulosReqRef = useRef(0)
+  // MOSAICO — curso cuyos módulos debe mostrar el dropdown: 'WELCOME' si el evento es Welcome,
+  // si no el curso elegido. Las opciones se derivan del caché por curso.
+  const cursoModulos = formData.evento === 'WELCOME' ? 'WELCOME' : formData.curso
+  const currentModulos = modulosByCurso[cursoModulos] || []
+
+  // Carga (idempotente) de módulos al caché. No limpia nada: solo agrega/actualiza la clave
+  // del curso. Re-llamarla con el mismo curso es inocuo.
   const loadModulos = (curso: string) => {
-    if (!curso || curso === TODOS) { setModulosMosaico([]); return }
-    const reqId = ++modulosReqRef.current
+    if (!curso || curso === TODOS) return
     fetch(`/api/postgres/niveles?curso=${encodeURIComponent(curso)}`, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : { modulos: [] }))
-      .then(d => { if (reqId === modulosReqRef.current) setModulosMosaico(Array.isArray(d.modulos) ? d.modulos : []) })
-      .catch(() => { if (reqId === modulosReqRef.current) setModulosMosaico([]) })
+      .then(d => setModulosByCurso(prev => ({ ...prev, [curso]: Array.isArray(d.modulos) ? d.modulos : [] })))
+      .catch(() => {})
   }
+
+  // Dispara la carga cuando cambia el curso a mostrar (cubre selección manual y la
+  // asignación programática de 'WELCOME' por el efecto Welcome). Idempotente vía caché.
+  useEffect(() => {
+    if (!isOpen) return
+    if (cursoModulos && cursoModulos !== TODOS && !modulosByCurso[cursoModulos]) loadModulos(cursoModulos)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, cursoModulos])
 
   // MOSAICO — evento Welcome: Curso='WELCOME' y Salón='Salon 00' fijos (el Módulo será
   // MOSAICO/IMPULSA, la Lección 'Leccion 00'). Al salir de Welcome se limpia.
@@ -269,7 +280,6 @@ export default function EventModal({
         curso: '',
         salon: '',
       })
-      setModulosMosaico([])
     }
   }, [editingEvent, selectedDate, isOpen])
 
@@ -890,7 +900,7 @@ export default function EventModal({
                   value={formData.curso} disabled={!formData.campaign || formData.evento === 'WELCOME'}
                   onChange={(e) => {
                     const v = e.target.value
-                    if (v === TODOS) { setFormData(prev => ({ ...prev, curso: TODOS, salon: TODOS, tituloONivel: TODOS, nombreEvento: TODOS })); setModulosMosaico([]) }
+                    if (v === TODOS) setFormData(prev => ({ ...prev, curso: TODOS, salon: TODOS, tituloONivel: TODOS, nombreEvento: TODOS }))
                     else { setFormData(prev => ({ ...prev, curso: v, salon: '', tituloONivel: '', nombreEvento: '' })); loadModulos(v) }
                   }}
                   className="input w-full" required
@@ -943,7 +953,7 @@ export default function EventModal({
                 >
                   <option value="">Seleccionar módulo</option>
                   {formData.evento !== 'WELCOME' && <option value={TODOS}>Todos</option>}
-                  {modulosMosaico.map(m => (<option key={m.code} value={m.code}>{m.code}</option>))}
+                  {currentModulos.map(m => (<option key={m.code} value={m.code}>{m.code}</option>))}
                 </select>
               </div>
               {/* Lección */}
@@ -957,7 +967,7 @@ export default function EventModal({
                 >
                   <option value="">Seleccionar lección</option>
                   {formData.evento !== 'WELCOME' && <option value={TODOS}>Todas</option>}
-                  {(modulosMosaico.find(m => m.code === formData.tituloONivel)?.steps || []).map(s => (
+                  {(currentModulos.find(m => m.code === formData.tituloONivel)?.steps || []).map(s => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
