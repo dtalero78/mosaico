@@ -38,21 +38,27 @@ const getNavigation = (userEmail: string, userRole: string) => [
     children: [
       { name: 'Calendario Sesiones', href: '/dashboard/academic/agenda-sesiones' },
       { name: 'Sesiones semana', href: '/dashboard/academic/agenda-academica' },
-      { name: 'Lista Guias', href: '/dashboard/academic/advisors' },
-      // Si el usuario logueado ES guía, su email va en la URL para abrir SU panel.
-      // Para coordinadores/admins el link va SIN email — el panel auto-selecciona
-      // el primer guía del dropdown (si pasamos el email del coordinador, el
-      // endpoint /by-email retorna 404 y la página muestra un error de guía no encontrado).
-      { name: 'Panel Guía', href: userRole === 'GUIA'
-        ? `/panel-advisor?email=${encodeURIComponent(userEmail)}`
-        : '/panel-advisor' },
+      // Submenú Guías — agrupa lo relacionado con guías. Cada ítem se filtra por su
+      // propio permiso (ver pagePermissions); SUPER_ADMIN/ADMIN ven todo (hasFullAccess).
+      {
+        name: 'Guías', isSubmenu: true, children: [
+          { name: 'Lista Guias', href: '/dashboard/academic/advisors' },
+          // Si el usuario logueado ES guía, su email va en la URL para abrir SU panel.
+          // Para coordinadores/admins el link va SIN email — el panel auto-selecciona
+          // el primer guía del dropdown (si pasamos el email del coordinador, el
+          // endpoint /by-email retorna 404 y la página muestra un error de guía no encontrado).
+          { name: 'Panel Guía', href: userRole === 'GUIA'
+            ? `/panel-advisor?email=${encodeURIComponent(userEmail)}`
+            : '/panel-advisor' },
+          { name: 'Control Horas', href: '/dashboard/academic/control-horas' },
+          { name: 'Sesiones sin gestión', href: '/dashboard/academic/sesiones-sin-gestion', newTab: true },
+          { name: 'Performance Evaluation', href: '/dashboard/academic/performance-evaluation', newTab: true },
+        ],
+      },
       { name: 'Actualizar Material', href: '/dashboard/academic/actualizar-material', newTab: true },
-      { name: 'Control Horas', href: '/dashboard/academic/control-horas' },
       { name: 'Eventos Administrativos', href: '/dashboard/academic/eventos-administrativos', newTab: true },
       { name: 'Campañas', href: '/dashboard/academic/crear-campana', newTab: true },
-      { name: 'Sesiones sin gestión', href: '/dashboard/academic/sesiones-sin-gestion', newTab: true },
       { name: 'Evaluaciones Jump', href: '/dashboard/academic/jump-evaluaciones' },
-      { name: 'Performance Evaluation', href: '/dashboard/academic/performance-evaluation', newTab: true },
     ],
   },
   {
@@ -585,7 +591,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // Planta, Estadísticas): modelo de 2 marcas — la sección se muestra si le
       // queda ≥1 ítem visible tras el filtrado de nivel 3 (no necesita permiso
       // propio de sección). Basta marcar el abuelo "Informes" + el ítem.
-      if (child.isSubmenu && item.name === 'Informes') {
+      if (child.isSubmenu && (item.name === 'Informes' || item.name === 'Académico')) {
         return (child.children?.length ?? 0) > 0
       }
 
