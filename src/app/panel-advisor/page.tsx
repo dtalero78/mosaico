@@ -153,7 +153,7 @@ function PanelAdvisorContent() {
       const response = await fetch(`/api/postgres/advisors/by-email/${encodeURIComponent(email)}`)
 
       if (!response.ok) {
-        throw new Error('Error al buscar advisor')
+        throw new Error('No se encontró un guía con ese correo. Selecciona uno de la lista.')
       }
 
       const data = await response.json()
@@ -337,6 +337,30 @@ function PanelAdvisorContent() {
   const dateRange = eachDayOfInterval({ start: startDate, end: endDate })
   const weekDays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
+  // Selector "Ver panel de" — sólo para roles NO-GUÍA con permiso VER_ENLACE.
+  // Se renderiza tanto en el header normal como en el estado de error, para que
+  // un admin pueda elegir un guía válido aunque el email de la URL no exista.
+  const advisorSwitcher = (canPickOtherAdvisor && availableAdvisors.length > 0) ? (
+    <div className="ml-auto">
+      <label htmlFor="advisor-switcher" className="block text-xs font-medium text-gray-500 mb-1">
+        Ver panel de
+      </label>
+      <select
+        id="advisor-switcher"
+        value={advisor?.email ?? ''}
+        onChange={e => handleAdvisorChange(e.target.value)}
+        className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white min-w-[220px]"
+      >
+        <option value="" disabled>Selecciona un guía…</option>
+        {availableAdvisors.map(a => (
+          <option key={a._id} value={a.email ?? ''}>
+            {[a.primerNombre, a.primerApellido].filter(Boolean).join(' ') || a.email || a._id}
+          </option>
+        ))}
+      </select>
+    </div>
+  ) : null
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -350,8 +374,16 @@ function PanelAdvisorContent() {
   if (error) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-red-500">{error}</div>
+        <div className="space-y-6">
+          {/* Selector visible aunque falle la carga, para que el admin recupere */}
+          {advisorSwitcher && (
+            <div className="border-b border-gray-200 pb-4 flex items-center">
+              {advisorSwitcher}
+            </div>
+          )}
+          <div className="flex items-center justify-center h-64">
+            <div className="text-red-500">{error}</div>
+          </div>
         </div>
       </DashboardLayout>
     )
@@ -378,32 +410,12 @@ function PanelAdvisorContent() {
               ¡Hola {advisor?.primerNombre}!
             </h1>
             <p className="mt-1 text-sm text-gray-600">
-              Panel de gestión para advisors
+              Panel de gestión para guías
             </p>
           </div>
 
-          {/* Selector de advisor — sólo visible para usuarios con permiso
-              ACADEMICO.ADVISOR.LISTA_VER. Un ADVISOR sin este permiso ve
-              únicamente su propio panel (email de la sesión, sin selector). */}
-          {canPickOtherAdvisor && availableAdvisors.length > 0 && (
-            <div className="ml-auto">
-              <label htmlFor="advisor-switcher" className="block text-xs font-medium text-gray-500 mb-1">
-                Ver panel de
-              </label>
-              <select
-                id="advisor-switcher"
-                value={advisor?.email ?? advisorEmail ?? ''}
-                onChange={e => handleAdvisorChange(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white min-w-[220px]"
-              >
-                {availableAdvisors.map(a => (
-                  <option key={a._id} value={a.email ?? ''}>
-                    {[a.primerNombre, a.primerApellido].filter(Boolean).join(' ') || a.email || a._id}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Selector "Ver panel de" — sólo para roles NO-GUÍA con permiso VER_ENLACE */}
+          {advisorSwitcher}
         </div>
 
         {/* Botón de Libros */}
