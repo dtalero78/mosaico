@@ -50,7 +50,8 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Panel Guía', href: userRole === 'GUIA'
             ? `/panel-advisor?email=${encodeURIComponent(userEmail)}`
             : '/panel-advisor' },
-          { name: 'Control Horas', href: '/dashboard/academic/control-horas' },
+          // "Control Horas" se movió a una pestaña dentro del Panel Guía.
+          // La página standalone /dashboard/academic/control-horas sigue accesible por URL.
           { name: 'Sesiones sin gestión', href: '/dashboard/academic/sesiones-sin-gestion', newTab: true },
           { name: 'Performance Evaluation', href: '/dashboard/academic/performance-evaluation', newTab: true },
         ],
