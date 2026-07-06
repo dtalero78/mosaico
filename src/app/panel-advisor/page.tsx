@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import EventDetailModal from '@/components/academic/EventDetailModal'
 import AdminEventRegistrarModal from '@/components/admin-events/AdminEventRegistrarModal'
+import CursosAsignadosGuia from '@/components/advisor/CursosAsignadosGuia'
 import {
   CalendarIcon,
   ClockIcon,
@@ -69,6 +70,8 @@ function PanelAdvisorContent() {
   const [eventsLoading, setEventsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentMonth, setCurrentMonth] = useState(new Date())
+  // Pestaña activa del panel: calendario de sesiones | cursos asignados
+  const [activeTab, setActiveTab] = useState<'calendario' | 'cursos'>('calendario')
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<CalendarioEvent | null>(null)
   const [showEventDetailModal, setShowEventDetailModal] = useState(false)
@@ -414,7 +417,33 @@ function PanelAdvisorContent() {
           </button>
         </div>
 
+        {/* Pestañas: Calendario | Cursos asignados */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex gap-6">
+            <button
+              type="button"
+              onClick={() => setActiveTab('calendario')}
+              className={`py-2 px-1 border-b-2 text-sm font-medium ${activeTab === 'calendario' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+            >
+              Calendario
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('cursos')}
+              className={`py-2 px-1 border-b-2 text-sm font-medium ${activeTab === 'cursos' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+            >
+              Cursos asignados
+            </button>
+          </nav>
+        </div>
+
+        {/* Pestaña Cursos asignados */}
+        {activeTab === 'cursos' && advisor && (
+          <CursosAsignadosGuia guiaId={advisor._id} />
+        )}
+
         {/* Calendar View */}
+        {activeTab === 'calendario' && (
         <div className="bg-white rounded-lg shadow-sm p-6">
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-6">
@@ -525,6 +554,7 @@ function PanelAdvisorContent() {
             </>
           )}
         </div>
+        )}
       </div>
 
       {/* Day Events Modal */}
