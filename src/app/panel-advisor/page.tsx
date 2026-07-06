@@ -7,6 +7,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import EventDetailModal from '@/components/academic/EventDetailModal'
 import AdminEventRegistrarModal from '@/components/admin-events/AdminEventRegistrarModal'
 import CursosAsignadosGuia from '@/components/advisor/CursosAsignadosGuia'
+import { ControlHorasContent } from '@/app/dashboard/academic/control-horas/page'
 import {
   CalendarIcon,
   ClockIcon,
@@ -70,8 +71,8 @@ function PanelAdvisorContent() {
   const [eventsLoading, setEventsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  // Pestaña activa del panel: calendario de sesiones | cursos asignados
-  const [activeTab, setActiveTab] = useState<'calendario' | 'cursos'>('calendario')
+  // Pestaña activa del panel: calendario | cursos asignados | control de horas
+  const [activeTab, setActiveTab] = useState<'calendario' | 'cursos' | 'horas'>('calendario')
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<CalendarioEvent | null>(null)
   const [showEventDetailModal, setShowEventDetailModal] = useState(false)
@@ -429,7 +430,7 @@ function PanelAdvisorContent() {
           </button>
         </div>
 
-        {/* Pestañas: Calendario | Cursos asignados */}
+        {/* Pestañas: Calendario | Cursos asignados | Control de Horas */}
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex gap-6">
             <button
@@ -446,12 +447,24 @@ function PanelAdvisorContent() {
             >
               Cursos asignados
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('horas')}
+              className={`py-2 px-1 border-b-2 text-sm font-medium ${activeTab === 'horas' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+            >
+              Control de Horas
+            </button>
           </nav>
         </div>
 
         {/* Pestaña Cursos asignados */}
         {activeTab === 'cursos' && advisor && (
           <CursosAsignadosGuia guiaId={advisor._id} />
+        )}
+
+        {/* Pestaña Control de Horas (embebida — usa el advisor del panel) */}
+        {activeTab === 'horas' && advisor && (
+          <ControlHorasContent embedded embeddedAdvisorId={advisor._id} />
         )}
 
         {/* Calendar View */}

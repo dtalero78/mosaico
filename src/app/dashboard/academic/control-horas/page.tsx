@@ -98,7 +98,19 @@ export default function ControlHorasPage() {
   )
 }
 
-function ControlHorasContent() {
+/**
+ * Contenido del Control de Horas.
+ *
+ * Modo standalone (`/dashboard/academic/control-horas`): muestra su propio
+ * header (avatar + título) y selector de advisor.
+ * Modo `embedded` (pestaña dentro del Panel Guía): recibe `embeddedAdvisorId`
+ * del panel y oculta su header, selector y padding externo — el panel ya los
+ * provee. Reusa toda la lógica (fetch, KPIs, calendario, modal).
+ */
+export function ControlHorasContent({
+  embedded = false,
+  embeddedAdvisorId,
+}: { embedded?: boolean; embeddedAdvisorId?: string } = {}) {
   const { data: session } = useSession()
   const { hasPermission } = usePermissions()
   const role = (session?.user as any)?.role as string | undefined
@@ -106,7 +118,8 @@ function ControlHorasContent() {
   const myEmail = (session?.user as any)?.email as string | undefined
   // Puede seleccionar/consultar el Ctrl Horas de CUALQUIER advisor:
   // SUPER_ADMIN/ADMIN (implícito) o cualquier rol con el permiso explícito.
-  const canPickAdvisor = isAdmin || hasPermission(AcademicoPermission.CONTROL_HORAS_VER_TODOS)
+  // En modo embebido nunca hay selector — el advisor lo fija el panel.
+  const canPickAdvisor = !embedded && (isAdmin || hasPermission(AcademicoPermission.CONTROL_HORAS_VER_TODOS))
 
   const [advisorId, setAdvisorId] = useState<string>('')
   const [advisors, setAdvisors] = useState<AdvisorOption[]>([])
@@ -134,7 +147,13 @@ function ControlHorasContent() {
   const [currentAdvisor, setCurrentAdvisor] = useState<AdvisorOption | null>(null)
   const [fotoUrl, setFotoUrl] = useState<string | null>(null)
 
+  // Modo embebido: el panel inyecta el advisorId; no se carga lista ni by-email.
   useEffect(() => {
+    if (embedded && embeddedAdvisorId) setAdvisorId(embeddedAdvisorId)
+  }, [embedded, embeddedAdvisorId])
+
+  useEffect(() => {
+    if (embedded) return
     if (!myEmail) return
     if (canPickAdvisor) {
       fetch('/api/postgres/advisors')
@@ -173,7 +192,7 @@ function ControlHorasContent() {
         })
         .catch(() => setError('No se pudo cargar tu perfil de advisor'))
     }
-  }, [myEmail, canPickAdvisor])
+  }, [myEmail, canPickAdvisor, embedded])
 
   // Mantener currentAdvisor sincronizado con advisorId cuando se cambia
   // de selección desde el dropdown.
@@ -358,10 +377,11 @@ function ControlHorasContent() {
   }, [year, month])
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      {/* Header adaptativo según rol:
+    <div className={embedded ? '' : 'max-w-7xl mx-auto p-6'}>
+      {/* Header adaptativo según rol (oculto en modo embebido — el panel ya lo trae):
           - ADVISOR (su propio panel): "¡Hola {nombre}!" + subtítulo "⏰ Control de Horas"
           - Admin (consulta a otro):    "⏰ Control de Horas" + subtítulo con nombre advisor */}
+      {!embedded && (
       <div className="mb-6 flex items-center gap-4">
         <AdvisorAvatar
           fotoUrl={fotoUrl}
@@ -393,6 +413,7 @@ function ControlHorasContent() {
           )}
         </div>
       </div>
+      )}
 
       {/* Toolbar */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap items-end gap-3">
