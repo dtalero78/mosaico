@@ -458,7 +458,7 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          AND SUBSTRING("numeroRecibo" FROM 5) ~ '^[0-9]+$'`
     );
     const next = (Number(maxRow?.max_num ?? 0) + 1).toString().padStart(4, '0');
-    const numeroRecibo = `LGS-${next}`;
+    const numeroRecibo = `MOS-${next}`;
 
     await queryOne(
       `UPDATE "PAGOS_TITULARES"

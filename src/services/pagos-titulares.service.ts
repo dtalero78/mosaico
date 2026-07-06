@@ -495,7 +495,7 @@ export const pagosTitularesService = {
 <body>
   <div class="page">
     <div class="header">
-      <span class="logo"><img src="${logoUrl}" alt="LGS"/></span>
+      <span class="logo"><img src="${logoUrl}" alt="MOSAICO"/></span>
       <h1>RECIBO DE PAGO</h1>
     </div>
 
@@ -539,7 +539,7 @@ export const pagosTitularesService = {
 
     <div class="footer">
       <div class="line"></div>
-      <div class="caption">Departamento de Recaudos · Let's Go Speak</div>
+      <div class="caption">Departamento de Recaudos · MOSAICO</div>
     </div>
   </div>
 </body>

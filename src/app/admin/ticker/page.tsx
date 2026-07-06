@@ -255,7 +255,7 @@ function TickerPreview({ message, color }: { message: string; color: string }) {
         }
       `}</style>
       <div className="flex-shrink-0 bg-blue-600 flex items-center px-4 py-2 gap-2">
-        <span className="text-white text-xs font-black uppercase tracking-widest">📢 LGS</span>
+        <span className="text-white text-xs font-black uppercase tracking-widest">📢 MOSAICO</span>
       </div>
       <div className="flex-1 overflow-hidden flex items-center py-2">
         <span

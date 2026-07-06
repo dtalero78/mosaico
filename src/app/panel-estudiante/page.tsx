@@ -150,7 +150,7 @@ function PanelEstudianteContent() {
       {/* 2. Booking Bar */}
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="mx-auto px-2 flex flex-wrap items-center gap-3">
-          <span className="text-lg font-bold text-primary-700 mr-2">LGS</span>
+          <span className="text-lg font-bold text-primary-700 mr-2">MOSAICO</span>
           <span className="text-sm text-gray-500 mr-1">Booking:</span>
           <button
             onClick={() => openBooking('SESSION')}
@@ -221,7 +221,7 @@ function PanelEstudianteContent() {
           }
         `}</style>
         <div className="flex-shrink-0 bg-blue-600 flex items-center px-4 py-2 gap-2">
-          <span className="text-white text-xs font-black uppercase tracking-widest">📢 LGS</span>
+          <span className="text-white text-xs font-black uppercase tracking-widest">📢 MOSAICO</span>
         </div>
         <div className="flex-1 overflow-hidden flex items-center py-2">
           <span className="lgs-ticker-text text-sm font-medium px-8" style={{ color: tickerColor }}>

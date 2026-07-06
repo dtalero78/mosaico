@@ -78,7 +78,7 @@ export default function ContratoPublicoPage() {
   useEffect(() => {
     if (pageState !== 'VERIFIED') return
     const timer = setTimeout(() => {
-      router.replace('https://letsgospeak.cl/')
+      router.replace('https://mosaicosorobanplataforma.com/')
     }, 2000)
     return () => clearTimeout(timer)
   }, [pageState, router])
@@ -355,7 +355,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">LGS</span>
+            <span className="text-white font-bold text-sm">MOSAICO</span>
           </div>
           <span className="font-semibold text-gray-900">Let&apos;s Go Speak</span>
         </div>

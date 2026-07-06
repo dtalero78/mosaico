@@ -18,7 +18,7 @@ const CRON_SECRET = process.env.CRON_SECRET
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const providedSecret = authHeader?.replace('Bearer ', '')
-  if (CRON_SECRET && providedSecret !== CRON_SECRET) {
+  if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
     console.log('Cron expire-contracts: Unauthorized request')
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   }

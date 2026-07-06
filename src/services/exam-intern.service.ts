@@ -109,7 +109,7 @@ function formatBogotaDate(d: Date | string): string {
  * Sample:
  *   "Francisca, te felicitamos. Estás inscrita en la preparación para el
  *    examen IELTS. Tus sesiones comienzan el 15 de mayo de 2026. Te esperamos.
- *    Gracias por confiar en Let's Go Speak."
+ *    Gracias por confiar en MOSAICO."
  */
 function buildConfirmadoMessage(
   primerNombre: string | null,
@@ -122,7 +122,7 @@ function buildConfirmadoMessage(
   return (
     `${nombre}, te felicitamos. Estás inscrito en la preparación para el examen ${examen}. ` +
     `Tus sesiones comienzan el ${fecha}. Te esperamos. ` +
-    `Gracias por confiar en Let's Go Speak.`
+    `Gracias por confiar en MOSAICO.`
   );
 }
 

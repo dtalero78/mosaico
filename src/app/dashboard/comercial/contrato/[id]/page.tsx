@@ -361,7 +361,7 @@ export default function ContratoDetailPage() {
 
       const message =
         `Hola ${nombre}: \n\n` +
-        `*Tu contrato con LetsGoSpeak esta listo!*\n\n` +
+        `*Tu contrato con MOSAICO esta listo!*\n\n` +
         `Para revisarlo sigue este enlace:\n\n` +
         `${contractUrl}\n\n` +
         `Si tienes alguna pregunta, no dudes en contactarnos.`

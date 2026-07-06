@@ -4,7 +4,7 @@ const CONTACTS = [
   {
     label: 'Soporte Usuario',
     phone: '56957208697',
-    message: 'Hola, soy estudiante de LGS y necesito ayuda.',
+    message: 'Hola, soy estudiante de MOSAICO y necesito ayuda.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
