@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const result = await recordCronRun('activate-academica', async () => {
       // ACADEMICA inactivos, aprobados, con inicioCurso a <= 7 días
       const elegibles = await query(
-        `SELECT a."_id", a."numeroId", a."email", a."primerNombre", a."primerApellido", a."inicioCurso"
+        `SELECT a."_id", a."numeroId", a."email", a."userLogin", a."primerNombre", a."primerApellido", a."inicioCurso"
            FROM "ACADEMICA" a
            JOIN "PEOPLE" p ON p."_id" = a."peopleId"
           WHERE a."estadoInactivo" = true
@@ -58,12 +58,14 @@ export async function GET(request: NextRequest) {
             [a._id]
           )
           let loginActivado = false
-          // Activar login: por numberid (= numeroId) o por email
+          // CRON-19: activar por userLogin (1:1, preciso) cuando existe — evita activar
+          // prematuramente a un hermano con email compartido. Fallback legacy: numberid/email.
           const up = await query(
             `UPDATE "USUARIOS_ROLES"
                 SET "activo" = true, "_updatedDate" = NOW()
-              WHERE "numberid" = $1 OR ($2 <> '' AND LOWER("email") = LOWER($2))`,
-            [a.numeroId, a.email || '']
+              WHERE ($3 <> '' AND "userLogin" = $3)
+                 OR ($3 = '' AND ("numberid" = $1 OR ($2 <> '' AND LOWER("email") = LOWER($2))))`,
+            [a.numeroId, a.email || '', a.userLogin || '']
           )
           loginActivado = (up.rowCount ?? 0) > 0
           details.push({

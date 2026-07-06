@@ -49,7 +49,32 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
   const fin = curso.finalCurso ? String(curso.finalCurso).slice(0, 10) : '';
   const parsed = parseHorario(curso.horarioCurso);
 
-  // Siempre limpiamos los previos (regeneración en edición / upsert).
+  // DATA-EVENTGEN-12: NO borrar+reinsertar si el curso ya tiene bookings precargados.
+  // La FK ACADEMICA_BOOKINGS.eventoId ON DELETE CASCADE los eliminaría en silencio
+  // (caso inminente: asignar guía a los cursos del backfill que ya tienen inscritos).
+  const bk = await query(
+    `SELECT COUNT(*)::int AS n FROM "ACADEMICA_BOOKINGS" b
+       JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
+      WHERE c."cursoCampaignId" = $1`,
+    [curso._id]
+  );
+  if ((bk.rows[0]?.n ?? 0) > 0) {
+    // Propagación IN-PLACE de metadatos (guía/zoom/título/cupos), preservando el _id de
+    // cada evento y por tanto los bookings. NO cambia fechas/horario: un cambio estructural
+    // sobre un curso con inscritos requiere un flujo de re-agenda dedicado (pendiente).
+    const salonIP = (curso.salon || '').trim();
+    const tituloIP = [curso.campaign, curso.tipoCurso, salonIP].filter(Boolean).join(' - ');
+    const upd = await query(
+      `UPDATE "CALENDARIO"
+          SET "advisor" = $2, "linkZoom" = $3, "titulo" = $4, "tituloONivel" = $4,
+              "limiteUsuarios" = $5, "_updatedDate" = NOW()
+        WHERE "cursoCampaignId" = $1`,
+      [curso._id, (curso.guia || '').trim(), curso.linkZoom || null, tituloIP, Number(curso.numeroUsuarios) || 0]
+    );
+    return upd.rowCount ?? 0;
+  }
+
+  // Sin bookings: la regeneración destructiva es segura (no hay agendamientos que perder).
   await eliminarEventosCurso(curso._id);
 
   if (!parsed || !inicio || !fin) return 0;
@@ -199,11 +224,19 @@ export async function generarBookingsBeneficiario(
       const values = Object.values(bookingData);
       const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
       const columnList = columns.map((c) => `"${c}"`).join(', ');
-      await client.query(
+      // DATA-APPROVE-04: idempotencia a nivel BD. ON CONFLICT sobre el índice único
+      // parcial idx_bookings_student_evento_uniq (studentId,eventoId) evita bookings
+      // duplicados ante doble-submit / reaprobación concurrente que el dedupe en memoria
+      // (yaTiene) no cubre. Solo subimos el cupo si el INSERT realmente ocurrió.
+      const insRes = await client.query(
         `INSERT INTO "ACADEMICA_BOOKINGS" (${columnList}, "_createdDate", "_updatedDate")
-         VALUES (${placeholders}, NOW(), NOW())`,
+         VALUES (${placeholders}, NOW(), NOW())
+         ON CONFLICT ("studentId","eventoId")
+           WHERE "studentId" IS NOT NULL AND "eventoId" IS NOT NULL
+           DO NOTHING`,
         values
       );
+      if ((insRes.rowCount ?? 0) === 0) continue; // ya existía → no inflar inscritos
       await client.query(
         `UPDATE "CALENDARIO" SET "inscritos" = COALESCE("inscritos",0) + 1, "_updatedDate" = NOW() WHERE "_id" = $1`,
         [e._id]

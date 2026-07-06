@@ -4,6 +4,7 @@ import { ValidationError, ConflictError } from '@/lib/errors';
 import { AdvisorRepository } from '@/repositories/advisor.repository';
 import { ids } from '@/lib/id-generator';
 import { queryOne } from '@/lib/postgres';
+import { hashPassword } from '@/lib/password';
 
 /**
  * POST /api/postgres/advisors/create
@@ -90,7 +91,7 @@ export const POST = handler(async (request: Request) => {
   });
 
   // Also create USUARIOS_ROLES entry so the guía can log in (rol GUIA)
-  const password = body.clave?.trim() || 'MOSAICO2026';
+  const password = await hashPassword(body.clave?.trim() || 'MOSAICO2026');
   const inserted = await queryOne<{ _id: string }>(
     `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numberid", "_createdDate", "_updatedDate")
      VALUES ($1, $2, $3, $4, 'GUIA', true, $5, NOW(), NOW())

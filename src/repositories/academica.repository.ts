@@ -75,6 +75,15 @@ class AcademicaRepositoryClass extends BaseRepository {
     return this.parse(row);
   }
 
+  /** Resuelve por userLogin (1:1, único) — evita el cruce entre hermanos con email compartido. */
+  async findByUserLogin(userLogin: string) {
+    const row = await queryOne(
+      `SELECT * FROM "ACADEMICA" WHERE "userLogin" = $1 LIMIT 1`,
+      [userLogin]
+    );
+    return this.parse(row);
+  }
+
   /**
    * Check if a student has an academic record
    */

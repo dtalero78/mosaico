@@ -2,7 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { ValidationError } from '@/lib/errors';
-import { verifyOtp } from '@/lib/otp-store';
+import { peekOtp } from '@/lib/otp-store';
 
 /**
  * POST /api/auth/forgot-password/verify-otp
@@ -15,7 +15,8 @@ export const POST = handler(async (request) => {
   if (!code?.trim())  throw new ValidationError('Código requerido');
 
   const normalizedEmail = email.trim().toLowerCase();
-  const result = verifyOtp(normalizedEmail, code.trim());
+  // Solo inspecciona (no consume): el OTP se consume en reset-password (P0-6).
+  const result = peekOtp(normalizedEmail, code.trim());
 
   if (!result.valid) {
     return NextResponse.json(

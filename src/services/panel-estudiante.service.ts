@@ -60,12 +60,16 @@ export async function resolveStudentFromSession(session: Session) {
   if (!email) {
     throw new ForbiddenError('No se encontró email en la sesión');
   }
+  // ENG-LOGIN-14: resolver por userLogin (1:1, único) cuando la sesión lo trae, para no
+  // cruzar datos entre hermanos que comparten el email del apoderado. Fallback a email.
+  const userLogin = (session.user as any)?.userLogin || null;
 
   // Lookup chain (ACADEMICA-first to avoid TITULAR/BENEFICIARIO email collision):
-  // 1. ACADEMICA by email → PEOPLE by ACADEMICA.numeroId (with BENEFICIARIO preference)
-  // 2. Fallback: PEOPLE by email → ACADEMICA by PEOPLE.numeroId
+  // 1. ACADEMICA by userLogin/email → PEOPLE by ACADEMICA.numeroId (BENEFICIARIO preference)
+  // 2. Fallback: PEOPLE by userLogin/email → ACADEMICA by PEOPLE.numeroId
   let person = null;
-  let academica = await AcademicaRepository.findByEmail(email);
+  let academica = userLogin ? await AcademicaRepository.findByUserLogin(userLogin) : null;
+  if (!academica) academica = await AcademicaRepository.findByEmail(email);
 
   if (academica) {
     // Found academic record — find the matching PEOPLE (BENEFICIARIO) via numeroId
@@ -77,8 +81,9 @@ export async function resolveStudentFromSession(session: Session) {
       }
     }
   } else {
-    // ACADEMICA not found by email — try PEOPLE first, then ACADEMICA by numeroId
-    person = await PeopleRepository.findByEmail(email);
+    // ACADEMICA not found — try PEOPLE by userLogin/email, then ACADEMICA by numeroId
+    person = (userLogin ? await PeopleRepository.findByUserLogin(userLogin) : null)
+      ?? await PeopleRepository.findByEmail(email);
     if (person && person.numeroId) {
       academica = await AcademicaRepository.findByNumeroId(person.numeroId);
     }

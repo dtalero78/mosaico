@@ -19,7 +19,7 @@ export const GET = handlerWithAuth(async (_req, ctx) => {
   const result = await query(
     `SELECT "_id", "email", "primerNombre", "primerApellido", "nombreCompleto",
             "zoom", "activo", "fotoAdvisor", "domicilioadvisor"
-     FROM "ADVISORS"
+     FROM "GUIAS"
      WHERE LOWER(TRIM("email")) = LOWER(TRIM($1))
      LIMIT 1`,
     [decodedEmail]

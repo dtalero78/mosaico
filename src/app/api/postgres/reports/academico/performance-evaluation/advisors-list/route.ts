@@ -34,7 +34,7 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
                a."email") AS "nombre",
       a."activo",
       COUNT(e.*)::int AS "evaluaciones"
-    FROM "ADVISORS" a
+    FROM "GUIAS" a
     INNER JOIN "ACADEMICA_BOOKING_EVALUATIONS" e ON e."advisorId" = a."_id"
     GROUP BY a."_id", a."nombreCompleto", a."primerNombre", a."primerApellido", a."email", a."activo"
     ORDER BY "nombre" ASC NULLS LAST

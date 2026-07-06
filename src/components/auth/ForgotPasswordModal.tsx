@@ -93,7 +93,7 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
     try {
       const res  = await fetch('/api/auth/forgot-password/reset-password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password, confirmPassword: confirm }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password, confirmPassword: confirm, code: otp.trim() }),
       })
       const data = await res.json()
       if (!data.success) throw new Error(data.error || 'Error al actualizar')

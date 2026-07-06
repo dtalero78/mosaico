@@ -33,7 +33,9 @@ export interface PagoTitular {
    *  pagó realmente el titular). Nullable para retrocompatibilidad. */
   fechaReporte: string | null;
   fechaValidacion: string | null;
-  plan: number | null;
+  // 'Contado' | 'Credito' | 'Colaborador' | null — la columna PAGOS_TITULARES.plan
+  // se migró de INTEGER a TEXT; el runtime la trata como string (VALID_PLAN).
+  plan: string | null;
   vlrTotalProg: number | null;
   numCuota: number | null;
   valorCuota: number | null;

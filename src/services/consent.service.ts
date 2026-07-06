@@ -12,6 +12,7 @@ import { PeopleRepository } from '@/repositories/people.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { generateOtp, saveOtp, verifyOtp } from '@/lib/otp-store';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { queryOne } from '@/lib/postgres';
 
 // ── Types ──
 
@@ -33,6 +34,20 @@ function computeHash(consent: ConsentData): string {
   return createHash('sha256').update(json).digest('hex');
 }
 
+/**
+ * DATA-SEQ-09: ¿existe plantilla de contrato para esta plataforma? Sin plantilla, la
+ * página pública renderiza un contrato VACÍO que el cliente firmaría por OTP (hash de un
+ * documento en blanco). Bloqueamos el flujo de firma cuando falta la plantilla.
+ */
+async function hasContractTemplate(plataforma: string | null | undefined): Promise<boolean> {
+  if (!plataforma || !String(plataforma).trim()) return false;
+  const row = await queryOne<{ template: string | null }>(
+    `SELECT "template" FROM "ContractTemplates" WHERE LOWER("plataforma") = LOWER($1) LIMIT 1`,
+    [plataforma]
+  );
+  return !!(row && row.template);
+}
+
 // ── Public API ──
 
 /**
@@ -51,6 +66,13 @@ export async function sendConsentOtp(
 
   if (person.numeroId !== numeroDocumento) {
     throw new ValidationError('El numero de documento no coincide');
+  }
+
+  // DATA-SEQ-09: no iniciar la firma si no hay plantilla para la plataforma del titular.
+  if (!(await hasContractTemplate((person as any).plataforma))) {
+    throw new ValidationError(
+      'No hay plantilla de contrato configurada para esta plataforma; no se puede firmar. Contacta al área comercial.'
+    );
   }
 
   const celular = person.celular;
@@ -91,6 +113,13 @@ export async function verifyAndSaveConsent(
 
   if (person.hashConsentimiento) {
     throw new ValidationError('Este contrato ya tiene consentimiento declarativo');
+  }
+
+  // DATA-SEQ-09 (defensa): no persistir consentimiento de un contrato sin plantilla.
+  if (!(await hasContractTemplate((person as any).plataforma))) {
+    throw new ValidationError(
+      'No hay plantilla de contrato configurada para esta plataforma; no se puede firmar.'
+    );
   }
 
   // Verify OTP

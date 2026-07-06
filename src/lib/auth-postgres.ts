@@ -16,6 +16,7 @@ interface UserRole {
   nombre: string
   rol: string
   activo: boolean
+  userLogin?: string | null
 }
 
 /**
@@ -31,7 +32,7 @@ async function verifyUserPostgres(email: string, password: string) {
     // El identificador puede ser el email (titulares/staff) o el userLogin
     // (estudiantes MOSAICO). Se busca por cualquiera de los dos.
     const user = await queryOne<UserRole>(
-      `SELECT "_id", "email", "password", "nombre", "rol", "activo"
+      `SELECT "_id", "email", "password", "nombre", "rol", "activo", "userLogin"
        FROM "USUARIOS_ROLES"
        WHERE "email" = $1 OR "userLogin" = $1`,
       [email]
@@ -84,13 +85,7 @@ async function verifyUserPostgres(email: string, password: string) {
         console.log('🔐 [PostgreSQL] Verificando con bcrypt');
         isPasswordValid = await bcrypt.compare(password, user.password);
       } else {
-        // Plain text comparison (legacy support)
-        console.log('⚠️ [PostgreSQL] Contraseña en texto plano');
-        console.log('🔍 [PostgreSQL] Comparando:', {
-          inputLen: password.length,
-          dbLen: user.password.length,
-          match: password === user.password
-        });
+        // Plain text comparison (legacy support). SEC-PII-LOGS-11: sin logs de contraseña.
         isPasswordValid = password === user.password;
       }
     }
@@ -102,6 +97,7 @@ async function verifyUserPostgres(email: string, password: string) {
         email: user.email,
         name: user.nombre,
         role: user.rol,
+        userLogin: user.userLogin ?? null,
       };
     } else {
       console.log('❌ [PostgreSQL] Contraseña incorrecta');
@@ -230,6 +226,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as any).role
+        token.userLogin = (user as any).userLogin ?? null
       }
       return token
     },
@@ -237,6 +234,7 @@ export const authOptions: NextAuthOptions = {
       if (token && session.user) {
         ;(session.user as any).id = token.sub
         ;(session.user as any).role = token.role
+        ;(session.user as any).userLogin = (token as any).userLogin ?? null
       }
       return session
     },

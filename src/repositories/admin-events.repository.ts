@@ -102,7 +102,7 @@ export const AdminEventsRepository = {
     return queryMany<AdminEventWithAdvisor>(
       `SELECT ae.*, adv."nombreCompleto" AS "advisorNombre"
        FROM "ADMIN_EVENTS" ae
-       LEFT JOIN "ADVISORS" adv ON adv."_id" = ae."advisorId"
+       LEFT JOIN "GUIAS" adv ON adv."_id" = ae."advisorId"
        WHERE ${conds.join(' AND ')}
        ORDER BY ae."fechaInicio" DESC, adv."nombreCompleto" ASC NULLS LAST
        LIMIT 2000`,
@@ -151,7 +151,7 @@ export const AdminEventsRepository = {
               c."tipo",
               c."tituloONivel"
        FROM "CALENDARIO" c
-       LEFT JOIN "ADVISORS" adv ON adv."_id" = c."advisor"
+       LEFT JOIN "GUIAS" adv ON adv."_id" = c."advisor"
        WHERE c."advisor" = ANY($1::text[])
          AND c."dia" <  ($2::timestamptz + ($3 || ' hours')::interval)
          AND c."dia" + INTERVAL '1 hour' > $2::timestamptz

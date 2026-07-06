@@ -56,7 +56,7 @@ class EvaluationsRepositoryClass extends BaseRepository {
        FROM "ACADEMICA_BOOKINGS" b
        LEFT JOIN "CALENDARIO" c
          ON c."_id" = COALESCE(b."eventoId", b."idEvento")
-       LEFT JOIN "ADVISORS" adv
+       LEFT JOIN "GUIAS" adv
          ON adv."_id" = b."advisor" OR LOWER(adv."email") = LOWER(b."advisor")
        WHERE (b."studentId" = $1 OR b."idEstudiante" = $1)
          AND (b."asistio" = true OR b."asistencia" = true)

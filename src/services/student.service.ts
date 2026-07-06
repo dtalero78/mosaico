@@ -166,6 +166,16 @@ export async function promoteFromWelcome(
     destStep = destStep || first.step;
   }
 
+  // DATA-NIVELES-06: si el curso real no está sembrado en NIVELES, destNivel/destStep
+  // quedan vacíos y un UPDATE con '' corrompería en silencio ACADEMICA (motor sin steps).
+  // Bloqueamos la promoción con un error explícito en vez de escribir el estado corrupto.
+  if (!destNivel || !destStep) {
+    throw new ValidationError(
+      `El curso "${people.tipoCurso || '—'}" no tiene módulos/lecciones cargados en NIVELES. ` +
+      `Siembra el curso (scripts/seed-niveles-curso.js) antes de aprobar la bienvenida.`
+    );
+  }
+
   const before = `${academic.curso || '—'} / ${academic.nivel || '—'} / ${academic.step || '—'}`;
   const after = `${people.tipoCurso || '—'} / ${destNivel || '—'} / ${destStep || '—'}`;
 

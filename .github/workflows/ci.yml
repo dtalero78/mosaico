@@ -1,0 +1,43 @@
+name: CI
+
+# Gate de calidad para MOSAICO. El build de Next tiene ignoreBuildErrors/ignoreDuringBuilds
+# (deuda QUALITY-09), así que corremos typecheck + lint como pasos SEPARADOS y bloqueantes
+# para recuperar la red de seguridad estática antes del deploy_on_push a soroban.
+
+on:
+  push:
+    branches: [main, soroban]
+  pull_request:
+    branches: [main, soroban]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # BLOQUEANTE: el typecheck ya está verde (0 errores). Es el gate real.
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      # INFORMATIVOS por ahora: lint y build arrastran deuda preexistente de LGS
+      # (por eso el proyecto tiene ignoreDuringBuilds/ignoreBuildErrors). Se dejan
+      # visibles pero no bloqueantes hasta limpiar la cola; luego quitar continue-on-error.
+      - name: Lint (informativo)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build (informativo)
+        run: npm run build
+        continue-on-error: true
+        env:
+          NEXTAUTH_SECRET: ci-placeholder-secret-32-characters-min
+          NEXTAUTH_URL: http://localhost:3001

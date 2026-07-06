@@ -400,6 +400,14 @@ class PeopleRepositoryClass extends BaseRepository {
     );
   }
 
+  /** Resuelve por userLogin (1:1, único) — evita el cruce entre hermanos con email compartido. */
+  async findByUserLogin(userLogin: string) {
+    return this.rawQueryOne(
+      `SELECT * FROM "PEOPLE" WHERE "userLogin" = $1 LIMIT 1`,
+      [userLogin]
+    );
+  }
+
   async findBeneficiarioByNumeroId(numeroId: string) {
     return this.rawQueryOne(
       `SELECT * FROM "PEOPLE" WHERE "numeroId" = $1 AND "tipoUsuario" = 'BENEFICIARIO' LIMIT 1`,

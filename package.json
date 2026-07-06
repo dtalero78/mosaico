@@ -8,6 +8,7 @@
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
     "start": "next start -p 3001",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "seed:admin": "node scripts/seedAdmin.js",
     "db:backup": "node scripts/backup.js",
     "cron:worker": "node scripts/cron-worker.js",

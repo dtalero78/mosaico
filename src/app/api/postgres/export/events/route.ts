@@ -34,7 +34,7 @@ export const GET = handlerWithAuth(async (req) => {
             COUNT(DISTINCT b."_id") as bookings_count,
             COUNT(DISTINCT CASE WHEN b."asistio" = true THEN b."_id" END) as asistencias_count
      FROM "CALENDARIO" c
-     LEFT JOIN "ADVISORS" a ON c."advisor" = a."_id"
+     LEFT JOIN "GUIAS" a ON c."advisor" = a."_id"
      LEFT JOIN "ACADEMICA_BOOKINGS" b ON c."_id" = b."eventoId" OR c."_id" = b."idEvento"
      ${whereClause}
      GROUP BY c."_id", c."dia", c."hora", c."advisor", c."nivel", c."step", c."tipo",

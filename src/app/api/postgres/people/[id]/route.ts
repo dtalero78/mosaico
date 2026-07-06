@@ -391,7 +391,25 @@ export const PATCH = handlerWithAuth(async (
     );
     beneficiariesInactivated = inactiveResult.rowCount || 0;
 
-    console.log(`🔴 [PostgreSQL People] Estado "${body.aprobacion}": titular + ${beneficiariesInactivated} beneficiarios marcados como inactivos`);
+    // DATA-NULLSTATE-15: sincronizar la inactivación a ACADEMICA y USUARIOS_ROLES.
+    // Antes solo se tocaba PEOPLE → el alumno de un contrato anulado conservaba
+    // ACADEMICA.estadoInactivo=false y USUARIOS_ROLES.activo=true (seguía logueando).
+    // Best-effort (log) para no romper el cambio de estado si falla el sync.
+    await query(
+      `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW()
+        WHERE "numeroId" IN (SELECT "numeroId" FROM "PEOPLE" WHERE "contrato" = $1)`,
+      [parsedPerson.contrato]
+    ).catch((e: any) => console.warn('[People] sync ACADEMICA inactivo:', e?.message));
+    await query(
+      `UPDATE "USUARIOS_ROLES" SET "activo" = false
+        WHERE LOWER("email") IN (
+          SELECT LOWER("email") FROM "PEOPLE"
+          WHERE "contrato" = $1 AND "email" IS NOT NULL AND "email" <> ''
+        )`,
+      [parsedPerson.contrato]
+    ).catch((e: any) => console.warn('[People] sync USUARIOS_ROLES activo:', e?.message));
+
+    console.log(`🔴 [PostgreSQL People] Estado "${body.aprobacion}": titular + ${beneficiariesInactivated} beneficiarios marcados como inactivos (PEOPLE+ACADEMICA+USUARIOS_ROLES)`);
   }
 
   console.log('✅ [PostgreSQL People] Person updated successfully');
@@ -412,7 +430,7 @@ export const DELETE = handlerWithAuth(async (
   const personId = params.id;
 
   const person = await queryOne(
-    `SELECT "_id", "numeroId", "tipoUsuario" FROM "PEOPLE" WHERE "_id" = $1`,
+    `SELECT "_id", "numeroId", "tipoUsuario", "email", "userLogin" FROM "PEOPLE" WHERE "_id" = $1`,
     [personId]
   );
 
@@ -421,10 +439,38 @@ export const DELETE = handlerWithAuth(async (
     throw new ValidationError('Solo se pueden eliminar registros de tipo BENEFICIARIO');
   }
 
-  // Delete from ACADEMICA if exists
-  await query(`DELETE FROM "ACADEMICA" WHERE "numeroId" = $1`, [person.numeroId]);
+  // DATA-DELETE-ORPHAN-17: limpiar orfanatos antes de borrar (best-effort).
+  // Antes solo se borraba ACADEMICA+PEOPLE → quedaban USUARIOS_ROLES (login zombi
+  // activo) y ACADEMICA_BOOKINGS huérfanos con CALENDARIO.inscritos inflado.
+  try {
+    const acadRows = await query(`SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = $1`, [person.numeroId]);
+    for (const a of acadRows.rows) {
+      const del = await query(
+        `DELETE FROM "ACADEMICA_BOOKINGS"
+          WHERE ("studentId" = $1 OR "idEstudiante" = $1)
+          RETURNING "eventoId","idEvento","cancelo"`,
+        [a._id]
+      );
+      for (const b of del.rows) {
+        if (b.cancelo === true) continue;
+        const evId = b.eventoId || b.idEvento;
+        if (evId) await query(
+          `UPDATE "CALENDARIO" SET "inscritos" = GREATEST(COALESCE("inscritos",0) - 1, 0), "_updatedDate" = NOW() WHERE "_id" = $1`,
+          [evId]
+        );
+      }
+    }
+    // userLogin es 1:1 con el beneficiario → borrar su login sin afectar a otros.
+    if (person.userLogin) {
+      await query(`DELETE FROM "USUARIOS_ROLES" WHERE "userLogin" = $1`, [person.userLogin]);
+    }
+  } catch (e: any) {
+    console.warn('[People] cleanup orfanatos en delete beneficiario:', e?.message);
+  }
 
-  // Delete from PEOPLE
+  // ACADEMICA + PEOPLE. NOTA: en titular-es-beneficiario (numeroId compartido) esto
+  // borra el ACADEMICA compartido — pendiente de decisión de producto.
+  await query(`DELETE FROM "ACADEMICA" WHERE "numeroId" = $1`, [person.numeroId]);
   await query(`DELETE FROM "PEOPLE" WHERE "_id" = $1`, [personId]);
 
   console.log('✅ [PostgreSQL People] Beneficiario deleted:', personId);

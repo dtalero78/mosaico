@@ -7,7 +7,10 @@ async function isAuthorized(request: NextRequest): Promise<boolean> {
   const wixSecret = request.headers.get('x-wix-secret');
   if (process.env.WIX_SECRET && wixSecret === process.env.WIX_SECRET) return true;
   const session = await getServerSession(authOptions);
-  return !!session;
+  if (!session) return false;
+  // P0-4: bloquea roles no-staff (ESTUDIANTE/GUIA) — no pueden mutar datos de terceros.
+  const role = (session.user as any)?.role;
+  return !!role && role !== 'ESTUDIANTE' && role !== 'GUIA';
 }
 
 export async function POST(request: NextRequest) {

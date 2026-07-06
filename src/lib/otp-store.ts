@@ -53,3 +53,19 @@ export function verifyOtp(personId: string, code: string): { valid: boolean; cel
   store.delete(personId);
   return { valid: true, celular: entry.celular };
 }
+
+/**
+ * Peek an OTP code WITHOUT consuming it. Mismos chequeos que verifyOtp pero no borra
+ * en éxito. Lo usa verify-otp (validación previa) para que el código sobreviva hasta
+ * reset-password, que es quien lo consume con verifyOtp (P0-6).
+ */
+export function peekOtp(personId: string, code: string): { valid: boolean; celular?: string } {
+  const entry = store.get(personId);
+  if (!entry) return { valid: false };
+  if (Date.now() - entry.createdAt > OTP_TTL_MS) {
+    store.delete(personId);
+    return { valid: false };
+  }
+  if (entry.code !== code) return { valid: false };
+  return { valid: true, celular: entry.celular };
+}

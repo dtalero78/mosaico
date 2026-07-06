@@ -35,7 +35,7 @@ export const GET = handlerWithAuth(async (request, { params }, session) => {
 
     if (!canPickAdvisor) {
       const adv = await queryOne<{ _id: string }>(
-        `SELECT "_id" FROM "ADVISORS" WHERE LOWER("email") = LOWER($1)`,
+        `SELECT "_id" FROM "GUIAS" WHERE LOWER("email") = LOWER($1)`,
         [email],
       );
       if (!adv || adv._id !== params.id) {

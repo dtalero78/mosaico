@@ -3,6 +3,7 @@ import { handler, successResponse } from '@/lib/api-helpers';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
+import { hashPassword } from '@/lib/password';
 
 // One-time migration: ensure columns exist (idempotent, runs once per server start)
 let migrationDone = false;
@@ -241,7 +242,7 @@ export const POST = handler(async (
            "perfilActualizado" = NOW(),
            "_updatedDate"     = NOW()`,
     [
-      usuarioId, normalizedEmail, clave.trim(), nombreCompleto,
+      usuarioId, normalizedEmail, await hashPassword(clave.trim()), nombreCompleto,
       (student as any).numeroId || null,
       (student as any).contrato  || null,
       (student as any).celular   || null,

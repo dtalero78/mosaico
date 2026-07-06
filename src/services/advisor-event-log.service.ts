@@ -125,7 +125,7 @@ function computeEditability(
  */
 async function resolveAdvisorIdByEmail(email: string): Promise<string | null> {
   const row = await queryOne<{ _id: string }>(
-    `SELECT "_id" FROM "ADVISORS" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
+    `SELECT "_id" FROM "GUIAS" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
     [email],
   );
   return row?._id ?? null;

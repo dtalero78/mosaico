@@ -74,7 +74,7 @@ export const GET = handler(async (req) => {
        b."cancelo"
      FROM "ACADEMICA_BOOKINGS" b
      LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
-     LEFT JOIN "ADVISORS" a ON a."_id" = b."advisor"
+     LEFT JOIN "GUIAS" a ON a."_id" = b."advisor"
      WHERE ${conditions.join(' AND ')}
      ORDER BY b."fechaEvento" DESC NULLS LAST`,
     params
