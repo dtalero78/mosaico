@@ -38,7 +38,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
     children: [
       { name: 'Calendario Sesiones', href: '/dashboard/academic/agenda-sesiones' },
       { name: 'Sesiones semana', href: '/dashboard/academic/agenda-academica' },
-      { name: 'Guías', href: '/dashboard/academic/advisors' },
+      { name: 'Lista Guias', href: '/dashboard/academic/advisors' },
       // Si el usuario logueado ES guía, su email va en la URL para abrir SU panel.
       // Para coordinadores/admins el link va SIN email — el panel auto-selecciona
       // el primer guía del dropdown (si pasamos el email del coordinador, el
