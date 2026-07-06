@@ -35,6 +35,7 @@ const PEOPLE_EDIT_FIELDS = [
   'observacionesContrato',
   'medioPago',
   'asesor',
+  'asesorMail',
 ];
 
 // Fields editable on FINANCIEROS records

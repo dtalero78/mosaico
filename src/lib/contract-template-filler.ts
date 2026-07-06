@@ -60,7 +60,10 @@ export function fillContractTemplate(
         `- Pais: ${b.plataforma || ''}\n` +
         `- Ciudad: ${b.ciudad || ''}\n` +
         `- Domicilio: ${b.domicilio || ''}\n` +
-        `- Email: ${b.email || ''}`
+        `- Email: ${b.email || ''}\n` +
+        `- Apoderado: ${b.apoderado || ''}\n` +
+        `- Telefono Apoderado: ${b.apoderadoTelefono || ''}\n` +
+        `- Correo Apoderado: ${b.apoderadoMail || ''}`
       ).join('\n\n');
 
   // Build firma (consent) text
@@ -130,6 +133,9 @@ export function fillContractTemplate(
     // si no el email crudo del titular. Plantillas Chile/Colombia usan {{asesor}}
     // al final del contrato (después del nombre del titular).
     asesor: ejecutivoComercial?.nombre || ejecutivoComercial?.email || titular?.asesor || '',
+    // Correo del asesor comercial ({{asesormail}} en la plantilla). Prefiere el
+    // campo PEOPLE.asesorMail; si no, el email resuelto del ejecutivo o el asesor crudo.
+    asesormail: titular?.asesorMail || ejecutivoComercial?.email || titular?.asesor || '',
     telefonoRefDos: titular?.telefonoRefDos || '',
     firma: firmaText,
   };

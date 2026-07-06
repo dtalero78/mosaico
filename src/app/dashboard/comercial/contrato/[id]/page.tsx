@@ -57,6 +57,7 @@ const CAMPOS_TITULAR: FieldDef[] = [
   { campo: 'genero', label: 'Genero', tipo: 'select', opciones: ['Masculino', 'Femenino', 'Otro'] },
   { campo: 'medioPago', label: 'Medio de Pago' },
   { campo: 'asesor', label: 'Asesor' },
+  { campo: 'asesorMail', label: 'Correo del Asesor' },
 ]
 
 const CAMPOS_REFERENCIAS: FieldDef[] = [
@@ -77,6 +78,8 @@ const CAMPOS_BENEFICIARIO: FieldDef[] = [
   { campo: 'fechaNacimiento', label: 'Fecha de Nacimiento', tipo: 'date' },
   { campo: 'celular', label: 'Celular' },
   { campo: 'email', label: 'Email' },
+  { campo: 'domicilio', label: 'Domicilio' },
+  { campo: 'ciudad', label: 'Ciudad' },
 ]
 
 const CAMPOS_FINANCIERO: FieldDef[] = [
@@ -849,6 +852,26 @@ export default function ContratoDetailPage() {
                           />
                         ))}
                       </dl>
+                      {/* Apoderado de este beneficiario (solo lectura) */}
+                      {(ben.apoderado || ben.apoderadoTelefono || ben.apoderadoMail) && (
+                        <div className="mt-3 pt-3 border-t border-green-100">
+                          <p className="text-[11px] font-semibold text-green-700 mb-2">Apoderado del beneficiario</p>
+                          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <div>
+                              <dt className="text-[11px] uppercase tracking-wide text-gray-500">Nombre</dt>
+                              <dd className="text-sm text-gray-900">{ben.apoderado || '—'}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-[11px] uppercase tracking-wide text-gray-500">Teléfono</dt>
+                              <dd className="text-sm text-gray-900">{ben.apoderadoTelefono || '—'}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-[11px] uppercase tracking-wide text-gray-500">Correo</dt>
+                              <dd className="text-sm text-gray-900">{ben.apoderadoMail || '—'}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, TrashIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
+import { cursosVisiblesContrato } from '@/lib/cursos-campaign'
+import { generateUserLogin } from '@/lib/user-login'
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -65,11 +68,23 @@ interface Beneficiario {
   celular: string
   domicilio: string
   ciudad: string
+  // Apoderado propio de este beneficiario (cada beneficiario puede tener uno distinto)
+  apoderado: string
+  apoderadoTelefono: string
+  apoderadoMail: string
+  titularEsApoderado: boolean
+  // Curso (cascada CURSOS_CAMPAIGN) — paridad con Crear Contrato
+  campaign: string
+  tipoCurso: string
+  horarioCurso: string
+  userLogin: string
 }
 
 const emptyBeneficiario = (): Beneficiario => ({
   primerNombre: '', segundoNombre: '', primerApellido: '', segundoApellido: '',
   numeroId: '', fechaNacimiento: '', email: '', celular: '', domicilio: '', ciudad: '',
+  apoderado: '', apoderadoTelefono: '', apoderadoMail: '', titularEsApoderado: false,
+  campaign: '', tipoCurso: '', horarioCurso: '', userLogin: '',
 })
 
 // ─── Componente ──────────────────────────────────────────────────────────────
@@ -82,18 +97,26 @@ export default function MigrarContratoPage() {
 
   // Step 1 – Contrato
   const [contrato, setContrato] = useState('')
-  const [plataforma, setPlataforma] = useState('')
+  const [plataforma, setPlataforma] = useState('Chile')
   const [asesor, setAsesor] = useState('')
+  const [asesorMail, setAsesorMail] = useState('')
 
   // Steps 2-5 – Titular
   const [titular, setTitular] = useState({
     primerNombre: '', segundoNombre: '', primerApellido: '', segundoApellido: '',
-    numeroId: '', fechaNacimiento: '', pais: 'Colombia',
+    numeroId: '', fechaNacimiento: '', pais: 'Chile',
     domicilio: '', ciudad: '', celular: '', telefono: '',
     email: '', ingresos: '', empresa: '', cargo: '', genero: '',
     referenciaUno: '', parentezcoRefUno: '', telRefUno: '',
     referenciaDos: '', parentezcoRefDos: '', telRefDos: '',
+    // Curso del titular (cuando el titular también es beneficiario) + flag Impulsa
+    esCursoImpulsa: false,
+    campaign: '', tipoCurso: '', horarioCurso: '', userLogin: '',
   })
+
+  // Cursos de campaña (cascada) — paridad con Crear Contrato
+  const [cursosCampaign, setCursosCampaign] = useState<CursoRow[]>([])
+  const cursosVisibles = useMemo(() => cursosVisiblesContrato(cursosCampaign, false), [cursosCampaign])
 
   // Step 6 – Financiero
   const [financial, setFinancial] = useState({
@@ -114,6 +137,30 @@ export default function MigrarContratoPage() {
 
   // Modal "¿Agregar otro?"
   const [showAnotherModal, setShowAnotherModal] = useState(false)
+
+  // Cargar cursos de campaña (cascada)
+  useEffect(() => {
+    fetch('/api/postgres/cursos-campaign', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => setCursosCampaign(Array.isArray(j.data) ? j.data : (Array.isArray(j.rows) ? j.rows : [])))
+      .catch(() => { /* silencioso */ })
+  }, [])
+
+  // userLogin del titular-beneficiario: se genera al definirse el curso.
+  useEffect(() => {
+    if (titular.campaign && titular.tipoCurso && titular.horarioCurso &&
+        titular.primerNombre && titular.numeroId && !titular.userLogin) {
+      setTitular(t => ({ ...t, userLogin: generateUserLogin(t.primerNombre, t.primerApellido, t.numeroId) }))
+    }
+  }, [titular.campaign, titular.tipoCurso, titular.horarioCurso, titular.primerNombre, titular.primerApellido, titular.numeroId, titular.userLogin])
+
+  // userLogin del beneficiario en curso: se genera al definirse el curso.
+  useEffect(() => {
+    if (currentBenef.campaign && currentBenef.tipoCurso && currentBenef.horarioCurso &&
+        currentBenef.primerNombre && currentBenef.numeroId && !currentBenef.userLogin) {
+      setCurrentBenef(b => ({ ...b, userLogin: generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId) }))
+    }
+  }, [currentBenef.campaign, currentBenef.tipoCurso, currentBenef.horarioCurso, currentBenef.primerNombre, currentBenef.primerApellido, currentBenef.numeroId, currentBenef.userLogin])
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -238,6 +285,7 @@ export default function MigrarContratoPage() {
           titular: {
             ...titular,
             asesor,
+            asesorMail,
             plataforma,
             celular: prefix ? prefix + titular.celular : titular.celular,
           },
@@ -342,12 +390,22 @@ export default function MigrarContratoPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Asesor *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Asesor comercial *</label>
                 <input
                   type="text"
                   value={asesor}
                   onChange={e => setAsesor(e.target.value)}
                   placeholder="Nombre del asesor"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Correo del asesor</label>
+                <input
+                  type="email"
+                  value={asesorMail}
+                  onChange={e => setAsesorMail(e.target.value.toLowerCase())}
+                  placeholder="asesor@correo.com"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
@@ -358,6 +416,12 @@ export default function MigrarContratoPage() {
           {step === 2 && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-gray-900">Datos Básicos del Titular</h2>
+              {/* Check curso Impulsa — gobierna la cascada de cursos (titular + beneficiarios) */}
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={titular.esCursoImpulsa}
+                  onChange={e => setTitular(t => ({ ...t, esCursoImpulsa: e.target.checked, campaign: '', tipoCurso: '', horarioCurso: '' }))} />
+                ¿Es curso Impulsa? (muestra solo cursos IMPULSA en los dropdowns)
+              </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   { label: 'Primer Nombre *', field: 'primerNombre', placeholder: 'Ej: Juan' },
@@ -661,6 +725,24 @@ export default function MigrarContratoPage() {
                 </button>
               </div>
 
+              {/* Curso del titular — sólo cuando el titular también es beneficiario */}
+              {titularEsBeneficiario && (
+                <div className="border border-primary-200 rounded-lg p-4 bg-primary-50">
+                  <p className="text-sm font-semibold text-primary-800 mb-2">
+                    Curso del titular ({titular.esCursoImpulsa ? 'solo IMPULSA' : 'YOJI / OKINA / KODOMO / DANSHI / SENPAI'})
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <CursoCampaignFields
+                      rows={cursosVisibles}
+                      esImpulsa={titular.esCursoImpulsa}
+                      values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso }}
+                      onPatch={(patch) => setTitular(t => ({ ...t, ...patch }))}
+                      userLogin={titular.userLogin}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Lista de beneficiarios confirmados */}
               {(titularEsBeneficiario || beneficiarios.length > 0) && (
                 <div className="space-y-2">
@@ -752,6 +834,73 @@ export default function MigrarContratoPage() {
                         value={currentBenef.ciudad}
                         onChange={e => setCurrentBenef(b => ({ ...b, ciudad: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
+                    </div>
+                  </div>
+
+                  {/* Curso del beneficiario (cascada CURSOS_CAMPAIGN) */}
+                  <div className="pt-3 border-t border-primary-200">
+                    <p className="text-sm font-semibold text-primary-800 mb-2">
+                      Curso del beneficiario ({titular.esCursoImpulsa ? 'solo IMPULSA' : 'YOJI / OKINA / KODOMO / DANSHI / SENPAI'})
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <CursoCampaignFields
+                        rows={cursosVisibles}
+                        esImpulsa={titular.esCursoImpulsa}
+                        values={{ campaign: currentBenef.campaign, tipoCurso: currentBenef.tipoCurso, horarioCurso: currentBenef.horarioCurso }}
+                        onPatch={(patch) => setCurrentBenef(b => ({ ...b, ...patch }))}
+                        userLogin={currentBenef.userLogin}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Apoderado de ESTE beneficiario (cada beneficiario puede tener uno distinto) */}
+                  <div className="pt-3 border-t border-primary-200">
+                    <p className="text-sm font-semibold text-primary-800 mb-2">Apoderado de este beneficiario</p>
+                    {/* ¿El titular es el apoderado? — prellena desde el titular y bloquea los campos */}
+                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-3">
+                      <input type="checkbox" checked={currentBenef.titularEsApoderado}
+                        onChange={e => {
+                          const on = e.target.checked
+                          setCurrentBenef(b => on ? ({
+                            ...b,
+                            titularEsApoderado: true,
+                            apoderado: [titular.primerNombre, titular.segundoNombre, titular.primerApellido, titular.segundoApellido].filter(Boolean).join(' '),
+                            apoderadoTelefono: titular.celular || '',
+                            apoderadoMail: titular.email || '',
+                          }) : ({ ...b, titularEsApoderado: false }))
+                        }} />
+                      ¿El titular será el apoderado? (prellena nombre, teléfono y correo del titular)
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Nombre del apoderado</label>
+                        <input type="text"
+                          value={currentBenef.apoderado}
+                          disabled={currentBenef.titularEsApoderado}
+                          onChange={e => setCurrentBenef(b => ({ ...b, apoderado: e.target.value }))}
+                          placeholder="Ej: María Pérez"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Teléfono del apoderado {getPhonePrefix() && <span className="text-gray-400">({getPhonePrefix()})</span>}
+                        </label>
+                        <input type="text"
+                          value={currentBenef.apoderadoTelefono}
+                          disabled={currentBenef.titularEsApoderado}
+                          onChange={e => setCurrentBenef(b => ({ ...b, apoderadoTelefono: e.target.value.replace(/\D/g, '') }))}
+                          placeholder="Solo dígitos"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Correo del apoderado</label>
+                        <input type="email"
+                          value={currentBenef.apoderadoMail}
+                          disabled={currentBenef.titularEsApoderado}
+                          onChange={e => setCurrentBenef(b => ({ ...b, apoderadoMail: e.target.value.toLowerCase() }))}
+                          placeholder="apoderado@correo.com"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                      </div>
                     </div>
                   </div>
                   {benError && <p className="text-sm text-red-600">{benError}</p>}
