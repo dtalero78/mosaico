@@ -26,7 +26,7 @@ class AcademicaRepositoryClass extends BaseRepository {
               "asesor", "fechaNacimiento", "celular", "telefono", "email", "contrato",
               "fechaCreacion", "tipoUsuario", "plataforma", "usuarioId", "peopleId",
               "estadoInactivo", "fechaContrato", "finalContrato", "vigencia",
-              "extensionCount", "extensionHistory", "onHoldCount"
+              "extensionCount", "extensionHistory", "onHoldCount", "curso"
        FROM "ACADEMICA"
        WHERE "_id" = $1 OR "studentId" = $1 OR "peopleId" = $1 OR "numeroId" = $1`,
       [id]

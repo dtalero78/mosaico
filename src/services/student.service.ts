@@ -438,19 +438,22 @@ export async function autoAdvanceStep(bookingId: string) {
   if (!student) student = await PeopleRepository.findByIdOrNumeroId(studentId);
   if (!student) return null;
 
-  // ─── WELCOME → BN1 Step 1: promote on attendance ───
-  if (bookingStep === 'WELCOME' || bookingNivel === 'WELCOME') {
-    // Only promote if student is currently in WELCOME
-    if (student.nivel !== 'WELCOME' && student.step !== 'WELCOME') return null;
-    // Only promote if the booking has attendance marked
+  // ─── MOSAICO: curso puente WELCOME → curso REAL (promoción al marcar asistencia) ───
+  // El alumno nace en el curso puente WELCOME (ACADEMICA.curso='WELCOME'). Cuando el
+  // Guía marca asistencia (en la sesión de bienvenida), se auto-promueve a su curso
+  // real copiando campaign/curso/salón/módulo/lección desde PEOPLE→ACADEMICA (misma
+  // lógica que el botón "Aprobar Welcome"). Idempotente: tras promover, curso deja de
+  // ser 'WELCOME' y esta rama no vuelve a dispararse.
+  if (student.curso === 'WELCOME') {
     if (!booking.asistio && !booking.asistencia) return null;
-    console.log(`🎓 [AutoAdvance] WELCOME → BN1 Step 1 for student ${studentId}`);
-    await changeStep(studentId, 'Step 1');
-    return {
-      advanced: true,
-      from: { nivel: 'WELCOME', step: 'WELCOME' },
-      to: { nivel: 'BN1', step: 'Step 1' },
-    };
+    console.log(`🎓 [AutoAdvance] WELCOME (curso puente) → curso real for ACADEMICA ${student._id}`);
+    try {
+      const res = await promoteFromWelcome(student._id, { nombre: 'Auto-promoción (asistencia WELCOME)' });
+      return { advanced: true, welcome: true, ...res };
+    } catch (err: any) {
+      console.warn(`[AutoAdvance] promoteFromWelcome falló para ${student._id}:`, err?.message || err);
+      return null;
+    }
   }
 
   if (extractStepNum(bookingStep) === null) return null;
