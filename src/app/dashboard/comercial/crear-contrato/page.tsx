@@ -160,6 +160,8 @@ function CrearContratoContent() {
   const [showSinCursoModal, setShowSinCursoModal] = useState(false);
   // Modal resumen antes de crear el contrato (paso 7)
   const [showResumenModal, setShowResumenModal] = useState(false);
+  // Modal tras confirmar un beneficiario: agregar otro o crear contrato (con resumen)
+  const [showPostConfirmModal, setShowPostConfirmModal] = useState(false);
   const [contrato, setContrato] = useState('');
   const [loadingContrato, setLoadingContrato] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
@@ -410,6 +412,7 @@ function CrearContratoContent() {
     if (em) { setError(`Beneficiario ${index + 1}: ${em}`); return; }
     setError('');
     setBeneficiarios(prev => prev.map((x, i) => i === index ? { ...x, confirmado: true } : x));
+    setShowPostConfirmModal(true);
   };
 
   // Email válido: requiere @ y un dominio con punto (algo@dominio.tld)
@@ -1646,6 +1649,67 @@ function CrearContratoContent() {
                   <button type="button" onClick={handleSubmit} disabled={loading}
                     className="px-4 py-2 text-sm rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50">
                     {loading ? 'Creando...' : 'Confirmar y crear contrato'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal tras confirmar un beneficiario: agregar otro o crear contrato */}
+          {showPostConfirmModal && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Beneficiario confirmado ✓</h3>
+                <p className="text-sm text-gray-500 mb-4">¿Deseas agregar otro beneficiario o crear el contrato?</p>
+
+                <div className="text-sm text-gray-700 space-y-4">
+                  {/* Titular */}
+                  <div>
+                    <p className="font-semibold text-gray-900">Titular</p>
+                    <p>{`${titular.primerNombre} ${titular.segundoNombre} ${titular.primerApellido} ${titular.segundoApellido}`.replace(/\s+/g, ' ').trim()}</p>
+                    <p className="text-gray-500">ID: {titular.numeroId} · {titular.plataforma}</p>
+                    <p className="text-gray-500">Asesor: {titular.asesor || '—'}{titular.asesorMail ? ` · ${titular.asesorMail}` : ''}</p>
+                  </div>
+
+                  {/* Beneficiarios + apoderados */}
+                  <div>
+                    <p className="font-semibold text-gray-900">Beneficiarios ({beneficiarios.length})</p>
+                    {beneficiarios.length === 0 ? (
+                      <p className="text-gray-500">Sin beneficiarios.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {beneficiarios.map((b, i) => (
+                          <li key={i} className="border border-gray-100 rounded-md p-2">
+                            <p>
+                              <span className="font-medium">{`${b.primerNombre} ${b.primerApellido}`.trim()}</span>
+                              <span className="text-gray-500"> (ID {b.numeroId})</span>
+                              {b.confirmado ? <span className="ml-2 text-green-600 text-xs font-semibold">confirmado</span> : <span className="ml-2 text-amber-600 text-xs font-semibold">sin confirmar</span>}
+                            </p>
+                            <p className="text-gray-500">{b.tipoCurso} · {b.horarioCurso}{salonFor(b.campaign || '', b.tipoCurso || '', b.horarioCurso || '') ? ` · Salón ${salonFor(b.campaign || '', b.tipoCurso || '', b.horarioCurso || '')}` : ''}</p>
+                            <p className="text-gray-500">Apoderado: {b.apoderado || '—'}{b.apoderadoTelefono ? ` · ${b.apoderadoTelefono}` : ''}{b.apoderadoMail ? ` · ${b.apoderadoMail}` : ''}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-between gap-2">
+                  <button type="button"
+                    onClick={() => { setShowPostConfirmModal(false); addBeneficiario(); }}
+                    className="inline-flex items-center px-4 py-2 text-sm rounded-md border border-primary-300 text-primary-700 hover:bg-primary-50">
+                    <PlusIcon className="h-4 w-4 mr-1" /> Agregar otro beneficiario
+                  </button>
+                  <button type="button" disabled={loading}
+                    onClick={() => {
+                      const idx = beneficiarios.findIndex(b => !b.confirmado);
+                      if (idx >= 0) { setError(`Confirma el Beneficiario ${idx + 1} antes de crear el contrato.`); setShowPostConfirmModal(false); return; }
+                      if (beneficiarios.some(b => !b.campaign || !b.tipoCurso || !b.horarioCurso)) { setError('Cada beneficiario debe tener campaña, curso y horario.'); setShowPostConfirmModal(false); return; }
+                      setShowPostConfirmModal(false);
+                      handleSubmit();
+                    }}
+                    className="px-4 py-2 text-sm rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50">
+                    {loading ? 'Creando...' : 'Crear contrato'}
                   </button>
                 </div>
               </div>
