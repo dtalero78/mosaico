@@ -34,6 +34,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
   const [errors, setErrors] = useState<Errors>({})
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [showPass, setShowPass] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   const [fotoFile, setFotoFile] = useState<File | null>(null)
   const [fotoPreview, setFotoPreview] = useState<string | null>(null)
@@ -111,7 +112,8 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
   }
 
   const handleSave = async () => {
-    if (!validate()) return
+    if (!validate()) { setShowConfirm(false); return }
+    setShowConfirm(false)
     setSaving(true); setMsg(null)
     try {
       let fotoKey: string | null = null
@@ -220,7 +222,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
             <button type="button" onClick={() => router.push('/dashboard/academic/advisors')}
               className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900">{canEdit ? 'Cancelar' : 'Volver'}</button>
             {canEdit && (
-              <button type="button" onClick={handleSave} disabled={saving || uploading}
+              <button type="button" onClick={() => { if (validate()) setShowConfirm(true) }} disabled={saving || uploading}
                 className="px-6 py-2.5 bg-accent-600 text-white text-sm font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50">
                 {saving || uploading ? 'Guardando...' : 'Guardar cambios'}
               </button>
@@ -228,6 +230,29 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
           </div>
         </div>
       </div>
+
+      {/* Modal de confirmación de cambios */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900">Confirmar cambios</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              ¿Guardar los cambios de <span className="font-medium">{form.primerNombre} {form.primerApellido}</span>?
+              {form.clave.trim() && <span className="block mt-1 text-amber-700">Se actualizará la contraseña del guía.</span>}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setShowConfirm(false)} disabled={saving || uploading}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={handleSave} disabled={saving || uploading}
+                className="px-6 py-2.5 bg-accent-600 text-white text-sm font-medium rounded-lg hover:bg-accent-700 disabled:opacity-50">
+                {saving || uploading ? 'Guardando...' : 'Confirmar y guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
