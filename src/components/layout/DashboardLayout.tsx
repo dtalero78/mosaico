@@ -594,7 +594,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // Planta, Estadísticas): modelo de 2 marcas — la sección se muestra si le
       // queda ≥1 ítem visible tras el filtrado de nivel 3 (no necesita permiso
       // propio de sección). Basta marcar el abuelo "Informes" + el ítem.
-      if (child.isSubmenu && (item.name === 'Informes' || item.name === 'Académico')) {
+      // CUALQUIER submenú (Servicio > Exam. Intern., Informes, Académico, etc.)
+      // se muestra sólo si le queda ≥1 ítem visible tras el filtrado de nivel 3.
+      // Un submenú no tiene href propio → sin esta guarda caería en el "return
+      // true" de abajo y se mostraría aunque el usuario no tenga permiso a ningún
+      // hijo (bug: COMERCIAL sin EXAM_INTERN veía "Exam. Intern.").
+      if (child.isSubmenu) {
         return (child.children?.length ?? 0) > 0
       }
 
