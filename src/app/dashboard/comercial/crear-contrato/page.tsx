@@ -81,6 +81,7 @@ interface Beneficiario {
   apoderadoTelefono?: string;
   apoderadoMail?: string;
   titularEsApoderado?: boolean;
+  confirmado?: boolean;
 }
 
 // CursoCampaignFields + CursoRow ahora viven en @/components/contract/CursoCampaignFields
@@ -154,7 +155,6 @@ function CrearContratoContent() {
 
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([]);
   const [titularEsBeneficiario, setTitularEsBeneficiario] = useState(false);
-  const [titularEsApoderado, setTitularEsApoderado] = useState(false);
   const [cursosCampaign, setCursosCampaign] = useState<CursoRow[]>([]);
   // Modal de confirmación paso 2: ni Impulsa ni titular-beneficiario marcados
   const [showSinCursoModal, setShowSinCursoModal] = useState(false);
@@ -181,13 +181,13 @@ function CrearContratoContent() {
     saveTimer.current = setTimeout(() => {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({
-          titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba, esExtemporanea,
+          titular, financial, beneficiarios, titularEsBeneficiario, currentStep, contrato, esContratoPrueba, esExtemporanea,
           savedAt: Date.now()
         }))
       } catch {}
     }, 500)
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
-  }, [titular, financial, beneficiarios, titularEsBeneficiario, titularEsApoderado, currentStep, contrato, esContratoPrueba, esExtemporanea])
+  }, [titular, financial, beneficiarios, titularEsBeneficiario, currentStep, contrato, esContratoPrueba, esExtemporanea])
 
   // Generar userLogin (10 chars, auto+aleatorio) cuando se define el curso.
   // Titular-beneficiario: usa los datos del titular.
@@ -254,7 +254,6 @@ function CrearContratoContent() {
       if (draft.financial) setFinancial(draft.financial)
       if (draft.beneficiarios) setBeneficiarios(draft.beneficiarios)
       if (draft.titularEsBeneficiario !== undefined) setTitularEsBeneficiario(draft.titularEsBeneficiario)
-      if (draft.titularEsApoderado !== undefined) setTitularEsApoderado(draft.titularEsApoderado)
       if (draft.currentStep) setCurrentStep(draft.currentStep)
       if (draft.contrato) setContrato(draft.contrato)
       if (draft.esContratoPrueba !== undefined) setEsContratoPrueba(draft.esContratoPrueba)
@@ -375,7 +374,8 @@ function CrearContratoContent() {
       apoderado: '',
       apoderadoTelefono: '',
       apoderadoMail: '',
-      titularEsApoderado: false
+      titularEsApoderado: false,
+      confirmado: false
     }]);
   };
 
@@ -389,9 +389,27 @@ function CrearContratoContent() {
     const updatedBeneficiarios = [...beneficiarios];
     updatedBeneficiarios[index] = {
       ...updatedBeneficiarios[index],
-      [field]: value
+      [field]: value,
+      confirmado: false // cualquier edición requiere re-confirmar
     };
     setBeneficiarios(updatedBeneficiarios);
+  };
+
+  // Valida los campos de un beneficiario y lo marca como confirmado.
+  const confirmarBeneficiario = (index: number) => {
+    const b = beneficiarios[index];
+    if (!b.primerNombre?.trim() || !b.primerApellido?.trim() || !b.numeroId?.trim()) {
+      setError(`Beneficiario ${index + 1}: nombre, apellido y número de ID son obligatorios.`);
+      return;
+    }
+    if (!b.campaign || !b.tipoCurso || !b.horarioCurso) {
+      setError(`Beneficiario ${index + 1}: debe seleccionar campaña, curso y horario.`);
+      return;
+    }
+    const em = benefEmailError(index);
+    if (em) { setError(`Beneficiario ${index + 1}: ${em}`); return; }
+    setError('');
+    setBeneficiarios(prev => prev.map((x, i) => i === index ? { ...x, confirmado: true } : x));
   };
 
   // Email válido: requiere @ y un dominio con punto (algo@dominio.tld)
@@ -506,12 +524,13 @@ function CrearContratoContent() {
   // Submit contract
   // Valida el paso final y abre el modal resumen (en vez de crear directo).
   const requestSubmit = () => {
-    if (!titular.apoderado?.trim()) {
-      setError('El nombre del apoderado es obligatorio.');
-      return;
-    }
     if (beneficiarios.some(b => !b.campaign || !b.tipoCurso || !b.horarioCurso)) {
       setError('Cada beneficiario debe tener campaña, tipo de curso y horario.');
+      return;
+    }
+    const sinConfirmar = beneficiarios.findIndex(b => !b.confirmado);
+    if (sinConfirmar >= 0) {
+      setError(`Confirma el Beneficiario ${sinConfirmar + 1} antes de crear el contrato.`);
       return;
     }
     // Email de beneficiarios: no puede repetir el del titular ni el de otro beneficiario.
@@ -526,11 +545,7 @@ function CrearContratoContent() {
 
   const handleSubmit = async () => {
     setShowResumenModal(false);
-    // Validación final (paso 7): apoderado obligatorio + cursos de beneficiarios
-    if (!titular.apoderado?.trim()) {
-      setError('El nombre del apoderado es obligatorio.');
-      return;
-    }
+    // Validación final (paso 7): cursos de beneficiarios
     const benefSinCurso = beneficiarios.some(
       b => !b.campaign || !b.tipoCurso || !b.horarioCurso
     );
@@ -1305,54 +1320,7 @@ function CrearContratoContent() {
           {/* Step 7: Beneficiarios */}
           {currentStep === 7 && (
             <div className="space-y-4">
-              {/* Apoderado del contrato (en la fila del titular) */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                <h2 className="text-xl font-semibold mb-3">Apoderado y Beneficiarios</h2>
-                <label className="inline-flex items-center cursor-pointer mb-3">
-                  <input
-                    type="checkbox"
-                    checked={titularEsApoderado}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setTitularEsApoderado(checked);
-                      if (checked) {
-                        setTitular((t) => ({
-                          ...t,
-                          apoderado: `${t.primerNombre} ${t.segundoNombre} ${t.primerApellido} ${t.segundoApellido}`.replace(/\s+/g, ' ').trim(),
-                          apoderadoTelefono: getPhonePrefix() + (t.celular || ''),
-                          apoderadoMail: t.email || '',
-                        }));
-                      }
-                    }}
-                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                  />
-                  <span className="ml-2 text-base font-semibold text-gray-900">¿Titular será apoderado?</span>
-                </label>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre apoderado *</label>
-                    <input type="text" value={titular.apoderado} disabled={titularEsApoderado}
-                      onChange={(e) => setTitular({ ...titular, apoderado: e.target.value })}
-                      placeholder="Nombre del apoderado"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-                    <input type="tel" value={titular.apoderadoTelefono} disabled={titularEsApoderado}
-                      onChange={(e) => setTitular({ ...titular, apoderadoTelefono: e.target.value })}
-                      placeholder="Teléfono del apoderado"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
-                    <input type="email" value={titular.apoderadoMail} disabled={titularEsApoderado}
-                      onChange={(e) => setTitular({ ...titular, apoderadoMail: e.target.value })}
-                      placeholder="correo@ejemplo.com"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
-                  </div>
-                </div>
-              </div>
-
+              {/* El apoderado se captura por beneficiario (más abajo), no a nivel titular. */}
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Beneficiarios</h3>
                 <button
@@ -1485,7 +1453,7 @@ function CrearContratoContent() {
                             esImpulsa={titular.esCursoImpulsa}
                             userLogin={beneficiario.userLogin}
                             values={{ campaign: beneficiario.campaign, tipoCurso: beneficiario.tipoCurso, horarioCurso: beneficiario.horarioCurso }}
-                            onPatch={(patch) => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, ...patch } : b))}
+                            onPatch={(patch) => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, ...patch, confirmado: false } : b))}
                           />
                         </div>
                       </div>
@@ -1499,11 +1467,11 @@ function CrearContratoContent() {
                               const on = e.target.checked;
                               setBeneficiarios(prev => prev.map((b, i) => i === index
                                 ? (on ? {
-                                    ...b, titularEsApoderado: true,
+                                    ...b, titularEsApoderado: true, confirmado: false,
                                     apoderado: `${titular.primerNombre} ${titular.segundoNombre} ${titular.primerApellido} ${titular.segundoApellido}`.replace(/\s+/g, ' ').trim(),
                                     apoderadoTelefono: getPhonePrefix() + (titular.celular || ''),
                                     apoderadoMail: titular.email || '',
-                                  } : { ...b, titularEsApoderado: false })
+                                  } : { ...b, titularEsApoderado: false, confirmado: false })
                                 : b));
                             }}
                             className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" />
@@ -1532,6 +1500,24 @@ function CrearContratoContent() {
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
                           </div>
                         </div>
+                      </div>
+
+                      {/* Confirmar beneficiario (antes de crear el contrato) */}
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-end gap-3">
+                        {beneficiario.confirmado ? (
+                          <>
+                            <span className="text-sm font-medium text-green-700">✓ Beneficiario confirmado</span>
+                            <button type="button"
+                              onClick={() => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, confirmado: false } : b))}
+                              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">Editar</button>
+                          </>
+                        ) : (
+                          <button type="button"
+                            onClick={() => confirmarBeneficiario(index)}
+                            className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-md hover:bg-primary-700">
+                            Confirmar beneficiario
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1633,15 +1619,6 @@ function CrearContratoContent() {
                     <p className="text-gray-500">ID: {titular.numeroId} · {titular.plataforma}</p>
                     {titularEsBeneficiario && (
                       <p className="text-primary-700 mt-1">Toma el curso: <b>{titular.campaign} · {titular.tipoCurso} · {titular.horarioCurso}</b>{salonFor(titular.campaign, titular.tipoCurso, titular.horarioCurso) ? ` · Salón ${salonFor(titular.campaign, titular.tipoCurso, titular.horarioCurso)}` : ''}</p>
-                    )}
-                  </div>
-
-                  {/* Apoderado */}
-                  <div>
-                    <p className="font-semibold text-gray-900">Apoderado</p>
-                    <p>{titular.apoderado || '—'}{titularEsApoderado ? ' (el titular)' : ''}</p>
-                    {(titular.apoderadoTelefono || titular.apoderadoMail) && (
-                      <p className="text-gray-500">{titular.apoderadoTelefono || ''}{titular.apoderadoTelefono && titular.apoderadoMail ? ' · ' : ''}{titular.apoderadoMail || ''}</p>
                     )}
                   </div>
 
