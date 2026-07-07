@@ -266,7 +266,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/academic/advisors': [
       AcademicoPermission.LISTA_ADVISORS_VER, // ← TALERO tiene este
       AcademicoPermission.AGREGAR,
-      AcademicoPermission.ESTADISTICA,
+      // NO se gatea por ESTADISTICA: el rol GUIA tiene ESTADISTICA (para su
+      // dashboard) y no debe ver la lista completa de guías. Ver lista requiere
+      // LISTA_VER (o AGREGAR).
     ],
     '/dashboard/academic/actualizar-material': [
       AcademicoPermission.ACTUALIZAR_MATERIAL,

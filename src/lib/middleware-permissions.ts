@@ -107,7 +107,8 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/advisors': [
     'ACADEMICO.ADVISOR.LISTA_VER' as Permission, // ← TALERO tiene este
     'ACADEMICO.ADVISOR.AGREGAR' as Permission,
-    'ACADEMICO.ADVISOR.ESTADISTICA' as Permission,
+    // NO ESTADISTICA: el rol GUIA la tiene (para su dashboard) y no debe ver
+    // la lista de guías, ni en el sidebar ni por URL directa.
   ],
 
   // Académico - Actualizar Material
