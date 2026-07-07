@@ -133,8 +133,10 @@ export function fillContractTemplate(
     // si no el email crudo del titular. Plantillas Chile/Colombia usan {{asesor}}
     // al final del contrato (después del nombre del titular).
     asesor: ejecutivoComercial?.nombre || ejecutivoComercial?.email || titular?.asesor || '',
-    // Correo del asesor comercial ({{asesormail}} en la plantilla). Prefiere el
-    // campo PEOPLE.asesorMail; si no, el email resuelto del ejecutivo o el asesor crudo.
+    // Correo del asesor comercial. La plantilla Chile usa {{asesorMail}} (camelCase);
+    // se registran AMBAS grafías por compatibilidad. Prefiere PEOPLE.asesorMail; si
+    // no, el email resuelto del ejecutivo o el asesor crudo.
+    asesorMail: titular?.asesorMail || ejecutivoComercial?.email || titular?.asesor || '',
     asesormail: titular?.asesorMail || ejecutivoComercial?.email || titular?.asesor || '',
     telefonoRefDos: titular?.telefonoRefDos || '',
     firma: firmaText,
