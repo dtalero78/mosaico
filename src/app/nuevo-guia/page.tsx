@@ -67,7 +67,7 @@ export default function NuevoGuiaPage() {
       const ext = fotoFile.type.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'
       const tempKey = `fotoGuia/new_${Date.now()}.${ext}`
       // Get presigned PUT URL directly from spaces config
-      const presignRes = await fetch('/api/postgres/advisors/photo-presign-public', {
+      const presignRes = await fetch('/api/postgres/guias/photo-presign-public', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempKey, contentType: fotoFile.type }),
@@ -134,7 +134,7 @@ export default function NuevoGuiaPage() {
         fotoKey = key
       }
 
-      const res = await fetch('/api/postgres/advisors/create', {
+      const res = await fetch('/api/postgres/guias/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, fotoKey }),

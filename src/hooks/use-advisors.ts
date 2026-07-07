@@ -18,7 +18,7 @@ const keys = {
 export function useAdvisors(includeInactive = false) {
   return useQuery(
     keys.all(includeInactive),
-    () => api.get(`/api/postgres/advisors${includeInactive ? '?includeInactive=true' : ''}`),
+    () => api.get(`/api/postgres/guias${includeInactive ? '?includeInactive=true' : ''}`),
     { staleTime: 5 * 60 * 1000 }
   )
 }
@@ -27,7 +27,7 @@ export function useAdvisors(includeInactive = false) {
 export function useAdvisorStats(advisorId: string | undefined) {
   return useQuery(
     keys.stats(advisorId!),
-    () => api.get(`/api/postgres/advisors/${encodeURIComponent(advisorId!)}/stats`),
+    () => api.get(`/api/postgres/guias/${encodeURIComponent(advisorId!)}/stats`),
     { enabled: !!advisorId, staleTime: 5 * 60 * 1000 }
   )
 }
@@ -41,7 +41,7 @@ export function useAdvisorEvents(advisorId: string | undefined, filters?: { star
   const qs = params.toString()
   return useQuery(
     keys.events(advisorId!, filters),
-    () => api.get(`/api/postgres/advisors/${encodeURIComponent(advisorId!)}/events${qs ? `?${qs}` : ''}`),
+    () => api.get(`/api/postgres/guias/${encodeURIComponent(advisorId!)}/events${qs ? `?${qs}` : ''}`),
     { enabled: !!advisorId }
   )
 }
@@ -50,7 +50,7 @@ export function useAdvisorEvents(advisorId: string | undefined, filters?: { star
 export function useAdvisorName(advisorId: string | undefined) {
   return useQuery(
     keys.name(advisorId!),
-    () => api.get(`/api/postgres/advisors/${encodeURIComponent(advisorId!)}/name`),
+    () => api.get(`/api/postgres/guias/${encodeURIComponent(advisorId!)}/name`),
     { enabled: !!advisorId, staleTime: 30 * 60 * 1000 }
   )
 }

@@ -156,7 +156,7 @@ export function ControlHorasContent({
     if (embedded) return
     if (!myEmail) return
     if (canPickAdvisor) {
-      fetch('/api/postgres/advisors')
+      fetch('/api/postgres/guias')
         .then(r => r.json())
         .then(j => {
           const list: AdvisorOption[] = (j.advisors || j.data || []).map((a: any) => ({
@@ -172,7 +172,7 @@ export function ControlHorasContent({
         })
         .catch(() => { /* ignore */ })
     } else {
-      fetch(`/api/postgres/advisors/by-email/${encodeURIComponent(myEmail)}`)
+      fetch(`/api/postgres/guias/by-email/${encodeURIComponent(myEmail)}`)
         .then(r => r.json())
         .then(j => {
           const a = j.advisor
@@ -228,7 +228,7 @@ export function ControlHorasContent({
     setLoading(true); setError(null)
     try {
       const res = await fetch(
-        `/api/postgres/advisors/${advisorId}/control-horas?year=${year}&month=${month}`,
+        `/api/postgres/guias/${advisorId}/control-horas?year=${year}&month=${month}`,
         { cache: 'no-store' },
       )
       const json = await res.json()
@@ -251,7 +251,7 @@ export function ControlHorasContent({
   const [adminEventsList, setAdminEventsList] = useState<any[]>([])
   useEffect(() => {
     if (!advisorId) { setAdminEventsAgg({ registradas: 0, sinRegistrar: 0 }); setAdminEventsList([]); return }
-    fetch(`/api/postgres/advisors/${advisorId}/admin-events?year=${year}&month=${month}`, { cache: 'no-store' })
+    fetch(`/api/postgres/guias/${advisorId}/admin-events?year=${year}&month=${month}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(j => {
         if (j.success) {

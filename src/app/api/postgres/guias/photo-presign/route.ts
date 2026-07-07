@@ -7,7 +7,7 @@ import { ValidationError, NotFoundError } from '@/lib/errors';
 import { queryOne } from '@/lib/postgres';
 
 /**
- * POST /api/postgres/advisors/photo-presign
+ * POST /api/postgres/guias/photo-presign
  *
  * Returns a presigned PUT URL so the advisor can upload their photo
  * directly to DO Spaces (fotosAdvisors/{advisorId}.ext).

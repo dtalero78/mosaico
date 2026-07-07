@@ -2,7 +2,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
 
 /**
- * GET /api/postgres/advisors/[id]/stats
+ * GET /api/postgres/guias/[id]/stats
  *
  * Get statistics for a specific advisor.
  * Keeps inline SQL due to complex 4-way parallel stats aggregation.

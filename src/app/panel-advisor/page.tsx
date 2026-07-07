@@ -108,7 +108,7 @@ function PanelAdvisorContent() {
   // Cargar lista de advisors si el usuario tiene permiso (para el selector)
   useEffect(() => {
     if (!canPickOtherAdvisor) return
-    fetch('/api/postgres/advisors')
+    fetch('/api/postgres/guias')
       .then(r => r.json())
       .then(j => setAvailableAdvisors(j.advisors || j.data || []))
       .catch(() => { /* silencioso — el dropdown queda vacío */ })
@@ -151,7 +151,7 @@ function PanelAdvisorContent() {
       setLoading(true)
       setError(null)
 
-      const response = await fetch(`/api/postgres/advisors/by-email/${encodeURIComponent(email)}`)
+      const response = await fetch(`/api/postgres/guias/by-email/${encodeURIComponent(email)}`)
 
       if (!response.ok) {
         throw new Error('No se encontró un guía con ese correo. Selecciona uno de la lista.')
@@ -201,7 +201,7 @@ function PanelAdvisorContent() {
       const data = await response.json()
 
       // Cargar admin events del mes en paralelo (no bloquean si fallan)
-      fetch(`/api/postgres/advisors/${advisor._id}/admin-events?year=${currentMonth.getFullYear()}&month=${currentMonth.getMonth() + 1}`, { cache: 'no-store' })
+      fetch(`/api/postgres/guias/${advisor._id}/admin-events?year=${currentMonth.getFullYear()}&month=${currentMonth.getMonth() + 1}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(j => { if (j?.success) setAdminEvents(j.items || []) })
         .catch(() => setAdminEvents([]))

@@ -7,7 +7,7 @@ const ALPHANUMERIC = /^[a-zA-Z0-9]+$/;
 const EMAIL_REGEX   = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * POST /api/postgres/advisors/update-profile
+ * POST /api/postgres/guias/update-profile
  *
  * One-time profile update for advisors (and reusable for other roles).
  * Updates: email, numberid, password, celular, domicilio, foto.

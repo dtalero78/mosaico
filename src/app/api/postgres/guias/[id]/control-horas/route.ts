@@ -6,7 +6,7 @@ import { RolPermisosRepository } from '@/repositories/roles.repository';
 import { buildMonthlyView, isRegistroSesionRequerido } from '@/services/advisor-event-log.service';
 
 /**
- * GET /api/postgres/advisors/[id]/control-horas?year=YYYY&month=MM
+ * GET /api/postgres/guias/[id]/control-horas?year=YYYY&month=MM
  *
  * Devuelve la vista mensual de Ctrl Horas para un advisor:
  *   { vigentes: [...], historicos: [...], requiereRegistro: boolean }

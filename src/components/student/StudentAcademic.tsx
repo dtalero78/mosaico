@@ -73,7 +73,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   useEffect(() => {
     const loadAdvisorNames = async () => {
       try {
-        const response = await fetch('/api/postgres/advisors')
+        const response = await fetch('/api/postgres/guias')
         if (response.ok) {
           const data = await response.json()
           if (data.success && data.advisors) {

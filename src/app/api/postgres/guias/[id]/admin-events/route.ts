@@ -1,5 +1,5 @@
 /**
- * GET /api/postgres/advisors/[id]/admin-events?year=&month=
+ * GET /api/postgres/guias/[id]/admin-events?year=&month=
  *
  * Lista de eventos administrativos de UN advisor en un mes específico.
  * Usado por:

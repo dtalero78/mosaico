@@ -6,8 +6,8 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 
 /**
- * GET   /api/postgres/advisors/[id]  → datos editables del guía (GUIAS + numberid de USUARIOS_ROLES).
- * PATCH /api/postgres/advisors/[id]  → actualiza el guía (GUIAS) y sincroniza USUARIOS_ROLES
+ * GET   /api/postgres/guias/[id]  → datos editables del guía (GUIAS + numberid de USUARIOS_ROLES).
+ * PATCH /api/postgres/guias/[id]  → actualiza el guía (GUIAS) y sincroniza USUARIOS_ROLES
  *                                      (email/nombre/apellido/numberid/password).
  * MOSAICO: opera sobre la tabla GUIAS (ADVISORS no existe en mosaico-db).
  */

@@ -12,7 +12,7 @@
  *   4. 2 donuts: composición por tipo (Sessions/Training/Clubs/Welcome) y por
  *      estado (Conducted/Canceled/Suspended)
  *
- * Datos: reutiliza el endpoint `/api/postgres/advisors/[id]/control-horas`
+ * Datos: reutiliza el endpoint `/api/postgres/guias/[id]/control-horas`
  * (el mismo que alimenta Ctrl Horas). Cero queries nuevas en backend; todo
  * el derivado (Training vs resto, KPIs, heatmap) es client-side sobre el
  * payload mensual.
@@ -81,7 +81,7 @@ export default function AdvisorDashboard() {
   // Paso 1 — resolver ADVISORS._id desde el email de sesión
   useEffect(() => {
     if (!email) return
-    fetch(`/api/postgres/advisors/by-email/${encodeURIComponent(email)}`)
+    fetch(`/api/postgres/guias/by-email/${encodeURIComponent(email)}`)
       .then(r => r.json())
       .then(j => {
         if (j?.advisor?._id) {
@@ -103,8 +103,8 @@ export default function AdvisorDashboard() {
     if (!advisor?._id) return
     setLoading(true); setError(null)
     Promise.all([
-      fetch(`/api/postgres/advisors/${advisor._id}/control-horas?year=${year}&month=${month}`, { cache: 'no-store' }).then(r => r.json()),
-      fetch(`/api/postgres/advisors/${advisor._id}/admin-events?year=${year}&month=${month}`, { cache: 'no-store' }).then(r => r.json()),
+      fetch(`/api/postgres/guias/${advisor._id}/control-horas?year=${year}&month=${month}`, { cache: 'no-store' }).then(r => r.json()),
+      fetch(`/api/postgres/guias/${advisor._id}/admin-events?year=${year}&month=${month}`, { cache: 'no-store' }).then(r => r.json()),
     ])
       .then(([j1, j2]) => {
         if (!j1.success) throw new Error(j1.error || 'Error cargando datos')

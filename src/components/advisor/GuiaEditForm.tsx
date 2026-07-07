@@ -41,7 +41,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
 
   useEffect(() => {
     let alive = true
-    fetch(`/api/postgres/advisors/${advisorId}`)
+    fetch(`/api/postgres/guias/${advisorId}`)
       .then(r => r.json())
       .then(d => {
         if (!alive) return
@@ -85,7 +85,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
     try {
       const ext = fotoFile.type.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'
       const tempKey = `fotoGuia/edit_${advisorId}_${Date.now()}.${ext}`
-      const pr = await fetch('/api/postgres/advisors/photo-presign-public', {
+      const pr = await fetch('/api/postgres/guias/photo-presign-public', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempKey, contentType: fotoFile.type }),
       }).then(r => r.json())
@@ -120,7 +120,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
         if (!k) { setSaving(false); return }
         fotoKey = k
       }
-      const res = await fetch(`/api/postgres/advisors/${advisorId}`, {
+      const res = await fetch(`/api/postgres/guias/${advisorId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, clave: form.clave.trim() || undefined, fotoKey: fotoKey || undefined }),
       })

@@ -28,7 +28,7 @@ const ENDPOINTS = [
   {
     key: 'advisors',
     label: 'Advisors (lista)',
-    path: '/api/postgres/advisors',
+    path: '/api/postgres/guias',
     requireId: false,
     helpText: 'Lista completa de advisors. Debería ser rápido (<300ms TTFB).',
   },

@@ -6,7 +6,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ValidationError } from '@/lib/errors';
 
 /**
- * POST /api/postgres/advisors/photo-presign-public
+ * POST /api/postgres/guias/photo-presign-public
  *
  * Public presigned PUT URL for guía photo during registration (/nuevo-guia).
  * No auth required since /nuevo-guia is a public page.

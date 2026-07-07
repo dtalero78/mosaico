@@ -27,7 +27,7 @@ export default function ClassHistory({ data, isLoading }: ClassHistoryProps) {
   useEffect(() => {
     const loadAdvisors = async () => {
       try {
-        const res = await fetch('/api/postgres/advisors')
+        const res = await fetch('/api/postgres/guias')
         if (!res.ok) return
         const d = await res.json()
         if (d.success && d.advisors) {

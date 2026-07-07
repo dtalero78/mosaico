@@ -1,5 +1,5 @@
 /**
- * GET /api/postgres/advisors/by-email/[email]
+ * GET /api/postgres/guias/by-email/[email]
  * MOSAICO: obtiene el guía por email desde la tabla GUIAS.
  *
  * Usa AdvisorRepository.findByEmail (→ GUIAS) en vez de una query cruda a

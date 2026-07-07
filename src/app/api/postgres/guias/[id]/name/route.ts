@@ -3,7 +3,7 @@ import { UsuariosRolesRepository } from '@/repositories/roles.repository';
 import { NotFoundError } from '@/lib/errors';
 
 /**
- * GET /api/postgres/advisors/[id]/name
+ * GET /api/postgres/guias/[id]/name
  */
 export const GET = handlerWithAuth(async (request, { params }) => {
   const advisorId = decodeURIComponent(params.id);

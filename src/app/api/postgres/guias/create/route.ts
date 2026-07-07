@@ -6,7 +6,7 @@ import { ids } from '@/lib/id-generator';
 import { queryOne } from '@/lib/postgres';
 
 /**
- * POST /api/postgres/advisors/create
+ * POST /api/postgres/guias/create
  * MOSAICO: crea un nuevo GUÍA en la tabla GUIAS (vía AdvisorRepository → GUIAS) y su
  * cuenta de login en USUARIOS_ROLES con rol GUIA. Lo usa la página pública /nuevo-guia.
  */
@@ -18,7 +18,7 @@ export const POST = handler(async (request: Request) => {
   if (!primerApellido?.trim()) throw new ValidationError('primerApellido es requerido');
   if (!email?.trim()) throw new ValidationError('email es requerido');
   // Foto obligatoria — body.fotoKey es la key del archivo en DO Spaces
-  // (la sube el frontend via /api/postgres/advisors/photo-presign-public).
+  // (la sube el frontend via /api/postgres/guias/photo-presign-public).
   if (!body.fotoKey?.trim()) throw new ValidationError('La foto de perfil es obligatoria');
 
   const emailLower = email.trim().toLowerCase();

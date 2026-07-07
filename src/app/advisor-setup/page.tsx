@@ -57,7 +57,7 @@ export default function ActualizarDatosPage() {
     setSaving(true)
     try {
       // 1. Get presigned URL for photo
-      const presignRes = await fetch('/api/postgres/advisors/photo-presign', {
+      const presignRes = await fetch('/api/postgres/guias/photo-presign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contentType: fotoFile!.type }),
@@ -74,7 +74,7 @@ export default function ActualizarDatosPage() {
       if (!uploadRes.ok) throw new Error('Error al subir la foto')
 
       // 3. Save all profile data
-      const saveRes = await fetch('/api/postgres/advisors/update-profile', {
+      const saveRes = await fetch('/api/postgres/guias/update-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

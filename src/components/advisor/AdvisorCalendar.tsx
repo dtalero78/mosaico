@@ -53,7 +53,7 @@ export default function AdvisorCalendar({ advisorId, advisorName }: AdvisorCalen
 
   const loadAdvisors = async () => {
     try {
-      const response = await fetch('/api/postgres/advisors', {
+      const response = await fetch('/api/postgres/guias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       })

@@ -2,7 +2,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { getEvents } from '@/services/calendar.service';
 
 /**
- * GET /api/postgres/advisors/[id]/events
+ * GET /api/postgres/guias/[id]/events
  */
 export const GET = handlerWithAuth(async (request, { params }) => {
   const { searchParams } = new URL(request.url);

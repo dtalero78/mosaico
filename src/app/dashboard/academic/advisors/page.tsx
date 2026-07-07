@@ -43,7 +43,7 @@ export default function AdvisorsPage() {
       setLoading(true)
       setError(null)
 
-      const response = await fetch('/api/postgres/advisors', {
+      const response = await fetch('/api/postgres/guias', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

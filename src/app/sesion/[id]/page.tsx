@@ -516,7 +516,7 @@ function RegistrarSesionButton({
   useEffect(() => {
     const email = (session?.user as any)?.email
     if (!email) return
-    fetch(`/api/postgres/advisors/by-email/${encodeURIComponent(email)}`)
+    fetch(`/api/postgres/guias/by-email/${encodeURIComponent(email)}`)
       .then(r => r.json())
       .then(j => {
         const myId = j.advisor?._id

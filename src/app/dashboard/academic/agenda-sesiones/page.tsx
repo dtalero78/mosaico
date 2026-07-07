@@ -511,7 +511,7 @@ export default function AgendaSesionesPage() {
   const loadInitialData = async (targetDate: Date = new Date()) => {
     try {
       // Cargar advisors from PostgreSQL
-      const advisorsResponse = await fetch('/api/postgres/advisors')
+      const advisorsResponse = await fetch('/api/postgres/guias')
 
       let advisorsData: Advisor[] = []
       if (advisorsResponse.ok) {
