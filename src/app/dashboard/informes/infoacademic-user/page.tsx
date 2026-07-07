@@ -92,7 +92,7 @@ export default function InfoAcademicUserPage() {
     exportToExcel(data.records, [
       { header: 'Fecha',     accessor: (r: any) => r.fechaEvento ? new Date(r.fechaEvento).toLocaleString('es-CO') : '' },
       { header: 'Tipo',      accessor: (r: any) => r.tipo || '' },
-      { header: 'Advisor',   accessor: (r: any) => r.advisor || '' },
+      { header: 'Guía',   accessor: (r: any) => r.advisor || '' },
       { header: 'Nivel',     accessor: (r: any) => r.nivel || '' },
       { header: 'Step',      accessor: (r: any) => r.step || '' },
       { header: 'Asistió',   accessor: (r: any) => (r.asistio || r.asistencia) ? 'Sí' : 'No' },

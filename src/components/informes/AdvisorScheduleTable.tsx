@@ -37,7 +37,7 @@ export default function AdvisorScheduleTable({ data, loading, onRowClick, filter
         { header: 'Nivel',          accessor: r => r.nivel },
         { header: 'Step',           accessor: r => r.step },
         { header: 'Nombre Sesión',  accessor: r => r.nombreEvento },
-        { header: 'Advisor',        accessor: r => r.advisorNombre },
+        { header: 'Guía',        accessor: r => r.advisorNombre },
         { header: 'Agendados',      accessor: r => r.inscritos },
         { header: 'Asistieron',     accessor: r => r.asistentes },
         { header: 'No Asistieron',  accessor: r => r.noAsistieron },

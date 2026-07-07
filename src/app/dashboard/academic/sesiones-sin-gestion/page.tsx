@@ -217,7 +217,7 @@ export default function SesionesSinGestionPage() {
                 />
               </div>
               <div>
-                <label htmlFor="advisor-select" className="block text-xs font-medium text-gray-600 mb-1">Advisor</label>
+                <label htmlFor="advisor-select" className="block text-xs font-medium text-gray-600 mb-1">Guía</label>
                 <select
                   id="advisor-select"
                   value={advisorId}
@@ -265,7 +265,7 @@ export default function SesionesSinGestionPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Kpi label="Total sin gestionar" value={stats.total.toLocaleString()} color="amber" />
             <Kpi label="Sin asistencia marcada" value={stats.sinAsistencia.toLocaleString()} sub="advisor no entró o no marcó" color="red" />
-            <Kpi label="Advisors involucrados" value={stats.advisorsDistintos.toLocaleString()} color="indigo" />
+            <Kpi label="Guías involucrados" value={stats.advisorsDistintos.toLocaleString()} color="indigo" />
             <Kpi label="Rango" value={startDate === endDate ? fechaCorta(startDate + 'T12:00') : `${fechaCorta(startDate + 'T12:00')} → ${fechaCorta(endDate + 'T12:00')}`} color="gray" />
           </div>
 
@@ -303,7 +303,7 @@ export default function SesionesSinGestionPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr className="text-xs text-gray-500 uppercase">
-                      <th className="text-left font-medium px-3 py-2">Advisor</th>
+                      <th className="text-left font-medium px-3 py-2">Guía</th>
                       <th className="text-left font-medium px-3 py-2 w-32">Tipo</th>
                       <th className="text-left font-medium px-3 py-2">Título</th>
                       <th className="text-left font-medium px-3 py-2 w-40">Fecha · Hora</th>
@@ -369,7 +369,7 @@ export default function SesionesSinGestionPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr className="text-xs text-gray-500 uppercase">
-                    <th className="text-left font-medium px-3 py-2">Advisor</th>
+                    <th className="text-left font-medium px-3 py-2">Guía</th>
                     <th className="text-left font-medium px-3 py-2 w-24">Tipo</th>
                     <th className="text-left font-medium px-3 py-2">Nivel · Step</th>
                     <th className="text-left font-medium px-3 py-2 w-32">Fecha · Hora</th>

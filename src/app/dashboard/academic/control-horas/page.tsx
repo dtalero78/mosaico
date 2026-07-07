@@ -419,7 +419,7 @@ export function ControlHorasContent({
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap items-end gap-3">
         {canPickAdvisor && (
           <div className="flex-1 min-w-[200px]">
-            <label htmlFor="advisor-select" className="block text-xs font-medium text-gray-700 mb-1">Advisor</label>
+            <label htmlFor="advisor-select" className="block text-xs font-medium text-gray-700 mb-1">Guía</label>
             <select
               id="advisor-select"
               value={advisorId}
@@ -820,7 +820,7 @@ function EventDetailModal({
                   onChange={e => setNotas(e.target.value)}
                   rows={4}
                   className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
-                  placeholder="Notas del advisor"
+                  placeholder="Notas del guía"
                 />
               ) : (
                 <div className="text-xs text-gray-700 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">

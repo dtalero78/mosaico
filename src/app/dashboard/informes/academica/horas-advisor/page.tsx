@@ -170,7 +170,7 @@ export default function HorasAdvisorPage() {
     exportToExcel(
       data.table,
       [
-        { header: 'Advisor',    accessor: r => r.advisorNombre },
+        { header: 'Guía',    accessor: r => r.advisorNombre },
         { header: 'NumeroId',   accessor: r => r.numeroId ?? '' },
         { header: 'País',       accessor: r => r.plataforma ?? '' },
         { header: 'Activo',     accessor: r => (r.activo ? 'Sí' : 'No') },
@@ -206,7 +206,7 @@ export default function HorasAdvisorPage() {
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Informe de horas Advisor</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Informe de horas Guía</h1>
           <p className="text-sm text-gray-500 mt-1">
             Sesiones conducted (por tipo), suspended y cancelled por advisor en el período seleccionado.
           </p>
@@ -225,7 +225,7 @@ export default function HorasAdvisorPage() {
               </select>
             </div>
             <div>
-              <label htmlFor="ha-advisor" className="block text-xs text-gray-500 mb-1">Advisor</label>
+              <label htmlFor="ha-advisor" className="block text-xs text-gray-500 mb-1">Guía</label>
               <select id="ha-advisor" value={advisorId} onChange={e => setAdvisorId(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]">
                 <option value="">Todos los advisors</option>

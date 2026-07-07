@@ -440,7 +440,7 @@ export default function AgendaAcademicaPage() {
                   { header: 'Tipo', accessor: (e) => e.evento || e.tipo || '' },
                   { header: 'Nivel', accessor: (e) => e.tituloONivel },
                   { header: 'Evento', accessor: (e) => e.nombreEvento || '' },
-                  { header: 'Advisor', accessor: (e) => e.advisorNombreCompleto || e.advisorNombre || (typeof e.advisor === 'object' ? `${e.advisor.primerNombre} ${e.advisor.primerApellido}` : e.advisor) || '' },
+                  { header: 'Guía', accessor: (e) => e.advisorNombreCompleto || e.advisorNombre || (typeof e.advisor === 'object' ? `${e.advisor.primerNombre} ${e.advisor.primerApellido}` : e.advisor) || '' },
                   { header: 'Inscritos', accessor: (e) => e.inscritos || 0 },
                   { header: 'Limite', accessor: (e) => e.limiteUsuarios },
                   { header: 'Zoom', accessor: (e) => e.linkZoom || '' },

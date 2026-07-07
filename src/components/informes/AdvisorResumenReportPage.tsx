@@ -158,7 +158,7 @@ export default function AdvisorResumenReportPage() {
     exportToExcel(
       data.table,
       [
-        { header: 'Advisor',    accessor: r => r.advisorNombre   },
+        { header: 'Guía',    accessor: r => r.advisorNombre   },
         { header: 'Sesiones',   accessor: r => r.totalSesiones   },
         { header: 'Jumps',      accessor: r => r.totalJumps      },
         { header: 'Training',   accessor: r => r.totalTraining   },
@@ -205,7 +205,7 @@ export default function AdvisorResumenReportPage() {
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label htmlFor="ar-advisor" className="block text-xs text-gray-500 mb-1">Advisor</label>
+              <label htmlFor="ar-advisor" className="block text-xs text-gray-500 mb-1">Guía</label>
               <select id="ar-advisor" value={advisorId} onChange={e => setAdvisorId(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]">
                 <option value="">Todos los advisors</option>

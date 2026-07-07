@@ -23,7 +23,7 @@ export default function EventReportTable({ data, config, loading, filters }: Pro
         { header: 'Nivel',          accessor: r => r.nivel },
         { header: 'Step',           accessor: r => r.step },
         { header: 'Nombre Evento',  accessor: r => r.nombreEvento },
-        { header: 'Advisor',        accessor: r => r.advisorNombre },
+        { header: 'Guía',        accessor: r => r.advisorNombre },
         { header: 'Inscritos',      accessor: r => r.inscritos },
         { header: 'Asistentes',     accessor: r => r.asistentes },
         { header: 'Capacidad',      accessor: r => r.capacidad },

@@ -46,7 +46,7 @@ export default function MyEventsSection({
               <tr className="border-b border-gray-200">
                 <th className="text-left py-2 px-2 text-xs font-semibold text-gray-500 uppercase">Fecha</th>
                 <th className="text-left py-2 px-2 text-xs font-semibold text-gray-500 uppercase">Evento</th>
-                <th className="text-left py-2 px-2 text-xs font-semibold text-gray-500 uppercase">Advisor</th>
+                <th className="text-left py-2 px-2 text-xs font-semibold text-gray-500 uppercase">Guía</th>
                 <th className="text-center py-2 px-2 text-xs font-semibold text-gray-500 uppercase w-16">Cancelar</th>
               </tr>
             </thead>

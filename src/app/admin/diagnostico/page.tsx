@@ -27,7 +27,7 @@ import {
 const ENDPOINTS = [
   {
     key: 'advisors',
-    label: 'Advisors (lista)',
+    label: 'Guías (lista)',
     path: '/api/postgres/guias',
     requireId: false,
     helpText: 'Lista completa de advisors. Debería ser rápido (<300ms TTFB).',

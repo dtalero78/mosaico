@@ -78,7 +78,7 @@ export default function PerformanceEvaluationPage() {
   const handleCSV = () => {
     if (!full.length) return
     exportToExcel(full, [
-      { header: 'Advisor',      accessor: (r: any) => r.nombre },
+      { header: 'Guía',      accessor: (r: any) => r.nombre },
       { header: '# Evals',      accessor: (r: any) => r.evaluaciones },
       { header: 'Promedio',     accessor: (r: any) => r.promedio },
       { header: 'Puntualidad',  accessor: (r: any) => r.dimensiones?.puntualidad ?? '' },
@@ -92,7 +92,7 @@ export default function PerformanceEvaluationPage() {
     if (!com.length) return
     exportToExcel(com, [
       { header: 'Fecha',        accessor: (c: any) => c.fechaEvento ? new Date(c.fechaEvento).toLocaleDateString('es-ES') : '' },
-      { header: 'Advisor',      accessor: (c: any) => canSeeRawComments ? (c.advisorNombre || '') : 'anónimo' },
+      { header: 'Guía',      accessor: (c: any) => canSeeRawComments ? (c.advisorNombre || '') : 'anónimo' },
       { header: 'Tipo',         accessor: (c: any) => c.tipo + (c.subtipo ? ` (${c.subtipo})` : '') },
       { header: 'Nivel',        accessor: (c: any) => c.nivel || '' },
       { header: 'Promedio',     accessor: (c: any) => c.promedio },
@@ -144,7 +144,7 @@ export default function PerformanceEvaluationPage() {
                     : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
                 }`}
               >
-                <UserCircleIcon className="h-4 w-4" /> Por Advisor
+                <UserCircleIcon className="h-4 w-4" /> Por Guía
               </button>
             )}
           </div>
@@ -770,7 +770,7 @@ function ByAdvisorView({
                   <thead>
                     <tr className="text-xs text-gray-500 border-b border-gray-100">
                       <th className="text-left font-medium py-2">Dimensión</th>
-                      <th className="text-right font-medium py-2 w-24">Advisor</th>
+                      <th className="text-right font-medium py-2 w-24">Guía</th>
                       <th className="text-right font-medium py-2 w-24">General</th>
                       <th className="text-right font-medium py-2 w-20">Δ</th>
                       <th className="text-right font-medium py-2 w-20">≥4★</th>

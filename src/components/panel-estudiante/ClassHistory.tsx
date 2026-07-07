@@ -120,7 +120,7 @@ export default function ClassHistory({ data, isLoading }: ClassHistoryProps) {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Advisor</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Guía</label>
             <select
               value={advisorFilter}
               onChange={(e) => setAdvisorFilter(e.target.value)}
@@ -158,7 +158,7 @@ export default function ClassHistory({ data, isLoading }: ClassHistoryProps) {
             <tr>
               <th className="table-header-cell">Fecha</th>
               <th className="table-header-cell">Tipo</th>
-              <th className="table-header-cell">Advisor</th>
+              <th className="table-header-cell">Guía</th>
               <th className="table-header-cell">Nivel</th>
               <th className="table-header-cell">Step</th>
               <th className="table-header-cell">Asistió</th>

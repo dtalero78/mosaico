@@ -73,7 +73,7 @@ export default function InformesUsuariosPage() {
       [
         { header: 'Fecha',        accessor: r => r.fechaEvento ? new Date(r.fechaEvento).toLocaleString('es-CO') : '' },
         { header: 'Tipo',         accessor: r => r.tipo || '' },
-        { header: 'Advisor',      accessor: r => r.advisor || '' },
+        { header: 'Guía',      accessor: r => r.advisor || '' },
         { header: 'Nivel',        accessor: r => r.nivel || '' },
         { header: 'Step',         accessor: r => r.step || '' },
         { header: 'Asistió',      accessor: r => (r.asistio || r.asistencia) ? 'Sí' : 'No' },

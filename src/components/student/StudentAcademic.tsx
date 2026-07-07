@@ -739,7 +739,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
             <tr>
               <th className="table-header-cell" style={{width: '150px'}}>Fecha</th>
               <th className="table-header-cell" style={{width: '100px'}}>Tipo</th>
-              <th className="table-header-cell" style={{width: '120px'}}>Advisor</th>
+              <th className="table-header-cell" style={{width: '120px'}}>Guía</th>
               <th className="table-header-cell" style={{width: '80px'}}>Nivel</th>
               <th className="table-header-cell" style={{width: '80px'}}>Step</th>
               <th className="table-header-cell" style={{width: '100px'}}>Zoom</th>
@@ -1056,7 +1056,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                   <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl border border-orange-200">
                     <div className="flex items-center space-x-2 mb-2">
                       <span className="text-orange-600">👨‍🏫</span>
-                      <span className="text-xs font-medium text-orange-700 uppercase tracking-wide">Advisor</span>
+                      <span className="text-xs font-medium text-orange-700 uppercase tracking-wide">Guía</span>
                     </div>
                     <p className="text-sm font-semibold text-orange-900">
                       {advisorName}

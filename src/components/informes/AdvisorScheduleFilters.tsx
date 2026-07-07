@@ -53,7 +53,7 @@ export default function AdvisorScheduleFilters({
         </div>
 
         <div>
-          <label htmlFor="af-advisor" className="block text-xs text-gray-500 mb-1">Advisor</label>
+          <label htmlFor="af-advisor" className="block text-xs text-gray-500 mb-1">Guía</label>
           <select id="af-advisor" value={filters.advisorId} onChange={e => set('advisorId', e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]">
             <option value="">Todos los advisors</option>

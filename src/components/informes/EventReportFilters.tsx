@@ -62,7 +62,7 @@ export default function EventReportFilters({
         </div>
 
         <div>
-          <label htmlFor="er-advisor" className="block text-xs text-gray-500 mb-1">Advisor</label>
+          <label htmlFor="er-advisor" className="block text-xs text-gray-500 mb-1">Guía</label>
           <select id="er-advisor" value={filters.advisorNombre} onChange={e => set('advisorNombre', e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[140px]">
             <option value="">Todos</option>

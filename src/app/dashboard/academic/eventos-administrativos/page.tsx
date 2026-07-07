@@ -294,7 +294,7 @@ export default function EventosAdministrativosPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
-                <label htmlFor="f-adv" className="block text-xs font-medium text-gray-600 mb-1">Advisor</label>
+                <label htmlFor="f-adv" className="block text-xs font-medium text-gray-600 mb-1">Guía</label>
                 <select id="f-adv" value={filterAdvisor} onChange={e => setFilterAdvisor(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" disabled={advisorsLoading}>
                   <option value="">Todos</option>
@@ -338,7 +338,7 @@ export default function EventosAdministrativosPage() {
                   <tr className="text-xs text-gray-500 uppercase">
                     <th className="text-left font-medium px-3 py-2">Fecha · Hora</th>
                     <th className="text-left font-medium px-3 py-2 w-32">Tipo</th>
-                    <th className="text-left font-medium px-3 py-2">Título / Advisor</th>
+                    <th className="text-left font-medium px-3 py-2">Título / Guía</th>
                     <th className="text-center font-medium px-3 py-2 w-20">Horas</th>
                     <th className="text-center font-medium px-3 py-2 w-32">Estado</th>
                     <th className="text-right font-medium px-3 py-2 w-24">Acciones</th>

@@ -870,7 +870,7 @@ export default function AgendaSesionesPage() {
                 { header: 'Hora', accessor: (e) => e.dia ? format(new Date(e.dia), 'HH:mm') : '' },
                 { header: 'Tipo', accessor: (e) => e.evento || e.tipo || '' },
                 { header: 'Nivel', accessor: (e) => e.tituloONivel || e.nombreEvento || '' },
-                { header: 'Advisor', accessor: (e) => e.advisorNombre || getAdvisorName(e.advisor) },
+                { header: 'Guía', accessor: (e) => e.advisorNombre || getAdvisorName(e.advisor) },
                 { header: 'Inscritos', accessor: (e) => e.inscritos ?? 0 },
                 { header: 'Asistieron', accessor: (e) => e.asistieron ?? 0 },
                 { header: 'Límite', accessor: (e) => e.limiteUsuarios },
