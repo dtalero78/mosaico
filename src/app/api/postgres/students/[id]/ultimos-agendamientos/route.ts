@@ -2,7 +2,7 @@ import 'server-only'
 import { handler, successResponse } from '@/lib/api-helpers'
 import { queryOne } from '@/lib/postgres'
 
-const ADVISOR_JOIN = `LEFT JOIN "ADVISORS" adv ON adv."_id" = b."advisor"`
+const ADVISOR_JOIN = `LEFT JOIN "GUIAS" adv ON adv."_id" = b."advisor"`
 const EVENTO_JOIN  = `LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")`
 
 const SELECT_FIELDS = `

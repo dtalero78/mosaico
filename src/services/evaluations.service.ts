@@ -282,7 +282,7 @@ export async function getDashboardStats(opts: {
   const advisorNames = new Map<string, string>();
   if (advisorIds.length) {
     const advs = await query<{ _id: string; nombreCompleto: string }>(
-      `SELECT "_id","nombreCompleto" FROM "ADVISORS" WHERE "_id" = ANY($1::text[])`,
+      `SELECT "_id","nombreCompleto" FROM "GUIAS" WHERE "_id" = ANY($1::text[])`,
       [advisorIds]
     );
     for (const a of advs.rows) advisorNames.set(a._id, a.nombreCompleto);

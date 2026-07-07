@@ -21,7 +21,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
             COALESCE(adv."nombreCompleto", c."advisor", 'Sin advisor') AS "advisor",
             COALESCE(c."limiteUsuarios", 0)::int AS "limiteUsuarios"
      FROM "CALENDARIO" c
-     LEFT JOIN "ADVISORS" adv
+     LEFT JOIN "GUIAS" adv
        ON adv."_id" = c."advisor" OR LOWER(adv."email") = LOWER(c."advisor")
      WHERE c."_id" = $1`,
     [eventId]

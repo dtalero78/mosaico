@@ -39,7 +39,7 @@ export const GET = handlerWithAuth(async (request, { params }, session) => {
   // Coordinator/admin pueden ver cualquier advisor. El advisor solo el suyo.
   if (!BYPASS_ROLES.has(role)) {
     const adv = await queryOne<{ _id: string }>(
-      `SELECT "_id" FROM "ADVISORS" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
+      `SELECT "_id" FROM "GUIAS" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
       [email],
     );
     if (!adv?._id) throw new ForbiddenError('Tu email no está registrado en ADVISORS');

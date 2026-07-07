@@ -58,7 +58,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        adv."fotoAdvisor"                        AS "advisorFoto",
        adv."email"                              AS "advisorEmail"
      FROM "ADMIN_EVENTS" ae
-     LEFT JOIN "ADVISORS" adv ON adv."_id" = ae."advisorId"
+     LEFT JOIN "GUIAS" adv ON adv."_id" = ae."advisorId"
      WHERE ${conds.join(' AND ')}
      ORDER BY ae."fechaInicio" DESC, adv."nombreCompleto" ASC NULLS LAST
      LIMIT 2000`,

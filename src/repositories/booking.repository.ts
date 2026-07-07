@@ -145,7 +145,7 @@ class BookingRepositoryClass extends BaseRepository {
               b."_createdDate", b."_updatedDate"
        FROM "ACADEMICA_BOOKINGS" b
        LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
-       LEFT JOIN "ADVISORS" adv ON adv."_id" = b."advisor"
+       LEFT JOIN "GUIAS" adv ON adv."_id" = b."advisor"
        WHERE b."idEstudiante" = ANY($1::text[])
           OR b."studentId"    = ANY($1::text[])
        ORDER BY b."fechaEvento" DESC, b."hora" DESC
@@ -432,7 +432,7 @@ class BookingRepositoryClass extends BaseRepository {
        INNER JOIN "ACADEMICA_BOOKINGS" ab ON (c."_id" = ab."eventoId" OR c."_id" = ab."idEvento")
        LEFT JOIN "ACADEMICA" a ON (ab."studentId" = a."_id" OR ab."idEstudiante" = a."_id")
        LEFT JOIN "PEOPLE" p ON a."numeroId" = p."numeroId" AND p."tipoUsuario" = 'BENEFICIARIO'
-       LEFT JOIN "ADVISORS" adv ON c."advisor" = adv."_id"
+       LEFT JOIN "GUIAS" adv ON c."advisor" = adv."_id"
        WHERE ${conditions.join(' AND ')}
        ORDER BY c."dia" DESC, ab."primerApellido" ASC, ab."primerNombre" ASC`,
       params
@@ -449,7 +449,7 @@ class BookingRepositoryClass extends BaseRepository {
               a."nombreCompleto" as "advisorNombre",
               c."linkZoom" as "eventLinkZoom"
        FROM "ACADEMICA_BOOKINGS" ab
-       LEFT JOIN "ADVISORS" a ON ab."advisor" = a."_id"
+       LEFT JOIN "GUIAS" a ON ab."advisor" = a."_id"
        LEFT JOIN "CALENDARIO" c ON (ab."eventoId" = c."_id" OR ab."idEvento" = c."_id")
        WHERE (ab."idEstudiante" = $1 OR ab."studentId" = $1)
          AND ab."cancelo" = false
@@ -494,7 +494,7 @@ class BookingRepositoryClass extends BaseRepository {
               ab."advisorAnotaciones", ab."comentarios", ab."calificacion",
               a."nombreCompleto" as "advisorNombre"
        FROM "ACADEMICA_BOOKINGS" ab
-       LEFT JOIN "ADVISORS" a ON ab."advisor" = a."_id"
+       LEFT JOIN "GUIAS" a ON ab."advisor" = a."_id"
        WHERE (ab."idEstudiante" = $1 OR ab."studentId" = $1)
          AND (ab."advisorAnotaciones" IS NOT NULL AND ab."advisorAnotaciones" != ''
               OR ab."comentarios" IS NOT NULL AND ab."comentarios" != '')

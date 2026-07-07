@@ -82,7 +82,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        COALESCE(agg."inscritos",       0)                       AS "inscritos",
        COALESCE(agg."asistioMarcados", 0)                       AS "asistioMarcados"
      FROM "CALENDARIO" c
-     LEFT JOIN "ADVISORS" adv ON adv."_id" = c."advisor"
+     LEFT JOIN "GUIAS" adv ON adv."_id" = c."advisor"
      LEFT JOIN LATERAL (
        SELECT
          COUNT(*) FILTER (WHERE b."cancelo" IS NOT TRUE) AS "inscritos",

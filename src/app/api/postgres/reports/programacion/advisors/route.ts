@@ -144,7 +144,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
         THEN b."_id"
       END)::int AS "asistentes"
     FROM "CALENDARIO" c
-    LEFT JOIN "ADVISORS" adv
+    LEFT JOIN "GUIAS" adv
       ON adv."_id" = c."advisor" OR LOWER(adv."email") = LOWER(c."advisor")
     LEFT JOIN "ACADEMICA_BOOKINGS" b
       ON COALESCE(b."eventoId", b."idEvento") = c."_id"
@@ -172,7 +172,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
   let totalAdvisorsActivos = advisorIds.length
   if (advisorIds.length > 0) {
     const activeRows = await queryMany<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM "ADVISORS" WHERE "_id" = ANY($1) AND "activo" = true`,
+      `SELECT COUNT(*)::text AS count FROM "GUIAS" WHERE "_id" = ANY($1) AND "activo" = true`,
       [advisorIds]
     )
     totalAdvisorsActivos = parseInt(activeRows[0]?.count ?? '0', 10)
@@ -245,7 +245,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
 
   // Meta dropdowns
   const allAdvisors = await queryMany<{ _id: string; nombreCompleto: string }>(
-    `SELECT "_id", "nombreCompleto" FROM "ADVISORS" WHERE "activo" = true ORDER BY "nombreCompleto"`,
+    `SELECT "_id", "nombreCompleto" FROM "GUIAS" WHERE "activo" = true ORDER BY "nombreCompleto"`,
     []
   )
 

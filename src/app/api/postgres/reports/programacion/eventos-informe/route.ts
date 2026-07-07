@@ -186,7 +186,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
       END)::int AS "asistentes",
       (${derivedTypeExpr()}) AS "tipoDerivado"
     FROM "CALENDARIO" c
-    LEFT JOIN "ADVISORS" adv
+    LEFT JOIN "GUIAS" adv
       ON adv."_id" = c."advisor" OR LOWER(adv."email") = LOWER(c."advisor")
     LEFT JOIN "ACADEMICA_BOOKINGS" b
       ON COALESCE(b."eventoId", b."idEvento") = c."_id"

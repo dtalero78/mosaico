@@ -50,7 +50,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   // ── Find ADVISORS record by session email ─────────────────────────────────
   const advisor = await queryOne<{ _id: string }>(
-    `SELECT "_id" FROM "ADVISORS" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
+    `SELECT "_id" FROM "GUIAS" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
     [sessionEmail]
   );
   if (!advisor) throw new NotFoundError('Advisor', sessionEmail);
@@ -74,7 +74,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   // ── Update ADVISORS ───────────────────────────────────────────────────────
   await query(
-    `UPDATE "ADVISORS"
+    `UPDATE "GUIAS"
      SET "email"              = $1,
          "telefono"           = $2,
          "domicilioadvisor"   = $3,

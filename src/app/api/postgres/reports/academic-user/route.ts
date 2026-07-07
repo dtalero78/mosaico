@@ -69,7 +69,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
             b."asistio", b."asistencia", b."participacion", b."noAprobo"
      FROM "ACADEMICA_BOOKINGS" b
      LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
-     LEFT JOIN "ADVISORS" a2 ON a2."_id" = b."advisor"
+     LEFT JOIN "GUIAS" a2 ON a2."_id" = b."advisor"
      WHERE ${WHERE}
      ORDER BY b."fechaEvento" DESC NULLS LAST`,
     params

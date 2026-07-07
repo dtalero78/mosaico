@@ -92,7 +92,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
         COUNT(*) FILTER (WHERE t.tipo = 'otros')::int     AS otros,
         COUNT(*)::int AS conducted
       FROM "CALENDARIO" c
-      JOIN "ADVISORS" a ON a."_id" = c."advisor" OR LOWER(a."email") = LOWER(c."advisor")
+      JOIN "GUIAS" a ON a."_id" = c."advisor" OR LOWER(a."email") = LOWER(c."advisor")
       CROSS JOIN LATERAL (SELECT (${CAL_TIPO}) AS tipo) t
       WHERE c."dia" >= $1::date AND c."dia" < ($2::date + interval '1 day')
         AND ($5::text = 'all' OR t.tipo = $5)
@@ -103,7 +103,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
         COUNT(*) FILTER (WHERE l."estado" = 'Canceled')::int  AS cancelled,
         COUNT(*) FILTER (WHERE l."estado" = 'Suspended')::int AS suspended
       FROM "ADVISOR_EVENT_LOG" l
-      JOIN "ADVISORS" a ON a."_id" = l."advisorId" OR LOWER(a."email") = LOWER(l."advisorId")
+      JOIN "GUIAS" a ON a."_id" = l."advisorId" OR LOWER(a."email") = LOWER(l."advisorId")
       CROSS JOIN LATERAL (SELECT (${LOG_TIPO}) AS tipo) t
       WHERE l."fechaEvento" >= $1::date AND l."fechaEvento" < ($2::date + interval '1 day')
         AND ($5::text = 'all' OR t.tipo = $5)
@@ -137,7 +137,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
       COALESCE(lo.cancelled, 0) AS "cancelled",
       COALESCE(co.conducted, 0) + COALESCE(lo.suspended, 0) + COALESCE(lo.cancelled, 0) AS "total"
     FROM combined cb
-    JOIN "ADVISORS" a ON a."_id" = cb.advisor_id
+    JOIN "GUIAS" a ON a."_id" = cb.advisor_id
     LEFT JOIN conducted co ON co.advisor_id = a."_id"
     LEFT JOIN logs lo ON lo.advisor_id = a."_id"
     LEFT JOIN "USUARIOS_ROLES" url ON url."_id" = a."usuarioRolId"
@@ -157,7 +157,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
   // Conteo de advisors ACTIVOS en el scope de país (roster), independiente de
   // si tuvieron actividad — alimenta el KPI "Advisors Activos".
   const activosRows = await queryMany<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM "ADVISORS"
+    `SELECT COUNT(*)::int AS n FROM "GUIAS"
      WHERE "activo" = true AND ($1::text IS NULL OR "pais" = $1)`,
     [plataforma],
   )
@@ -212,11 +212,11 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
 
   // ── Meta dropdowns ──
   const plataformas = await queryMany<{ pais: string }>(
-    `SELECT DISTINCT "pais" FROM "ADVISORS" WHERE "pais" IS NOT NULL AND TRIM("pais") <> '' ORDER BY "pais"`,
+    `SELECT DISTINCT "pais" FROM "GUIAS" WHERE "pais" IS NOT NULL AND TRIM("pais") <> '' ORDER BY "pais"`,
     [],
   )
   const advisors = await queryMany<{ _id: string; nombreCompleto: string; pais: string | null }>(
-    `SELECT "_id", "nombreCompleto", "pais" FROM "ADVISORS" WHERE "activo" = true ORDER BY "nombreCompleto"`,
+    `SELECT "_id", "nombreCompleto", "pais" FROM "GUIAS" WHERE "activo" = true ORDER BY "nombreCompleto"`,
     [],
   )
 
