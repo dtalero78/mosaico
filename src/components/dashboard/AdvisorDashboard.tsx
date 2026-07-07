@@ -233,6 +233,21 @@ export default function AdvisorDashboard() {
   const monthlyConductedMax = useMemo(() => matrixMax(monthly.conducted), [monthly])
   const monthlyCanceledMax  = useMemo(() => matrixMax(monthly.canceled),  [monthly])
 
+  // Distribución de cursos asignados por tipo (donut). Debe declararse ANTES de
+  // cualquier return temprano (regla de hooks) — si no, React error #310.
+  const cursosDonut = useMemo(() => {
+    const byTipo = new Map<string, number>()
+    cursos.forEach(c => byTipo.set(c.tipoCurso, (byTipo.get(c.tipoCurso) ?? 0) + 1))
+    const palette: Record<string, string> = {
+      YOJI: '#3b82f6', OKINA: '#22c55e', KODOMO: '#a855f7',
+      DANSHI: '#f97316', SENPAI: '#ec4899', IMPULSA: '#0ea5e9',
+    }
+    const extra = ['#64748b', '#eab308', '#14b8a6', '#ef4444']
+    return Array.from(byTipo.entries()).map(([label, value], i) => ({
+      label, value, color: palette[label] || extra[i % extra.length],
+    }))
+  }, [cursos])
+
   // ── Render ──────────────────────────────────────────────────────────────
   if (loading && !data) {
     return (
@@ -251,21 +266,8 @@ export default function AdvisorDashboard() {
   const totalTipos = kpis.sessions + kpis.training + kpis.clubs + kpis.welcome
   const totalEstados = kpis.conducted + kpis.canceled + kpis.suspended
 
-  // MOSAICO — sesiones agendadas del mes (eventos vigentes en CALENDARIO) y
-  // distribución de cursos asignados por tipo de curso (para el donut).
+  // Sesiones agendadas del mes (eventos vigentes en CALENDARIO).
   const sesionesAgendadas = data?.vigentes.length ?? 0
-  const cursosDonut = useMemo(() => {
-    const byTipo = new Map<string, number>()
-    cursos.forEach(c => byTipo.set(c.tipoCurso, (byTipo.get(c.tipoCurso) ?? 0) + 1))
-    const palette: Record<string, string> = {
-      YOJI: '#3b82f6', OKINA: '#22c55e', KODOMO: '#a855f7',
-      DANSHI: '#f97316', SENPAI: '#ec4899', IMPULSA: '#0ea5e9',
-    }
-    const extra = ['#64748b', '#eab308', '#14b8a6', '#ef4444']
-    return Array.from(byTipo.entries()).map(([label, value], i) => ({
-      label, value, color: palette[label] || extra[i % extra.length],
-    }))
-  }, [cursos])
 
   return (
     <div className="space-y-6">
