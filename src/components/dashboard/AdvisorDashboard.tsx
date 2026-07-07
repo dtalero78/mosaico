@@ -97,22 +97,19 @@ export default function AdvisorDashboard() {
       })
   }, [email])
 
-  // Paso 2 — cargar vista mensual del mes corriente (CALENDARIO + admin events + cursos)
+  // Paso 2 — cargar vista mensual del mes corriente (CALENDARIO + admin events)
   const [adminAgg, setAdminAgg] = useState<{ registradas: number; sinRegistrar: number }>({ registradas: 0, sinRegistrar: 0 })
-  const [cursos, setCursos] = useState<Array<{ campaign: string; tipoCurso: string; salon?: string; horarioCurso?: string }>>([])
   useEffect(() => {
     if (!advisor?._id) return
     setLoading(true); setError(null)
     Promise.all([
       fetch(`/api/postgres/guias/${advisor._id}/control-horas?year=${year}&month=${month}`, { cache: 'no-store' }).then(r => r.json()),
       fetch(`/api/postgres/guias/${advisor._id}/admin-events?year=${year}&month=${month}`, { cache: 'no-store' }).then(r => r.json()),
-      fetch(`/api/postgres/guias/${advisor._id}/cursos-asignados`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ rows: [] })),
     ])
-      .then(([j1, j2, j3]) => {
+      .then(([j1, j2]) => {
         if (!j1.success) throw new Error(j1.error || 'Error cargando datos')
         setData({ vigentes: j1.vigentes ?? [], historicos: j1.historicos ?? [] })
         if (j2?.success) setAdminAgg(j2.aggregate || { registradas: 0, sinRegistrar: 0 })
-        setCursos(Array.isArray(j3?.rows) ? j3.rows : [])
       })
       .catch((e: any) => setError(e?.message || 'Error desconocido'))
       .finally(() => setLoading(false))
@@ -233,21 +230,6 @@ export default function AdvisorDashboard() {
   const monthlyConductedMax = useMemo(() => matrixMax(monthly.conducted), [monthly])
   const monthlyCanceledMax  = useMemo(() => matrixMax(monthly.canceled),  [monthly])
 
-  // Distribución de cursos asignados por tipo (donut). Debe declararse ANTES de
-  // cualquier return temprano (regla de hooks) — si no, React error #310.
-  const cursosDonut = useMemo(() => {
-    const byTipo = new Map<string, number>()
-    cursos.forEach(c => byTipo.set(c.tipoCurso, (byTipo.get(c.tipoCurso) ?? 0) + 1))
-    const palette: Record<string, string> = {
-      YOJI: '#3b82f6', OKINA: '#22c55e', KODOMO: '#a855f7',
-      DANSHI: '#f97316', SENPAI: '#ec4899', IMPULSA: '#0ea5e9',
-    }
-    const extra = ['#64748b', '#eab308', '#14b8a6', '#ef4444']
-    return Array.from(byTipo.entries()).map(([label, value], i) => ({
-      label, value, color: palette[label] || extra[i % extra.length],
-    }))
-  }, [cursos])
-
   // ── Render ──────────────────────────────────────────────────────────────
   if (loading && !data) {
     return (
@@ -266,9 +248,6 @@ export default function AdvisorDashboard() {
   const totalTipos = kpis.sessions + kpis.training + kpis.clubs + kpis.welcome
   const totalEstados = kpis.conducted + kpis.canceled + kpis.suspended
 
-  // Sesiones agendadas del mes (eventos vigentes en CALENDARIO).
-  const sesionesAgendadas = data?.vigentes.length ?? 0
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -285,39 +264,29 @@ export default function AdvisorDashboard() {
         </div>
       </div>
 
-      {/* MOSAICO — 3 tarjetas del guía: sesiones agendadas | cursos asignados | donut de cursos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-        {/* 1. Sesiones agendadas del mes */}
-        <div className="bg-white rounded-lg border-2 border-blue-300 p-5 flex flex-col justify-center text-center">
-          <p className="text-4xl font-bold text-blue-700">{sesionesAgendadas}</p>
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500 mt-2">
-            Sesiones agendadas · <span className="capitalize">{mesLabel}</span>
-          </p>
-        </div>
-
-        {/* 2. Cursos asignados (campaña + curso) en lista */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
-            Cursos asignados ({cursos.length})
-          </p>
-          {cursos.length === 0 ? (
-            <p className="text-sm text-gray-400 italic">Sin cursos asignados.</p>
-          ) : (
-            <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-              {cursos.map((c, i) => (
-                <li key={i} className="flex items-center justify-between gap-3 text-sm border-b border-gray-50 pb-1">
-                  <span className="font-medium text-gray-900 truncate">
-                    {c.tipoCurso}{c.salon ? ` · Salón ${c.salon}` : ''}
-                  </span>
-                  <span className="text-[11px] text-gray-400 whitespace-nowrap">{c.campaign}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* 3. Donut de distribución de cursos por tipo */}
-        <DonutCard title="Cursos por tipo" total={cursos.length} segments={cursosDonut} />
+      {/* KPIs destacados — Effective | Sin registrar | Administrative.
+          Administrative ya está sumado en Effective; se muestra como tercer KPI
+          para que el advisor sepa cuántas de sus horas efectivas vienen de
+          eventos administrativos (Training/Support/...). */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiCard
+          label="Effective Hours"
+          value={kpis.effective}
+          color="bg-emerald-50  border-emerald-400  text-emerald-700"
+          big
+        />
+        <KpiCard
+          label="Hours without recording"
+          value={kpis.sinRegistrar}
+          color="bg-amber-50    border-amber-400    text-amber-700"
+          big
+        />
+        <KpiCard
+          label="Administrative Hours"
+          value={kpis.administrative}
+          color="bg-violet-50   border-violet-400   text-violet-700"
+          big
+        />
       </div>
 
       {/* KPIs detalle */}
