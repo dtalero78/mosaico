@@ -76,6 +76,11 @@ interface Beneficiario {
   tipoCurso?: string;
   horarioCurso?: string;
   userLogin?: string;
+  // Apoderado propio de cada beneficiario (como en Migrar Contrato)
+  apoderado?: string;
+  apoderadoTelefono?: string;
+  apoderadoMail?: string;
+  titularEsApoderado?: boolean;
 }
 
 // CursoCampaignFields + CursoRow ahora viven en @/components/contract/CursoCampaignFields
@@ -131,7 +136,8 @@ function CrearContratoContent() {
     userLogin: '',
     apoderado: '',
     apoderadoTelefono: '',
-    apoderadoMail: ''
+    apoderadoMail: '',
+    asesorMail: ''
   });
 
   const [financial, setFinancial] = useState({
@@ -365,7 +371,11 @@ function CrearContratoContent() {
       celular: '',
       campaign: '',
       tipoCurso: '',
-      horarioCurso: ''
+      horarioCurso: '',
+      apoderado: '',
+      apoderadoTelefono: '',
+      apoderadoMail: '',
+      titularEsApoderado: false
     }]);
   };
 
@@ -729,6 +739,18 @@ function CrearContratoContent() {
                   onChange={(e) => setTitular({...titular, asesor: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   placeholder="Nombre del asesor"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Correo del asesor
+                </label>
+                <input
+                  type="email"
+                  value={titular.asesorMail}
+                  onChange={(e) => setTitular({...titular, asesorMail: e.target.value.toLowerCase()})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="asesor@correo.com"
                 />
               </div>
             </div>
@@ -1465,6 +1487,50 @@ function CrearContratoContent() {
                             values={{ campaign: beneficiario.campaign, tipoCurso: beneficiario.tipoCurso, horarioCurso: beneficiario.horarioCurso }}
                             onPatch={(patch) => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, ...patch } : b))}
                           />
+                        </div>
+                      </div>
+
+                      {/* Apoderado de ESTE beneficiario (como en Migrar Contrato) */}
+                      <div className="border-t border-gray-100 pt-4 mt-4">
+                        <p className="text-sm font-semibold text-gray-700 mb-2">Apoderado del beneficiario</p>
+                        <label className="inline-flex items-center cursor-pointer mb-3">
+                          <input type="checkbox" checked={!!beneficiario.titularEsApoderado}
+                            onChange={(e) => {
+                              const on = e.target.checked;
+                              setBeneficiarios(prev => prev.map((b, i) => i === index
+                                ? (on ? {
+                                    ...b, titularEsApoderado: true,
+                                    apoderado: `${titular.primerNombre} ${titular.segundoNombre} ${titular.primerApellido} ${titular.segundoApellido}`.replace(/\s+/g, ' ').trim(),
+                                    apoderadoTelefono: getPhonePrefix() + (titular.celular || ''),
+                                    apoderadoMail: titular.email || '',
+                                  } : { ...b, titularEsApoderado: false })
+                                : b));
+                            }}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" />
+                          <span className="ml-2 text-sm font-medium text-gray-900">¿El titular será el apoderado?</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre apoderado</label>
+                            <input type="text" value={beneficiario.apoderado || ''} disabled={!!beneficiario.titularEsApoderado}
+                              onChange={(e) => updateBeneficiario(index, 'apoderado', e.target.value)}
+                              placeholder="Nombre del apoderado"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                            <input type="tel" value={beneficiario.apoderadoTelefono || ''} disabled={!!beneficiario.titularEsApoderado}
+                              onChange={(e) => updateBeneficiario(index, 'apoderadoTelefono', e.target.value)}
+                              placeholder="Teléfono del apoderado"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Correo</label>
+                            <input type="email" value={beneficiario.apoderadoMail || ''} disabled={!!beneficiario.titularEsApoderado}
+                              onChange={(e) => updateBeneficiario(index, 'apoderadoMail', e.target.value)}
+                              placeholder="correo@ejemplo.com"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
+                          </div>
                         </div>
                       </div>
                     </div>
