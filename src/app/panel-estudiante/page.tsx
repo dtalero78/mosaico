@@ -153,18 +153,20 @@ function PanelEstudianteContent() {
           <span className="text-lg font-bold text-primary-700 mr-2">MOSAICO</span>
           <span className="text-sm text-gray-500 mr-1">Booking:</span>
           <button
-            onClick={() => openBooking('SESSION')}
-            className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-1.5"
-          >
-            <CalendarDaysIcon className="h-4 w-4" />
-            Session
-          </button>
-          <button
+            type="button"
             onClick={() => openBooking('CLUB')}
             className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5"
           >
             <CalendarDaysIcon className="h-4 w-4" />
-            Talleres
+            Inscripción Talleres
+          </button>
+          <button
+            type="button"
+            onClick={() => openBooking('SESSION')}
+            className="px-4 py-2 bg-yellow-400 text-gray-900 text-sm font-semibold rounded-lg hover:bg-yellow-500 transition-colors flex items-center gap-1.5"
+          >
+            <CalendarDaysIcon className="h-4 w-4" />
+            Inscripción Olimpiadas
           </button>
 
           <div className="flex-1" />
@@ -262,7 +264,7 @@ function PanelEstudianteContent() {
               {/* Guía */}
               <div>
                 <span className="text-xs text-gray-400 uppercase tracking-wide">Guía</span>
-                <p className="text-sm font-medium text-gray-900">{nextClass?.advisorNombre || '---'}</p>
+                <p className="text-sm font-medium text-gray-900">{profile?.cursoGuia || nextClass?.advisorNombre || '---'}</p>
               </div>
               {/* NEXT SESSION */}
               <div className="pt-3 border-t border-gray-100 space-y-3">
@@ -353,6 +355,24 @@ function PanelEstudianteContent() {
                       className="h-full bg-primary-600 rounded-full transition-all"
                       style={{ width: `${Math.min(100, Math.round((profile.cursoProgreso.actual / profile.cursoProgreso.total) * 100))}%` }}
                     />
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Módulos: anterior · actual · próximo */}
+              {profile?.cursoModulos ? (
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 p-2 text-center">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Módulo anterior</div>
+                    <div className="text-xs font-semibold text-gray-700 mt-1 leading-tight">{profile.cursoModulos.anterior}</div>
+                  </div>
+                  <div className="rounded-lg bg-primary-50 border border-primary-200 p-2 text-center">
+                    <div className="text-[10px] text-primary-500 uppercase tracking-wide">Módulo actual</div>
+                    <div className="text-xs font-bold text-primary-700 mt-1 leading-tight">{profile.cursoModulos.actual}</div>
+                  </div>
+                  <div className="rounded-lg bg-gray-50 border border-gray-200 p-2 text-center">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Módulo próximo</div>
+                    <div className="text-xs font-semibold text-gray-700 mt-1 leading-tight">{profile.cursoModulos.proximo}</div>
                   </div>
                 </div>
               ) : null}

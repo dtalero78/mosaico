@@ -1,7 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { resolveStudentFromSession } from '@/services/panel-estudiante.service';
-import { queryOne } from '@/lib/postgres';
+import { queryOne, query } from '@/lib/postgres';
 import { getPresignedVideoUrl } from '@/lib/spaces';
 
 export const GET = handlerWithAuth(async (request, context, session) => {
@@ -48,12 +48,48 @@ export const GET = handlerWithAuth(async (request, context, session) => {
     if (prog?.total) cursoProgreso = { total: prog.total, actual: prog.actual ?? 0 };
   }
 
+  // Guía del curso: resuelto de CURSOS_CAMPAIGN por campaña + tipoCurso + horario
+  let cursoGuia: string | null = null;
+  const campaign = (student as any)?.campaign as string | null;
+  if (tipoCurso && campaign) {
+    const g = await queryOne<{ nombreCompleto: string | null }>(
+      `SELECT g."nombreCompleto"
+         FROM "CURSOS_CAMPAIGN" cc
+         JOIN "GUIAS" g ON g."_id" = cc."guia"
+        WHERE cc."campaign" = $1 AND cc."tipoCurso" = $2 AND cc."horarioCurso" = $3
+        LIMIT 1`,
+      [campaign, tipoCurso, (student as any)?.horarioCurso ?? '']
+    ).catch(() => null);
+    cursoGuia = g?.nombreCompleto ?? null;
+  }
+
+  // Módulos: anterior / actual / próximo dentro de la secuencia del curso
+  let cursoModulos: { anterior: string; actual: string; proximo: string } | null = null;
+  const nivelActual = (student as any)?.nivel as string | null;
+  if (tipoCurso && nivelActual) {
+    const rows = await query<{ code: string }>(
+      `SELECT "code" FROM "NIVELES" WHERE "curso" = $1 GROUP BY "code" ORDER BY MIN("orden") ASC NULLS LAST`,
+      [tipoCurso]
+    ).catch(() => null);
+    const codes = rows?.rows.map((r) => r.code) ?? [];
+    const idx = codes.indexOf(nivelActual);
+    if (idx >= 0) {
+      cursoModulos = {
+        anterior: idx === 0 ? 'WELCOME' : codes[idx - 1],
+        actual: nivelActual,
+        proximo: idx === codes.length - 1 ? 'FIN DE CURSO' : codes[idx + 1],
+      };
+    }
+  }
+
   return successResponse({
     profile: {
       ...student,
       perfilActualizado: urRow?.perfilActualizado ?? null,
       cursoImagenUrl,
       cursoProgreso,
+      cursoGuia,
+      cursoModulos,
     },
   });
 });

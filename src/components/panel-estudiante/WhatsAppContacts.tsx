@@ -4,7 +4,7 @@ const CONTACTS = [
   {
     label: 'Soporte Usuario',
     phone: '56957208697',
-    message: 'Hola, soy estudiante de LGS y necesito ayuda.',
+    message: 'Hola, soy estudiante de MOSAICO y necesito ayuda.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
@@ -19,21 +19,15 @@ const CONTACTS = [
     message: 'Hola, tengo una consulta sobre recaudos Chile.',
     color: 'bg-red-100 text-red-600',
   },
-  {
-    label: 'Col/Peru/Ec Recaudos',
-    phone: '573013894444',
-    message: 'Hola, tengo una consulta sobre recaudos.',
-    color: 'bg-amber-100 text-amber-600',
-  },
 ]
 
 export default function WhatsAppContacts() {
   return (
     <div className="border-t border-gray-200 pt-6">
       <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-        Let&apos;s Go assistance:
+        Asistencia Mosaico:
       </h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {CONTACTS.map((contact) => {
           const url = `https://wa.me/${contact.phone}?text=${encodeURIComponent(contact.message)}`
           return (

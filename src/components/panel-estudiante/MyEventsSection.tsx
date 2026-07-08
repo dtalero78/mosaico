@@ -35,7 +35,7 @@ export default function MyEventsSection({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
       <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-        Eventos programados:
+        Agenda Semanal Eventos:
       </h3>
       {upcomingEvents.length === 0 ? (
         <p className="text-gray-400 text-sm py-4">No tienes eventos programados</p>

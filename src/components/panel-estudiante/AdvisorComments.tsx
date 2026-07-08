@@ -33,7 +33,7 @@ export default function AdvisorComments({ data, isLoading }: AdvisorCommentsProp
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 min-h-[280px]">
       <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-        Advisor comments:
+        Comentarios Guía:
       </h3>
       {comments.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
