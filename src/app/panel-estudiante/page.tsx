@@ -164,7 +164,7 @@ function PanelEstudianteContent() {
             className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5"
           >
             <CalendarDaysIcon className="h-4 w-4" />
-            Clubs
+            Talleres
           </button>
 
           <div className="flex-1" />
