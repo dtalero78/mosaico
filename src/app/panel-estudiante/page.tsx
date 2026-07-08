@@ -154,7 +154,7 @@ function PanelEstudianteContent() {
           <span className="text-sm text-gray-500 mr-1">Booking:</span>
           <button
             onClick={() => openBooking('SESSION')}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+            className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-1.5"
           >
             <CalendarDaysIcon className="h-4 w-4" />
             Session
@@ -220,7 +220,7 @@ function PanelEstudianteContent() {
             animation: lgs-ticker 35s linear infinite;
           }
         `}</style>
-        <div className="flex-shrink-0 bg-blue-600 flex items-center px-4 py-2 gap-2">
+        <div className="flex-shrink-0 bg-primary-600 flex items-center justify-center min-w-[200px] px-4 py-2 gap-2">
           <span className="text-white text-xs font-black uppercase tracking-widest">📢 MOSAICO</span>
         </div>
         <div className="flex-1 overflow-hidden flex items-center py-2">
