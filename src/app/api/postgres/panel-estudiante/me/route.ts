@@ -29,11 +29,31 @@ export const GET = handlerWithAuth(async (request, context, session) => {
     }
   }
 
+  // Progreso del curso: total de lecciones del curso + posición de la lección actual
+  let cursoProgreso: { total: number; actual: number } | null = null;
+  if (tipoCurso) {
+    // Match por `step` (nombre de lección): la numeración de lecciones es global
+    // en el curso y no reinicia por módulo, así que el step es la posición real.
+    const prog = await queryOne<{ total: number; actual: number | null }>(
+      `WITH ord AS (
+         SELECT "step",
+                ROW_NUMBER() OVER (ORDER BY "orden" ASC NULLS LAST, "step" ASC) AS pos
+         FROM "NIVELES" WHERE "curso" = $1
+       )
+       SELECT
+         (SELECT COUNT(*)::int FROM "NIVELES" WHERE "curso" = $1) AS total,
+         (SELECT MIN(pos)::int FROM ord WHERE "step" = $2) AS actual`,
+      [tipoCurso, (student as any)?.step ?? '']
+    ).catch(() => null);
+    if (prog?.total) cursoProgreso = { total: prog.total, actual: prog.actual ?? 0 };
+  }
+
   return successResponse({
     profile: {
       ...student,
       perfilActualizado: urRow?.perfilActualizado ?? null,
       cursoImagenUrl,
+      cursoProgreso,
     },
   });
 });

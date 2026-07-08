@@ -338,6 +338,24 @@ function PanelEstudianteContent() {
                   <div className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide leading-tight">Total sesiones</div>
                 </div>
               </div>
+
+              {/* Barra de progreso del curso (lecciones) */}
+              {profile?.cursoProgreso?.total ? (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-500">Progreso del curso</span>
+                    <span className="text-xs font-semibold text-gray-700">
+                      {profile.cursoProgreso.actual} / {profile.cursoProgreso.total} lecciones
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary-600 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, Math.round((profile.cursoProgreso.actual / profile.cursoProgreso.total) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* EVENTOS PROGRAMADOS — eventos de la semana (sesiones, talleres, otros) */}
