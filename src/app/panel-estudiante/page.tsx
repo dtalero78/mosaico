@@ -92,6 +92,7 @@ function PanelEstudianteContent() {
     KODOMO: 'bg-blue-50 border border-blue-100',
     DANSHI: 'bg-orange-50 border border-orange-100',
     SENPAI: 'bg-red-50 border border-red-100',
+    IMPULSA: 'bg-fuchsia-50 border border-fuchsia-100',
   }
   const cursoBg = CURSO_BG[(profile?.tipoCurso || '').toUpperCase()] || 'bg-gray-50 border border-gray-100'
 
