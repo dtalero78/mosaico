@@ -235,53 +235,44 @@ function PanelEstudianteContent() {
         {/* Jump exam banner (only when eligible) */}
         <JumpExamBanner />
 
-        {/* Fila superior: imagen del curso (izq) + NEXT SESSION (der) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-          {/* Imagen del curso (se carga desde Mantenimiento Cursos › Imágenes) */}
-          <div className="rounded-xl overflow-hidden bg-white border border-gray-200 flex flex-col">
+        {/* Fila superior: detalle del curso + próxima sesión (izq) | Sesiones (der) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          {/* Izquierda: imagen del curso + Curso/Campaña/Salón + Guía + NEXT SESSION */}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             {meQuery.isLoading ? (
-              <div className="flex-1 min-h-[240px] bg-gray-100 animate-pulse" />
+              <div className="h-56 bg-gray-100 animate-pulse" />
             ) : profile?.cursoImagenUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.cursoImagenUrl} alt={profile?.tipoCurso || 'Curso'} className="w-full flex-1 object-cover min-h-[240px]" />
+              <img src={profile.cursoImagenUrl} alt={profile?.tipoCurso || 'Curso'} className="w-full h-56 object-cover" />
             ) : (
-              <div className="flex-1 min-h-[240px] flex flex-col items-center justify-center bg-gradient-to-br from-primary-50 to-accent/10 text-gray-400 gap-2">
+              <div className="h-56 flex flex-col items-center justify-center bg-gradient-to-br from-primary-50 to-accent/10 text-gray-400 gap-2">
                 <BookOpenIcon className="h-10 w-10" />
                 <span className="text-sm">{profile?.tipoCurso || 'Curso'}</span>
               </div>
             )}
-            {profile?.tipoCurso && (
-              <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span className="text-sm font-bold text-gray-900">{profile.tipoCurso}</span>
-                {profile?.campaign && <span className="text-xs text-gray-500">Campaña: {profile.campaign}</span>}
-                {profile?.salon && <span className="text-xs text-gray-500">Salón: {profile.salon}</span>}
+            <div className="p-4 space-y-3">
+              {/* Curso · Campaña · Salón */}
+              {profile?.tipoCurso && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="text-sm font-bold text-gray-900">{profile.tipoCurso}</span>
+                  {profile?.campaign && <span className="text-xs text-gray-500">Campaña: {profile.campaign}</span>}
+                  {profile?.salon && <span className="text-xs text-gray-500">Salón: {profile.salon}</span>}
+                </div>
+              )}
+              {/* Guía */}
+              <div>
+                <span className="text-xs text-gray-400 uppercase tracking-wide">Guía</span>
+                <p className="text-sm font-medium text-gray-900">{nextClass?.advisorNombre || '---'}</p>
               </div>
-            )}
-          </div>
-
-          {/* NEXT SESSION */}
-          <div className="bg-gradient-to-br from-primary-600 to-primary-800 rounded-xl p-5 text-white">
-            {meQuery.isLoading ? (
-              <div className="animate-pulse space-y-3">
-                <div className="h-4 bg-white/20 rounded w-24" />
-                <div className="h-4 bg-white/20 rounded w-32" />
-                <div className="h-4 bg-white/20 rounded w-28" />
-              </div>
-            ) : (
-              <div className="space-y-3">
+              {/* NEXT SESSION */}
+              <div className="pt-3 border-t border-gray-100 space-y-3">
                 <div>
-                  <p className="text-lg font-bold uppercase tracking-wide">Next Session</p>
-                  <p className="text-sm font-medium text-primary-200">{nextClass ? `${nextClass.nivel || profile?.nivel || '---'} - ${nextClass.step || '---'}` : '---'}</p>
+                  <p className="text-sm font-bold uppercase tracking-wide text-primary-700">Next Session</p>
+                  <p className="text-sm text-gray-500">{nextClass ? `${nextClass.nivel || profile?.nivel || '---'} - ${nextClass.step || '---'}` : '---'}</p>
                 </div>
                 <div>
-                  <span className="text-xs text-primary-200 uppercase tracking-wide">Asesor</span>
-                  <p className="text-sm font-medium">
-                    {nextClass?.advisorNombre || '---'}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-xs text-primary-200 uppercase tracking-wide">Fecha</span>
-                  <p className="text-sm font-medium">
+                  <span className="text-xs text-gray-400 uppercase tracking-wide">Fecha</span>
+                  <p className="text-sm font-medium text-gray-900">
                     {nextEventDate
                       ? nextEventDate.toLocaleString('es', {
                           weekday: 'short', day: 'numeric', month: 'short',
@@ -292,35 +283,59 @@ function PanelEstudianteContent() {
                   </p>
                 </div>
                 <div>
-                  <span className="text-xs text-primary-200 uppercase tracking-wide">Link de Ingreso</span>
+                  <span className="text-xs text-gray-400 uppercase tracking-wide">Link de Ingreso</span>
                   {showZoom && zoomLink ? (
                     <a
                       href={zoomLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/20 text-white text-sm font-medium rounded-lg hover:bg-white/30 transition-colors"
+                      className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
                     >
                       <VideoCameraIcon className="h-4 w-4" />
                       Entrar a Zoom
                     </a>
                   ) : (
-                    <p className="text-sm text-white">
+                    <p className="text-sm text-gray-600">
                       {zoomLink ? 'Enlace disponible 5 min antes, recuerda refrescar el navegador' : '---'}
                     </p>
                   )}
                 </div>
-                <div className="pt-2 border-t border-white/20">
-                  <p className="text-sm text-primary-200 mb-2">Que aprenderas...</p>
+                <div className="pt-1">
+                  <p className="text-sm text-gray-500 mb-2">Que aprenderás...</p>
                   <button
+                    type="button"
                     onClick={handleOpenVideo}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-white/20 text-white text-sm font-medium rounded-lg hover:bg-white/30 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     <VideoCameraIcon className="h-4 w-4" />
                     Ver video
                   </button>
                 </div>
               </div>
-            )}
+            </div>
+          </div>
+
+          {/* Derecha: Sesiones (4 subtarjetas) */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Sesiones</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-green-50 border border-green-100 p-4 text-center">
+                <div className="text-3xl font-bold text-green-700">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.asistencias ?? 0)}</div>
+                <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Asistidas</div>
+              </div>
+              <div className="rounded-lg bg-red-50 border border-red-100 p-4 text-center">
+                <div className="text-3xl font-bold text-red-600">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.ausencias ?? 0)}</div>
+                <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Ausente</div>
+              </div>
+              <div className="rounded-lg bg-amber-50 border border-amber-100 p-4 text-center">
+                <div className="text-3xl font-bold text-amber-600">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.canceladas ?? 0)}</div>
+                <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Suspendidas</div>
+              </div>
+              <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 text-center">
+                <div className="text-3xl font-bold text-gray-900">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.total ?? 0)}</div>
+                <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Total de sesiones</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -332,15 +347,9 @@ function PanelEstudianteContent() {
           isCancelling={cancelMutation.isLoading}
         />
 
-        {/* Secundario: estadísticas + valoración (izq) | comentarios del guía (der) */}
+        {/* Secundario: valoración (izq) | comentarios del guía (der) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          <div className="space-y-4">
-            <AttendanceStats
-              stats={statsQuery.data?.stats}
-              isLoading={statsQuery.isLoading}
-            />
-            <SinEvaluarCard />
-          </div>
+          <SinEvaluarCard />
           <div className="lg:col-span-2">
             <AdvisorComments
               data={commentsQuery.data}
