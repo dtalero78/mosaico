@@ -4,11 +4,29 @@ export default function ActualizarMaterialPage() {
   const openTab = (path: string) => window.open(path, '_blank', 'noopener,noreferrer')
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Actualizar Material</h1>
-      <p className="text-gray-500 mb-8">Selecciona el tipo de material que deseas actualizar, esta acción genera registros de auditoría.</p>
+    <div className="p-6 max-w-5xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">Mantenimiento Cursos</h1>
+      <p className="text-gray-500 mb-8">Selecciona qué deseas gestionar, esta acción genera registros de auditoría.</p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Imágenes de curso */}
+        <button
+          type="button"
+          onClick={() => openTab('/dashboard/academic/actualizar-material/imagenes')}
+          className="flex flex-col items-center justify-center gap-4 p-10 bg-white border-2 border-gray-200 rounded-2xl shadow-sm hover:border-fuchsia-500 hover:shadow-md transition-all text-left group"
+        >
+          <div className="w-16 h-16 bg-fuchsia-50 rounded-full flex items-center justify-center group-hover:bg-fuchsia-100 transition-colors">
+            <svg className="w-8 h-8 text-fuchsia-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-gray-900 group-hover:text-fuchsia-600 transition-colors">Imágenes de curso</div>
+            <div className="text-sm text-gray-500 mt-1">Una imagen por tipo de curso</div>
+          </div>
+        </button>
+
         {/* Usuarios */}
         <button
           type="button"
