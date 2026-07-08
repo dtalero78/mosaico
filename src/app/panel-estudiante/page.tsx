@@ -85,6 +85,16 @@ function PanelEstudianteContent() {
   const profile = meQuery.data?.profile
   const events = eventsQuery.data?.events || []
 
+  // Fondo suave de la tarjeta de curso según el tipo de curso (clases literales para Tailwind)
+  const CURSO_BG: Record<string, string> = {
+    YOJI: 'bg-green-50 border border-green-100',
+    OKINA: 'bg-yellow-50 border border-yellow-100',
+    KODOMO: 'bg-blue-50 border border-blue-100',
+    DANSHI: 'bg-orange-50 border border-orange-100',
+    SENPAI: 'bg-red-50 border border-red-100',
+  }
+  const cursoBg = CURSO_BG[(profile?.tipoCurso || '').toUpperCase()] || 'bg-gray-50 border border-gray-100'
+
   // Derive next class info for student card
   const nextClass = useMemo(() => {
     if (!events || events.length === 0) return null
@@ -253,23 +263,26 @@ function PanelEstudianteContent() {
               </div>
             )}
             <div className="p-4 space-y-3">
-              {/* Curso · Campaña · Salón */}
-              {profile?.tipoCurso && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <span className="text-sm font-bold text-gray-900">{profile.tipoCurso}</span>
-                  {profile?.campaign && <span className="text-xs text-gray-500">Campaña: {profile.campaign}</span>}
-                  {profile?.salon && <span className="text-xs text-gray-500">Salón: {profile.salon}</span>}
-                </div>
-              )}
-              {/* Guía */}
-              <div>
-                <span className="text-xs text-gray-400 uppercase tracking-wide">Guía</span>
-                <p className="text-sm font-medium text-gray-900">{profile?.cursoGuia || nextClass?.advisorNombre || '---'}</p>
-              </div>
-              {/* NEXT SESSION */}
-              <div className="pt-3 border-t border-gray-100 space-y-3">
+              {/* Curso + Guía — fondo con el color del curso */}
+              <div className={`rounded-lg p-3 space-y-2 ${cursoBg}`}>
+                {/* Curso · Campaña · Salón */}
+                {profile?.tipoCurso && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="text-sm font-bold text-gray-900">{profile.tipoCurso}</span>
+                    {profile?.campaign && <span className="text-xs text-gray-600">Campaña: {profile.campaign}</span>}
+                    {profile?.salon && <span className="text-xs text-gray-600">Salón: {profile.salon}</span>}
+                  </div>
+                )}
+                {/* Guía */}
                 <div>
-                  <p className="text-sm font-bold uppercase tracking-wide text-primary-700">Next Session</p>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide">Guía</span>
+                  <p className="text-sm font-medium text-gray-900">{profile?.cursoGuia || nextClass?.advisorNombre || '---'}</p>
+                </div>
+              </div>
+              {/* SESSION PRÓXIMA — fondo morado suave */}
+              <div className="rounded-lg p-3 space-y-3 bg-primary-50 border border-primary-100">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-wide text-primary-700">Session próxima</p>
                   <p className="text-sm text-gray-500">{nextClass ? `${nextClass.nivel || profile?.nivel || '---'} - ${nextClass.step || '---'}` : '---'}</p>
                 </div>
                 <div>
