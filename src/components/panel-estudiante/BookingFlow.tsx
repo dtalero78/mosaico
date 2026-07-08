@@ -138,7 +138,7 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
             <div className="space-y-2">
               {[
                 { value: 'SESSION', label: 'Sesion', desc: 'Clase regular con advisor', color: 'border-l-blue-500' },
-                { value: 'CLUB', label: 'Club', desc: 'Training session grupal', color: 'border-l-green-500' },
+                { value: 'CLUB', label: 'Taller', desc: 'Training session grupal', color: 'border-l-green-500' },
               ].map((tipo) => (
                 <button
                   key={tipo.value}

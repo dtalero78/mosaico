@@ -110,7 +110,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       {
         name: 'Asistencia', isSubmenu: true, children: [
           { name: 'Sesiones', href: '/dashboard/informes/asistencia/sesiones-clubes', newTab: true },
-          { name: 'Clubes', href: '/dashboard/informes/asistencia/clubes', newTab: true },
+          { name: 'Talleres', href: '/dashboard/informes/asistencia/clubes', newTab: true },
           { name: 'Actividades Complementarias', href: '/dashboard/informes/asistencia/complementarias', newTab: true },
           { name: 'Welcome Session', href: '/dashboard/informes/asistencia/welcome-session', newTab: true },
           { name: 'X País', href: '/dashboard/informes/asistencia/x-pais', newTab: true },
@@ -119,7 +119,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       {
         name: 'Programación', isSubmenu: true, children: [
           { name: 'Sesiones - Jumps',  href: '/dashboard/informes/sesiones/calendario-sesiones-jumps', newTab: true },
-          { name: 'Training - Clubs',  href: '/dashboard/informes/sesiones/calendario-training-clubs', newTab: true },
+          { name: 'Training - Talleres',  href: '/dashboard/informes/sesiones/calendario-training-clubs', newTab: true },
           { name: 'Welcome',           href: '/dashboard/informes/sesiones/calendario-welcome',        newTab: true },
         ]
       },
@@ -128,7 +128,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Sesiones', href: '/dashboard/informes/advisors/sesiones', newTab: true },
           { name: 'Jumps', href: '/dashboard/informes/advisors/jumps', newTab: true },
           { name: 'Training', href: '/dashboard/informes/advisors/training', newTab: true },
-          { name: 'Clubes', href: '/dashboard/informes/advisors/clubes', newTab: true },
+          { name: 'Talleres', href: '/dashboard/informes/advisors/clubes', newTab: true },
           { name: 'Welcome',   href: '/dashboard/informes/advisors/welcome',    newTab: true },
           { name: 'Essential', href: '/dashboard/informes/advisors/essential',  newTab: true },
           { name: 'Resumen',   href: '/dashboard/informes/advisors/resumen',    newTab: true },

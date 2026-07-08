@@ -265,9 +265,9 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
 
         {/* ── FILA 2: Clubes ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <SectionLabel label="Clubes" color={cColor} />
+          <SectionLabel label="Talleres" color={cColor} />
 
-          <ChartCard title="Clubes por Tipo" accent={cColor}>
+          <ChartCard title="Talleres por Tipo" accent={cColor}>
             {noData(charts.clubsPorTipo) ?? (
               <ResponsiveContainer width="100%" height={Math.max(180, charts.clubsPorTipo.length * 32)}>
                 <BarChart data={charts.clubsPorTipo} layout="vertical"
@@ -283,11 +283,11 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
             )}
           </ChartCard>
 
-          <ChartCard title="Clubes por Nivel" accent={cColor}>
+          <ChartCard title="Talleres por Nivel" accent={cColor}>
             <NivelChart data={charts.clubesPorNivel ?? []} color={cColor} />
           </ChartCard>
 
-          <ChartCard title="Clubes — Asistencia vs Inscritos" accent={cColor}>
+          <ChartCard title="Talleres — Asistencia vs Inscritos" accent={cColor}>
             <AsistenciaChart data={charts.clubesAsistencia ?? []} gradId="club" />
           </ChartCard>
         </div>
@@ -310,7 +310,7 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
 
           // Donut card reutilizable
           const DonutCard = () => (
-            <ChartCard title="Training & Clubes — Distribución">
+            <ChartCard title="Training & Talleres — Distribución">
               <div className="flex items-start gap-3 flex-wrap justify-center">
                 <svg width="140" height="140" viewBox="0 0 140 140" className="flex-shrink-0">
                   {donutTotal === 0
@@ -350,7 +350,7 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 <SectionLabel label="Ranking & Actividad" color="#6b7280" />
 
-                <ChartCard title="Clubes por Hora" accent={cColor}>
+                <ChartCard title="Talleres por Hora" accent={cColor}>
                   <HoraChart data={charts.clubesPorHora ?? []} />
                 </ChartCard>
 
@@ -358,7 +358,7 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
                   <RankingChart data={charts.rankingAdvisorsTraining ?? []} />
                 </ChartCard>
 
-                <ChartCard title="Ranking Advisors — Clubes" accent={cColor}>
+                <ChartCard title="Ranking Advisors — Talleres" accent={cColor}>
                   <RankingChart data={charts.rankingAdvisorsClub ?? []} />
                 </ChartCard>
               </div>
@@ -371,7 +371,7 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
                   <HeatmapGrid data={charts.heatmapTraining ?? []} palette={PALETTE_ORANGE} />
                 </ChartCard>
 
-                <ChartCard title="Heatmap Clubes — Día vs Hora" accent={cColor}>
+                <ChartCard title="Heatmap Talleres — Día vs Hora" accent={cColor}>
                   <HeatmapGrid data={charts.heatmapClub ?? []} palette={PALETTE_GREEN} />
                 </ChartCard>
               </div>

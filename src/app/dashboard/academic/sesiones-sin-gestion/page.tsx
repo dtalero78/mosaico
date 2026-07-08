@@ -239,7 +239,7 @@ export default function SesionesSinGestionPage() {
                 >
                   <option value="">Todos</option>
                   <option value="SESSION">Session</option>
-                  <option value="CLUB">Club</option>
+                  <option value="CLUB">Taller</option>
                 </select>
               </div>
               <div className="flex gap-2">

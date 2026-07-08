@@ -18,7 +18,7 @@ export interface AdvisorReportConfig {
 export const ADVISOR_REPORT_CONFIGS: Record<AdvisorReportType, AdvisorReportConfig> = {
   sesiones: {
     title:              'Informe de Sesiones por Advisor',
-    subtitle:           'Sesiones programadas (excluye Jumps, Clubs y Welcome)',
+    subtitle:           'Sesiones programadas (excluye Jumps, Talleres y Welcome)',
     kpiLabel:           'Total Sesiones',
     rankingLabelAdv:    'Advisor',
     rankingLabelSec:    'Nivel',
@@ -53,12 +53,12 @@ export const ADVISOR_REPORT_CONFIGS: Record<AdvisorReportType, AdvisorReportConf
     exportPermission:   InformesPermission.ADV_TRAINING_EXP,
   },
   clubes: {
-    title:              'Informe de Clubes por Advisor',
+    title:              'Informe de Talleres por Advisor',
     subtitle:           'Eventos CLUB excluyendo Training (Listening, Grammar, Karaoke…)',
-    kpiLabel:           'Total Clubes',
+    kpiLabel:           'Total Talleres',
     rankingLabelAdv:    'Advisor',
-    rankingLabelSec:    'Tipo de Club',
-    chartLabelSec:      'por Tipo de Club',
+    rankingLabelSec:    'Tipo de Taller',
+    chartLabelSec:      'por Tipo de Taller',
     showNivelFilter:    false,
     showTipoClubFilter: true,
     accentColor:        '#22c55e',

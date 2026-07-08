@@ -74,7 +74,7 @@ export default function AdvisorScheduleFilters({
 
         {showTipoClubFilter && (
           <div>
-            <label htmlFor="af-tipoclub" className="block text-xs text-gray-500 mb-1">Tipo de Club</label>
+            <label htmlFor="af-tipoclub" className="block text-xs text-gray-500 mb-1">Tipo de Taller</label>
             <select id="af-tipoclub" value={filters.tipoClub} onChange={e => set('tipoClub', e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[140px]">
               <option value="">Todos los tipos</option>

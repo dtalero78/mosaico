@@ -50,7 +50,7 @@ const TIPO_OPTIONS: { value: TipoFiltro; label: string }[] = [
   { value: 'sesiones',  label: 'Sesiones'         },
   { value: 'jumps',     label: 'Jumps'            },
   { value: 'training',  label: 'Training'         },
-  { value: 'clubes',    label: 'Clubes'           },
+  { value: 'clubes',    label: 'Talleres'         },
   { value: 'essential', label: 'Essential (ESS)'  },
   { value: 'welcome',   label: 'Welcome'          },
 ]
@@ -162,7 +162,7 @@ export default function AdvisorResumenReportPage() {
         { header: 'Sesiones',   accessor: r => r.totalSesiones   },
         { header: 'Jumps',      accessor: r => r.totalJumps      },
         { header: 'Training',   accessor: r => r.totalTraining   },
-        { header: 'Clubes',     accessor: r => r.totalClubes     },
+        { header: 'Talleres',     accessor: r => r.totalClubes     },
         { header: 'Essential',  accessor: r => r.totalEssential  },
         { header: 'Welcome',    accessor: r => r.totalWelcome    },
         { header: 'Total',      accessor: r => r.totalGeneral    },
@@ -263,7 +263,7 @@ export default function AdvisorResumenReportPage() {
             <KpiCard label="Sesiones"  value={(kpis?.totalSesiones  ?? 0).toLocaleString()} color={TYPE_COLORS.sesiones}  />
             <KpiCard label="Jumps"     value={(kpis?.totalJumps     ?? 0).toLocaleString()} color={TYPE_COLORS.jumps}     />
             <KpiCard label="Training"  value={(kpis?.totalTraining  ?? 0).toLocaleString()} color={TYPE_COLORS.training}  />
-            <KpiCard label="Clubes"    value={(kpis?.totalClubes    ?? 0).toLocaleString()} color={TYPE_COLORS.clubes}    />
+            <KpiCard label="Talleres"    value={(kpis?.totalClubes    ?? 0).toLocaleString()} color={TYPE_COLORS.clubes}    />
             <KpiCard label="Essential" value={(kpis?.totalEssential ?? 0).toLocaleString()} color={TYPE_COLORS.essential} />
             <KpiCard label="Welcome"   value={(kpis?.totalWelcome   ?? 0).toLocaleString()} color={TYPE_COLORS.welcome}   />
           </div>
@@ -294,7 +294,7 @@ export default function AdvisorResumenReportPage() {
                   <Bar dataKey="sesiones"  name="Sesiones"  fill={TYPE_COLORS.sesiones}  stackId="a" />
                   <Bar dataKey="jumps"     name="Jumps"     fill={TYPE_COLORS.jumps}     stackId="a" />
                   <Bar dataKey="training"  name="Training"  fill={TYPE_COLORS.training}  stackId="a" />
-                  <Bar dataKey="clubes"    name="Clubes"    fill={TYPE_COLORS.clubes}    stackId="a" />
+                  <Bar dataKey="clubes"    name="Talleres"    fill={TYPE_COLORS.clubes}    stackId="a" />
                   <Bar dataKey="essential" name="Essential" fill={TYPE_COLORS.essential} stackId="a" />
                   <Bar dataKey="welcome"   name="Welcome"   fill={TYPE_COLORS.welcome}   stackId="a" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -341,7 +341,7 @@ export default function AdvisorResumenReportPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                     <tr>
-                      {['#','Advisor','Sesiones','Jumps','Training','Clubes','Essential','Welcome','Total','Inscritos','Asistentes','% Asist.'].map(h => (
+                      {['#','Advisor','Sesiones','Jumps','Training','Talleres','Essential','Welcome','Total','Inscritos','Asistentes','% Asist.'].map(h => (
                         <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>

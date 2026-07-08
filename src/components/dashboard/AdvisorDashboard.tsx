@@ -293,7 +293,7 @@ export default function AdvisorDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
         <KpiCard label="Sessions"  value={kpis.sessions}  color="bg-blue-50    border-blue-300    text-blue-700" />
         <KpiCard label="Training"  value={kpis.training}  color="bg-orange-50  border-orange-300  text-orange-700" />
-        <KpiCard label="Clubs"     value={kpis.clubs}     color="bg-green-50   border-green-300   text-green-700" />
+        <KpiCard label="Talleres"     value={kpis.clubs}     color="bg-green-50   border-green-300   text-green-700" />
         <KpiCard label="Welcome"   value={kpis.welcome}   color="bg-purple-50  border-purple-300  text-purple-700" />
         <KpiCard label="Conducted" value={kpis.conducted} color="bg-sky-50     border-sky-300     text-sky-700" />
         <KpiCard label="Canceled"  value={kpis.canceled}  color="bg-red-50     border-red-300     text-red-700" />
@@ -329,7 +329,7 @@ export default function AdvisorDashboard() {
           segments={[
             { label: 'Sessions', value: kpis.sessions, color: '#3b82f6' },
             { label: 'Training', value: kpis.training, color: '#f97316' },
-            { label: 'Clubs',    value: kpis.clubs,    color: '#22c55e' },
+            { label: 'Talleres',    value: kpis.clubs,    color: '#22c55e' },
             { label: 'Welcome',  value: kpis.welcome,  color: '#a855f7' },
           ]}
         />

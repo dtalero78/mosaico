@@ -181,11 +181,11 @@ export default function InformeClubesPage() {
       { s: 'Filtros', c: 'Fecha final',      v: clEnd,                p: '' },
       { s: 'Filtros', c: 'Plataforma',       v: clPlat || 'Todas',   p: '' },
       { s: 'Filtros', c: 'Nivel',            v: clNivel || 'Todos',  p: '' },
-      { s: 'Filtros', c: 'Tipo de Club',     v: clTipo || 'Todos',   p: '' },
-      { s: 'Clubs',   c: 'Total',            v: ct.total,             p: '' },
-      { s: 'Clubs',   c: 'Asistieron',       v: ct.asistieron,        p: ct.total > 0 ? `${((ct.asistieron / ct.total) * 100).toFixed(1)}%` : '0%' },
-      { s: 'Clubs',   c: 'No asistieron',    v: ct.noAsistieron,      p: ct.total > 0 ? `${((ct.noAsistieron / ct.total) * 100).toFixed(1)}%` : '0%' },
-      { s: 'Clubs',   c: 'Cancelaron',       v: ct.cancelaron,        p: ct.total > 0 ? `${((ct.cancelaron / ct.total) * 100).toFixed(1)}%` : '0%' },
+      { s: 'Filtros', c: 'Tipo de Taller',     v: clTipo || 'Todos',   p: '' },
+      { s: 'Talleres',   c: 'Total',            v: ct.total,             p: '' },
+      { s: 'Talleres',   c: 'Asistieron',       v: ct.asistieron,        p: ct.total > 0 ? `${((ct.asistieron / ct.total) * 100).toFixed(1)}%` : '0%' },
+      { s: 'Talleres',   c: 'No asistieron',    v: ct.noAsistieron,      p: ct.total > 0 ? `${((ct.noAsistieron / ct.total) * 100).toFixed(1)}%` : '0%' },
+      { s: 'Talleres',   c: 'Cancelaron',       v: ct.cancelaron,        p: ct.total > 0 ? `${((ct.cancelaron / ct.total) * 100).toFixed(1)}%` : '0%' },
     ];
     (clData?.clubesPorTipo ?? []).forEach(club => {
       rows.push({ s: club.tipoClub, c: 'Total',         v: club.total,        p: '' })
@@ -194,7 +194,7 @@ export default function InformeClubesPage() {
       rows.push({ s: club.tipoClub, c: 'Cancelaron',    v: club.cancelaron,   p: club.total > 0 ? `${((club.cancelaron / club.total) * 100).toFixed(1)}%` : '0%' })
     })
     exportToExcel(rows, [
-      { header: 'Tipo Club', accessor: r => r.s }, { header: 'Categoría', accessor: r => r.c },
+      { header: 'Tipo Taller', accessor: r => r.s }, { header: 'Categoría', accessor: r => r.c },
       { header: 'Cantidad',  accessor: r => r.v }, { header: 'Porcentaje', accessor: r => r.p },
     ], `clubes_${clStart}_${clEnd}`)
   }
@@ -206,7 +206,7 @@ export default function InformeClubesPage() {
         {/* ── Left Panel ── */}
         <aside className="w-60 flex-shrink-0">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sticky top-4 space-y-1">
-            <h2 className="text-base font-bold text-gray-900 mb-3">Training Session y Clubes</h2>
+            <h2 className="text-base font-bold text-gray-900 mb-3">Training Session y Talleres</h2>
 
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Training Session</p>
             <p className="text-xs text-gray-400 mb-2">{trStart} → {trEnd}{trPlat && <span className="block">{trPlat}</span>}{trNivel && <span className="block">{trNivel}</span>}</p>
@@ -215,7 +215,7 @@ export default function InformeClubesPage() {
             <StatRow label="No asistieron" value={tr.noAsistieron} color="#f59e0b" />
             <StatRow label="Cancelaron"    value={tr.cancelaron}   color="#ef4444" />
 
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-1">Clubs</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-5 mb-1">Talleres</p>
             <p className="text-xs text-gray-400 mb-2">{clStart} → {clEnd}{clPlat && <span className="block">{clPlat}</span>}{clNivel && <span className="block">{clNivel}</span>}{clTipo && <span className="block">{clTipo}</span>}</p>
             <StatRow label="Total"         value={ct.total}        color="#6b7280" />
             <StatRow label="Asistieron"    value={ct.asistieron}   color="#3b82f6" />
@@ -319,7 +319,7 @@ export default function InformeClubesPage() {
                 </select>
               </div>
               <div>
-                <label htmlFor="cl-tipo" className="block text-xs text-gray-500 mb-1">Tipo de Club</label>
+                <label htmlFor="cl-tipo" className="block text-xs text-gray-500 mb-1">Tipo de Taller</label>
                 <select id="cl-tipo" value={clTipo} onChange={e => setClTipo(e.target.value)}
                   className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Todos</option>
@@ -344,8 +344,8 @@ export default function InformeClubesPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Clubs</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Todos los clubes excepto TRAINING — por tipo</p>
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Talleres</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Todos los talleres excepto TRAINING — por tipo</p>
               </div>
               {clLoading && <span className="text-xs text-gray-400 animate-pulse">Cargando...</span>}
             </div>

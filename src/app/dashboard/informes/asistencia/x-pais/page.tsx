@@ -496,7 +496,7 @@ export default function InformeXPaisPage() {
             section={tr} metricKey="asistieron" metricLabel="Asist."
             loading={loading} />
 
-          <SectionCard title="Clubes"
+          <SectionCard title="Talleres"
             subtitle="CLUB — GRAMMAR / LISTENING / KARAOKE / PRONUNCIATION / CONVERSATION"
             section={cl} metricKey="asistieron" metricLabel="Asist."
             loading={loading} />

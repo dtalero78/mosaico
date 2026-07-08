@@ -188,7 +188,7 @@ export default function PerformanceEvaluationPage() {
                   className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                   <option value="">Todos</option>
                   <option value="SESSION">Session</option>
-                  <option value="CLUB">Club</option>
+                  <option value="CLUB">Taller</option>
                 </select>
               </div>
               <button type="button" onClick={() => dashQ.refetch()}
@@ -662,7 +662,7 @@ function ByAdvisorView({
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
             <option value="">Todos</option>
             <option value="SESSION">Session</option>
-            <option value="CLUB">Club</option>
+            <option value="CLUB">Taller</option>
           </select>
         </div>
         <div>

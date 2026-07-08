@@ -69,7 +69,7 @@ const TIPO_OPTIONS: { value: string; label: string }[] = [
   { value: 'sesiones',  label: 'Sesiones' },
   { value: 'jumps',     label: 'Jumps' },
   { value: 'training',  label: 'Training' },
-  { value: 'clubes',    label: 'Clubes' },
+  { value: 'clubes',    label: 'Talleres' },
   { value: 'welcome',   label: 'Welcome' },
   { value: 'essential', label: 'Essential (ESS)' },
   { value: 'otros',     label: 'Otros' },
@@ -177,7 +177,7 @@ export default function HorasAdvisorPage() {
         { header: 'Sesiones',   accessor: r => r.sesiones },
         { header: 'Jumps',      accessor: r => r.jumps },
         { header: 'Training',   accessor: r => r.training },
-        { header: 'Clubes',     accessor: r => r.clubes },
+        { header: 'Talleres',     accessor: r => r.clubes },
         { header: 'Welcome',    accessor: r => r.welcome },
         { header: 'Essential',  accessor: r => r.essential },
         { header: 'Otros',      accessor: r => r.otros },
@@ -387,7 +387,7 @@ export default function HorasAdvisorPage() {
               <table className="w-full text-sm whitespace-nowrap">
                 <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                   <tr>
-                    {['#', 'Advisor', 'NumeroId', 'Sesiones', 'Jumps', 'Training', 'Clubes', 'Welcome', 'Essential', 'Otros', 'Conducted', 'Suspended', 'Cancelled', 'Total'].map(h => (
+                    {['#', 'Advisor', 'NumeroId', 'Sesiones', 'Jumps', 'Training', 'Talleres', 'Welcome', 'Essential', 'Otros', 'Conducted', 'Suspended', 'Cancelled', 'Total'].map(h => (
                       <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>

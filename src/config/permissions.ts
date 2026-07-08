@@ -596,8 +596,8 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   // -- Sección: Asistencia (cada informe con su botón CSV debajo) --
   { code: InformesPermission.ASIS_SESIONES,        module: Module.INFORMES, section: 'Asistencia', name: 'Informe "Sesiones"',                    description: 'Ver el informe Asistencia → Sesiones' },
   { code: InformesPermission.ASIS_SESIONES_EXP,    module: Module.INFORMES, section: 'Asistencia', name: '↳ Descargar CSV (Sesiones)',            description: 'Botón Exportar CSV del informe Asistencia → Sesiones' },
-  { code: InformesPermission.ASIS_CLUBES,          module: Module.INFORMES, section: 'Asistencia', name: 'Informe "Clubes"',                      description: 'Ver el informe Asistencia → Clubes' },
-  { code: InformesPermission.ASIS_CLUBES_EXP,      module: Module.INFORMES, section: 'Asistencia', name: '↳ Descargar CSV (Clubes)',              description: 'Botón Exportar CSV del informe Asistencia → Clubes' },
+  { code: InformesPermission.ASIS_CLUBES,          module: Module.INFORMES, section: 'Asistencia', name: 'Informe "Talleres"',                      description: 'Ver el informe Asistencia → Talleres' },
+  { code: InformesPermission.ASIS_CLUBES_EXP,      module: Module.INFORMES, section: 'Asistencia', name: '↳ Descargar CSV (Talleres)',              description: 'Botón Exportar CSV del informe Asistencia → Talleres' },
   { code: InformesPermission.ASIS_COMPLEMENTARIAS,     module: Module.INFORMES, section: 'Asistencia', name: 'Informe "Actividades Complementarias"', description: 'Ver el informe Asistencia → Actividades Complementarias' },
   { code: InformesPermission.ASIS_COMPLEMENTARIAS_EXP, module: Module.INFORMES, section: 'Asistencia', name: '↳ Descargar CSV (Complementarias)',     description: 'Botón Exportar CSV del informe Asistencia → Actividades Complementarias' },
   { code: InformesPermission.ASIS_WELCOME,         module: Module.INFORMES, section: 'Asistencia', name: 'Informe "Welcome Session"',             description: 'Ver el informe Asistencia → Welcome Session' },
@@ -608,8 +608,8 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   // -- Sección: Programación --
   { code: InformesPermission.PROG_SESIONES_JUMPS,     module: Module.INFORMES, section: 'Programación', name: 'Informe "Sesiones - Jumps"',         description: 'Ver el informe Programación → Sesiones - Jumps' },
   { code: InformesPermission.PROG_SESIONES_JUMPS_EXP, module: Module.INFORMES, section: 'Programación', name: '↳ Descargar CSV (Sesiones - Jumps)',  description: 'Botón Exportar CSV del informe Programación → Sesiones - Jumps' },
-  { code: InformesPermission.PROG_TRAINING_CLUBS,     module: Module.INFORMES, section: 'Programación', name: 'Informe "Training - Clubs"',         description: 'Ver el informe Programación → Training - Clubs' },
-  { code: InformesPermission.PROG_TRAINING_CLUBS_EXP, module: Module.INFORMES, section: 'Programación', name: '↳ Descargar CSV (Training - Clubs)',  description: 'Botón Exportar CSV del informe Programación → Training - Clubs' },
+  { code: InformesPermission.PROG_TRAINING_CLUBS,     module: Module.INFORMES, section: 'Programación', name: 'Informe "Training - Talleres"',         description: 'Ver el informe Programación → Training - Talleres' },
+  { code: InformesPermission.PROG_TRAINING_CLUBS_EXP, module: Module.INFORMES, section: 'Programación', name: '↳ Descargar CSV (Training - Talleres)',  description: 'Botón Exportar CSV del informe Programación → Training - Talleres' },
   { code: InformesPermission.PROG_WELCOME,            module: Module.INFORMES, section: 'Programación', name: 'Informe "Welcome"',                  description: 'Ver el informe Programación → Welcome' },
   { code: InformesPermission.PROG_WELCOME_EXP,        module: Module.INFORMES, section: 'Programación', name: '↳ Descargar CSV (Welcome)',           description: 'Botón Exportar CSV del informe Programación → Welcome' },
 
@@ -620,8 +620,8 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   { code: InformesPermission.ADV_JUMPS_EXP,     module: Module.INFORMES, section: 'Advisors', name: '↳ Descargar CSV (Jumps)',      description: 'Botón Exportar CSV del informe Advisors → Jumps' },
   { code: InformesPermission.ADV_TRAINING,      module: Module.INFORMES, section: 'Advisors', name: 'Informe "Training"',     description: 'Ver el informe Advisors → Training' },
   { code: InformesPermission.ADV_TRAINING_EXP,  module: Module.INFORMES, section: 'Advisors', name: '↳ Descargar CSV (Training)',   description: 'Botón Exportar CSV del informe Advisors → Training' },
-  { code: InformesPermission.ADV_CLUBES,        module: Module.INFORMES, section: 'Advisors', name: 'Informe "Clubes"',       description: 'Ver el informe Advisors → Clubes' },
-  { code: InformesPermission.ADV_CLUBES_EXP,    module: Module.INFORMES, section: 'Advisors', name: '↳ Descargar CSV (Clubes)',     description: 'Botón Exportar CSV del informe Advisors → Clubes' },
+  { code: InformesPermission.ADV_CLUBES,        module: Module.INFORMES, section: 'Advisors', name: 'Informe "Talleres"',       description: 'Ver el informe Advisors → Talleres' },
+  { code: InformesPermission.ADV_CLUBES_EXP,    module: Module.INFORMES, section: 'Advisors', name: '↳ Descargar CSV (Talleres)',     description: 'Botón Exportar CSV del informe Advisors → Talleres' },
   { code: InformesPermission.ADV_WELCOME,       module: Module.INFORMES, section: 'Advisors', name: 'Informe "Welcome"',      description: 'Ver el informe Advisors → Welcome' },
   { code: InformesPermission.ADV_WELCOME_EXP,   module: Module.INFORMES, section: 'Advisors', name: '↳ Descargar CSV (Welcome)',    description: 'Botón Exportar CSV del informe Advisors → Welcome' },
   { code: InformesPermission.ADV_ESSENTIAL,     module: Module.INFORMES, section: 'Advisors', name: 'Informe "Essential"',    description: 'Ver el informe Advisors → Essential' },

@@ -124,7 +124,7 @@ export default function ProgressReport({ data, isLoading }: ProgressReportProps)
                   <div className="flex gap-3 mt-1 text-xs text-gray-400">
                     <span>Sesiones: {s.sesionesExitosas}/2</span>
                     <span>
-                      Club:{' '}
+                      Taller:{' '}
                       {s.clubNombres && s.clubNombres.length > 0
                         ? s.clubNombres.join(', ')
                         : '0/1'}

@@ -23,12 +23,12 @@ export const REPORT_CONFIGS: Record<ReportType, ReportConfig> = {
     exportPermission: InformesPermission.PROG_SESIONES_JUMPS_EXP,
   },
   'training-clubs': {
-    title:    'Calendario Training – Clubs',
+    title:    'Calendario Training – Talleres',
     subtitle: 'Eventos TRAINING y CLUB del calendario académico',
     tiposPermitidos: ['TRAINING', 'CLUB'],
     kpiLabels: [
       { key: 'TRAINING', label: 'Total Training' },
-      { key: 'CLUB',     label: 'Total Clubs' },
+      { key: 'CLUB',     label: 'Total Talleres' },
     ],
     showTipoClubFilter: true,
     colors: { TRAINING: '#f97316', CLUB: '#22c55e' },

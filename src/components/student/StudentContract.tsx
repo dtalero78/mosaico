@@ -449,7 +449,7 @@ export default function StudentContract({ student, contratoFinalizado = false }:
               booking={agendamientos?.ultimoJump ?? null}
             />
             <BookingRow
-              label="Último club asistido"
+              label="Último taller asistido"
               color="bg-white border-green-100"
               booking={agendamientos?.ultimoClub ?? null}
             />

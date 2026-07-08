@@ -204,7 +204,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     { name: 'Sesiones',  value: totals.sesiones },
     { name: 'Jumps',     value: totals.jumps },
     { name: 'Training',  value: totals.training },
-    { name: 'Clubes',    value: totals.clubes },
+    { name: 'Talleres',    value: totals.clubes },
     { name: 'Welcome',   value: totals.welcome },
     { name: 'Essential', value: totals.essential },
     { name: 'Otros',     value: totals.otros },

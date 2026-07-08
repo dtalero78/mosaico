@@ -72,7 +72,7 @@ export default function EventReportFilters({
 
         {showTipoClubFilter && (
           <div>
-            <label htmlFor="er-club" className="block text-xs text-gray-500 mb-1">Tipo de Club</label>
+            <label htmlFor="er-club" className="block text-xs text-gray-500 mb-1">Tipo de Taller</label>
             <input id="er-club" type="text" value={filters.tipoClub}
               onChange={e => set('tipoClub', e.target.value)}
               placeholder="Ej: Listening"

@@ -44,7 +44,7 @@ export const GET = handlerWithAuth(async (req) => {
     values
   );
 
-  const headers = ['ID','Fecha','Hora','Advisor ID','Advisor Nombre','Nivel','Step','Tipo','Titulo','Nombre Evento','Inscritos','Limite','Bookings','Asistencias','Link Zoom','Club'];
+  const headers = ['ID','Fecha','Hora','Advisor ID','Advisor Nombre','Nivel','Step','Tipo','Titulo','Nombre Evento','Inscritos','Limite','Bookings','Asistencias','Link Zoom','Taller'];
   const csvRows = [headers.join(',')];
 
   for (const row of result.rows) {

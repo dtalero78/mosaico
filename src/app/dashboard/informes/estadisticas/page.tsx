@@ -167,10 +167,10 @@ export default function NivelesPage() {
     sesiones.forEach(r     => rows.push({ seccion: 'Sesiones por Nivel',  label: r.nivel,     valor: r.total }))
     diaChart.forEach(r     => rows.push({ seccion: 'Sesiones por Día',    label: r.dia,        valor: r.total }))
     jumps.forEach(r        => rows.push({ seccion: 'Jumps por Nivel',     label: r.nivel,     valor: r.total }))
-    clubes.forEach(r       => rows.push({ seccion: 'Clubes por Tipo',     label: r.tipo_club,  valor: r.total }))
+    clubes.forEach(r       => rows.push({ seccion: 'Talleres por Tipo',     label: r.tipo_club,  valor: r.total }))
     sesSemana.forEach(r    => rows.push({ seccion: 'Sesiones (semana)',   label: r.nivel,     valor: r.total }))
     jumpsSemana.forEach(r  => rows.push({ seccion: 'Jumps (semana)',      label: r.nivel,     valor: r.total }))
-    clubsSemana.forEach(r  => rows.push({ seccion: 'Clubes (semana)',     label: r.tipo_club,  valor: r.total }))
+    clubsSemana.forEach(r  => rows.push({ seccion: 'Talleres (semana)',     label: r.tipo_club,  valor: r.total }))
     exportToExcel(rows, [
       { header: 'Sección',         accessor: r => r.seccion },
       { header: 'Nivel / Tipo',    accessor: r => r.label   },
@@ -187,7 +187,7 @@ export default function NivelesPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Agendamientos por Nivel</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Sesiones, Jumps y Clubes agendados por nivel en el período seleccionado
+            Sesiones, Jumps y Talleres agendados por nivel en el período seleccionado
           </p>
         </div>
 
@@ -252,9 +252,9 @@ export default function NivelesPage() {
             value={loading || !diaPico ? '—' : diaPico.dia}
             sub={diaPico ? `${diaPico.total.toLocaleString()} agendamientos` : undefined}
             accent="#7c3aed" />
-          <KpiCard label="Club más Agendado"
+          <KpiCard label="Taller más Agendado"
             value={loading || !clubePico ? '—' : clubePico.tipo_club}
-            sub={clubePico ? `${clubePico.total.toLocaleString()} clubes` : undefined}
+            sub={clubePico ? `${clubePico.total.toLocaleString()} talleres` : undefined}
             accent="#059669" />
         </div>
 
@@ -351,13 +351,13 @@ export default function NivelesPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Clubes por Tipo</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Distribución de clubes agendados por tipo en el período</p>
+              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide">Talleres por Tipo</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Distribución de talleres agendados por tipo en el período</p>
             </div>
             {!loading && clubePico && (
               <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-1 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                Club pico: {clubePico.tipo_club} · {clubePico.total.toLocaleString()}
+                Taller pico: {clubePico.tipo_club} · {clubePico.total.toLocaleString()}
               </span>
             )}
           </div>
@@ -396,7 +396,7 @@ export default function NivelesPage() {
             <div className="flex gap-4 text-xs text-gray-500">
               <span><span className="font-bold text-blue-600">{totalSesSem.toLocaleString()}</span> sesiones</span>
               <span><span className="font-bold text-purple-600">{totalJumpSem.toLocaleString()}</span> jumps</span>
-              <span><span className="font-bold text-emerald-600">{totalClubSem.toLocaleString()}</span> clubes</span>
+              <span><span className="font-bold text-emerald-600">{totalClubSem.toLocaleString()}</span> talleres</span>
             </div>
           </div>
           {loading
@@ -430,10 +430,10 @@ export default function NivelesPage() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-emerald-600 uppercase mb-3">Clubes por Tipo</p>
+                  <p className="text-xs font-semibold text-emerald-600 uppercase mb-3">Talleres por Tipo</p>
                   <div className="space-y-2">
                     {clubsSemana.length === 0
-                      ? <p className="text-xs text-gray-400">Sin clubes esta semana</p>
+                      ? <p className="text-xs text-gray-400">Sin talleres esta semana</p>
                       : clubsSemana.map(row => (
                           <HBar key={row.tipo_club} label={row.tipo_club} total={row.total} max={maxClubSem}
                             color={CLUB_COLORS[row.tipo_club] ?? '#9ca3af'}

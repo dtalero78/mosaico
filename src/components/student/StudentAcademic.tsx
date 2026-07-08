@@ -1387,7 +1387,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                         }`}
                       >
                         <div className="text-center">
-                          <div className="font-medium">Club</div>
+                          <div className="font-medium">Taller</div>
                         </div>
                         {selectedEventType === 'CLUB' && (
                           <div className="absolute top-1.5 right-1.5">
@@ -1586,7 +1586,7 @@ function getTypeBadgeText(tipoEvento: string): string {
     case 'SESSION':
       return 'Sesión'
     case 'CLUB':
-      return 'Club'
+      return 'Taller'
     case 'WELCOME':
       return 'Bienvenida'
     case 'COMPLEMENTARIA':

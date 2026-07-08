@@ -162,7 +162,7 @@ export const GET = handlerWithAuth(async (req, _ctx, _session) => {
     { name: 'Sesiones',  value: kpis.totalSesiones  },
     { name: 'Jumps',     value: kpis.totalJumps     },
     { name: 'Training',  value: kpis.totalTraining  },
-    { name: 'Clubes',   value: kpis.totalClubes    },
+    { name: 'Talleres',   value: kpis.totalClubes    },
     { name: 'Essential', value: kpis.totalEssential },
     { name: 'Welcome',   value: kpis.totalWelcome   },
   ].filter(d => d.value > 0)

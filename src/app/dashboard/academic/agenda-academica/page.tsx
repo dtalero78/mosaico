@@ -609,7 +609,7 @@ export default function AgendaAcademicaPage() {
               <div className="text-2xl font-bold text-green-600">
                 {filteredEvents.filter(e => (e.evento || e.tipo) === 'CLUB').length}
               </div>
-              <div className="text-sm text-gray-600">Clubs</div>
+              <div className="text-sm text-gray-600">Talleres</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-purple-600">

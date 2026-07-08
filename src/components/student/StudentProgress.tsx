@@ -211,7 +211,7 @@ export default function StudentProgress({ student }: StudentProgressProps) {
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-2 px-3 text-xs font-medium text-gray-500 uppercase">Step</th>
                     <th className="text-center py-2 px-3 text-xs font-medium text-gray-500 uppercase">Sesiones</th>
-                    <th className="text-center py-2 px-3 text-xs font-medium text-gray-500 uppercase">Clubs</th>
+                    <th className="text-center py-2 px-3 text-xs font-medium text-gray-500 uppercase">Talleres</th>
                     <th className="text-center py-2 px-3 text-xs font-medium text-gray-500 uppercase">Estado</th>
                     <th className="text-left py-2 px-3 text-xs font-medium text-gray-500 uppercase">Diagnóstico</th>
                   </tr>
