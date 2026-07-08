@@ -121,6 +121,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/actualizar-material/imagenes': [
     'ACADEMICO.MATERIAL.ACTUALIZAR' as Permission,
   ],
+  '/dashboard/academic/actualizar-material/videos': [
+    'ACADEMICO.MATERIAL.ACTUALIZAR' as Permission,
+  ],
   '/dashboard/academic/control-horas': [
     'ACADEMICO.CONTROL_HORAS.VER' as Permission,
   ],

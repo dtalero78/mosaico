@@ -8,7 +8,7 @@ export default function ActualizarMaterialPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Mantenimiento Cursos</h1>
       <p className="text-gray-500 mb-8">Selecciona qué deseas gestionar, esta acción genera registros de auditoría.</p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         {/* Imágenes de curso */}
         <button
           type="button"
@@ -24,6 +24,24 @@ export default function ActualizarMaterialPage() {
           <div className="text-center">
             <div className="text-lg font-semibold text-gray-900 group-hover:text-fuchsia-600 transition-colors">Imágenes de curso</div>
             <div className="text-sm text-gray-500 mt-1">Una imagen por tipo de curso</div>
+          </div>
+        </button>
+
+        {/* Videos */}
+        <button
+          type="button"
+          onClick={() => openTab('/dashboard/academic/actualizar-material/videos')}
+          className="flex flex-col items-center justify-center gap-4 p-10 bg-white border-2 border-gray-200 rounded-2xl shadow-sm hover:border-purple-500 hover:shadow-md transition-all text-left group"
+        >
+          <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+            <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">Videos</div>
+            <div className="text-sm text-gray-500 mt-1">Video por lección (MP4 o enlace)</div>
           </div>
         </button>
 
