@@ -14,9 +14,9 @@ export default function StudentHeader({ profile, isLoading }: StudentHeaderProps
     return (
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between animate-pulse">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-gray-200 flex-shrink-0" />
+          <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-gray-200 flex-shrink-0" />
           <div className="space-y-1.5">
-            <div className="h-3.5 bg-gray-200 rounded w-32" />
+            <div className="h-5 bg-gray-200 rounded w-40" />
             <div className="h-3 bg-gray-200 rounded w-24" />
           </div>
         </div>
@@ -44,16 +44,16 @@ export default function StudentHeader({ profile, isLoading }: StudentHeaderProps
         {/* Left: Avatar + name + subtitle */}
         <div className="flex items-center gap-2.5 min-w-0">
           {/* Avatar */}
-          <div className="flex-shrink-0 h-9 w-9 sm:h-10 sm:w-10 rounded-full overflow-hidden bg-primary-100 flex items-center justify-center border border-gray-200">
+          <div className="flex-shrink-0 h-14 w-14 sm:h-16 sm:w-16 rounded-full overflow-hidden bg-primary-100 flex items-center justify-center border border-gray-200">
             {fotoUrl
               ? <img src={fotoUrl} alt={nombre} className="h-full w-full object-cover" />
-              : <span className="text-xs sm:text-sm font-semibold text-primary-700">{initials}</span>
+              : <span className="text-lg sm:text-xl font-semibold text-primary-700">{initials}</span>
             }
           </div>
 
           {/* Name + subtitle */}
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">
+            <p className="text-lg sm:text-xl font-bold text-gray-900 truncate">
               ¡Hola, {nombre}<span className="hidden sm:inline"> {apellido}</span>!
             </p>
             <p className="text-xs text-gray-500 hidden sm:block">Panel de gestión para Usuarios</p>

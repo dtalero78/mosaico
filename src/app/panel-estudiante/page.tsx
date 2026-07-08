@@ -150,7 +150,7 @@ function PanelEstudianteContent() {
       {/* 2. Booking Bar */}
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="mx-auto px-2 flex flex-wrap items-center gap-3">
-          <span className="text-lg font-bold text-primary-700 mr-2">LGS</span>
+          <span className="text-lg font-bold text-primary-700 mr-2">MOSAICO</span>
           <span className="text-sm text-gray-500 mr-1">Booking:</span>
           <button
             onClick={() => openBooking('SESSION')}
@@ -221,7 +221,7 @@ function PanelEstudianteContent() {
           }
         `}</style>
         <div className="flex-shrink-0 bg-blue-600 flex items-center px-4 py-2 gap-2">
-          <span className="text-white text-xs font-black uppercase tracking-widest">📢 LGS</span>
+          <span className="text-white text-xs font-black uppercase tracking-widest">📢 MOSAICO</span>
         </div>
         <div className="flex-1 overflow-hidden flex items-center py-2">
           <span className="lgs-ticker-text text-sm font-medium px-8" style={{ color: tickerColor }}>
@@ -243,7 +243,7 @@ function PanelEstudianteContent() {
               <div className="h-56 bg-gray-100 animate-pulse" />
             ) : profile?.cursoImagenUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.cursoImagenUrl} alt={profile?.tipoCurso || 'Curso'} className="w-full h-56 object-cover" />
+              <img src={profile.cursoImagenUrl} alt={profile?.tipoCurso || 'Curso'} className="w-full h-auto" />
             ) : (
               <div className="h-56 flex flex-col items-center justify-center bg-gradient-to-br from-primary-50 to-accent/10 text-gray-400 gap-2">
                 <BookOpenIcon className="h-10 w-10" />
@@ -315,48 +315,49 @@ function PanelEstudianteContent() {
             </div>
           </div>
 
-          {/* Derecha: Sesiones (4 subtarjetas) */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Sesiones</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-green-50 border border-green-100 p-4 text-center">
-                <div className="text-3xl font-bold text-green-700">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.asistencias ?? 0)}</div>
-                <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Asistidas</div>
-              </div>
-              <div className="rounded-lg bg-red-50 border border-red-100 p-4 text-center">
-                <div className="text-3xl font-bold text-red-600">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.ausencias ?? 0)}</div>
-                <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Ausente</div>
-              </div>
-              <div className="rounded-lg bg-amber-50 border border-amber-100 p-4 text-center">
-                <div className="text-3xl font-bold text-amber-600">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.canceladas ?? 0)}</div>
-                <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Suspendidas</div>
-              </div>
-              <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 text-center">
-                <div className="text-3xl font-bold text-gray-900">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.total ?? 0)}</div>
-                <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Total de sesiones</div>
+          {/* Derecha: Sesiones + Eventos Programados + Comentarios (apilados) */}
+          <div className="space-y-4">
+            {/* Sesiones — 4 subtarjetas en línea */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Sesiones</h2>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="rounded-lg bg-green-50 border border-green-100 p-3 text-center">
+                  <div className="text-xl font-bold text-green-700">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.asistencias ?? 0)}</div>
+                  <div className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide leading-tight">Asistidas</div>
+                </div>
+                <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-center">
+                  <div className="text-xl font-bold text-red-600">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.ausencias ?? 0)}</div>
+                  <div className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide leading-tight">Ausente</div>
+                </div>
+                <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 text-center">
+                  <div className="text-xl font-bold text-amber-600">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.canceladas ?? 0)}</div>
+                  <div className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide leading-tight">Suspendidas</div>
+                </div>
+                <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 text-center">
+                  <div className="text-xl font-bold text-gray-900">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.total ?? 0)}</div>
+                  <div className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide leading-tight">Total sesiones</div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* EVENTOS PROGRAMADOS — eventos de la semana (sesiones, talleres, otros) */}
-        <MyEventsSection
-          events={events}
-          isLoading={eventsQuery.isLoading}
-          onCancel={handleCancel}
-          isCancelling={cancelMutation.isLoading}
-        />
+            {/* EVENTOS PROGRAMADOS — eventos de la semana (sesiones, talleres, otros) */}
+            <MyEventsSection
+              events={events}
+              isLoading={eventsQuery.isLoading}
+              onCancel={handleCancel}
+              isCancelling={cancelMutation.isLoading}
+            />
 
-        {/* Secundario: valoración (izq) | comentarios del guía (der) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          <SinEvaluarCard />
-          <div className="lg:col-span-2">
+            {/* Comentarios del guía */}
             <AdvisorComments
               data={commentsQuery.data}
               isLoading={commentsQuery.isLoading}
             />
           </div>
         </div>
+
+        {/* Valoración de sesiones (si hay pendientes) */}
+        <SinEvaluarCard />
 
         {/* 5. Let's Go assistance */}
         <WhatsAppContacts />
