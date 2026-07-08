@@ -235,14 +235,31 @@ function PanelEstudianteContent() {
         {/* Jump exam banner (only when eligible) */}
         <JumpExamBanner />
 
-        {/* Grid principal de 2 columnas con cards apiladas:
-              Izq (1/3): NEXT SESSION + SinEvaluar
-              Der (2/3): Stats + Eventos + AdvisorComments
-            items-start para que cada columna mida su contenido natural. */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-          {/* Columna izquierda — NEXT SESSION arriba, SinEvaluar abajo */}
-          <div className="space-y-4">
-          {/* Student Info Card */}
+        {/* Fila superior: imagen del curso (izq) + NEXT SESSION (der) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+          {/* Imagen del curso (se carga desde Mantenimiento Cursos › Imágenes) */}
+          <div className="rounded-xl overflow-hidden bg-white border border-gray-200 flex flex-col">
+            {meQuery.isLoading ? (
+              <div className="flex-1 min-h-[240px] bg-gray-100 animate-pulse" />
+            ) : profile?.cursoImagenUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profile.cursoImagenUrl} alt={profile?.tipoCurso || 'Curso'} className="w-full flex-1 object-cover min-h-[240px]" />
+            ) : (
+              <div className="flex-1 min-h-[240px] flex flex-col items-center justify-center bg-gradient-to-br from-primary-50 to-accent/10 text-gray-400 gap-2">
+                <BookOpenIcon className="h-10 w-10" />
+                <span className="text-sm">{profile?.tipoCurso || 'Curso'}</span>
+              </div>
+            )}
+            {profile?.tipoCurso && (
+              <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="text-sm font-bold text-gray-900">{profile.tipoCurso}</span>
+                {profile?.campaign && <span className="text-xs text-gray-500">Campaña: {profile.campaign}</span>}
+                {profile?.salon && <span className="text-xs text-gray-500">Salón: {profile.salon}</span>}
+              </div>
+            )}
+          </div>
+
+          {/* NEXT SESSION */}
           <div className="bg-gradient-to-br from-primary-600 to-primary-800 rounded-xl p-5 text-white">
             {meQuery.isLoading ? (
               <div className="animate-pulse space-y-3">
@@ -305,22 +322,26 @@ function PanelEstudianteContent() {
               </div>
             )}
           </div>
-          {/* SinEvaluar debajo de NEXT SESSION (misma columna izquierda) */}
-          <SinEvaluarCard />
-          </div>
+        </div>
 
-          {/* Columna derecha — Stats + Eventos arriba, AdvisorComments abajo */}
-          <div className="lg:col-span-2 space-y-4">
+        {/* EVENTOS PROGRAMADOS — eventos de la semana (sesiones, talleres, otros) */}
+        <MyEventsSection
+          events={events}
+          isLoading={eventsQuery.isLoading}
+          onCancel={handleCancel}
+          isCancelling={cancelMutation.isLoading}
+        />
+
+        {/* Secundario: estadísticas + valoración (izq) | comentarios del guía (der) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          <div className="space-y-4">
             <AttendanceStats
               stats={statsQuery.data?.stats}
               isLoading={statsQuery.isLoading}
             />
-            <MyEventsSection
-              events={events}
-              isLoading={eventsQuery.isLoading}
-              onCancel={handleCancel}
-              isCancelling={cancelMutation.isLoading}
-            />
+            <SinEvaluarCard />
+          </div>
+          <div className="lg:col-span-2">
             <AdvisorComments
               data={commentsQuery.data}
               isLoading={commentsQuery.isLoading}
