@@ -23,7 +23,10 @@ export async function POST(request: Request) {
       CORSRules: [
         {
           AllowedOrigins: [
-            'https://lgs-plataforma.com',
+            'https://mosaicosorobanplataforma.com',
+            'https://www.mosaicosorobanplataforma.com',
+            'https://mosaico-sy8tq.ondigitalocean.app',
+            'http://localhost:3002',
             'http://localhost:3001',
             'http://localhost:3000',
           ],
