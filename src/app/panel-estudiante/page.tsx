@@ -283,7 +283,7 @@ function PanelEstudianteContent() {
               {/* SESSION PRÓXIMA — fondo morado suave */}
               <div className="rounded-lg p-3 space-y-3 bg-primary-50 border border-primary-100">
                 <div>
-                  <p className="text-sm font-bold uppercase tracking-wide text-primary-700">Session próxima</p>
+                  <p className="text-sm font-bold uppercase tracking-wide text-primary-700">Sesión próxima</p>
                   <p className="text-sm text-gray-500">{nextClass ? `${nextClass.nivel || profile?.nivel || '---'} - ${nextClass.step || '---'}` : '---'}</p>
                 </div>
                 <div>
