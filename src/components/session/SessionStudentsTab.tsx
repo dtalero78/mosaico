@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import {
   CheckCircleIcon,
   UserGroupIcon,
@@ -16,6 +17,8 @@ interface CalendarioEvent {
   dia: string
   advisor: string
   tituloONivel: string
+  nivel?: string   // MOSAICO: = tipoCurso del evento (YOJI, KODOMO, …) — curso para las lecciones de nivelación
+  step?: string
   observaciones?: string
   limiteUsuarios: number
   linkZoom?: string
@@ -87,6 +90,55 @@ export default function SessionStudentsTab({
   const [isGeneratingActivity, setIsGeneratingActivity] = useState(false)
   // Only used for F3 Step 45 (Jump): routes promotion to MASTER/IELS/B2FIRST/TOEFL
   const [pruebainter, setPruebainter] = useState<string>('')
+
+  // Nivelación (ACADEMICA.nivelacion / detalleNivelacion) — casilla + dropdown de lecciones
+  const [nivelacion, setNivelacion] = useState(false)
+  const [nivelacionLeccion, setNivelacionLeccion] = useState('')
+  const [lecciones, setLecciones] = useState<Array<{ value: string; label: string; modulo: string }>>([])
+  const [savingNivel, setSavingNivel] = useState(false)
+
+  // Cargar lecciones del curso del evento (evento.nivel = tipoCurso en MOSAICO)
+  useEffect(() => {
+    const curso = evento?.nivel
+    if (!curso) { setLecciones([]); return }
+    fetch(`/api/postgres/niveles?curso=${encodeURIComponent(curso)}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        const opts: Array<{ value: string; label: string; modulo: string }> = []
+        ;(d.modulos || []).forEach((m: any) => (m.steps || []).forEach((s: string) => opts.push({ value: s, label: `${m.code} · ${s}`, modulo: m.code })))
+        setLecciones(opts)
+      })
+      .catch(() => setLecciones([]))
+  }, [evento?.nivel])
+
+  // Cargar estado de nivelación del estudiante seleccionado
+  useEffect(() => {
+    if (!selectedStudent?._id) { setNivelacion(false); setNivelacionLeccion(''); return }
+    fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { setNivelacion(d.nivelacion === true); setNivelacionLeccion(d.detalleNivelacion?.leccion || '') })
+      .catch(() => { setNivelacion(false); setNivelacionLeccion('') })
+  }, [selectedStudent?._id])
+
+  // Guarda nivelación inmediatamente (al marcar la casilla o elegir lección)
+  const saveNivelacion = async (checked: boolean, leccion: string) => {
+    if (!selectedStudent?._id) return
+    setSavingNivel(true)
+    try {
+      const modulo = lecciones.find(l => l.value === leccion)?.modulo || null
+      const r = await fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nivelacion: checked, leccion: checked ? leccion : null, modulo: checked ? modulo : null }),
+      }).then(x => x.json())
+      if (r.error) throw new Error(r.error)
+      toast.success('Nivelación actualizada')
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al guardar nivelación')
+    } finally {
+      setSavingNivel(false)
+    }
+  }
 
   useEffect(() => {
     if (selectedStudent?.classRecord) {
@@ -347,6 +399,33 @@ export default function SessionStudentsTab({
                     />
                     <span className="text-gray-700">Participó activamente</span>
                   </label>
+                  {/* Nivelación — casilla + dropdown de lecciones del curso */}
+                  <div>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={nivelacion}
+                        onChange={(e) => {
+                          const c = e.target.checked
+                          setNivelacion(c)
+                          if (!c) setNivelacionLeccion('')
+                          saveNivelacion(c, c ? nivelacionLeccion : '')
+                        }}
+                        className="w-5 h-5 text-amber-600 rounded focus:ring-amber-500"
+                      />
+                      <span className="text-gray-700 font-medium">Nivelación</span>
+                      {savingNivel && <span className="text-xs text-gray-400">guardando…</span>}
+                    </label>
+                    <select
+                      value={nivelacionLeccion}
+                      onChange={(e) => { const v = e.target.value; setNivelacionLeccion(v); saveNivelacion(true, v) }}
+                      disabled={!nivelacion || !lecciones.length}
+                      className="mt-2 ml-8 w-[calc(100%-2rem)] px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">— Selecciona lección —</option>
+                      {lecciones.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                    </select>
+                  </div>
                   {isJumpStep() && (
                     <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
