@@ -107,7 +107,7 @@ class AcademicaRepositoryClass extends BaseRepository {
               p."empresa", p."cargo", p."referenciaUno", p."parentezcoRefUno", p."telefonoRefUno",
               p."referenciaDos", p."parentezcoRefDos", p."telefonoRefDos",
               p."suspenddata", p."suspendcount",
-              a."campaign", a."curso", p."salon", a."userLogin", a."inicioCurso",
+              a."campaign", a."curso", p."tipoCurso", p."salon", a."userLogin", a."inicioCurso",
               t."apoderado", t."apoderadoTelefono", t."apoderadoMail",
               a."_createdDate", a."_updatedDate", p."documentacion"
        FROM "ACADEMICA" a

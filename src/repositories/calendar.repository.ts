@@ -15,6 +15,8 @@ export interface EventFilters {
   tipo?: string;
   advisor?: string;
   nivel?: string;
+  /** MOSAICO — tipoCurso del evento (YOJI/OKINA/…/IMPULSA, o 'WELCOME'). */
+  curso?: string;
   step?: string;
   limit?: number;
   includeBookingCounts?: boolean;
@@ -75,6 +77,11 @@ class CalendarioRepositoryClass extends BaseRepository {
     if (filters.nivel) {
       conditions.push(`COALESCE(c."nivel", c."tituloONivel") = $${idx}`);
       params.push(filters.nivel);
+      idx++;
+    }
+    if (filters.curso) {
+      conditions.push(`UPPER(c."curso") = UPPER($${idx})`);
+      params.push(filters.curso);
       idx++;
     }
     if (filters.step) {
@@ -181,6 +188,11 @@ class CalendarioRepositoryClass extends BaseRepository {
     if (filters.nivel) {
       conditions.push(`COALESCE(c."nivel", c."tituloONivel") = $${idx}`);
       params.push(filters.nivel);
+      idx++;
+    }
+    if (filters.curso) {
+      conditions.push(`UPPER(c."curso") = UPPER($${idx})`);
+      params.push(filters.curso);
       idx++;
     }
     if (filters.step) {

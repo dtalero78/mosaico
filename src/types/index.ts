@@ -29,6 +29,10 @@ export interface Student {
   fechaCreacion: string
   tipoUsuario: 'BENEFICIARIO'
   plataforma?: string
+  // MOSAICO — curso: ACADEMICA.curso ('WELCOME' en el puente o curso real);
+  // tipoCurso: PEOPLE.tipoCurso (curso REAL: YOJI/OKINA/…/IMPULSA)
+  curso?: string
+  tipoCurso?: string
   clave?: string
   claveLogin?: string
   usuarioId?: string

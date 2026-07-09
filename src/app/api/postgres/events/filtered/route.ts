@@ -10,6 +10,7 @@ export const GET = handlerWithAuth(async (request) => {
   const { searchParams } = new URL(request.url);
 
   const nivel = searchParams.get('nivel');
+  const curso = searchParams.get('curso');
   const step = searchParams.get('step');
   const tipo = searchParams.get('tipo') || searchParams.get('tipoEvento');
   const advisor = searchParams.get('advisor');
@@ -19,6 +20,7 @@ export const GET = handlerWithAuth(async (request) => {
 
   const events = await getEvents({
     nivel: nivel || undefined,
+    curso: curso || undefined,
     step: step || undefined,
     tipo: tipo || undefined,
     advisor: advisor || undefined,

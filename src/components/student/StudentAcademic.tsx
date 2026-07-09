@@ -254,9 +254,37 @@ export default function StudentAcademic({ student, classes: initialClasses, view
     setAvailableDays(days)
   }
 
+  // Curso REAL del alumno (PEOPLE.tipoCurso; fallback ACADEMICA.curso). Para
+  // WELCOME/NIVELACION el filtro de eventos se hace por curso, no por módulo.
+  const studentCourse = (((student as any).tipoCurso || student.curso || '') as string).trim()
+  const isImpulsa = studentCourse.toUpperCase().startsWith('IMPULSA')
+
+  // Query de alcance para /events/filtered según el tipo de evento elegido:
+  //  - WELCOME    → eventos WELCOME (curso WELCOME); módulo IMPULSA si el alumno
+  //                 es IMPULSA, MOSAICO para el resto de cursos.
+  //  - NIVELACION → sólo nivelaciones del MISMO curso del alumno (ej. YOJI).
+  //  - SESSION/CLUB → comportamiento existente (por módulo/nivel del alumno).
+  const buildEventScopeQuery = (): string => {
+    if (selectedEventType === 'WELCOME') {
+      return `tipoEvento=WELCOME&nivel=${encodeURIComponent(isImpulsa ? 'IMPULSA' : 'MOSAICO')}`
+    }
+    if (selectedEventType === 'NIVELACION') {
+      return `tipoEvento=NIVELACION&curso=${encodeURIComponent(studentCourse)}`
+    }
+    return `nivel=${encodeURIComponent(student.nivel || '')}&tipoEvento=${selectedEventType}`
+  }
+
   const loadAvailableTimes = async (selectedDay: string) => {
-    if (!selectedEventType || !student.nivel) {
-      console.warn('Missing eventType or student level')
+    if (!selectedEventType) {
+      console.warn('Missing eventType')
+      return
+    }
+    if ((selectedEventType === 'SESSION' || selectedEventType === 'CLUB') && !student.nivel) {
+      console.warn('Missing student level')
+      return
+    }
+    if ((selectedEventType === 'WELCOME' || selectedEventType === 'NIVELACION') && !studentCourse) {
+      console.warn('Missing student course')
       return
     }
 
@@ -289,7 +317,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       })
 
       const response = await fetch(
-        `/api/postgres/events/filtered?nivel=${encodeURIComponent(student.nivel)}&tipoEvento=${selectedEventType}&fechaInicio=${encodeURIComponent(startOfDay)}&fechaFin=${encodeURIComponent(endOfDay)}`
+        `/api/postgres/events/filtered?${buildEventScopeQuery()}&fechaInicio=${encodeURIComponent(startOfDay)}&fechaFin=${encodeURIComponent(endOfDay)}`
       )
 
       if (response.ok) {
@@ -431,7 +459,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       const endOfDay = endLocal.toISOString()
 
       const calendarResponse = await fetch(
-        `/api/postgres/events/filtered?nivel=${encodeURIComponent(student.nivel)}&tipoEvento=${selectedEventType}&fechaInicio=${encodeURIComponent(startOfDay)}&fechaFin=${encodeURIComponent(endOfDay)}`
+        `/api/postgres/events/filtered?${buildEventScopeQuery()}&fechaInicio=${encodeURIComponent(startOfDay)}&fechaFin=${encodeURIComponent(endOfDay)}`
       )
 
       if (!calendarResponse.ok) {
