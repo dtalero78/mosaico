@@ -8,7 +8,7 @@ import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS, ext
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -65,7 +65,7 @@ export default function EventModal({
   const [formData, setFormData] = useState({
     fecha: '',
     hora: '',
-    evento: 'SESSION' as 'SESSION' | 'CLUB' | 'WELCOME',
+    evento: 'SESSION' as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION',
     tituloONivel: '',   // = Módulo (código de NIVELES) o 'Todos'
     nombreEvento: '',   // = Lección (step) o 'Todos'
     advisor: '',
@@ -224,7 +224,7 @@ export default function EventModal({
       setFormData({
         fecha: format(eventDate, 'yyyy-MM-dd'),
         hora: format(eventDate, 'HH:mm'),
-        evento: (editingEvent.evento || editingEvent.tipo || 'SESSION') as 'SESSION' | 'CLUB' | 'WELCOME',
+        evento: (editingEvent.evento || editingEvent.tipo || 'SESSION') as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION',
         tituloONivel: resolvedNivel,
         nombreEvento: nombreEventoValue,
         advisor: advisorId,
@@ -247,13 +247,13 @@ export default function EventModal({
           // Si niveles no está cargado, cargarlos primero
           loadCodigosNivel().then((loadedNiveles) => {
             // Luego cargar opciones de step/club con los niveles recién cargados
-            if (eventType === 'SESSION' || eventType === 'CLUB') {
+            if (eventType === 'SESSION' || eventType === 'CLUB' || eventType === 'NIVELACION') {
               cargarNombreStepForEdit(resolvedNivel, eventType, nombreEventoValue, loadedNiveles)
             }
           })
         } else {
           // Si niveles ya está cargado, cargar directamente
-          if (eventType === 'SESSION' || eventType === 'CLUB') {
+          if (eventType === 'SESSION' || eventType === 'CLUB' || eventType === 'NIVELACION') {
             cargarNombreStepForEdit(resolvedNivel, eventType, nombreEventoValue, niveles)
           }
         }
@@ -459,7 +459,7 @@ export default function EventModal({
 
   const getOptionsForNivelTipo = (
     nivelCode: string,
-    tipo: 'SESSION' | 'CLUB' | 'WELCOME',
+    tipo: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION',
     clubPrefixFilter?: string | null,
   ): StepOption[] => {
     const niv = niveles.find(n => n.code === nivelCode)
@@ -872,6 +872,7 @@ export default function EventModal({
                 >
                   <option value="SESSION">Sesión</option>
                   <option value="CLUB">Taller</option>
+                  <option value="NIVELACION">Nivelación</option>
                 </select>
               </div>
               {/* Campaña */}

@@ -95,6 +95,8 @@ export default function CalendarView({
         return 'bg-green-100 text-green-800'
       case 'WELCOME':
         return 'bg-purple-100 text-purple-800'
+      case 'NIVELACION':
+        return 'bg-amber-100 text-amber-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -212,6 +214,10 @@ export default function CalendarView({
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded bg-purple-100"></span>
           <span className="text-gray-600">WELCOME</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded bg-amber-100"></span>
+          <span className="text-gray-600">NIVELACIÓN</span>
         </div>
       </div>
     </div>
