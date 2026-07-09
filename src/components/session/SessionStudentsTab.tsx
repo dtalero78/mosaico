@@ -53,7 +53,7 @@ interface StudentWithClass {
   foto?: string
   nivel?: string
   step?: string
-  pruebainter?: string | null
+  nivelacionGuia?: string | null
   classRecord?: ClassRecord
 }
 
@@ -89,7 +89,7 @@ export default function SessionStudentsTab({
   const [actividadPropuesta, setActividadPropuesta] = useState('')
   const [isGeneratingActivity, setIsGeneratingActivity] = useState(false)
   // Only used for F3 Step 45 (Jump): routes promotion to MASTER/IELS/B2FIRST/TOEFL
-  const [pruebainter, setPruebainter] = useState<string>('')
+  const [nivelacionGuia, setNivelacionGuia] = useState<string>('')
 
   // Nivelación (ACADEMICA.nivelacion / detalleNivelacion) — casilla + dropdown de lecciones
   const [nivelacion, setNivelacion] = useState(false)
@@ -150,7 +150,7 @@ export default function SessionStudentsTab({
       setComentarios(selectedStudent.classRecord.comentarios || '')
       setAdvisorAnotaciones(selectedStudent.classRecord.advisorAnotaciones || '')
       setActividadPropuesta(selectedStudent.classRecord.actividadPropuesta || '')
-      setPruebainter(selectedStudent.pruebainter || '')
+      setNivelacionGuia(selectedStudent.nivelacionGuia || '')
     } else {
       resetForm()
     }
@@ -164,7 +164,7 @@ export default function SessionStudentsTab({
     setComentarios('')
     setAdvisorAnotaciones('')
     setActividadPropuesta('')
-    setPruebainter('')
+    setNivelacionGuia('')
   }
 
   const isJumpStep = () => {
@@ -244,9 +244,9 @@ export default function SessionStudentsTab({
           actividadPropuesta,
           nivel: evento?.tituloONivel,
           step: evento?.nombreEvento ? extractStepNumber(evento.nombreEvento) : evento?.nombreEvento,
-          // pruebainter is only sent when the event is Step 45 (Jump)
+          // nivelacionGuia is only sent when the event is Step 45 (Jump)
           // Empty string → null (default → MASTER); 'IELTS'/'B2F'/'TOEF' → that nivel
-          pruebainter: isStep45() ? (pruebainter || null) : undefined,
+          nivelacionGuia: isStep45() ? (nivelacionGuia || null) : undefined,
         })
       })
 
@@ -465,10 +465,10 @@ export default function SessionStudentsTab({
                       <label key={opt.value || 'none'} className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                         <input
                           type="radio"
-                          name="pruebainter"
+                          name="nivelacionGuia"
                           value={opt.value}
-                          checked={pruebainter === opt.value}
-                          onChange={(e) => setPruebainter(e.target.value)}
+                          checked={nivelacionGuia === opt.value}
+                          onChange={(e) => setNivelacionGuia(e.target.value)}
                           disabled={isLocked}
                           className="w-4 h-4 text-primary-600 focus:ring-primary-500 disabled:cursor-not-allowed"
                         />

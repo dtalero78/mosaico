@@ -508,7 +508,7 @@ export async function autoAdvanceStep(bookingId: string) {
 
   // ─── F3 Step 45 (Jump) approved → route to MASTER/IELTS/B2FIRST/TOEFL ───
   // After passing F3 Jump, the student is promoted to one of 4 special niveles
-  // based on ACADEMICA.pruebainter selection. fechaPromocionEspecial is stored
+  // based on ACADEMICA.nivelacionGuia selection. fechaPromocionEspecial is stored
   // for audit only (the 100-day timer was removed in May 2026).
   //
   // If finalContrato is ALREADY expired at this point (student approved the
@@ -518,10 +518,10 @@ export async function autoAdvanceStep(bookingId: string) {
   //   - IELTS/B2FIRST/TOEFL → stay in 47/48/49 + block (preserves test info)
   if (extractStepNum(bookingStep) === 45 && student.nivel === 'F3') {
     const {
-      resolvePruebaInterTarget,
+      resolveNivelacionGuiaTarget,
       autoAdvanceSpecialNivel,
     } = await import('@/services/special-nivel.service');
-    const target = resolvePruebaInterTarget((student as any).pruebainter);
+    const target = resolveNivelacionGuiaTarget((student as any).nivelacionGuia);
     await ensureFechaPromocionEspecial();
     if (student._id) {
       await query(

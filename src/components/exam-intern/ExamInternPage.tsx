@@ -18,14 +18,14 @@ interface ExamInternStudent {
   celular: string | null
   email: string | null
   plataforma: string | null
-  pruebainter: string | null
+  nivelacionGuia: string | null
   nivel: string | null
   step: string | null
   fechaPromocionEspecial: string | null
 }
 
 export interface ExamInternPageProps {
-  /** Pruebainter value used for the GET query (e.g. 'IELTS'). */
+  /** NivelacionGuia value used for the GET query (e.g. 'IELTS'). */
   prueba: 'IELTS' | 'B2FIRST' | 'TOEFL'
   /** Display name shown in the page title and messages (e.g. 'IELTS', 'B2 First'). */
   displayName: string
@@ -188,7 +188,7 @@ export default function ExamInternPage({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">🎓 Exam. Intern. — {displayName}</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Estudiantes con <code className="px-1 py-0.5 bg-gray-100 rounded text-xs">pruebainter = {prueba}</code> o <code className="px-1 py-0.5 bg-gray-100 rounded text-xs">step = Step {prueba === 'IELTS' ? 47 : prueba === 'B2FIRST' ? 48 : 49}</code>
+              Estudiantes con <code className="px-1 py-0.5 bg-gray-100 rounded text-xs">nivelacionGuia = {prueba}</code> o <code className="px-1 py-0.5 bg-gray-100 rounded text-xs">step = Step {prueba === 'IELTS' ? 47 : prueba === 'B2FIRST' ? 48 : 49}</code>
             </p>
           </div>
 

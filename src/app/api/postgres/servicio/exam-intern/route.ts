@@ -7,7 +7,7 @@ import { ValidationError } from '@/lib/errors';
  * GET /api/postgres/servicio/exam-intern
  *
  * Lists ACADEMICA students preparing an international test. A student is
- * considered "preparing test X" when `pruebainter = X` OR `step = STEP_OF_X`.
+ * considered "preparing test X" when `nivelacionGuia = X` OR `step = STEP_OF_X`.
  *
  * Required query param:
  *   prueba — 'IELTS' | 'B2FIRST' | 'TOEFL'
@@ -34,7 +34,7 @@ interface ExamInternRow {
   celular: string | null;
   email: string | null;
   plataforma: string | null;
-  pruebainter: string | null;
+  nivelacionGuia: string | null;
   nivel: string | null;
   step: string | null;
   fechaPromocionEspecial: string | null;
@@ -56,7 +56,7 @@ export const GET = handlerWithAuth(async (request: NextRequest) => {
   const search     = (searchParams.get('search') || '').trim();
 
   const where: string[] = [
-    `("pruebainter" = $1 OR "step" = $2)`,
+    `("nivelacionGuia" = $1 OR "step" = $2)`,
   ];
   const params: any[] = [prueba, PRUEBA_TO_STEP[prueba]];
 
@@ -86,7 +86,7 @@ export const GET = handlerWithAuth(async (request: NextRequest) => {
     `SELECT "_id", "numeroId", "primerNombre", "segundoNombre",
             "primerApellido", "segundoApellido",
             "celular", "email", "plataforma",
-            "pruebainter", "nivel", "step", "fechaPromocionEspecial"
+            "nivelacionGuia", "nivel", "step", "fechaPromocionEspecial"
      FROM "ACADEMICA"
      WHERE ${where.join(' AND ')}
      ORDER BY "fechaPromocionEspecial" DESC NULLS LAST, "primerApellido" ASC`,

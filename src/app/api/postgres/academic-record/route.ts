@@ -10,15 +10,15 @@ const UPDATABLE_FIELDS = [
   'calificacion', 'comentarios', 'advisorAnotaciones', 'actividadPropuesta',
 ];
 
-// Ensure ACADEMICA.pruebainter column exists (idempotent, once per server start)
-let pruebainterColumnEnsured = false;
-async function ensurePruebaInterColumn() {
-  if (pruebainterColumnEnsured) return;
+// Ensure ACADEMICA.nivelacionGuia column exists (idempotent, once per server start)
+let nivelacionGuiaColumnEnsured = false;
+async function ensureNivelacionGuiaColumn() {
+  if (nivelacionGuiaColumnEnsured) return;
   try {
-    await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "pruebainter" VARCHAR(10)`, []);
-    pruebainterColumnEnsured = true;
+    await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "nivelacionGuia" VARCHAR(10)`, []);
+    nivelacionGuiaColumnEnsured = true;
   } catch (err: any) {
-    console.warn('[academic-record] ensurePruebaInterColumn:', err.message);
+    console.warn('[academic-record] ensureNivelacionGuiaColumn:', err.message);
   }
 }
 
@@ -37,7 +37,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
   const sessionRole = (session?.user as any)?.role;
 
-  const { idEstudiante, idEvento, asistencia, participacion, noAprobo, calificacion, comentarios, advisorAnotaciones, actividadPropuesta, pruebainter } = body;
+  const { idEstudiante, idEvento, asistencia, participacion, noAprobo, calificacion, comentarios, advisorAnotaciones, actividadPropuesta, nivelacionGuia } = body;
 
   if (!idEstudiante || !idEvento) {
     throw new ValidationError('idEstudiante and idEvento are required');
@@ -99,15 +99,15 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     throw new NotFoundError('Booking', booking._id);
   }
 
-  // Save pruebainter to ACADEMICA (only sent when evaluating Step 45 / F3 Jump).
+  // Save nivelacionGuia to ACADEMICA (only sent when evaluating Step 45 / F3 Jump).
   // Persisted BEFORE autoAdvanceStep so the promotion logic reads the latest value.
-  if (pruebainter !== undefined) {
-    await ensurePruebaInterColumn();
-    const value = pruebainter === '' || pruebainter === null ? null : String(pruebainter);
+  if (nivelacionGuia !== undefined) {
+    await ensureNivelacionGuiaColumn();
+    const value = nivelacionGuia === '' || nivelacionGuia === null ? null : String(nivelacionGuia);
     await query(
-      `UPDATE "ACADEMICA" SET "pruebainter" = $1, "_updatedDate" = NOW() WHERE "_id" = $2`,
+      `UPDATE "ACADEMICA" SET "nivelacionGuia" = $1, "_updatedDate" = NOW() WHERE "_id" = $2`,
       [value, idEstudiante]
-    ).catch(err => console.warn('[academic-record] update pruebainter failed:', err.message));
+    ).catch(err => console.warn('[academic-record] update nivelacionGuia failed:', err.message));
   }
 
   const advancement = await autoAdvanceStep(booking._id);

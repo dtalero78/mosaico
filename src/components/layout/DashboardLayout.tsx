@@ -70,13 +70,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Welcome Session', href: '/dashboard/servicio/welcome-session' },
       { name: 'Lista de Sesiones', href: '/dashboard/servicio/lista-sesiones' },
       { name: 'Usuarios sin perfil creado', href: '/dashboard/servicio/sin-registro' },
-      {
-        name: 'Exam. Intern.', isSubmenu: true, children: [
-          { name: 'IELTS',    href: '/dashboard/servicio/exam-intern/ielts',    newTab: true },
-          { name: 'B2 First', href: '/dashboard/servicio/exam-intern/b2first', newTab: true },
-          { name: 'TOEFL',    href: '/dashboard/servicio/exam-intern/toefl',    newTab: true },
-        ],
-      },
+      // "Exam. Intern." removido: el proceso no existe en MOSAICO.
     ],
   },
   {
