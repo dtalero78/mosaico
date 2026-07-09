@@ -21,6 +21,7 @@ import {
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, startOfWeek, endOfWeek, addMonths, subMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
 import HolidayBadge from '@/components/common/HolidayBadge'
+import { formatEventTimeRange } from '@/lib/event-duration'
 import { usePermissions } from '@/hooks/usePermissions'
 import { AcademicoPermission } from '@/types/permissions'
 
@@ -543,7 +544,7 @@ function PanelAdvisorContent() {
                             }}
                           >
                             {isShared && <span className="mr-0.5" aria-hidden>🔗</span>}
-                            {format(new Date(event.dia), 'HH:mm')} - {event.tituloONivel}
+                            {formatEventTimeRange(event.dia, event.tipo || event.evento)} - {event.tituloONivel}
                           </div>
                           )
                         })}
@@ -617,7 +618,7 @@ function PanelAdvisorContent() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-medium">
-                        {format(new Date(event.dia), 'HH:mm')} - {event.tituloONivel}
+                        {formatEventTimeRange(event.dia, event.tipo || event.evento)} - {event.tituloONivel}
                       </div>
                       <div className="text-sm opacity-90">
                         {event.evento || event.tipo} {event.nombreEvento && `- ${event.nombreEvento}`}

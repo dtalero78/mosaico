@@ -7,7 +7,7 @@ import { es } from 'date-fns/locale'
 interface CalendarioEvent {
   _id: string
   nombreEvento: string
-  evento: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
   dia: string
   advisor: string                          // ADVISORS._id (UUID) — no human-readable
   advisorNombreCompleto?: string | null    // viene del JOIN del endpoint

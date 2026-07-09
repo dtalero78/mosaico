@@ -15,7 +15,7 @@ import { es } from 'date-fns/locale'
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string

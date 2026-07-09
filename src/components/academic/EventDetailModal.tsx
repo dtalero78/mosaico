@@ -5,11 +5,12 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { XMarkIcon, UserIcon, CalendarIcon, ClockIcon, UsersIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { formatEventTimeRange } from '@/lib/event-duration'
 
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -245,7 +246,10 @@ export default function EventDetailModal({ event, isOpen, onClose, advisors, adv
                 <div className="flex items-center gap-2">
                   <ClockIcon className="h-4 w-4 text-gray-500" />
                   <span className="text-sm">
-                    {format(new Date(event.dia), 'HH:mm', { locale: es })}
+                    {formatEventTimeRange(event.dia, event.tipo || event.evento)}
+                    {(event.evento || event.tipo) === 'NIVELACION' && (
+                      <span className="ml-2 text-xs text-amber-700">(30 min)</span>
+                    )}
                   </span>
                 </div>
 

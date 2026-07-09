@@ -13,7 +13,7 @@ import {
 interface CalendarioEvent {
   _id: string
   nombreEvento: string
-  evento: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
   dia: string
   advisor: string
   tituloONivel: string

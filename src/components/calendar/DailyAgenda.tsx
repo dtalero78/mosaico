@@ -5,11 +5,12 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { XMarkIcon, PencilIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { formatEventTimeRange } from '@/lib/event-duration'
 
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -261,6 +262,9 @@ export default function DailyAgenda({
                             </span>
                             <span className="font-medium text-sm">
                               {event.tituloONivel}
+                            </span>
+                            <span className="text-xs text-gray-500 font-medium">
+                              · {formatEventTimeRange(event.dia, event.tipo || event.evento)}
                             </span>
                           </div>
 

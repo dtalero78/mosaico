@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { CalendarIcon, ClockIcon, UserGroupIcon, ExclamationTriangleIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
 import { format } from 'date-fns'
+import { formatEventTimeRange } from '@/lib/event-duration'
 import { es } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions'
@@ -20,7 +21,8 @@ import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window'
 interface CalendarioEvent {
   _id: string
   nombreEvento: string
-  evento: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
+  tipo?: string
   dia: string
   advisor: string                          // ADVISORS._id (UUID)
   advisorNombreCompleto?: string | null    // viene del JOIN del endpoint
@@ -359,7 +361,7 @@ export default function SesionPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <ClockIcon className="h-4 w-4" />
-                    <span>{format(new Date(evento.dia), 'HH:mm', { locale: es })}</span>
+                    <span>{formatEventTimeRange(evento.dia, evento.tipo || evento.evento)}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <UserGroupIcon className="h-4 w-4" />

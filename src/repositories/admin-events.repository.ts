@@ -130,8 +130,9 @@ export const AdminEventsRepository = {
    * Detecta conflictos con CALENDARIO académico del advisor en un rango horario.
    * Retorna eventos académicos que solapan con [fechaInicio, fechaInicio+horas).
    *
-   * Solapamiento: cada evento del CALENDARIO dura 1 hora (convención del sistema),
-   * por lo que [c.dia, c.dia + 1 hora) solapa con [a, b) si c.dia < b AND c.dia + 1h > a.
+   * Solapamiento: la duración del evento del CALENDARIO se deriva del tipo
+   * (NIVELACION = 30 min, resto = 60 min — igual que src/lib/event-duration.ts),
+   * por lo que [c.dia, c.dia + dur) solapa con [a, b) si c.dia < b AND c.dia + dur > a.
    */
   async findConflictsInCalendario(
     advisorIds: string[],
@@ -154,7 +155,7 @@ export const AdminEventsRepository = {
        LEFT JOIN "GUIAS" adv ON adv."_id" = c."advisor"
        WHERE c."advisor" = ANY($1::text[])
          AND c."dia" <  ($2::timestamptz + ($3 || ' hours')::interval)
-         AND c."dia" + INTERVAL '1 hour' > $2::timestamptz
+         AND c."dia" + (INTERVAL '1 minute' * CASE WHEN UPPER(c."tipo") = 'NIVELACION' THEN 30 ELSE 60 END) > $2::timestamptz
        ORDER BY c."dia" ASC`,
       [advisorIds, fechaInicioISO, String(horas)],
     );

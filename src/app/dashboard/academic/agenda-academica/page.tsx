@@ -9,11 +9,12 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, getHours,
 import { es } from 'date-fns/locale'
 import { exportToExcel } from '@/lib/export-excel'
 import HolidayBadge from '@/components/common/HolidayBadge'
+import { formatEventTimeRange } from '@/lib/event-duration'
 
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -575,6 +576,9 @@ export default function AgendaAcademicaPage() {
                         >
                           <div className="font-medium truncate">
                             {(event.evento || event.tipo) === 'CLUB' ? 'TALLER' : (event.evento || event.tipo)} - {event.tituloONivel}
+                          </div>
+                          <div className="truncate opacity-75 font-medium">
+                            {formatEventTimeRange(event.dia, event.tipo || event.evento)}
                           </div>
                           {event.nombreEvento && (
                             <div className="truncate opacity-75">

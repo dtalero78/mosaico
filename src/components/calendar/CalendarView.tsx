@@ -4,6 +4,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isWee
 import { es } from 'date-fns/locale'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import HolidayBadge from '@/components/common/HolidayBadge'
+import { formatEventTimeRange } from '@/lib/event-duration'
 
 interface Advisor {
   _id: string
@@ -14,7 +15,7 @@ interface Advisor {
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -176,10 +177,10 @@ export default function CalendarView({
                   <div
                     key={event._id}
                     className={`text-xs px-1 py-0.5 rounded ${getEventColor(getEventType(event))}`}
-                    title={`${getEventType(event)} - ${event.tituloONivel} ${event.nombreEvento || ''}\nGuía: ${event.advisorNombre || 'Sin asignar'}\nInscritos: ${event.inscritos || 0}/${event.limiteUsuarios}\nAsistieron: ${event.asistieron || 0}`}
+                    title={`${getEventType(event)} - ${event.tituloONivel} ${event.nombreEvento || ''}\nHorario: ${formatEventTimeRange(event.dia, event.tipo || event.evento)}\nGuía: ${event.advisorNombre || 'Sin asignar'}\nInscritos: ${event.inscritos || 0}/${event.limiteUsuarios}\nAsistieron: ${event.asistieron || 0}`}
                   >
                     <div className="truncate">
-                      {format(new Date(event.dia), 'HH:mm')} {getEventType(event)}
+                      {formatEventTimeRange(event.dia, event.tipo || event.evento)} {getEventType(event)}
                     </div>
                     <div className="truncate text-[10px] opacity-75">
                       {event.advisorNombre || 'Sin advisor'}
