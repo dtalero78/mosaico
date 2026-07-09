@@ -264,6 +264,19 @@ export async function updateEvent(
     data.tituloONivel = `${data.tituloONivel} - ${data.nombreEvento}`.trim();
   }
 
+  // WELCOME es un CURSO (no un tipo): los eventos con curso=WELCOME siempre son
+  // tipo WELCOME (morado). Se fuerza en cada edición para que no regrese a SESSION.
+  if (event.curso === 'WELCOME') {
+    data.tipo = 'WELCOME';
+    data.evento = 'WELCOME';
+  }
+  // Nombre = "Curso - Módulo - Lección": prefija el curso al tituloONivel
+  // (consistente con la creación). event.curso viene de la fila existente.
+  if (data.tituloONivel && event.curso && event.curso !== 'Todos'
+      && !data.tituloONivel.startsWith(`${event.curso} -`) && data.tituloONivel !== event.curso) {
+    data.tituloONivel = `${event.curso} - ${data.tituloONivel}`;
+  }
+
   // Guarda integridad: cambiar nivel/step de un evento que ya tiene
   // estudiantes inscritos corrompe sus historiales (los bookings quedan
   // apuntando a un nivel/step distinto al que el estudiante realmente cursó).

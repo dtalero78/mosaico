@@ -27,15 +27,20 @@ export const POST = handlerWithAuth(async (request) => {
     tituloONivel = nivel + (step ? ` - ${step}` : '');
   }
 
-  // NIVELACION: el evento aplica al CURSO completo (módulo/lección suelen ser
-  // "Todos"). Para que sea identificable en calendario/agenda, el título de
-  // display usa el curso (ej. "YOJI" en vez de "Todos - Todos"; o "YOJI - Modulo 01"
-  // si se acotó a un módulo/lección específico).
-  const eventTipo = body.tipo || body.evento;
-  if (eventTipo === 'NIVELACION' && body.curso && body.curso !== 'Todos') {
+  // Nombre de display = "Curso - Módulo - Lección" cuando hay un curso real.
+  //  - WELCOME:            "WELCOME - MOSAICO - Leccion 00"
+  //  - Sesión/Nivelación:  "YOJI - Modulo 01 - Leccion 01" (o "YOJI" si módulo/lección = Todos)
+  // Los campos "Todos" se omiten. (Los eventos auto-generados de cursos-campaign
+  // usan otro path y conservan su formato "Campaña - Curso - Salón".)
+  if (body.curso && body.curso !== 'Todos') {
     const extras = [nivel, step].filter((x: string | null) => x && x !== 'Todos').join(' - ');
     tituloONivel = extras ? `${body.curso} - ${extras}` : body.curso;
   }
+
+  // WELCOME es un CURSO en el modal (no un tipo). Un evento con curso=WELCOME es
+  // una Bienvenida → su tipo/evento se fuerza a 'WELCOME' (se muestra en morado y
+  // se filtra como WELCOME), sin importar el "Tipo de Evento" elegido.
+  const tipoFinal = body.curso === 'WELCOME' ? 'WELCOME' : (body.tipo || body.evento || 'SESSION');
 
   // body.compartidoCon (opcional): array de niveles adicionales para crear
   // un grupo compartido (1-2 elementos). Cada elemento puede traer su propio
@@ -57,7 +62,7 @@ export const POST = handlerWithAuth(async (request) => {
     advisor: body.advisor,
     nivel,
     step,
-    tipo: body.tipo || body.evento || 'SESSION',
+    tipo: tipoFinal,
     titulo: body.titulo || tituloONivel || body.tituloONivel || nivel,
     nombreEvento: body.nombreEvento || step,
     tituloONivel: tituloONivel || body.tituloONivel,
