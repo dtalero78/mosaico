@@ -9,7 +9,10 @@ import { queryOne, queryMany, parseJsonbFields } from '@/lib/postgres';
 import { BaseRepository } from './base.repository';
 import { NotFoundError } from '@/lib/errors';
 
-const JSONB_FIELDS = ['extensionHistory'];
+// jsonb de ACADEMICA. La antigua "extensionHistory" de ACADEMICA (columna muerta,
+// heredada de Wix) se renombró a "detalleInscripcion". OJO: NO confundir con
+// PEOPLE.extensionHistory (sistema de extensiones real) — ese no se toca.
+const JSONB_FIELDS = ['detalleInscripcion'];
 
 class AcademicaRepositoryClass extends BaseRepository {
   constructor() {
@@ -26,7 +29,7 @@ class AcademicaRepositoryClass extends BaseRepository {
               "asesor", "fechaNacimiento", "celular", "telefono", "email", "contrato",
               "fechaCreacion", "tipoUsuario", "plataforma", "usuarioId", "peopleId",
               "estadoInactivo", "fechaContrato", "finalContrato",
-              "extensionCount", "extensionHistory", "onHoldCount", "curso"
+              "onHoldCount", "curso"
        FROM "ACADEMICA"
        WHERE "_id" = $1 OR "studentId" = $1 OR "peopleId" = $1 OR "numeroId" = $1`,
       [id]
