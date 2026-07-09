@@ -10,9 +10,9 @@ import { BaseRepository } from './base.repository';
 import { NotFoundError } from '@/lib/errors';
 
 // jsonb de ACADEMICA. La antigua "extensionHistory" de ACADEMICA (columna muerta,
-// heredada de Wix) se renombró a "detalleInscripcion". OJO: NO confundir con
+// heredada de Wix) se repurposó a "detalleNivelacion". OJO: NO confundir con
 // PEOPLE.extensionHistory (sistema de extensiones real) — ese no se toca.
-const JSONB_FIELDS = ['detalleInscripcion'];
+const JSONB_FIELDS = ['detalleNivelacion'];
 
 class AcademicaRepositoryClass extends BaseRepository {
   constructor() {
