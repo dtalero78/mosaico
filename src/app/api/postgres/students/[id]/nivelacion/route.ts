@@ -46,20 +46,53 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
   if (!rec?._id) throw new NotFoundError('ACADEMICA', params.id)
 
   const body = await request.json()
+
+  // Estado actual (para el conteo)
+  const cur = await queryOne<{ nivelacion: boolean | null; NivelacionCount: number | null }>(
+    `SELECT "nivelacion", "NivelacionCount" FROM "ACADEMICA" WHERE "_id" = $1`, [rec._id]
+  )
+  const curNivel = cur?.nivelacion === true
+  const curCount = Number(cur?.NivelacionCount) || 0
+
+  // Acción APROBAR (reporte Nivelaciones) → resuelve el pendiente: sale de la lista
+  // (nivelacion=false) y queda marcado aprobadoNivelacion=true. Se CONSERVA el conteo
+  // y el detalle (registro), para que la próxima nivelación incremente a la 2ª.
+  if (body?.aprobar === true) {
+    await query(
+      `UPDATE "ACADEMICA" SET "nivelacion" = false, "aprobadoNivelacion" = true, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      [rec._id]
+    )
+    return successResponse({ nivelacion: false, aprobadoNivelacion: true, NivelacionCount: curCount })
+  }
+  // Acción CANCELAR (reporte) → quita la nivelación pendiente (decrementa el conteo)
+  if (body?.cancelar === true) {
+    const nc = Math.max(0, curCount - (curNivel ? 1 : 0))
+    await query(
+      `UPDATE "ACADEMICA" SET "nivelacion" = false, "detalleNivelacion" = NULL, "NivelacionCount" = $2, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      [rec._id, nc]
+    )
+    return successResponse({ nivelacion: false, NivelacionCount: nc })
+  }
+
+  // Marca normal desde la sesión (casilla Nivelación)
   const nivelacion = body?.nivelacion === true
   const leccion = (body?.leccion || '').trim() || null
   const modulo = (body?.modulo || '').trim() || null
-
   const detalle = nivelacion && leccion
     ? { leccion, modulo, fecha: new Date().toISOString(), marcadoPor: session.user?.email || null }
     : null
 
+  // Conteo: +1 al pasar de false→true, -1 al pasar de true→false
+  let nuevoCount = curCount
+  if (nivelacion && !curNivel) nuevoCount = curCount + 1
+  else if (!nivelacion && curNivel) nuevoCount = Math.max(0, curCount - 1)
+
   await query(
     `UPDATE "ACADEMICA"
-       SET "nivelacion" = $2, "detalleNivelacion" = $3::jsonb, "_updatedDate" = NOW()
+       SET "nivelacion" = $2, "detalleNivelacion" = $3::jsonb, "NivelacionCount" = $4, "_updatedDate" = NOW()
      WHERE "_id" = $1`,
-    [rec._id, nivelacion, detalle ? JSON.stringify(detalle) : null]
+    [rec._id, nivelacion, detalle ? JSON.stringify(detalle) : null, nuevoCount]
   )
 
-  return successResponse({ nivelacion, detalleNivelacion: detalle })
+  return successResponse({ nivelacion, detalleNivelacion: detalle, NivelacionCount: nuevoCount })
 })

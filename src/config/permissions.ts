@@ -732,6 +732,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Botón "Exportar CSV"',
     description: 'Descargar usuarios sin registro como archivo Excel/CSV',
   },
+  {
+    code: ServicioPermission.NIVELACIONES_VER,
+    module: Module.SERVICIO,
+    section: 'Nivelaciones',
+    name: 'Página "Nivelaciones"',
+    description: 'Acceso a /dashboard/servicio/nivelaciones. Estudiantes marcados para nivelación (ACADEMICA.nivelacion=true, pendientes) con filtros curso/salón/lección/guía/fecha y conteo (1ª, 2ª nivelación).',
+  },
+  {
+    code: ServicioPermission.NIVELACIONES_GESTION,
+    module: Module.SERVICIO,
+    section: 'Nivelaciones',
+    name: '↳ Aprobar / Cancelar',
+    description: 'Muestra los botones Aprobar (aprobadoNivelacion=true) y Cancelar (nivelacion=false) en el reporte de Nivelaciones.',
+  },
 
   // -- Página: Exam. Intern. > IELTS (/dashboard/servicio/exam-intern/ielts) --
   {

@@ -306,6 +306,10 @@ export enum ServicioPermission {
   EXAM_INTERN_TOEFL_VER                  = 'SERVICIO.EXAM_INTERN.TOEFL_VER',
   EXAM_INTERN_TOEFL_EXPORTAR             = 'SERVICIO.EXAM_INTERN.TOEFL_EXPORTAR',
   EXAM_INTERN_TOEFL_APLICAR_CONFIRMACION = 'SERVICIO.EXAM_INTERN.TOEFL_APLICAR_CONFIRMACION',
+
+  // Nivelaciones — reporte de estudiantes marcados para nivelación (aprobar/cancelar)
+  NIVELACIONES_VER      = 'SERVICIO.NIVELACIONES.VER',
+  NIVELACIONES_GESTION  = 'SERVICIO.NIVELACIONES.GESTION',  // aprobar/cancelar
 }
 
 /**

@@ -173,6 +173,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
     'SERVICIO.USUARIOS.ACTUALIZAR' as Permission,
     'SERVICIO.USUARIOS.EXPORTAR_CSV' as Permission,
   ],
+  '/dashboard/servicio/nivelaciones': [
+    'SERVICIO.NIVELACIONES.VER' as Permission,
+  ],
 
   // Servicio - Exam. Intern. > IELTS / B2 First / TOEFL
   '/dashboard/servicio/exam-intern/ielts': [

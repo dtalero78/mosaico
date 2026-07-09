@@ -70,6 +70,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Welcome Session', href: '/dashboard/servicio/welcome-session' },
       { name: 'Lista de Sesiones', href: '/dashboard/servicio/lista-sesiones' },
       { name: 'Usuarios sin perfil creado', href: '/dashboard/servicio/sin-registro' },
+      { name: 'Nivelaciones', href: '/dashboard/servicio/nivelaciones', newTab: true },
       // "Exam. Intern." removido: el proceso no existe en MOSAICO.
     ],
   },
@@ -334,6 +335,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/servicio/sin-registro': [
       ServicioPermission.USUARIOS_ACTUALIZAR,
       ServicioPermission.USUARIOS_EXPORTAR_CSV,
+    ],
+    '/dashboard/servicio/nivelaciones': [
+      ServicioPermission.NIVELACIONES_VER,
     ],
     '/dashboard/servicio/exam-intern/ielts':   [ServicioPermission.EXAM_INTERN_IELTS_VER],
     '/dashboard/servicio/exam-intern/b2first': [ServicioPermission.EXAM_INTERN_B2F_VER],
