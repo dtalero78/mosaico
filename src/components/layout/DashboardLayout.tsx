@@ -54,6 +54,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
           // La página standalone /dashboard/academic/control-horas sigue accesible por URL.
           { name: 'Sesiones sin gestión', href: '/dashboard/academic/sesiones-sin-gestion', newTab: true },
           { name: 'Performance Evaluation', href: '/dashboard/academic/performance-evaluation', newTab: true },
+          { name: 'Lista de Usuarios', href: '/dashboard/academic/lista-usuarios', newTab: true },
         ],
       },
       { name: 'Mantenimiento Cursos', href: '/dashboard/academic/actualizar-material', newTab: true },
@@ -290,6 +291,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/dashboard/academic/performance-evaluation': [
       AcademicoPermission.PERFORMANCE_EVAL_VER,
+    ],
+    '/dashboard/academic/lista-usuarios': [
+      AcademicoPermission.LISTA_USUARIOS_VER,
     ],
     '/panel-advisor': [
       AcademicoPermission.ADVISOR_VER_ENLACE,

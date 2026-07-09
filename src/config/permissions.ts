@@ -552,6 +552,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/sesiones-sin-gestion. Lista de eventos pasados sin registrar (sesionCerrada=false) con filtros por fecha y advisor. Muestra inscritos/asistencia marcada para detectar si el advisor empezó pero no cerró, y un acceso directo al panel del evento para que el coordinador gestione el cierre.',
   },
   {
+    code: AcademicoPermission.LISTA_USUARIOS_VER,
+    module: Module.ACADEMICO,
+    section: 'Lista de Usuarios',
+    name: 'Página "Lista de Usuarios"',
+    description: 'Acceso a /dashboard/academic/lista-usuarios (Académico › Guías). Reporte de estudiantes con filtros por campaña, curso, salón, guía y rango de fecha de contrato. Columnas: nombre, fecha de nacimiento, edad, apoderado, guía, módulo y lección actual.',
+  },
+  {
+    code: AcademicoPermission.LISTA_USUARIOS_EXPORTAR,
+    module: Module.ACADEMICO,
+    section: 'Lista de Usuarios',
+    name: '↳ Exportar CSV',
+    description: 'Muestra el botón "Exportar CSV" en la Lista de Usuarios.',
+  },
+  {
     code: AcademicoPermission.ADMIN_EVENTS_GESTIONAR,
     module: Module.ACADEMICO,
     section: 'Eventos Administrativos',

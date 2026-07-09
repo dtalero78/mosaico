@@ -118,6 +118,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/actualizar-material/interactivo': [
     'ACADEMICO.MATERIAL.ACTUALIZAR' as Permission,
   ],
+  '/dashboard/academic/lista-usuarios': [
+    'ACADEMICO.LISTA_USUARIOS.VER' as Permission,
+  ],
   '/dashboard/academic/actualizar-material/imagenes': [
     'ACADEMICO.MATERIAL.ACTUALIZAR' as Permission,
   ],

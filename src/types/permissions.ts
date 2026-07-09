@@ -175,6 +175,10 @@ export enum AcademicoPermission {
 
   // Crea Campaña — gestión de campañas/cursos (CURSOS_CAMPAIGN)
   CAMPANA_CREAR = 'ACADEMICO.CAMPANA.CREAR',
+
+  // Lista de Usuarios — reporte de estudiantes (Académico › Guías)
+  LISTA_USUARIOS_VER      = 'ACADEMICO.LISTA_USUARIOS.VER',
+  LISTA_USUARIOS_EXPORTAR = 'ACADEMICO.LISTA_USUARIOS.EXPORTAR',
 }
 
 /**
