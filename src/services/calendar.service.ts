@@ -13,6 +13,7 @@ import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { withTransaction } from '@/lib/postgres';
 import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS, extractClubPrefix } from '@/lib/evento-compartido';
+import { eventDurationMin } from '@/lib/event-duration';
 
 const MAX_ADVISOR_REASSIGNMENTS = 2;
 
@@ -136,6 +137,29 @@ export async function createEvent(data: {
     eventoCompartidoId = randomUUID();
   }
 
+  // ── Regla MOSAICO: un guía NO puede tener dos eventos que se solapen ──
+  // La duración del evento nuevo se deriva del tipo (NIVELACION=30, resto=60).
+  // Se chequea contra los eventos que YA existen en la BD para ese guía. La
+  // única excepción son los eventos compartidos entre niveles (mismo guía/hora),
+  // que se crean como un grupo — sus hermanos se insertan en la misma
+  // transacción y comparten `eventoCompartidoId` (se excluyen del chequeo).
+  // NOTA: en MOSAICO aún no se ha definido el uso de eventos compartidos.
+  const newDurationMin = eventDurationMin(tipo);
+  const conflicts = await CalendarioRepository.findAdvisorTimeConflicts(
+    data.advisor,
+    data.dia,
+    newDurationMin,
+    eventoCompartidoId ? { excludeGroupId: eventoCompartidoId } : undefined,
+  );
+  if (conflicts.length > 0) {
+    const c = conflicts[0];
+    const cLabel = `${c.tipo || 'evento'}${c.tituloONivel ? ` · ${c.tituloONivel}` : ''}`;
+    throw new ConflictError(
+      `El guía ya tiene un evento que se solapa con este horario (${cLabel}). ` +
+      `Un guía no puede tener dos eventos al mismo tiempo.`,
+    );
+  }
+
   const baseEventData: Record<string, any> = {
     _id: ids.event(),
     dia: data.dia,
@@ -252,6 +276,32 @@ export async function updateEvent(
     if (activeCount > 0) {
       throw new ValidationError(
         `No se puede cambiar el nivel/step de este evento: tiene ${activeCount} estudiante(s) inscrito(s). Cancela las inscripciones primero o crea un evento nuevo.`,
+      );
+    }
+  }
+
+  // Regla MOSAICO: al MOVER un evento (cambio de hora o de guía) no puede quedar
+  // solapado con otro evento del mismo guía. Se excluye el propio evento y su
+  // grupo compartido. La duración se deriva del tipo (NIVELACION=30, resto=60).
+  const finalAdvisor = data.advisor ?? event.advisor;
+  const finalTipo    = data.tipo ?? event.tipo;
+  const finalDiaRaw  = data.dia ?? event.dia;
+  const diaChanged     = !!data.dia && new Date(data.dia).getTime() !== new Date(event.dia).getTime();
+  const advisorChanged = !!data.advisor && data.advisor !== event.advisor;
+  if (diaChanged || advisorChanged) {
+    const finalDiaISO = typeof finalDiaRaw === 'string' ? finalDiaRaw : new Date(finalDiaRaw).toISOString();
+    const conflicts = await CalendarioRepository.findAdvisorTimeConflicts(
+      finalAdvisor,
+      finalDiaISO,
+      eventDurationMin(finalTipo),
+      { excludeEventId: eventId, excludeGroupId: event.eventoCompartidoId || undefined },
+    );
+    if (conflicts.length > 0) {
+      const c = conflicts[0];
+      const cLabel = `${c.tipo || 'evento'}${c.tituloONivel ? ` · ${c.tituloONivel}` : ''}`;
+      throw new ConflictError(
+        `El guía ya tiene un evento que se solapa con este horario (${cLabel}). ` +
+        `Un guía no puede tener dos eventos al mismo tiempo.`,
       );
     }
   }

@@ -280,6 +280,49 @@ class CalendarioRepositoryClass extends BaseRepository {
   }
 
   /**
+   * Detecta eventos EXISTENTES del MISMO guía que se solapan en el tiempo con
+   * el rango [startISO, startISO + newDurationMin). La duración de cada evento
+   * existente se deriva de su tipo (NIVELACION = 30 min, resto = 60 min — igual
+   * que src/lib/event-duration.ts).
+   *
+   * `excludeEventId` / `excludeGroupId` permiten ignorar el propio evento y su
+   * grupo compartido (al editar / al crear los hermanos de un grupo compartido).
+   *
+   * Regla MOSAICO: un guía NO puede tener dos eventos que se solapen. La única
+   * excepción son los eventos compartidos entre niveles (mismo guía, misma hora),
+   * que se identifican por `eventoCompartidoId` y se excluyen vía excludeGroupId.
+   */
+  async findAdvisorTimeConflicts(
+    advisorId: string,
+    startISO: string,
+    newDurationMin: number,
+    opts?: { excludeEventId?: string; excludeGroupId?: string },
+  ): Promise<Array<{ _id: string; dia: string; tipo: string | null; tituloONivel: string | null; nombreEvento: string | null }>> {
+    if (!advisorId) return [];
+    const params: any[] = [advisorId, startISO, String(newDurationMin)];
+    let extra = '';
+    if (opts?.excludeEventId) {
+      params.push(opts.excludeEventId);
+      extra += ` AND c."_id" <> $${params.length}`;
+    }
+    if (opts?.excludeGroupId) {
+      params.push(opts.excludeGroupId);
+      extra += ` AND (c."eventoCompartidoId" IS NULL OR c."eventoCompartidoId" <> $${params.length})`;
+    }
+    return queryMany(
+      `SELECT c."_id", c."dia", c."tipo", c."tituloONivel", c."nombreEvento"
+       FROM "CALENDARIO" c
+       WHERE c."advisor" = $1
+         AND c."dia" <  ($2::timestamptz + ($3 || ' minutes')::interval)
+         AND c."dia" + (INTERVAL '1 minute' * CASE WHEN UPPER(c."tipo") = 'NIVELACION' THEN 30 ELSE 60 END) > $2::timestamptz
+         ${extra}
+       ORDER BY c."dia" ASC
+       LIMIT 5`,
+      params,
+    );
+  }
+
+  /**
    * Update event fields
    */
   async updateEvent(id: string, data: Record<string, any>, allowedFields: string[]) {

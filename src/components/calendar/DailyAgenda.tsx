@@ -179,6 +179,8 @@ export default function DailyAgenda({
         return 'bg-green-50 border-green-200 text-green-900'
       case 'WELCOME':
         return 'bg-purple-50 border-purple-200 text-purple-900'
+      case 'NIVELACION':
+        return 'bg-amber-50 border-amber-200 text-amber-900'
       default:
         return 'bg-gray-50 border-gray-200 text-gray-900'
     }
@@ -192,6 +194,8 @@ export default function DailyAgenda({
       case 'CLUB':
         return 'badge-success'
       case 'WELCOME':
+        return 'badge-warning'
+      case 'NIVELACION':
         return 'badge-warning'
       default:
         return 'badge-secondary'
