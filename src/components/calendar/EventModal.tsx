@@ -607,11 +607,13 @@ export default function EventModal({
         setShowNombreClub(true)  // Mostrar dropdown para SESSION también
       }
 
-      // NO limpiar nombreEvento si estamos en modo edición
+      // NO limpiar nombreEvento si estamos en modo edición.
+      // Para el curso WELCOME la Lección es fija 'Leccion 00' — NO se limpia
+      // (si no, al elegir el Módulo se borraba y la validación fallaba en "Lección").
       if (!isEditMode) {
         setFormData(prev => ({
           ...prev,
-          nombreEvento: ''
+          nombreEvento: prev.curso === 'WELCOME' ? 'Leccion 00' : ''
         }))
       }
     }
