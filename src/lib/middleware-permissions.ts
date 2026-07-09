@@ -177,17 +177,6 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
     'SERVICIO.NIVELACIONES.VER' as Permission,
   ],
 
-  // Servicio - Exam. Intern. > IELTS / B2 First / TOEFL
-  '/dashboard/servicio/exam-intern/ielts': [
-    'SERVICIO.EXAM_INTERN.IELTS_VER' as Permission,
-  ],
-  '/dashboard/servicio/exam-intern/b2first': [
-    'SERVICIO.EXAM_INTERN.B2F_VER' as Permission,
-  ],
-  '/dashboard/servicio/exam-intern/toefl': [
-    'SERVICIO.EXAM_INTERN.TOEFL_VER' as Permission,
-  ],
-
   // Comercial - Crear Contrato
   '/dashboard/comercial/crear-contrato': [
     'COMERCIAL.CONTRATO.MODIFICAR' as Permission,
@@ -349,9 +338,7 @@ export const GENERIC_ROUTE_ACCESS: Record<string, Permission[]> = {
     'SERVICIO.SESIONES.EXPORTAR_CSV' as Permission,
     'SERVICIO.USUARIOS.ACTUALIZAR' as Permission,
     'SERVICIO.USUARIOS.EXPORTAR_CSV' as Permission,
-    'SERVICIO.EXAM_INTERN.IELTS_VER' as Permission,
-    'SERVICIO.EXAM_INTERN.B2F_VER' as Permission,
-    'SERVICIO.EXAM_INTERN.TOEFL_VER' as Permission,
+    'SERVICIO.NIVELACIONES.VER' as Permission,
   ],
 
   '/dashboard/comercial': [

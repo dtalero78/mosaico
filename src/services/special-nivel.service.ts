@@ -5,12 +5,9 @@
  * MASTER, IELTS, B2FIRST, TOEFL.
  *
  * Each of these niveles has a single step (46, 47, 48, 49 respectively).
- * Students reach these niveles after passing F3 Step 45 (Jump) based on
- * their selection in ACADEMICA.nivelacionGuia:
- *   - NULL    → MASTER  (Step 46)
- *   - 'IELTS' → IELTS   (Step 47)
- *   - 'B2F'   → B2FIRST (Step 48)
- *   - 'TOEF'  → TOEFL   (Step 49)
+ * Motor LGS heredado: en MOSAICO está dormido (no existen F3 ni los Steps
+ * 46-49, y el proceso de Exámenes Internacionales fue retirado). La ruta de
+ * fin de programa desde F3 Step 45 (Jump) usa MASTER (Step 46) por defecto.
  *
  * Behavior when finalContrato is expired (gracia +1 day rule, see
  * src/lib/contract-expiry.ts):
@@ -41,15 +38,14 @@ export function isSpecialNivel(nivel: string | null | undefined): nivel is Speci
 }
 
 /**
- * Map nivelacionGuia value to target nivel/step.
- * Used when promoting from F3 Step 45 (Jump approved).
- * Canonical values: IELTS / B2FIRST / TOEFL (full names, May 2026).
+ * Map a target key to nivel/step for the end-of-program promotion from
+ * F3 Step 45 (Jump approved). En MOSAICO siempre se invoca con null → MASTER.
  */
-export function resolveNivelacionGuiaTarget(nivelacionGuia: string | null | undefined): {
+export function resolveNivelacionGuiaTarget(target: string | null | undefined): {
   nivel: SpecialNivel;
   step: string;
 } {
-  switch ((nivelacionGuia || '').toUpperCase()) {
+  switch ((target || '').toUpperCase()) {
     case 'IELTS':   return { nivel: 'IELTS',   step: 'Step 47' };
     case 'B2FIRST': return { nivel: 'B2FIRST', step: 'Step 48' };
     case 'TOEFL':   return { nivel: 'TOEFL',   step: 'Step 49' };

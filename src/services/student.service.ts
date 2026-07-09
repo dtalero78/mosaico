@@ -506,22 +506,20 @@ export async function autoAdvanceStep(bookingId: string) {
   );
   if (!isComplete) return null;
 
-  // ─── F3 Step 45 (Jump) approved → route to MASTER/IELTS/B2FIRST/TOEFL ───
-  // After passing F3 Jump, the student is promoted to one of 4 special niveles
-  // based on ACADEMICA.nivelacionGuia selection. fechaPromocionEspecial is stored
-  // for audit only (the 100-day timer was removed in May 2026).
+  // ─── F3 Step 45 (Jump) approved → route to MASTER (DONE-of-program) ───
+  // Motor LGS heredado: dormido en MOSAICO (no existe el nivel F3 ni los
+  // Steps 46-49). Se conserva la lógica de graduación de fin de programa;
+  // sin selección de prueba internacional el destino por defecto es MASTER.
+  // fechaPromocionEspecial se guarda sólo para auditoría.
   //
-  // If finalContrato is ALREADY expired at this point (student approved the
-  // Jump after contract expiry), the rule from special-nivel.service applies
-  // post-promotion:
-  //   - MASTER (no test selected) → DONE Step 50 + full block
-  //   - IELTS/B2FIRST/TOEFL → stay in 47/48/49 + block (preserves test info)
+  // Si finalContrato ya está vencido en este punto, se aplica la regla de
+  // special-nivel.service post-promoción (MASTER → DONE Step 50 + bloqueo).
   if (extractStepNum(bookingStep) === 45 && student.nivel === 'F3') {
     const {
       resolveNivelacionGuiaTarget,
       autoAdvanceSpecialNivel,
     } = await import('@/services/special-nivel.service');
-    const target = resolveNivelacionGuiaTarget((student as any).nivelacionGuia);
+    const target = resolveNivelacionGuiaTarget(null);
     await ensureFechaPromocionEspecial();
     if (student._id) {
       await query(

@@ -72,7 +72,6 @@ interface ClassRecord {
 }
 
 interface StudentWithClass extends Student {
-  nivelacionGuia?: string | null
   classRecord?: ClassRecord
 }
 
@@ -177,7 +176,6 @@ export default function SesionPage() {
             edad: booking.edad,
             pais: booking.pais,
             hobbies: booking.hobbies || '',
-            nivelacionGuia: booking.studentNivelacionGuia ?? null,
             classRecord: {
               _id: booking._id,
               idEstudiante: booking.idEstudiante,

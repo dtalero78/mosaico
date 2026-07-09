@@ -71,7 +71,6 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Lista de Sesiones', href: '/dashboard/servicio/lista-sesiones' },
       { name: 'Usuarios sin perfil creado', href: '/dashboard/servicio/sin-registro' },
       { name: 'Nivelaciones', href: '/dashboard/servicio/nivelaciones', newTab: true },
-      // "Exam. Intern." removido: el proceso no existe en MOSAICO.
     ],
   },
   {
@@ -339,9 +338,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/servicio/nivelaciones': [
       ServicioPermission.NIVELACIONES_VER,
     ],
-    '/dashboard/servicio/exam-intern/ielts':   [ServicioPermission.EXAM_INTERN_IELTS_VER],
-    '/dashboard/servicio/exam-intern/b2first': [ServicioPermission.EXAM_INTERN_B2F_VER],
-    '/dashboard/servicio/exam-intern/toefl':   [ServicioPermission.EXAM_INTERN_TOEFL_VER],
 
     // Comercial
     '/dashboard/comercial/crear-contrato': [
@@ -596,11 +592,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // Planta, Estadísticas): modelo de 2 marcas — la sección se muestra si le
       // queda ≥1 ítem visible tras el filtrado de nivel 3 (no necesita permiso
       // propio de sección). Basta marcar el abuelo "Informes" + el ítem.
-      // CUALQUIER submenú (Servicio > Exam. Intern., Informes, Académico, etc.)
-      // se muestra sólo si le queda ≥1 ítem visible tras el filtrado de nivel 3.
+      // CUALQUIER submenú (Informes, Académico, etc.) se muestra sólo si le
+      // queda ≥1 ítem visible tras el filtrado de nivel 3.
       // Un submenú no tiene href propio → sin esta guarda caería en el "return
       // true" de abajo y se mostraría aunque el usuario no tenga permiso a ningún
-      // hijo (bug: COMERCIAL sin EXAM_INTERN veía "Exam. Intern.").
+      // hijo.
       if (child.isSubmenu) {
         return (child.children?.length ?? 0) > 0
       }

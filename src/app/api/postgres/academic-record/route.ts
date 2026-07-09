@@ -2,25 +2,13 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { autoAdvanceStep } from '@/services/student.service';
-import { query, queryOne } from '@/lib/postgres';
+import { queryOne } from '@/lib/postgres';
 import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window';
 
 const UPDATABLE_FIELDS = [
   'asistio', 'asistencia', 'participacion', 'noAprobo',
   'calificacion', 'comentarios', 'advisorAnotaciones', 'actividadPropuesta',
 ];
-
-// Ensure ACADEMICA.nivelacionGuia column exists (idempotent, once per server start)
-let nivelacionGuiaColumnEnsured = false;
-async function ensureNivelacionGuiaColumn() {
-  if (nivelacionGuiaColumnEnsured) return;
-  try {
-    await query(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "nivelacionGuia" VARCHAR(10)`, []);
-    nivelacionGuiaColumnEnsured = true;
-  } catch (err: any) {
-    console.warn('[academic-record] ensureNivelacionGuiaColumn:', err.message);
-  }
-}
 
 /**
  * POST /api/postgres/academic-record
@@ -37,7 +25,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
   const sessionRole = (session?.user as any)?.role;
 
-  const { idEstudiante, idEvento, asistencia, participacion, noAprobo, calificacion, comentarios, advisorAnotaciones, actividadPropuesta, nivelacionGuia } = body;
+  const { idEstudiante, idEvento, asistencia, participacion, noAprobo, calificacion, comentarios, advisorAnotaciones, actividadPropuesta } = body;
 
   if (!idEstudiante || !idEvento) {
     throw new ValidationError('idEstudiante and idEvento are required');
@@ -97,17 +85,6 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const updated = await BookingRepository.updateFields(booking._id, updateData, UPDATABLE_FIELDS);
   if (!updated) {
     throw new NotFoundError('Booking', booking._id);
-  }
-
-  // Save nivelacionGuia to ACADEMICA (only sent when evaluating Step 45 / F3 Jump).
-  // Persisted BEFORE autoAdvanceStep so the promotion logic reads the latest value.
-  if (nivelacionGuia !== undefined) {
-    await ensureNivelacionGuiaColumn();
-    const value = nivelacionGuia === '' || nivelacionGuia === null ? null : String(nivelacionGuia);
-    await query(
-      `UPDATE "ACADEMICA" SET "nivelacionGuia" = $1, "_updatedDate" = NOW() WHERE "_id" = $2`,
-      [value, idEstudiante]
-    ).catch(err => console.warn('[academic-record] update nivelacionGuia failed:', err.message));
   }
 
   const advancement = await autoAdvanceStep(booking._id);

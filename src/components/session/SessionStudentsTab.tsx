@@ -53,7 +53,6 @@ interface StudentWithClass {
   foto?: string
   nivel?: string
   step?: string
-  nivelacionGuia?: string | null
   classRecord?: ClassRecord
 }
 
@@ -88,8 +87,6 @@ export default function SessionStudentsTab({
   const [advisorAnotaciones, setAdvisorAnotaciones] = useState('')
   const [actividadPropuesta, setActividadPropuesta] = useState('')
   const [isGeneratingActivity, setIsGeneratingActivity] = useState(false)
-  // Only used for F3 Step 45 (Jump): routes promotion to MASTER/IELS/B2FIRST/TOEFL
-  const [nivelacionGuia, setNivelacionGuia] = useState<string>('')
 
   // Nivelación (ACADEMICA.nivelacion / detalleNivelacion) — casilla + dropdown de lecciones
   const [nivelacion, setNivelacion] = useState(false)
@@ -150,7 +147,6 @@ export default function SessionStudentsTab({
       setComentarios(selectedStudent.classRecord.comentarios || '')
       setAdvisorAnotaciones(selectedStudent.classRecord.advisorAnotaciones || '')
       setActividadPropuesta(selectedStudent.classRecord.actividadPropuesta || '')
-      setNivelacionGuia(selectedStudent.nivelacionGuia || '')
     } else {
       resetForm()
     }
@@ -164,7 +160,6 @@ export default function SessionStudentsTab({
     setComentarios('')
     setAdvisorAnotaciones('')
     setActividadPropuesta('')
-    setNivelacionGuia('')
   }
 
   const isJumpStep = () => {
@@ -174,13 +169,6 @@ export default function SessionStudentsTab({
     const stepNumber = parseInt(stepMatch[1])
     const JUMP_STEPS = [5, 10, 15, 20, 25, 30, 35, 40, 45]
     return JUMP_STEPS.includes(stepNumber)
-  }
-
-  // F3 Step 45 (Jump) → show "Pruebas Internacionales" box for routing promotion
-  const isStep45 = () => {
-    if (!evento?.nombreEvento) return false
-    const stepMatch = evento.nombreEvento.match(/Step\s+(\d+)/i)
-    return !!stepMatch && parseInt(stepMatch[1]) === 45
   }
 
   const handleGenerateActivity = async () => {
@@ -244,9 +232,6 @@ export default function SessionStudentsTab({
           actividadPropuesta,
           nivel: evento?.tituloONivel,
           step: evento?.nombreEvento ? extractStepNumber(evento.nombreEvento) : evento?.nombreEvento,
-          // nivelacionGuia is only sent when the event is Step 45 (Jump)
-          // Empty string → null (default → MASTER); 'IELTS'/'B2F'/'TOEF' → that nivel
-          nivelacionGuia: isStep45() ? (nivelacionGuia || null) : undefined,
         })
       })
 
@@ -375,8 +360,8 @@ export default function SessionStudentsTab({
               </div>
             </div>
 
-            {/* Asistencia y Participación + Pruebas Internacionales (Step 45) */}
-            <div className={isStep45() ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}>
+            {/* Asistencia y Participación */}
+            <div>
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Asistencia y Participación</h3>
                 <div className="space-y-4">
@@ -447,37 +432,6 @@ export default function SessionStudentsTab({
                   )}
                 </div>
               </div>
-
-              {/* Pruebas Internacionales — solo en Step 45 (F3 Jump) */}
-              {isStep45() && (
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                  <h3 className="font-semibold text-gray-900 mb-1">Pruebas Internacionales</h3>
-                  <p className="text-xs text-gray-500 mb-4">
-                    Define la promoción al aprobar el Jump. Sin selección → MASTER.
-                  </p>
-                  <div className="space-y-3">
-                    {[
-                      { value: '',        label: 'Ninguna (→ MASTER · Step 46)' },
-                      { value: 'IELTS',   label: 'IELTS (→ IELTS · Step 47)' },
-                      { value: 'B2FIRST', label: 'B2 First (→ B2FIRST · Step 48)' },
-                      { value: 'TOEFL',   label: 'TOEFL (→ TOEFL · Step 49)' },
-                    ].map(opt => (
-                      <label key={opt.value || 'none'} className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input
-                          type="radio"
-                          name="nivelacionGuia"
-                          value={opt.value}
-                          checked={nivelacionGuia === opt.value}
-                          onChange={(e) => setNivelacionGuia(e.target.value)}
-                          disabled={isLocked}
-                          className="w-4 h-4 text-primary-600 focus:ring-primary-500 disabled:cursor-not-allowed"
-                        />
-                        <span className="text-gray-700 text-sm">{opt.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Calificación */}
