@@ -54,8 +54,8 @@ export default function StudentHeader({ profile, isLoading }: StudentHeaderProps
 
           {/* Name + subtitle */}
           <div className="min-w-0">
-            <p className="text-lg sm:text-xl font-bold text-gray-900 truncate">
-              ¡Hola, {nombre}<span className="hidden sm:inline"> {apellido}</span>!
+            <p className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
+              ¡Hola, {nombre} {apellido}!
             </p>
             <p className="text-xs text-gray-500 hidden sm:block">Panel de gestión para Usuarios</p>
             <p className="text-xs text-gray-500 sm:hidden">Panel de usuario</p>
