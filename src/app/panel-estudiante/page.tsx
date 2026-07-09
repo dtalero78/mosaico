@@ -253,12 +253,12 @@ function PanelEstudianteContent() {
           {/* Izquierda: imagen del curso + Curso/Campaña/Salón + Guía + NEXT SESSION */}
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             {meQuery.isLoading ? (
-              <div className="h-72 bg-gray-100 animate-pulse" />
+              <div className="h-[21.5rem] bg-gray-100 animate-pulse" />
             ) : profile?.cursoImagenUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.cursoImagenUrl} alt={profile?.tipoCurso || 'Curso'} className="w-full h-72 object-contain bg-gray-50" />
+              <img src={profile.cursoImagenUrl} alt={profile?.tipoCurso || 'Curso'} className="w-full h-[21.5rem] object-contain bg-gray-50" />
             ) : (
-              <div className="h-72 flex flex-col items-center justify-center bg-gradient-to-br from-primary-50 to-accent/10 text-gray-400 gap-2">
+              <div className="h-[21.5rem] flex flex-col items-center justify-center bg-gradient-to-br from-primary-50 to-accent/10 text-gray-400 gap-2">
                 <BookOpenIcon className="h-10 w-10" />
                 <span className="text-sm">{profile?.tipoCurso || 'Curso'}</span>
               </div>
