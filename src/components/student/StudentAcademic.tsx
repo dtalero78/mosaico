@@ -46,7 +46,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [advisorFilter, setAdvisorFilter] = useState('')
 
   // Nueva Clase modal state
-  const [selectedEventType, setSelectedEventType] = useState<'SESSION' | 'CLUB' | ''>('')
+  const [selectedEventType, setSelectedEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | ''>('')
   const [availableDays, setAvailableDays] = useState<{label: string, value: string}[]>([])
   const [selectedDay, setSelectedDay] = useState('')
   const [availableTimes, setAvailableTimes] = useState<{label: string, value: string, disabled?: boolean}[]>([])
@@ -214,7 +214,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   }
 
   // Nueva Clase functions
-  const handleEventTypeSelection = (eventType: 'SESSION' | 'CLUB') => {
+  const handleEventTypeSelection = (eventType: 'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB') => {
     setSelectedEventType(eventType)
     setSelectedDay('')
     setSelectedTime('')
@@ -1356,49 +1356,35 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                   <div>
                     <h4 className="text-lg font-medium text-gray-900 mb-4">1. Selecciona el tipo de evento</h4>
                     <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => handleEventTypeSelection('SESSION')}
-                        className={`relative px-4 py-2.5 rounded-lg border transition-all text-sm font-medium ${
-                          selectedEventType === 'SESSION'
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="font-medium">Sesión</div>
-                        </div>
-                        {selectedEventType === 'SESSION' && (
-                          <div className="absolute top-1.5 right-1.5">
-                            <div className="w-3 h-3 bg-primary-500 rounded-full flex items-center justify-center">
-                              <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                              </svg>
-                            </div>
+                      {([
+                        { value: 'WELCOME',    label: 'Welcome' },
+                        { value: 'NIVELACION', label: 'Nivelación' },
+                        { value: 'SESSION',    label: 'Sesión' },
+                        { value: 'CLUB',       label: 'Taller' },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => handleEventTypeSelection(opt.value)}
+                          className={`relative px-4 py-2.5 rounded-lg border transition-all text-sm font-medium ${
+                            selectedEventType === opt.value
+                              ? 'border-primary-500 bg-primary-50 text-primary-700'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="text-center">
+                            <div className="font-medium">{opt.label}</div>
                           </div>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => handleEventTypeSelection('CLUB')}
-                        className={`relative px-4 py-2.5 rounded-lg border transition-all text-sm font-medium ${
-                          selectedEventType === 'CLUB'
-                            ? 'border-primary-500 bg-primary-50 text-primary-700'
-                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="font-medium">Taller</div>
-                        </div>
-                        {selectedEventType === 'CLUB' && (
-                          <div className="absolute top-1.5 right-1.5">
-                            <div className="w-3 h-3 bg-primary-500 rounded-full flex items-center justify-center">
-                              <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                              </svg>
+                          {selectedEventType === opt.value && (
+                            <div className="absolute top-1.5 right-1.5">
+                              <div className="w-3 h-3 bg-primary-500 rounded-full flex items-center justify-center">
+                                <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
+                                </svg>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </button>
+                          )}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -1574,6 +1560,8 @@ function getTypeBadgeClass(tipoEvento: string): string {
       return 'badge-success'
     case 'WELCOME':
       return 'badge-warning'
+    case 'NIVELACION':
+      return 'badge-warning'
     case 'COMPLEMENTARIA':
       return 'badge-info'
     default:
@@ -1589,6 +1577,8 @@ function getTypeBadgeText(tipoEvento: string): string {
       return 'Taller'
     case 'WELCOME':
       return 'Bienvenida'
+    case 'NIVELACION':
+      return 'Nivelación'
     case 'COMPLEMENTARIA':
       return 'Complementaria'
     default:
