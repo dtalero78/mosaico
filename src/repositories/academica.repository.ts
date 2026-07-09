@@ -12,7 +12,7 @@ import { NotFoundError } from '@/lib/errors';
 // jsonb de ACADEMICA. La antigua "extensionHistory" de ACADEMICA (columna muerta,
 // heredada de Wix) se repurposó a "detalleNivelacion". OJO: NO confundir con
 // PEOPLE.extensionHistory (sistema de extensiones real) — ese no se toca.
-const JSONB_FIELDS = ['detalleNivelacion'];
+const JSONB_FIELDS = ['detalleNivelacion', 'NivelacionHistory'];
 
 class AcademicaRepositoryClass extends BaseRepository {
   constructor() {
@@ -29,7 +29,7 @@ class AcademicaRepositoryClass extends BaseRepository {
               "asesor", "fechaNacimiento", "celular", "telefono", "email", "contrato",
               "fechaCreacion", "tipoUsuario", "plataforma", "usuarioId", "peopleId",
               "estadoInactivo", "fechaContrato", "finalContrato",
-              "onHoldCount", "curso"
+              "curso"
        FROM "ACADEMICA"
        WHERE "_id" = $1 OR "studentId" = $1 OR "peopleId" = $1 OR "numeroId" = $1`,
       [id]
