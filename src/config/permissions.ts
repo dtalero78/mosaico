@@ -167,6 +167,14 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   },
 
   // ========== STUDENT MODULE (Página: /student/[id]) ==========
+  // -- Panel del estudiante (vista propia del alumno) --
+  {
+    code: StudentPermission.PANEL_VER_VIDEO,
+    module: Module.STUDENT,
+    section: 'Panel Estudiante',
+    name: 'Botón "Ver video" en el panel del estudiante',
+    description: 'Muestra el botón "Ver video" (video de la lección) en el panel del estudiante. Asignar al rol ESTUDIANTE para que el alumno lo vea; quitarlo lo oculta para todos los estudiantes.',
+  },
   // -- Global --
   {
     code: StudentPermission.CONSULTA_CONTRATO,

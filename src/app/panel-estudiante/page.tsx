@@ -35,6 +35,8 @@ import WhatsAppContacts from '@/components/panel-estudiante/WhatsAppContacts'
 import AdvisorComments from '@/components/panel-estudiante/AdvisorComments'
 import ClassHistory from '@/components/panel-estudiante/ClassHistory'
 import JumpExamBanner from '@/components/panel-estudiante/JumpExamBanner'
+import { usePermissions } from '@/hooks/usePermissions'
+import { StudentPermission } from '@/types/permissions'
 
 function PanelEstudianteContent() {
   const [showBookingFlow, setShowBookingFlow] = useState(false)
@@ -81,6 +83,12 @@ function PanelEstudianteContent() {
 
   // Mutations
   const cancelMutation = useCancelBooking()
+
+  // Permiso del botón "Ver video" (rol ESTUDIANTE). Mientras cargan los permisos
+  // se muestra (optimista) para no ocultarlo por defecto; sólo se oculta si el rol
+  // NO tiene STUDENT.PANEL.VER_VIDEO. Admin/SuperAdmin siempre lo ven.
+  const { hasPermission, isLoading: permsLoading } = usePermissions()
+  const canVerVideo = permsLoading || hasPermission(StudentPermission.PANEL_VER_VIDEO as any)
 
   const profile = meQuery.data?.profile
   const events = eventsQuery.data?.events || []
@@ -316,17 +324,19 @@ function PanelEstudianteContent() {
                     </p>
                   )}
                 </div>
-                <div className="pt-1">
-                  <p className="text-sm text-gray-500 mb-2">Que aprenderás...</p>
-                  <button
-                    type="button"
-                    onClick={handleOpenVideo}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-                  >
-                    <VideoCameraIcon className="h-4 w-4" />
-                    Ver video
-                  </button>
-                </div>
+                {canVerVideo && (
+                  <div className="pt-1">
+                    <p className="text-sm text-gray-500 mb-2">Que aprenderás...</p>
+                    <button
+                      type="button"
+                      onClick={handleOpenVideo}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                      <VideoCameraIcon className="h-4 w-4" />
+                      Ver video
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
