@@ -6,6 +6,7 @@ import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
+import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
 
 interface Row {
@@ -62,6 +63,18 @@ function NivelacionesContent() {
   const borrar = () => {
     setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
     fetchData()
+  }
+  const exportar = () => {
+    exportToExcel(rows, [
+      { header: 'Curso', accessor: r => r.curso || '' },
+      { header: 'Nombre', accessor: r => r.nombre || '' },
+      { header: 'Salón', accessor: r => r.salon || '' },
+      { header: 'Lección', accessor: r => r.leccion || '' },
+      { header: 'Tema', accessor: r => r.tema || '' },
+      { header: 'Guía', accessor: r => r.guia || '' },
+      { header: 'Conteo', accessor: r => (r.conteo ?? '') },
+      { header: 'Fecha', accessor: r => (r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '') },
+    ], 'nivelaciones')
   }
 
   const accion = async (r: Row, tipo: 'aprobar' | 'cancelar') => {
@@ -129,6 +142,10 @@ function NivelacionesContent() {
             className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">Aplicar filtros</button>
           <button type="button" onClick={borrar}
             className="px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">Borrar filtros</button>
+          <PermissionGuard permission={ServicioPermission.NIVELACIONES_EXPORTAR}>
+            <button type="button" onClick={exportar} disabled={!rows.length}
+              className="px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-50 font-medium">Exportar CSV</button>
+          </PermissionGuard>
         </div>
       </div>
 

@@ -746,6 +746,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Aprobar / Cancelar',
     description: 'Muestra los botones Aprobar (aprobadoNivelacion=true) y Cancelar (nivelacion=false) en el reporte de Nivelaciones.',
   },
+  {
+    code: ServicioPermission.NIVELACIONES_EXPORTAR,
+    module: Module.SERVICIO,
+    section: 'Nivelaciones',
+    name: '↳ Exportar CSV',
+    description: 'Muestra el botón "Exportar CSV" para descargar el reporte de Nivelaciones.',
+  },
 
   // ========== COMERCIAL MODULE ==========
   // -- Página: Contrato Detalle (/dashboard/comercial/contrato/[id]) --

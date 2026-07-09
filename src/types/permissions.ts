@@ -299,6 +299,7 @@ export enum ServicioPermission {
   // Nivelaciones — reporte de estudiantes marcados para nivelación (aprobar/cancelar)
   NIVELACIONES_VER      = 'SERVICIO.NIVELACIONES.VER',
   NIVELACIONES_GESTION  = 'SERVICIO.NIVELACIONES.GESTION',  // aprobar/cancelar
+  NIVELACIONES_EXPORTAR = 'SERVICIO.NIVELACIONES.EXPORTAR', // descargar CSV
 }
 
 /**
