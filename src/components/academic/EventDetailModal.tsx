@@ -14,6 +14,9 @@ interface CalendarEvent {
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
+  campaign?: string
+  curso?: string
+  salon?: string
   advisor: string | Advisor
   advisorNombre?: string
   // Fields from ADVISORS JOIN
@@ -228,6 +231,13 @@ export default function EventDetailModal({ event, isOpen, onClose, advisors, adv
                   </span>
                   <span className="font-medium">{event.tituloONivel}</span>
                 </div>
+
+                {event.curso && (
+                  <div>
+                    <span className="text-sm text-gray-600">Curso:</span>
+                    <span className="ml-2 text-sm font-medium">{event.curso}{event.salon ? ` · Salón ${event.salon}` : ''}</span>
+                  </div>
+                )}
 
                 {event.nombreEvento && (
                   <div>

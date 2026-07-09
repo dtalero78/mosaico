@@ -27,6 +27,16 @@ export const POST = handlerWithAuth(async (request) => {
     tituloONivel = nivel + (step ? ` - ${step}` : '');
   }
 
+  // NIVELACION: el evento aplica al CURSO completo (módulo/lección suelen ser
+  // "Todos"). Para que sea identificable en calendario/agenda, el título de
+  // display usa el curso (ej. "YOJI" en vez de "Todos - Todos"; o "YOJI - Modulo 01"
+  // si se acotó a un módulo/lección específico).
+  const eventTipo = body.tipo || body.evento;
+  if (eventTipo === 'NIVELACION' && body.curso && body.curso !== 'Todos') {
+    const extras = [nivel, step].filter((x: string | null) => x && x !== 'Todos').join(' - ');
+    tituloONivel = extras ? `${body.curso} - ${extras}` : body.curso;
+  }
+
   // body.compartidoCon (opcional): array de niveles adicionales para crear
   // un grupo compartido (1-2 elementos). Cada elemento puede traer su propio
   // step / nombreEvento / tituloONivel; si no, se reutilizan los del base.
@@ -48,7 +58,7 @@ export const POST = handlerWithAuth(async (request) => {
     nivel,
     step,
     tipo: body.tipo || body.evento || 'SESSION',
-    titulo: body.titulo || body.tituloONivel || nivel,
+    titulo: body.titulo || tituloONivel || body.tituloONivel || nivel,
     nombreEvento: body.nombreEvento || step,
     tituloONivel: tituloONivel || body.tituloONivel,
     linkZoom: body.linkZoom,
