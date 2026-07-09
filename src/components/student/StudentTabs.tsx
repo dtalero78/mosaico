@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { Student, Class } from '@/types'
 import { cn } from '@/lib/utils'
@@ -42,6 +43,17 @@ const tabs = [
 export default function StudentTabs({ student, classes, contratoFinalizado = false, isSuspendida }: StudentTabsProps) {
   const [activeTab, setActiveTab] = useState('general')
   const [academicView, setAcademicView] = useState('attendance')
+  const searchParams = useSearchParams()
+
+  // Si se llega con ?agendar=<TIPO> (desde el reporte de Nivelaciones → Aprobar),
+  // abrir directamente la pestaña Académica en vista Agendar para que
+  // StudentAcademic monte y abra el modal de agendamiento con el tipo bloqueado.
+  useEffect(() => {
+    if (searchParams?.get('agendar')) {
+      setActiveTab('academic')
+      setAcademicView('schedule')
+    }
+  }, [searchParams])
   const [showAcademicSubmenu, setShowAcademicSubmenu] = useState(false)
   const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null)
   const [showChangeStepModal, setShowChangeStepModal] = useState(false)

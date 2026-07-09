@@ -179,9 +179,9 @@ function NivelacionesContent() {
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
                   </td>
                   <td className="px-3 py-2">
-                    <button type="button" title="Aprobar nivelación"
-                      onClick={() => accion(r, 'aprobar')}
-                      disabled={!canGestion || acting === r.academicaId + 'aprobar'}
+                    <button type="button" title="Aprobar y agendar nivelación"
+                      onClick={() => window.open(`/student/${r.academicaId}?agendar=NIVELACION`, '_blank', 'noopener,noreferrer')}
+                      disabled={!canGestion}
                       className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed">
                       <CheckCircleIcon className="h-6 w-6" />
                     </button>

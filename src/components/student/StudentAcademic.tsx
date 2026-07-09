@@ -5,6 +5,7 @@ import { Student, Class } from '@/types'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission, Role } from '@/types/permissions'
@@ -17,8 +18,12 @@ interface StudentAcademicProps {
 
 export default function StudentAcademic({ student, classes: initialClasses, view = 'attendance' }: StudentAcademicProps) {
   const { data: session } = useSession()
+  const searchParams = useSearchParams()
   const { hasPermission, userRole } = usePermissions()
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+  // Cuando se llega desde el reporte de Nivelaciones (Aprobar) con ?agendar=NIVELACION,
+  // se abre el modal de agendamiento con SOLO ese tipo habilitado.
+  const [lockEventType, setLockEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | null>(null)
   const [selectedClass, setSelectedClass] = useState<Class | null>(null)
   const [showClassModal, setShowClassModal] = useState(false)
   const [advisorName, setAdvisorName] = useState<string>('No asignado')
@@ -221,6 +226,19 @@ export default function StudentAcademic({ student, classes: initialClasses, view
     setAvailableTimes([])
     loadAvailableDays()
   }
+
+  // Auto-abrir el modal de agendamiento cuando se llega con ?agendar=<TIPO>
+  // (desde el reporte de Nivelaciones → Aprobar). Bloquea el selector de tipo
+  // para que sólo quede habilitado ese tipo (ej. NIVELACION).
+  useEffect(() => {
+    const agendar = (searchParams?.get('agendar') || '').toUpperCase()
+    if (['WELCOME', 'NIVELACION', 'SESSION', 'CLUB'].includes(agendar)) {
+      setLockEventType(agendar as any)
+      handleEventTypeSelection(agendar as any)
+      setShowScheduleModal(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const loadAvailableDays = () => {
     // Generate next 5 days (including today)
@@ -515,6 +533,21 @@ export default function StudentAcademic({ student, classes: initialClasses, view
         const result = await response.json()
         if (result.success) {
           console.log('✅ New class event created successfully')
+          // Si venimos del reporte de Nivelaciones (Aprobar), al agendar la
+          // nivelación se marca como aprobada (aprobadoNivelacion=true) para que
+          // salga del listado de pendientes.
+          if (lockEventType === 'NIVELACION') {
+            try {
+              await fetch(`/api/postgres/students/${student._id}/nivelacion`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ aprobar: true }),
+              })
+            } catch (e) {
+              console.warn('No se pudo marcar la nivelación como aprobada:', e)
+            }
+            setLockEventType(null)
+          }
           setShowScheduleModal(false)
           // Reset modal state
           setSelectedEventType('')
@@ -1389,12 +1422,17 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                         { value: 'NIVELACION', label: 'Nivelación' },
                         { value: 'SESSION',    label: 'Sesión' },
                         { value: 'CLUB',       label: 'Taller' },
-                      ] as const).map(opt => (
+                      ] as const).map(opt => {
+                        const bloqueado = !!lockEventType && lockEventType !== opt.value
+                        return (
                         <button
                           key={opt.value}
                           onClick={() => handleEventTypeSelection(opt.value)}
+                          disabled={bloqueado}
                           className={`relative px-4 py-2.5 rounded-lg border transition-all text-sm font-medium ${
-                            selectedEventType === opt.value
+                            bloqueado
+                              ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                              : selectedEventType === opt.value
                               ? 'border-primary-500 bg-primary-50 text-primary-700'
                               : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                           }`}
@@ -1412,7 +1450,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                             </div>
                           )}
                         </button>
-                      ))}
+                      )})}
                     </div>
                   </div>
 
