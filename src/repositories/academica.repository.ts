@@ -25,7 +25,7 @@ class AcademicaRepositoryClass extends BaseRepository {
               "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
               "asesor", "fechaNacimiento", "celular", "telefono", "email", "contrato",
               "fechaCreacion", "tipoUsuario", "plataforma", "usuarioId", "peopleId",
-              "estadoInactivo", "fechaContrato", "finalContrato", "vigencia",
+              "estadoInactivo", "fechaContrato", "finalContrato",
               "extensionCount", "extensionHistory", "onHoldCount", "curso"
        FROM "ACADEMICA"
        WHERE "_id" = $1 OR "studentId" = $1 OR "peopleId" = $1 OR "numeroId" = $1`,
@@ -98,7 +98,7 @@ class AcademicaRepositoryClass extends BaseRepository {
               COALESCE(p."estadoInactivo", a."estadoInactivo"::boolean) AS "estadoInactivo", p."estado", p."fechaOnHold", p."fechaFinOnHold",
               p."vigenciaOriginalPreOnHold", p."onHoldCount", p."onHoldHistory",
               p."extensionCount", p."extensionHistory", p."fechaContrato", p."finalContrato",
-              COALESCE(p."vigencia"::text, a."vigencia"::text) AS "vigencia",
+              p."vigencia"::text AS "vigencia",
               p."titularId", a."asesor", a."usuarioId", p."_id" AS "peopleId", p."ingresos", p."genero",
               COALESCE(a."clave", p."clave") AS "clave",
               p."empresa", p."cargo", p."referenciaUno", p."parentezcoRefUno", p."telefonoRefUno",
