@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -188,8 +189,10 @@ function NivelacionesContent() {
 
 export default function NivelacionesPage() {
   return (
-    <PermissionGuard permission={ServicioPermission.NIVELACIONES_VER} showDefaultMessage>
-      <NivelacionesContent />
-    </PermissionGuard>
+    <DashboardLayout>
+      <PermissionGuard permission={ServicioPermission.NIVELACIONES_VER} showDefaultMessage>
+        <NivelacionesContent />
+      </PermissionGuard>
+    </DashboardLayout>
   )
 }

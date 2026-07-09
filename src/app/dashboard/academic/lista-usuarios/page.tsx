@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { exportToExcel } from '@/lib/export-excel'
+import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
@@ -171,8 +172,10 @@ function ListaUsuariosContent() {
 
 export default function ListaUsuariosPage() {
   return (
-    <PermissionGuard permission={AcademicoPermission.LISTA_USUARIOS_VER} showDefaultMessage>
-      <ListaUsuariosContent />
-    </PermissionGuard>
+    <DashboardLayout>
+      <PermissionGuard permission={AcademicoPermission.LISTA_USUARIOS_VER} showDefaultMessage>
+        <ListaUsuariosContent />
+      </PermissionGuard>
+    </DashboardLayout>
   )
 }
