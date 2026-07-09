@@ -60,7 +60,9 @@ function parseFecha(s) { // "1/06/2026" → "2026-06-01"
 const TIPOS = ['YOJI', 'OKINA', 'KODOMO', 'DANSHI', 'SENPAI', 'IMPULSA'];
 function normPrograma(s) {
   const u = stripAccents(s).toUpperCase().replace(/[^A-Z]/g, '');
-  return TIPOS.find(t => t === u) || null;
+  // Exacto o por prefijo (ej. "IMPULSA PAES" → IMPULSA). Los tipos no son prefijos
+  // unos de otros, así que startsWith es seguro.
+  return TIPOS.find(t => t === u) || TIPOS.find(t => u.startsWith(t)) || null;
 }
 
 function normHorario(s) { // "Martes y Jueves 18:15-19:15" → "MAR-JUE 18:15-19:15"
@@ -84,6 +86,10 @@ const col = (row, name) => { const i = H.indexOf(name); return i >= 0 ? clean(ro
 function buildBenef(row, n) {
   const prog = col(row, `programa${n}beneficiario`);
   if (!prog) return null;
+  const tipoCurso = normPrograma(prog);
+  let horarioCurso = normHorario(col(row, `horario${n}beneficiario`));
+  // IMPULSA tiene un único horario en la campaña; si el CSV no lo trae, se defaultea.
+  if (tipoCurso === 'IMPULSA' && !horarioCurso) horarioCurso = 'LUN-MIÉ-VIE 20:00-21:00';
   return {
     _idx: n,
     primerNombre: col(row, `nombre1beneciciario${n}`),
@@ -92,12 +98,13 @@ function buildBenef(row, n) {
     segundoApellido: col(row, `apellido2beneficiario${n}`) || null,
     numeroId: normId(col(row, `idbeneficiaio${n}`)),
     numeroIdRaw: col(row, `idbeneficiaio${n}`),
+    fechaNacimiento: parseFecha(col(row, `fechanacimientobeneficiario${n}`)),
     domicilio: col(row, `domiciliobeneficiaio${n}`) || null,
     email: col(row, `emailbeneficiaio${n}`) || null,
     celular: col(row, `celularbeneficiario${n}`) || null,
-    tipoCurso: normPrograma(prog),
+    tipoCurso,
     tipoCursoRaw: prog,
-    horarioCurso: normHorario(col(row, `horario${n}beneficiario`)),
+    horarioCurso,
     horarioRaw: col(row, `horario${n}beneficiario`),
   };
 }
