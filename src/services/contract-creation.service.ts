@@ -154,10 +154,20 @@ export async function createFullContract(input: CreateContractInput) {
       }
 
       // userLogin del estudiante (viene del wizard; fallback server-side). 10 chars,
-      // es el IDENTIFICADOR DE LOGIN → se garantiza único en USUARIOS_ROLES.
+      // es el IDENTIFICADOR DE LOGIN → se garantiza único. Se verifica en USUARIOS_ROLES
+      // (índice único) Y en ACADEMICA, porque los estudiantes con login omitido (hermanos
+      // menores que comparten email) guardan su userLogin sólo en ACADEMICA — mirar ambas
+      // evita colisiones futuras. La query corre dentro de la transacción, así que también
+      // ve los beneficiarios ya insertados en este mismo contrato. Regenera hasta 6 veces.
       let userLogin = String(b.userLogin || generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId)).slice(0, 10);
       for (let intento = 0; intento < 6; intento++) {
-        const dup = await client.query(`SELECT 1 FROM "USUARIOS_ROLES" WHERE "userLogin"=$1 LIMIT 1`, [userLogin]);
+        const dup = await client.query(
+          `SELECT 1 FROM "USUARIOS_ROLES" WHERE "userLogin"=$1
+           UNION ALL
+           SELECT 1 FROM "ACADEMICA" WHERE "userLogin"=$1
+           LIMIT 1`,
+          [userLogin]
+        );
         if (dup.rows.length === 0) break;
         userLogin = generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId);
       }
