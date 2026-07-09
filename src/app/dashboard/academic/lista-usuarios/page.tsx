@@ -9,6 +9,7 @@ import { TIPOS_CURSO } from '@/lib/cursos-campaign'
 
 interface Row {
   nombre: string
+  curso: string | null
   fechaNacimiento: string | null
   edad: number | null
   apoderado: string | null
@@ -65,6 +66,7 @@ function ListaUsuariosContent() {
   const exportar = () => {
     exportToExcel(rows, [
       { header: 'Nombre', accessor: r => r.nombre },
+      { header: 'Curso', accessor: r => r.curso || '' },
       { header: 'Fecha nacimiento', accessor: r => r.fechaNacimiento || '' },
       { header: 'Edad', accessor: r => (r.edad ?? '') },
       { header: 'Apoderado', accessor: r => r.apoderado || '' },
@@ -137,19 +139,20 @@ function ListaUsuariosContent() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Nombre', 'Fecha nacimiento', 'Edad', 'Apoderado', 'Guía', 'Módulo', 'Lección'].map(h => (
+                {['Nombre', 'Curso', 'Fecha nacimiento', 'Edad', 'Apoderado', 'Guía', 'Módulo', 'Lección'].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
+                <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">Sin resultados</td></tr>
+                <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">Sin resultados</td></tr>
               ) : rows.map((r, idx) => (
                 <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{r.nombre || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.curso || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.fechaNacimiento || '—'}</td>
                   <td className="px-3 py-2 text-gray-600">{r.edad ?? '—'}</td>
                   <td className="px-3 py-2 text-gray-600">{r.apoderado || '—'}</td>
