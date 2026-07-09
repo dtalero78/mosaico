@@ -23,6 +23,7 @@ import {
 
 import StudentHeader from '@/components/panel-estudiante/StudentHeader'
 import MyEventsSection from '@/components/panel-estudiante/MyEventsSection'
+import NivelacionProgramadaCard from '@/components/panel-estudiante/NivelacionProgramadaCard'
 import { formatDate } from '@/lib/utils'
 import AttendanceStats from '@/components/panel-estudiante/AttendanceStats'
 import BookingFlow from '@/components/panel-estudiante/BookingFlow'
@@ -92,6 +93,10 @@ function PanelEstudianteContent() {
 
   const profile = meQuery.data?.profile
   const events = eventsQuery.data?.events || []
+  // La nivelación agendada (booking tipo=NIVELACION) se muestra en su propia caja;
+  // el resto de eventos van en la agenda semanal.
+  const nivelacionBooking = events.find((e: any) => (e.tipo || e.tipoEvento) === 'NIVELACION') || null
+  const weeklyEvents = events.filter((e: any) => (e.tipo || e.tipoEvento) !== 'NIVELACION')
 
   // Fondo suave de la tarjeta de curso según el tipo de curso (clases literales para Tailwind)
   const CURSO_BG: Record<string, string> = {
@@ -402,9 +407,17 @@ function PanelEstudianteContent() {
               ) : null}
             </div>
 
+            {/* Nivelación Programada — visible siempre; se habilita cuando el
+                admin aprueba la nivelación y la agenda (booking tipo=NIVELACION) */}
+            <NivelacionProgramadaCard
+              booking={nivelacionBooking}
+              onCancel={handleCancel}
+              isCancelling={cancelMutation.isLoading}
+            />
+
             {/* EVENTOS PROGRAMADOS — eventos de la semana (sesiones, talleres, otros) */}
             <MyEventsSection
-              events={events}
+              events={weeklyEvents}
               isLoading={eventsQuery.isLoading}
               onCancel={handleCancel}
               isCancelling={cancelMutation.isLoading}
