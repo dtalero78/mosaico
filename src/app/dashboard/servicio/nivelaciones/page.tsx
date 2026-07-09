@@ -159,7 +159,7 @@ function NivelacionesContent() {
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                   <td className="px-3 py-2">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}ª</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
                   </td>
                   <td className="px-3 py-2">
                     <button type="button" title="Aprobar nivelación"
