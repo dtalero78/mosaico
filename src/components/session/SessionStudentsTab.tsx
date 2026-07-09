@@ -95,6 +95,7 @@ export default function SessionStudentsTab({
   const [nivelacion, setNivelacion] = useState(false)
   const [nivelacionLeccion, setNivelacionLeccion] = useState('')
   const [lecciones, setLecciones] = useState<Array<{ value: string; label: string; modulo: string }>>([])
+  const [moduloActual, setModuloActual] = useState<string | null>(null)
   const [savingNivel, setSavingNivel] = useState(false)
 
   // Cargar lecciones del curso del evento (evento.nivel = tipoCurso en MOSAICO)
@@ -113,11 +114,11 @@ export default function SessionStudentsTab({
 
   // Cargar estado de nivelación del estudiante seleccionado
   useEffect(() => {
-    if (!selectedStudent?._id) { setNivelacion(false); setNivelacionLeccion(''); return }
+    if (!selectedStudent?._id) { setNivelacion(false); setNivelacionLeccion(''); setModuloActual(null); return }
     fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { setNivelacion(d.nivelacion === true); setNivelacionLeccion(d.detalleNivelacion?.leccion || '') })
-      .catch(() => { setNivelacion(false); setNivelacionLeccion('') })
+      .then(d => { setNivelacion(d.nivelacion === true); setNivelacionLeccion(d.detalleNivelacion?.leccion || ''); setModuloActual(d.moduloActual || null) })
+      .catch(() => { setNivelacion(false); setNivelacionLeccion(''); setModuloActual(null) })
   }, [selectedStudent?._id])
 
   // Guarda nivelación inmediatamente (al marcar la casilla o elegir lección)
@@ -416,15 +417,21 @@ export default function SessionStudentsTab({
                       <span className="text-gray-700 font-medium">Nivelación</span>
                       {savingNivel && <span className="text-xs text-gray-400">guardando…</span>}
                     </label>
-                    <select
-                      value={nivelacionLeccion}
-                      onChange={(e) => { const v = e.target.value; setNivelacionLeccion(v); saveNivelacion(true, v) }}
-                      disabled={!nivelacion || !lecciones.length}
-                      className="mt-2 ml-8 w-[calc(100%-2rem)] px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    >
-                      <option value="">— Selecciona lección —</option>
-                      {lecciones.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                    </select>
+                    {(() => {
+                      // Solo las lecciones del módulo ACTUAL del estudiante
+                      const leccionesModulo = moduloActual ? lecciones.filter(l => l.modulo === moduloActual) : lecciones
+                      return (
+                        <select
+                          value={nivelacionLeccion}
+                          onChange={(e) => { const v = e.target.value; setNivelacionLeccion(v); saveNivelacion(true, v) }}
+                          disabled={!nivelacion || !leccionesModulo.length}
+                          className="mt-2 ml-8 w-[calc(100%-2rem)] px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        >
+                          <option value="">{moduloActual ? `— Lección de ${moduloActual} —` : '— Selecciona lección —'}</option>
+                          {leccionesModulo.map(l => <option key={l.value} value={l.value}>{l.value}</option>)}
+                        </select>
+                      )
+                    })()}
                   </div>
                   {isJumpStep() && (
                     <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
