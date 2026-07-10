@@ -78,19 +78,27 @@ export default function StudentNivelacionHistorial({ student }: Props) {
               ) : rows.map((r, i) => (
                 <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-3 py-2">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
                       {r.conteo ?? '—'}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{fmt(r.fechaEvento || r.fecha)}</td>
                   <td className="px-3 py-2">
-                    {r.resultado === 'REALIZADA' ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Realizada</span>
-                    ) : r.resultado === 'NO_ASISTIO' ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">No asistió</span>
-                    ) : (
-                      <span className="text-gray-500">{r.resultado || '—'}</span>
-                    )}
+                    {(() => {
+                      // Si la fecha del evento es FUTURA → "Pendiente" (aún no ocurre).
+                      // Solo se muestra Realizada / No asistió cuando el evento ya pasó.
+                      const esFuturo = !!r.fechaEvento && new Date(r.fechaEvento).getTime() > Date.now()
+                      if (esFuturo) {
+                        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">Pendiente</span>
+                      }
+                      if (r.resultado === 'REALIZADA') {
+                        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Realizada</span>
+                      }
+                      if (r.resultado === 'NO_ASISTIO') {
+                        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">No asistió</span>
+                      }
+                      return <span className="text-gray-500">{r.resultado || '—'}</span>
+                    })()}
                   </td>
                   <td className="px-3 py-2 text-gray-600">{r.comentario || '—'}</td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.marcadoPor || '—'}</td>
