@@ -19,28 +19,43 @@ export const POST = handlerWithAuth(async (request) => {
   // Resolve nivel and step: frontend sends nivel in tituloONivel and step in nombreEvento.
   // For CLUB events, nombreEvento contains the full step name (e.g. "TRAINING - Step 32"),
   // so prefer it over the raw step number to keep step consistent with nombreEvento.
-  const nivel = body.nivel || body.tituloONivel || null;
-  const step = body.nombreEvento || body.step || null;
+  const eventTipoRaw = body.tipo || body.evento;
+  const esTaller = eventTipoRaw === 'CLUB';
 
-  let tituloONivel = body.titulo || body.nombreEvento || '';
-  if (nivel) {
-    tituloONivel = nivel + (step ? ` - ${step}` : '');
+  let nivel: string | undefined;
+  let step: string | undefined;
+  let nombreEventoFinal: string | undefined;
+  let tituloONivel: string;
+
+  if (esTaller) {
+    // TALLER (CLUB): a nivel de CURSO. body.club = Tipo (club de NIVELES.clubs),
+    // body.leccion = Lección ('Todos' = todo el curso accede). nivel=curso,
+    // step=Lección, nombreEvento=Tipo, display="Curso - Tipo".
+    nivel = body.curso || undefined;
+    step = body.leccion || undefined;
+    nombreEventoFinal = body.club || undefined;
+    tituloONivel = body.curso && body.curso !== 'Todos'
+      ? `${body.curso}${body.club ? ` - ${body.club}` : ''}`
+      : (body.club || body.curso || '');
+  } else {
+    nivel = body.nivel || body.tituloONivel || undefined;
+    step = body.nombreEvento || body.step || undefined;
+    nombreEventoFinal = body.nombreEvento || step;
+    tituloONivel = body.titulo || body.nombreEvento || '';
+    if (nivel) {
+      tituloONivel = nivel + (step ? ` - ${step}` : '');
+    }
+    // Nombre de display = "Curso - Módulo - Lección" cuando hay un curso real.
+    //  - WELCOME: "WELCOME - MOSAICO - Leccion 00"; Sesión/Nivelación YOJI:
+    //  "YOJI - Modulo 01 - Leccion 01" (o "YOJI" si módulo/lección = Todos).
+    if (body.curso && body.curso !== 'Todos') {
+      const extras = [nivel, step].filter((x: string | undefined) => x && x !== 'Todos').join(' - ');
+      tituloONivel = extras ? `${body.curso} - ${extras}` : body.curso;
+    }
   }
 
-  // Nombre de display = "Curso - Módulo - Lección" cuando hay un curso real.
-  //  - WELCOME:            "WELCOME - MOSAICO - Leccion 00"
-  //  - Sesión/Nivelación:  "YOJI - Modulo 01 - Leccion 01" (o "YOJI" si módulo/lección = Todos)
-  // Los campos "Todos" se omiten. (Los eventos auto-generados de cursos-campaign
-  // usan otro path y conservan su formato "Campaña - Curso - Salón".)
-  if (body.curso && body.curso !== 'Todos') {
-    const extras = [nivel, step].filter((x: string | null) => x && x !== 'Todos').join(' - ');
-    tituloONivel = extras ? `${body.curso} - ${extras}` : body.curso;
-  }
-
-  // WELCOME es un CURSO en el modal (no un tipo). Un evento con curso=WELCOME es
-  // una Bienvenida → su tipo/evento se fuerza a 'WELCOME' (se muestra en morado y
-  // se filtra como WELCOME), sin importar el "Tipo de Evento" elegido.
-  const tipoFinal = body.curso === 'WELCOME' ? 'WELCOME' : (body.tipo || body.evento || 'SESSION');
+  // WELCOME es un CURSO en el modal (no un tipo) → tipo='WELCOME' (morado).
+  const tipoFinal = body.curso === 'WELCOME' ? 'WELCOME' : (eventTipoRaw || 'SESSION');
 
   // body.compartidoCon (opcional): array de niveles adicionales para crear
   // un grupo compartido (1-2 elementos). Cada elemento puede traer su propio
@@ -64,7 +79,7 @@ export const POST = handlerWithAuth(async (request) => {
     step,
     tipo: tipoFinal,
     titulo: body.titulo || tituloONivel || body.tituloONivel || nivel,
-    nombreEvento: body.nombreEvento || step,
+    nombreEvento: nombreEventoFinal || step,
     tituloONivel: tituloONivel || body.tituloONivel,
     linkZoom: body.linkZoom,
     limiteUsuarios: body.limiteUsuarios || 30,

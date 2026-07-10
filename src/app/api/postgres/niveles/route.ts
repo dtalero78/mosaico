@@ -28,7 +28,21 @@ export const GET = handler(async (request: Request) => {
     const modulos = Array.from(mapMod.values())
       .sort((a, b) => a.minOrden - b.minOrden)
       .map(m => ({ code: m.code, steps: m.steps.sort((a, b) => a.orden - b.orden).map(s => s.step) }));
-    return successResponse({ curso, modulos, total: modulos.length });
+
+    // Clubs (Talleres) del curso: por lección (step) y agregados del curso.
+    // NIVELES.clubs es un array por fila (curso+módulo+lección), ej. ["BASICO - Leccion 02", …].
+    const clubsPorLeccion: Record<string, string[]> = {};
+    const clubsCursoSet = new Set<string>();
+    for (const r of delCurso) {
+      if (!Array.isArray(r.clubs) || !r.step) continue;
+      for (const c of r.clubs) {
+        if (!c) continue;
+        (clubsPorLeccion[r.step] ||= []);
+        if (!clubsPorLeccion[r.step].includes(c)) clubsPorLeccion[r.step].push(c);
+        clubsCursoSet.add(c);
+      }
+    }
+    return successResponse({ curso, modulos, clubsPorLeccion, clubsCurso: Array.from(clubsCursoSet), total: modulos.length });
   }
 
   // Group rows by code to build a single object per level

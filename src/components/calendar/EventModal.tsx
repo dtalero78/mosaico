@@ -84,6 +84,8 @@ export default function EventModal({
   // Caché de módulos POR CURSO (solo crece, nunca se limpia). El dropdown deriva sus
   // opciones de modulosByCurso[cursoActual]; así ningún re-render/efecto puede dejarlo vacío.
   const [modulosByCurso, setModulosByCurso] = useState<Record<string, Array<{ code: string; steps: string[] }>>>({})
+  // Clubs (Talleres) por curso: { clubsPorLeccion: {leccion: string[]}, clubsCurso: string[] }
+  const [clubsByCurso, setClubsByCurso] = useState<Record<string, { clubsPorLeccion: Record<string, string[]>; clubsCurso: string[] }>>({})
   const TODOS = 'Todos'
 
   const [niveles, setNiveles] = useState<Nivel[]>([])
@@ -126,13 +128,27 @@ export default function EventModal({
   const cursoModulos = formData.curso
   const currentModulos = modulosByCurso[cursoModulos] || []
 
+  // ── TALLER (CLUB): "Módulo" se reemplaza por "Tipo" (clubs de NIVELES.clubs) ──
+  // Para Taller: Lección = todas las lecciones del curso + "Todas" (Todas = todo el
+  // curso puede acceder). "Tipo" = clubs de la lección elegida (o de todo el curso
+  // si Lección = Todas). Se guarda tituloONivel = Tipo (club), nombreEvento = Lección.
+  const esTaller = formData.evento === 'CLUB'
+  const cursoClubs = clubsByCurso[cursoModulos] || { clubsPorLeccion: {}, clubsCurso: [] }
+  const todasLeccionesCurso = Array.from(new Set(currentModulos.flatMap(m => m.steps)))
+  const tipoClubsOpciones = (formData.nombreEvento && formData.nombreEvento !== TODOS)
+    ? (cursoClubs.clubsPorLeccion[formData.nombreEvento] || [])
+    : cursoClubs.clubsCurso
+
   // Carga (idempotente) de módulos al caché. No limpia nada: solo agrega/actualiza la clave
   // del curso. Re-llamarla con el mismo curso es inocuo.
   const loadModulos = (curso: string) => {
     if (!curso || curso === TODOS) return
     fetch(`/api/postgres/niveles?curso=${encodeURIComponent(curso)}`, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : { modulos: [] }))
-      .then(d => setModulosByCurso(prev => ({ ...prev, [curso]: Array.isArray(d.modulos) ? d.modulos : [] })))
+      .then(d => {
+        setModulosByCurso(prev => ({ ...prev, [curso]: Array.isArray(d.modulos) ? d.modulos : [] }))
+        setClubsByCurso(prev => ({ ...prev, [curso]: { clubsPorLeccion: d.clubsPorLeccion || {}, clubsCurso: Array.isArray(d.clubsCurso) ? d.clubsCurso : [] } }))
+      })
       .catch(() => {})
   }
 
@@ -701,6 +717,19 @@ export default function EventModal({
       }
       if (compartidoConPayload) eventData.compartidoCon = compartidoConPayload
 
+      // TALLER (CLUB): "Tipo" (tituloONivel del form) = el club; "Lección"
+      // (nombreEvento) = la lección. Se mandan como `club` y `leccion`; el
+      // backend arma nivel=curso, step=lección, nombreEvento=club y
+      // tituloONivel="Curso - Tipo". (Lección='Todos' → todo el curso accede.)
+      if (formData.evento === 'CLUB') {
+        eventData.club = formData.tituloONivel || undefined
+        eventData.leccion = formData.nombreEvento || undefined
+        // Evitar que el backend interprete tituloONivel/nombreEvento del form
+        // (que aquí significan Tipo/Lección) como nivel/step.
+        eventData.tituloONivel = undefined
+        eventData.nombreEvento = undefined
+      }
+
       // Guarda integridad: si estamos editando Y cambia nivel o step (nombreEvento),
       // detectamos antes y mostramos modal apropiado:
       //   - Si el evento tiene inscritos > 0 → modal BLOQUEANTE (sólo Salir)
@@ -941,27 +970,53 @@ export default function EventModal({
                   )}
                 </select>
               </div>
-              {/* Módulo */}
+              {/* Módulo (Sesión/Nivelación) — o Tipo=clubs (Taller) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Módulo *</label>
-                <select
-                  value={formData.tituloONivel} disabled={!formData.curso || formData.curso === TODOS}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    // WELCOME: la Lección es siempre 'Leccion 00' (se fija al elegir módulo).
-                    if (v === TODOS) setFormData(prev => ({ ...prev, tituloONivel: TODOS, nombreEvento: TODOS }))
-                    else setFormData(prev => ({ ...prev, tituloONivel: v, nombreEvento: prev.curso === 'WELCOME' ? 'Leccion 00' : '' }))
-                  }}
-                  className="input w-full" required
-                >
-                  <option value="">Seleccionar módulo</option>
-                  {formData.curso !== 'WELCOME' && <option value={TODOS}>Todos</option>}
-                  {currentModulos.map(m => (<option key={m.code} value={m.code}>{m.code}</option>))}
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{esTaller ? 'Tipo *' : 'Módulo *'}</label>
+                {esTaller ? (
+                  <select
+                    value={formData.tituloONivel}
+                    disabled={!formData.curso || formData.curso === TODOS}
+                    onChange={(e) => setFormData(prev => ({ ...prev, tituloONivel: e.target.value }))}
+                    className="input w-full" required
+                  >
+                    <option value="">
+                      {tipoClubsOpciones.length ? 'Seleccionar tipo' : (formData.nombreEvento ? 'Sin clubs para esta lección' : 'Elige la lección primero')}
+                    </option>
+                    {tipoClubsOpciones.map(c => (<option key={c} value={c}>{c}</option>))}
+                  </select>
+                ) : (
+                  <select
+                    value={formData.tituloONivel} disabled={!formData.curso || formData.curso === TODOS}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      // WELCOME: la Lección es siempre 'Leccion 00' (se fija al elegir módulo).
+                      if (v === TODOS) setFormData(prev => ({ ...prev, tituloONivel: TODOS, nombreEvento: TODOS }))
+                      else setFormData(prev => ({ ...prev, tituloONivel: v, nombreEvento: prev.curso === 'WELCOME' ? 'Leccion 00' : '' }))
+                    }}
+                    className="input w-full" required
+                  >
+                    <option value="">Seleccionar módulo</option>
+                    {formData.curso !== 'WELCOME' && <option value={TODOS}>Todos</option>}
+                    {currentModulos.map(m => (<option key={m.code} value={m.code}>{m.code}</option>))}
+                  </select>
+                )}
               </div>
               {/* Lección */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Lección *</label>
+                {esTaller ? (
+                  <select
+                    value={formData.nombreEvento}
+                    disabled={!formData.curso || formData.curso === TODOS}
+                    onChange={(e) => setFormData(prev => ({ ...prev, nombreEvento: e.target.value, tituloONivel: '' }))}
+                    className="input w-full" required
+                  >
+                    <option value="">Seleccionar lección</option>
+                    <option value={TODOS}>Todas</option>
+                    {todasLeccionesCurso.map(s => (<option key={s} value={s}>{s}</option>))}
+                  </select>
+                ) : (
                 <select
                   value={formData.nombreEvento}
                   disabled={formData.curso === 'WELCOME' || !formData.tituloONivel || formData.tituloONivel === TODOS || formData.curso === TODOS}
@@ -980,6 +1035,7 @@ export default function EventModal({
                     </>
                   )}
                 </select>
+                )}
               </div>
               {/* Límite de Usuarios */}
               <div>
