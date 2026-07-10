@@ -9,6 +9,24 @@ export default function ActualizarMaterialPage() {
       <p className="text-gray-500 mb-8">Selecciona qué deseas gestionar, esta acción genera registros de auditoría.</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Subir Curso (CSV) */}
+        <button
+          type="button"
+          onClick={() => openTab('/dashboard/academic/actualizar-material/subir-curso')}
+          className="flex flex-col items-center justify-center gap-4 p-10 bg-white border-2 border-gray-200 rounded-2xl shadow-sm hover:border-rose-500 hover:shadow-md transition-all text-left group"
+        >
+          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center group-hover:bg-rose-100 transition-colors">
+            <svg className="w-8 h-8 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-gray-900 group-hover:text-rose-600 transition-colors">Subir Curso</div>
+            <div className="text-sm text-gray-500 mt-1">Crear módulos y lecciones desde CSV</div>
+          </div>
+        </button>
+
         {/* Imágenes de curso */}
         <button
           type="button"
