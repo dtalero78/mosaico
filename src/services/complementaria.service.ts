@@ -275,7 +275,9 @@ Each question object must have:
 - "question": string (in English)
 - "options": string[] (for multiple_choice: 4 options; for true_false: ["True", "False"]; for open_ended: empty array [])
 - "correctAnswer": string (the correct option text, "True"/"False", or model answer)
-- "explanation": string (brief explanation of why the answer is correct)`
+- "explanation": string (brief explanation of why the answer is correct)
+
+If the lesson content includes mathematical formulas, equations, fractions, exponents or symbols, write them using LaTeX delimited by single dollar signs, e.g. "What is $\\frac{1}{2} + \\frac{1}{3}$?". Use LaTeX both in the "question" text and in the "options" when appropriate. Do NOT use LaTeX for plain prose.`
       },
       {
         role: 'user',

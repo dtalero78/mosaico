@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions'
 import { AcademicoPermission } from '@/types/permissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import MathText from '@/components/ecuaciones/MathText'
+import InsertEquationModal from '@/components/ecuaciones/InsertEquationModal'
 
 interface Leccion {
   step: string
@@ -18,8 +20,26 @@ function LeccionEditor({
   const [description, setDescription] = useState(leccion.description)
   const [contenido, setContenido] = useState(leccion.contenido)
   const [busy, setBusy] = useState(false)
+  const [eqOpen, setEqOpen] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const taRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => { setDescription(leccion.description); setContenido(leccion.contenido) }, [leccion])
+
+  // Inserta el snippet ($...$) en la posición del cursor del textarea.
+  const insertSnippet = (snippet: string) => {
+    const ta = taRef.current
+    if (!ta) { setContenido((c) => c + snippet); return }
+    const start = ta.selectionStart ?? contenido.length
+    const end = ta.selectionEnd ?? contenido.length
+    const next = contenido.slice(0, start) + snippet + contenido.slice(end)
+    setContenido(next)
+    requestAnimationFrame(() => {
+      ta.focus()
+      const pos = start + snippet.length
+      ta.setSelectionRange(pos, pos)
+    })
+  }
 
   const dirty = description !== leccion.description || contenido !== leccion.contenido
 
@@ -53,10 +73,29 @@ function LeccionEditor({
       <label className="block text-xs font-medium text-gray-500 mb-1">Descripción (título de la lección)</label>
       <input value={description} onChange={(e) => setDescription(e.target.value)}
         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-3" />
-      <label className="block text-xs font-medium text-gray-500 mb-1">Contenido / temario (fuente del quiz IA)</label>
-      <textarea value={contenido} onChange={(e) => setContenido(e.target.value)} rows={5}
-        placeholder="Objetivos, vocabulario, puntos gramaticales, criterios de evaluación…"
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs font-medium text-gray-500">Contenido / temario (fuente del quiz IA)</label>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setEqOpen(true)}
+            className="px-2.5 py-1 text-xs rounded-md border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
+            ∑ Insertar ecuación
+          </button>
+          <button type="button" onClick={() => setShowPreview((v) => !v)}
+            className={`px-2.5 py-1 text-xs rounded-md border ${showPreview ? 'border-indigo-300 bg-indigo-100 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+            {showPreview ? 'Ocultar vista previa' : 'Vista previa'}
+          </button>
+        </div>
+      </div>
+      <textarea ref={taRef} value={contenido} onChange={(e) => setContenido(e.target.value)} rows={5}
+        placeholder="Objetivos, vocabulario, puntos gramaticales, criterios de evaluación… Usa $...$ para ecuaciones."
         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono resize-y" />
+      {showPreview && (
+        <div className="mt-2 p-3 rounded-lg bg-gray-50 border border-gray-200">
+          <div className="text-[11px] font-medium text-gray-400 mb-1">Vista previa</div>
+          <MathText block className="text-sm text-gray-800">{contenido || '—'}</MathText>
+        </div>
+      )}
+      <InsertEquationModal open={eqOpen} onClose={() => setEqOpen(false)} onInsert={insertSnippet} />
     </div>
   )
 }

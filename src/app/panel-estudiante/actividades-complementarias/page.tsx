@@ -14,6 +14,7 @@ import {
   useGenerateQuestions,
   useGradeAnswers,
 } from '@/hooks/use-complementaria'
+import MathText from '@/components/ecuaciones/MathText'
 
 function ComplementariaContent() {
   const searchParams = useSearchParams()
@@ -235,7 +236,7 @@ function ComplementariaContent() {
                 {currentAttempt.questions.map((q: any, idx: number) => (
                   <div key={idx} className="border-b border-gray-100 pb-5 last:border-0 last:pb-0">
                     <p className="text-sm font-medium text-gray-900 mb-2">
-                      {idx + 1}. {q.question}
+                      {idx + 1}. <MathText>{q.question}</MathText>
                     </p>
 
                     {q.type === 'multiple_choice' || q.type === 'true_false' ? (
@@ -261,7 +262,7 @@ function ComplementariaContent() {
                               }}
                               className="text-blue-600"
                             />
-                            <span className="text-sm text-gray-700">{opt}</span>
+                            <MathText className="text-sm text-gray-700">{opt}</MathText>
                           </label>
                         ))}
                       </div>
@@ -368,7 +369,7 @@ function ComplementariaContent() {
                         )}
                         <div>
                           <p className="text-sm font-medium text-gray-900">
-                            {idx + 1}. {currentAttempt?.questions?.[idx]?.question || `Pregunta ${idx + 1}`}
+                            {idx + 1}. <MathText>{currentAttempt?.questions?.[idx]?.question || `Pregunta ${idx + 1}`}</MathText>
                           </p>
                           {r.feedback && (
                             <p className="text-xs text-gray-600 mt-1">{r.feedback}</p>
