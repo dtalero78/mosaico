@@ -5,7 +5,7 @@ import { Student, Class } from '@/types'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission, Role } from '@/types/permissions'
@@ -19,6 +19,8 @@ interface StudentAcademicProps {
 export default function StudentAcademic({ student, classes: initialClasses, view = 'attendance' }: StudentAcademicProps) {
   const { data: session } = useSession()
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const { hasPermission, userRole } = usePermissions()
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   // Cuando se llega desde el reporte de Nivelaciones (Aprobar) con ?agendar=NIVELACION,
@@ -236,6 +238,9 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       setLockEventType(agendar as any)
       handleEventTypeSelection(agendar as any)
       setShowScheduleModal(true)
+      // Quitar ?agendar de la URL (estado de Next) para que al REFRESCAR o
+      // cambiar de pestaña NO se vuelva a abrir el modal automáticamente.
+      router.replace(pathname, { scroll: false })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
