@@ -7,11 +7,14 @@ import { AcademicoPermission } from '@/types/permissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
 import MathText from '@/components/ecuaciones/MathText'
 import InsertEquationModal from '@/components/ecuaciones/InsertEquationModal'
+import ManualQuestionsEditor, { ManualQuestion, validateManualQuestions } from '@/components/ecuaciones/ManualQuestionsEditor'
 
 interface Leccion {
   step: string
   description: string
   contenido: string
+  evaluacionModo?: string
+  preguntasManual?: ManualQuestion[]
 }
 
 function LeccionEditor({
@@ -24,7 +27,37 @@ function LeccionEditor({
   const [showPreview, setShowPreview] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => { setDescription(leccion.description); setContenido(leccion.contenido) }, [leccion])
+  const [modo, setModo] = useState<'IA' | 'MANUAL'>((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
+  const [preguntas, setPreguntas] = useState<ManualQuestion[]>(leccion.preguntasManual || [])
+  const [savingEval, setSavingEval] = useState(false)
+
+  useEffect(() => {
+    setDescription(leccion.description); setContenido(leccion.contenido)
+    setModo((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
+    setPreguntas(leccion.preguntasManual || [])
+  }, [leccion])
+
+  const saveEval = async () => {
+    if (modo === 'MANUAL') {
+      const err = validateManualQuestions(preguntas)
+      if (err) { toast.error(err); return }
+    }
+    setSavingEval(true)
+    try {
+      const r = await fetch('/api/postgres/cursos-contenido', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curso, code, step: leccion.step, evaluacionModo: modo, preguntasManual: modo === 'MANUAL' ? preguntas : [] }),
+      }).then((x) => x.json())
+      if (r.error) throw new Error(r.error)
+      toast.success(`Evaluación de ${leccion.step} guardada (${modo})`)
+      onSaved()
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al guardar evaluación')
+    } finally {
+      setSavingEval(false)
+    }
+  }
 
   // Inserta el snippet ($...$) en la posición del cursor del textarea.
   const insertSnippet = (snippet: string) => {
@@ -96,6 +129,42 @@ function LeccionEditor({
         </div>
       )}
       <InsertEquationModal open={eqOpen} onClose={() => setEqOpen(false)} onInsert={insertSnippet} />
+
+      {/* Evaluación: IA vs MANUAL */}
+      <div className="mt-4 pt-4 border-t border-gray-100">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium text-gray-500">Evaluación</span>
+            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              <button type="button" onClick={() => setModo('IA')}
+                className={`px-3 py-1 ${modo === 'IA' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                IA (del contenido)
+              </button>
+              <button type="button" onClick={() => setModo('MANUAL')}
+                className={`px-3 py-1 ${modo === 'MANUAL' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                Manual
+              </button>
+            </div>
+          </div>
+          <button type="button" onClick={saveEval} disabled={savingEval}
+            className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
+            {savingEval ? 'Guardando…' : 'Guardar evaluación'}
+          </button>
+        </div>
+
+        {modo === 'IA' ? (
+          <p className="text-xs text-gray-400">
+            Las 10 preguntas se generan automáticamente del contenido/temario con IA (requiere OPENAI_API_KEY).
+          </p>
+        ) : (
+          <>
+            <p className="text-xs text-gray-400 mb-3">
+              Preguntas escritas a mano; se califican solas (sin IA). Si aún no hay preguntas, agrega al menos una.
+            </p>
+            <ManualQuestionsEditor value={preguntas} onChange={setPreguntas} />
+          </>
+        )}
+      </div>
     </div>
   )
 }

@@ -12,6 +12,14 @@ interface Row {
   contenido: string | null;
   descripcionModulo: string | null;
   orden: number | null;
+  evaluacionModo: string | null;
+  preguntasManual: any;
+}
+
+function parsePreguntas(raw: any): any[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') { try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; } }
+  return [];
 }
 
 /**
@@ -30,7 +38,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (!curso || !code) throw new ValidationError('curso y code son requeridos');
 
   const r = await query<Row>(
-    `SELECT "step","description","contenido","descripcionModulo","orden"
+    `SELECT "step","description","contenido","descripcionModulo","orden","evaluacionModo","preguntasManual"
      FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
     [curso, code]
@@ -44,6 +52,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
       step: x.step,
       description: x.description ?? '',
       contenido: x.contenido ?? '',
+      evaluacionModo: (x.evaluacionModo || 'IA').toUpperCase(),
+      preguntasManual: parsePreguntas(x.preguntasManual),
     })),
   });
 });
@@ -79,16 +89,27 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
     );
     accion = 'DESCRIPCION_MODULO';
   } else {
-    // Modo lección: description y/o contenido
+    // Modo lección: description, contenido, evaluacionModo y/o preguntasManual
     const hasDesc = Object.prototype.hasOwnProperty.call(body, 'description');
     const hasCont = Object.prototype.hasOwnProperty.call(body, 'contenido');
-    if (!hasDesc && !hasCont) throw new ValidationError('nada que actualizar');
+    const hasModo = Object.prototype.hasOwnProperty.call(body, 'evaluacionModo');
+    const hasPreg = Object.prototype.hasOwnProperty.call(body, 'preguntasManual');
+    if (!hasDesc && !hasCont && !hasModo && !hasPreg) throw new ValidationError('nada que actualizar');
 
     const sets: string[] = [];
     const params: any[] = [curso, code, step];
     let i = 4;
     if (hasDesc) { sets.push(`"description" = $${i++}`); params.push(body.description ?? ''); }
     if (hasCont) { sets.push(`"contenido" = $${i++}`); params.push(body.contenido ?? ''); }
+    if (hasModo) {
+      const modo = String(body.evaluacionModo || 'IA').toUpperCase();
+      if (modo !== 'IA' && modo !== 'MANUAL') throw new ValidationError('evaluacionModo inválido (IA | MANUAL)');
+      sets.push(`"evaluacionModo" = $${i++}`); params.push(modo);
+    }
+    if (hasPreg) {
+      const preg = Array.isArray(body.preguntasManual) ? body.preguntasManual : [];
+      sets.push(`"preguntasManual" = $${i++}::jsonb`); params.push(JSON.stringify(preg));
+    }
     sets.push(`"_updatedDate" = NOW()`);
 
     const res = await query(
@@ -96,7 +117,7 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
       params
     );
     if (res.rowCount === 0) throw new ValidationError('Lección no encontrada');
-    accion = hasCont ? 'CONTENIDO' : 'DESCRIPCION';
+    accion = (hasModo || hasPreg) ? 'EVALUACION' : hasCont ? 'CONTENIDO' : 'DESCRIPCION';
   }
 
   await query(`

@@ -127,14 +127,25 @@ export async function generateQuestions(
     };
   }
 
-  // Fetch step content from NIVELES
-  const contenido = await NivelesRepository.findContenidoByNivelAndStep(nivel, step);
-  if (!contenido) {
-    throw new NotFoundError('Contenido del step', `${nivel} - ${step}`);
+  // Fase 3: modo de evaluación de la lección (MANUAL vs IA).
+  const evalInfo = await NivelesRepository.findEvaluacionByNivelAndStep(nivel, step);
+  let questions: any[];
+  if (evalInfo.evaluacionModo === 'MANUAL') {
+    if (!evalInfo.preguntasManual.length) {
+      throw new ValidationError(
+        'La evaluación manual de esta lección aún no tiene preguntas configuradas. Contacta a tu coordinador.'
+      );
+    }
+    // Preguntas escritas por el admin (solo opción múltiple / verdadero-falso).
+    questions = normalizeManualQuestions(evalInfo.preguntasManual);
+  } else {
+    // Modo IA: genera desde el contenido con OpenAI.
+    const contenido = await NivelesRepository.findContenidoByNivelAndStep(nivel, step);
+    if (!contenido) {
+      throw new NotFoundError('Contenido del step', `${nivel} - ${step}`);
+    }
+    questions = await callOpenAIGenerateQuestions(contenido, nivel, step);
   }
-
-  // Generate questions with OpenAI
-  const questions = await callOpenAIGenerateQuestions(contenido, nivel, step);
 
   // Save attempt
   const attemptNumber = elig.attemptsUsed + 1;
@@ -173,13 +184,19 @@ export async function gradeAnswers(
   if (attempt.studentId !== studentId) throw new ValidationError('Este intento no te pertenece');
   if (attempt.status !== 'IN_PROGRESS') throw new ConflictError('Este intento ya fue completado');
 
-  // Validate all questions answered
-  if (!answers || answers.length !== 10) {
-    throw new ValidationError('Debes responder las 10 preguntas');
+  // Validate all questions answered (el nº de preguntas puede variar en modo MANUAL)
+  const totalQ = Array.isArray(attempt.questions) ? attempt.questions.length : 0;
+  if (!answers || answers.length !== totalQ || totalQ === 0) {
+    throw new ValidationError(`Debes responder las ${totalQ || ''} preguntas`.trim());
   }
 
-  // Grade with OpenAI
-  const { score, results } = await callOpenAIGradeAnswers(attempt.questions, answers);
+  // Califica: si NO hay preguntas abiertas (típico del modo MANUAL: solo opción
+  // múltiple / verdadero-falso) se corrige offline sin OpenAI; si hay abiertas
+  // (modo IA) se usa OpenAI para la corrección semántica.
+  const hasOpenEnded = attempt.questions.some((q: any) => q?.type === 'open_ended');
+  const { score, results } = hasOpenEnded
+    ? await callOpenAIGradeAnswers(attempt.questions, answers)
+    : gradeDeterministic(attempt.questions, answers);
   const passed = score >= PASS_THRESHOLD;
 
   let bookingId: string | undefined;
@@ -340,4 +357,57 @@ Return a JSON object with:
     score: parsed.score || 0,
     results: parsed.results || [],
   };
+}
+
+// ── Fase 3: evaluación MANUAL (offline) ──
+
+/** Normaliza para el formato de quiz. Solo opción múltiple / verdadero-falso. */
+function normalizeManualQuestions(preguntas: any[]): any[] {
+  return preguntas.map((q: any, i: number) => {
+    const type = q?.type === 'true_false' ? 'true_false' : 'multiple_choice';
+    const options = Array.isArray(q?.options)
+      ? q.options.map((o: any) => String(o ?? '')).filter((o: string) => o.length > 0)
+      : [];
+    return {
+      id: Number(q?.id) || i + 1,
+      type,
+      question: String(q?.question ?? ''),
+      options: type === 'true_false' && options.length !== 2 ? ['Verdadero', 'Falso'] : options,
+      correctAnswer: String(q?.correctAnswer ?? ''),
+      explanation: String(q?.explanation ?? ''),
+    };
+  });
+}
+
+/** Normaliza un texto de respuesta para comparación (sin acentos, minúsculas, espacios colapsados). */
+function normAnswer(s: string): string {
+  return String(s ?? '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Corrección determinística (sin OpenAI) para preguntas de opción múltiple /
+ * verdadero-falso: correcta si la respuesta del estudiante coincide con
+ * `correctAnswer`. Feedback local en español.
+ */
+function gradeDeterministic(
+  questions: any[],
+  answers: any[]
+): { score: number; results: any[] } {
+  let correct = 0;
+  const results = questions.map((q: any, i: number) => {
+    const student = typeof answers[i] === 'string' ? answers[i] : (answers[i]?.answer || '');
+    const ok = normAnswer(student) === normAnswer(q?.correctAnswer);
+    if (ok) correct++;
+    return {
+      questionId: q?.id ?? i + 1,
+      correct: ok,
+      feedback: ok
+        ? '¡Correcto!'
+        : `Respuesta correcta: ${q?.correctAnswer || '—'}${q?.explanation ? `. ${q.explanation}` : ''}`,
+    };
+  });
+  const score = questions.length ? Math.round((correct / questions.length) * 100) : 0;
+  return { score, results };
 }

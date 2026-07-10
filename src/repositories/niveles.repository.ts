@@ -97,6 +97,31 @@ class NivelesRepositoryClass extends BaseRepository {
   }
 
   /**
+   * Get the evaluation mode + manual questions for a nivel(code)+step (Fase 3).
+   * `evaluacionModo`='MANUAL' → serve `preguntasManual` (auto-graded, no OpenAI);
+   * 'IA' (default) → generate from `contenido`.
+   */
+  async findEvaluacionByNivelAndStep(
+    nivel: string,
+    step: string
+  ): Promise<{ evaluacionModo: string; preguntasManual: any[] }> {
+    const row = await queryOne<{ evaluacionModo: string | null; preguntasManual: any }>(
+      `SELECT "evaluacionModo", "preguntasManual" FROM "NIVELES"
+       WHERE "code" = $1 AND "step" = $2
+       LIMIT 1`,
+      [nivel, step]
+    );
+    let preguntas: any[] = [];
+    const raw = row?.preguntasManual;
+    if (Array.isArray(raw)) preguntas = raw;
+    else if (typeof raw === 'string') { try { preguntas = JSON.parse(raw); } catch { preguntas = []; } }
+    return {
+      evaluacionModo: (row?.evaluacionModo || 'IA').toUpperCase(),
+      preguntasManual: Array.isArray(preguntas) ? preguntas : [],
+    };
+  }
+
+  /**
    * Get every step of a nivel with its `contenido`, ordered numerically by step.
    *
    * Used by the Jump tutor: a Jump evaluates the WHOLE level, so the bot needs
