@@ -408,8 +408,8 @@ function CrearContratoContent() {
       setError(`Beneficiario ${index + 1}: debe seleccionar campaña, curso y horario.`);
       return;
     }
-    const em = benefEmailError(index);
-    if (em) { setError(`Beneficiario ${index + 1}: ${em}`); return; }
+    // El correo NO bloquea: si coincide con otro beneficiario/titular sólo se
+    // muestra una advertencia (benefEmailWarn) en el campo.
     setError('');
     setBeneficiarios(prev => prev.map((x, i) => i === index ? { ...x, confirmado: true } : x));
     setShowPostConfirmModal(true);
@@ -420,17 +420,20 @@ function CrearContratoContent() {
 
   const normStr = (s?: string) => (s || '').trim().toLowerCase();
 
-  // Error de email de un beneficiario: no puede ser el del titular (salvo que el
-  // titular sea beneficiario) ni el de otro beneficiario. Devuelve '' si OK.
+  // Advertencia (NO bloquea) del email de un beneficiario: mismo que el de otro
+  // beneficiario, o el del titular. Sólo avisa — hermanos menores suelen compartir
+  // el correo del apoderado. Devuelve el texto de la advertencia o '' si no aplica.
   // EXCEPCIÓN MOSAICO: en cursos de menores (YOJI/OKINA/KODOMO) el contacto es el
-  // del apoderado/titular, así que el email SÍ puede coincidir con el del titular.
-  const benefEmailError = (index: number): string => {
+  // del apoderado/titular, así que no se advierte por coincidir con el titular.
+  const benefEmailWarn = (index: number): string => {
     const email = normStr(beneficiarios[index]?.email);
     if (!email) return '';
-    const cursoMenores = esMenores(beneficiarios[index]?.tipoCurso || '');
-    if (!titularEsBeneficiario && !cursoMenores && email === normStr(titular.email)) return 'El correo no puede ser el mismo del titular.';
     if (beneficiarios.some((b, j) => j !== index && normStr(b.email) && normStr(b.email) === email)) {
-      return 'Este correo ya lo tiene otro beneficiario.';
+      return 'El correo es el mismo del beneficiario, asegúrese que es correcto.';
+    }
+    const cursoMenores = esMenores(beneficiarios[index]?.tipoCurso || '');
+    if (!titularEsBeneficiario && !cursoMenores && email === normStr(titular.email)) {
+      return 'El correo es el mismo del titular, asegúrese que es correcto.';
     }
     return '';
   };
@@ -536,12 +539,7 @@ function CrearContratoContent() {
       setError(`Confirma el Beneficiario ${sinConfirmar + 1} antes de crear el contrato.`);
       return;
     }
-    // Email de beneficiarios: no puede repetir el del titular ni el de otro beneficiario.
-    const idxEmail = beneficiarios.findIndex((_, i) => benefEmailError(i) !== '');
-    if (idxEmail >= 0) {
-      setError(`Beneficiario ${idxEmail + 1}: ${benefEmailError(idxEmail)}`);
-      return;
-    }
+    // El correo del beneficiario NO bloquea (sólo advierte en el campo).
     setError('');
     setShowResumenModal(true);
   };
@@ -1425,11 +1423,11 @@ function CrearContratoContent() {
                             value={beneficiario.email}
                             onChange={(e) => updateBeneficiario(index, 'email', e.target.value)}
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
-                              benefEmailError(index) ? 'border-red-400' : 'border-gray-300'
+                              benefEmailWarn(index) ? 'border-amber-400' : 'border-gray-300'
                             }`}
                           />
-                          {benefEmailError(index) && (
-                            <p className="mt-1 text-xs text-red-600">{benefEmailError(index)}</p>
+                          {benefEmailWarn(index) && (
+                            <p className="mt-1 text-xs text-amber-600">⚠️ {benefEmailWarn(index)}</p>
                           )}
                         </div>
                         <div>
