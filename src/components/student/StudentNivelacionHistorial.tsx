@@ -19,7 +19,7 @@ interface Props {
 /**
  * Historial de nivelaciones del estudiante (ACADEMICA.NivelacionHistory).
  * Muestra cada registro (fecha del evento, conteo, resultado y comentario),
- * ordenado de la más ANTIGUA a la más NUEVA (por fecha del evento).
+ * ordenado de la más RECIENTE a la más antigua (por fecha del evento).
  */
 export default function StudentNivelacionHistorial({ student }: Props) {
   const [rows, setRows] = useState<Entry[]>([])
@@ -32,11 +32,12 @@ export default function StudentNivelacionHistorial({ student }: Props) {
       .then(r => r.json())
       .then(d => {
         const hist: Entry[] = Array.isArray(d.historial) ? d.historial : []
-        // Orden ascendente por fecha del evento (fallback a fecha de registro)
+        // Orden descendente por fecha del evento: de la más RECIENTE a la más antigua
+        // (fallback a fecha de registro).
         hist.sort((a, b) => {
           const fa = new Date(a.fechaEvento || a.fecha || 0).getTime()
           const fb = new Date(b.fechaEvento || b.fecha || 0).getTime()
-          return fa - fb
+          return fb - fa
         })
         setRows(hist)
       })
@@ -56,7 +57,7 @@ export default function StudentNivelacionHistorial({ student }: Props) {
     <div>
       <h3 className="text-lg font-medium text-gray-900 mb-1">Nivelación Historial</h3>
       <p className="text-sm text-gray-500 mb-5">
-        Registros de nivelación del estudiante (de la más antigua a la más nueva). Total: <span className="font-semibold text-gray-700">{rows.length}</span>
+        Registros de nivelación del estudiante (de la más reciente a la más antigua). Total: <span className="font-semibold text-gray-700">{rows.length}</span>
       </p>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
