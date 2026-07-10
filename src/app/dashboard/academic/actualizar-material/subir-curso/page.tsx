@@ -12,33 +12,67 @@ interface Leccion {
   descripcionModulo: string
   leccion: string
   descripcion: string
+  clubs: string[]
+  contenido: string
+  esParalelo: boolean
+  orden?: number
 }
 
-// Aliases flexibles de columnas (encabezado del CSV → campo interno).
-const COL_ALIASES: Record<string, keyof Omit<Leccion, 'fila'>> = {
+type TextField = 'curso' | 'modulo' | 'descripcionModulo' | 'leccion' | 'descripcion'
+
+// Aliases flexibles de columnas (encabezado del CSV → campo interno). Acepta tanto
+// el formato simple (modulo/leccion/…) como los nombres nativos de NIVELES
+// (code/step/description/descripcionModulo) para poder re-subir un export completo.
+const COL_ALIASES: Record<string, TextField> = {
   curso: 'curso',
   modulo: 'modulo',
   'módulo': 'modulo',
+  code: 'modulo',
   descipcionmodulo: 'descripcionModulo',
   descripcionmodulo: 'descripcionModulo',
   'descripción módulo': 'descripcionModulo',
   'descripcion modulo': 'descripcionModulo',
   leccion: 'leccion',
   'lección': 'leccion',
+  step: 'leccion',
   descripcionlession: 'descripcion',
   descripcionleccion: 'descripcion',
   'descripción lección': 'descripcion',
   'descripcion leccion': 'descripcion',
   descripcion: 'descripcion',
+  description: 'descripcion',
 }
 
 // Orden posicional por defecto cuando el CSV no trae encabezado reconocible.
-const POS_ORDER: (keyof Omit<Leccion, 'fila'>)[] = ['curso', 'modulo', 'descripcionModulo', 'leccion', 'descripcion']
+const POS_ORDER: TextField[] = ['curso', 'modulo', 'descripcionModulo', 'leccion', 'descripcion']
 
 function detectSep(line: string): string {
   const semi = (line.match(/;/g) || []).length
   const comma = (line.match(/,/g) || []).length
   return semi >= comma ? ';' : ','
+}
+
+// Parser de línea CSV con comillas dobles ("" = comilla escapada). Necesario para
+// campos como clubs = "[""BASICO - Leccion 00"",""AVANZADO - Leccion 00""]".
+function parseCsvLine(line: string, sep: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let inQ = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQ) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++ }
+        else inQ = false
+      } else cur += ch
+    } else {
+      if (ch === '"') inQ = true
+      else if (ch === sep) { out.push(cur); cur = '' }
+      else cur += ch
+    }
+  }
+  out.push(cur)
+  return out
 }
 
 function parseCSV(text: string): { rows: Leccion[]; error: string | null } {
@@ -47,33 +81,50 @@ function parseCSV(text: string): { rows: Leccion[]; error: string | null } {
   if (lines.length === 0) return { rows: [], error: 'El archivo está vacío.' }
 
   const sep = detectSep(lines[0])
-  const firstCols = lines[0].split(sep).map(c => c.trim().toLowerCase())
+  const firstCols = parseCsvLine(lines[0], sep).map(c => c.trim().toLowerCase())
 
-  // ¿Primera fila es encabezado? (contiene "curso" y "modulo"/"módulo")
-  const hasHeader = firstCols.includes('curso') && (firstCols.includes('modulo') || firstCols.includes('módulo'))
+  // ¿Primera fila es encabezado? (contiene "curso" y "modulo"/"módulo"/"code")
+  const hasHeader = firstCols.includes('curso') &&
+    (firstCols.includes('modulo') || firstCols.includes('módulo') || firstCols.includes('code'))
 
-  let colMap: (keyof Omit<Leccion, 'fila'> | null)[]
-  if (hasHeader) {
-    colMap = firstCols.map(c => COL_ALIASES[c] || null)
-  } else {
-    colMap = POS_ORDER
-  }
+  // Índice de columnas nativas extra (solo cuando hay encabezado).
+  const nameIdx: Record<string, number> = {}
+  if (hasHeader) firstCols.forEach((c, i) => { if (!(c in nameIdx)) nameIdx[c] = i })
+
+  const colMap: (TextField | null)[] = hasHeader
+    ? firstCols.map(c => COL_ALIASES[c] || null)
+    : POS_ORDER
 
   const dataLines = hasHeader ? lines.slice(1) : lines
   const rows: Leccion[] = []
   dataLines.forEach((line, i) => {
-    const parts = line.split(sep)
+    const parts = parseCsvLine(line, sep)
     if (parts.every(p => !p.trim())) return
-    const row: Leccion = { fila: i + 1, curso: '', modulo: '', descripcionModulo: '', leccion: '', descripcion: '' }
+    const row: Leccion = {
+      fila: i + 1, curso: '', modulo: '', descripcionModulo: '', leccion: '', descripcion: '',
+      clubs: [], contenido: '', esParalelo: false,
+    }
     colMap.forEach((field, idx) => {
       if (!field) return
       let val = (parts[idx] ?? '').trim()
-      // La descripción de la lección puede contener el separador → une el resto.
       if (field === 'descripcion' && idx === colMap.length - 1 && parts.length > colMap.length) {
         val = parts.slice(idx).join(sep).trim()
       }
       row[field] = val.replace(/[}\s]+$/, '').trim()
     })
+    // Columnas nativas extra del export (clubs / contenido / esParalelo / orden).
+    if (hasHeader) {
+      if (nameIdx.clubs != null) {
+        const raw = (parts[nameIdx.clubs] ?? '').trim()
+        if (raw) { try { const c = JSON.parse(raw); if (Array.isArray(c)) row.clubs = c.map((x: any) => String(x)) } catch { /* ignora */ } }
+      }
+      if (nameIdx.contenido != null) row.contenido = (parts[nameIdx.contenido] ?? '').trim()
+      if (nameIdx.orden != null) { const n = parseInt((parts[nameIdx.orden] ?? '').trim(), 10); if (!isNaN(n)) row.orden = n }
+      if (nameIdx.esparalelo != null) {
+        const v = (parts[nameIdx.esparalelo] ?? '').trim().toLowerCase()
+        row.esParalelo = v === 'verdadero' || v === 'true' || v === 't' || v === '1'
+      }
+    }
     rows.push(row)
   })
 
@@ -118,7 +169,7 @@ export default function SubirCursoPage() {
     if (file) handleFile(file)
   }, [handleFile])
 
-  const updateCell = (fila: number, field: keyof Omit<Leccion, 'fila'>, value: string) => {
+  const updateCell = (fila: number, field: TextField, value: string) => {
     setRows(prev => prev.map(r => (r.fila === fila ? { ...r, [field]: value } : r)))
   }
 
@@ -132,6 +183,10 @@ export default function SubirCursoPage() {
       descripcionModulo: r.descripcionModulo,
       leccion: r.leccion,
       descripcion: r.descripcion,
+      clubs: r.clubs,
+      contenido: r.contenido,
+      esParalelo: r.esParalelo,
+      orden: r.orden,
     })),
   })
 
@@ -233,6 +288,11 @@ export default function SubirCursoPage() {
                 <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-sm font-semibold">Curso: {curso}</span>
                 <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm">{rows.length} lecciones</span>
                 <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-sm">{modulos.length} módulos</span>
+                {rows.some(r => r.clubs.length > 0) && (
+                  <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm">
+                    {rows.filter(r => r.clubs.length > 0).length} con talleres
+                  </span>
+                )}
                 {invalidRows.length > 0 && (
                   <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-sm">
                     {invalidRows.length} fila(s) sin módulo/lección
@@ -251,6 +311,7 @@ export default function SubirCursoPage() {
                         <th className="px-3 py-2 font-medium">Descripción módulo</th>
                         <th className="px-3 py-2 font-medium">Lección</th>
                         <th className="px-3 py-2 font-medium">Descripción lección</th>
+                        <th className="px-3 py-2 font-medium">Talleres</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -274,6 +335,9 @@ export default function SubirCursoPage() {
                             <td className="px-2 py-1">
                               <input value={r.descripcion} onChange={e => updateCell(r.fila, 'descripcion', e.target.value)}
                                 className="w-full px-2 py-1 rounded border border-gray-200 focus:border-rose-400 focus:outline-none" />
+                            </td>
+                            <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap" title={r.clubs.join(', ')}>
+                              {r.clubs.length > 0 ? `${r.clubs.length} taller(es)` : '—'}
                             </td>
                           </tr>
                         )
