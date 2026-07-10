@@ -13,6 +13,7 @@ import StudentContract from './StudentContract'
 import StudentWhatsApp from './StudentWhatsApp'
 import StudentComments from './StudentComments'
 import StudentProgress from './StudentProgress'
+import StudentNivelacionHistorial from './StudentNivelacionHistorial'
 import StudentChangeStep from './StudentChangeStep'
 import StudentInicializarNivel from './StudentInicializarNivel'
 import StudentCambioStepAuditado from './StudentCambioStepAuditado'
@@ -89,6 +90,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   const academicSubmenu = [
     { id: 'attendance', name: 'Tabla de Asistencia', icon: '📋' },
     ...(canAccessProgress ? [{ id: 'progress', name: '¿Cómo voy?', icon: '📈' }] : []),
+    { id: 'nivelacion-historial', name: 'Nivelación Historial', icon: '📜' },
     { id: 'schedule', name: 'Agendar Nueva Clase', icon: '📅' },
     ...(canAccessSteps ? [{ id: 'steps', name: 'Gestión de Steps', icon: '📊' }] : []),
     ...(canChangeStep ? [{ id: 'change-step', name: 'Cambiar Step', icon: '👣' }] : []),
@@ -108,6 +110,9 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
         // Si la vista académica es "progress", mostrar el componente de diagnóstico
         if (academicView === 'progress') {
           return <StudentProgress student={student} />
+        }
+        if (academicView === 'nivelacion-historial') {
+          return <StudentNivelacionHistorial student={student} />
         }
         return <StudentAcademic student={student} classes={classes} view={academicView as any} />
       case 'contract':

@@ -16,10 +16,10 @@ export const GET = handlerWithAuth(async (_req, { params }, _session) => {
   // Módulo actual real: si sigue en el puente WELCOME (o sin nivel), el de PEOPLE;
   // si fue promovido, el de ACADEMICA. Curso real = PEOPLE.tipoCurso (o a.curso).
   const row = await queryOne<{
-    nivelacion: boolean | null; detalleNivelacion: any;
+    nivelacion: boolean | null; detalleNivelacion: any; NivelacionHistory: any;
     a_nivel: string | null; a_curso: string | null; p_nivel: string | null; tipoCurso: string | null
   }>(
-    `SELECT a."nivelacion", a."detalleNivelacion",
+    `SELECT a."nivelacion", a."detalleNivelacion", a."NivelacionHistory",
             a."nivel" AS a_nivel, a."curso" AS a_curso, p."nivel" AS p_nivel, p."tipoCurso"
        FROM "ACADEMICA" a LEFT JOIN "PEOPLE" p ON p."_id" = a."peopleId"
       WHERE a."_id" = $1`,
@@ -29,6 +29,7 @@ export const GET = handlerWithAuth(async (_req, { params }, _session) => {
   return successResponse({
     nivelacion: row?.nivelacion ?? false,
     detalleNivelacion: row?.detalleNivelacion ?? null,
+    historial: Array.isArray(row?.NivelacionHistory) ? row!.NivelacionHistory : [],
     moduloActual,
     curso: row?.tipoCurso || row?.a_curso || null,
   })
