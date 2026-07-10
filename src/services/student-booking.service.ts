@@ -142,7 +142,8 @@ export async function getAvailableEvents(
   date: string,
   tipo?: string,
   tzOffset: number = 0,
-  nivelParalelo?: string
+  nivelParalelo?: string,
+  curso?: string
 ) {
   // Build a date range for the selected day in the student's local timezone
   // tzOffset is in minutes from UTC (e.g., Chile UTC-3 = 180, Colombia UTC-5 = 300)
@@ -153,15 +154,19 @@ export async function getAvailableEvents(
   const startDate = new Date(dayStart.getTime() + offsetMs).toISOString();
   const endDate = new Date(dayEnd.getTime() + offsetMs).toISOString();
 
+  // MOSAICO — Talleres (CLUB): se filtran por CURSO (YOJI/OKINA/…), no por módulo.
+  // Un alumno YOJI ve TODOS los talleres de YOJI sin importar su módulo actual.
+  // (Igual criterio que Nivelación.) El filtro por step/jump se omite para Talleres.
+  const esTaller = String(tipo || '').toUpperCase() === 'CLUB';
+
   // When the student's main nivel is ESS, mark all their events as esESS so the UI
   // displays them correctly (orange border, "English Speaking Session" label) and
   // the step/jump filter is bypassed (ESS has no step progression requirements).
-  const rawMainEvents = await CalendarioRepository.findEvents({
-    startDate,
-    endDate,
-    nivel,
-    tipo,
-  });
+  const rawMainEvents = await CalendarioRepository.findEvents(
+    (esTaller && curso)
+      ? { startDate, endDate, curso, tipo }
+      : { startDate, endDate, nivel, tipo }
+  );
   const mainEvents = nivel === 'ESS'
     ? rawMainEvents.map((e: any) => ({ ...e, esESS: true }))
     : rawMainEvents;
@@ -237,8 +242,9 @@ export async function getAvailableEvents(
     // can see the session existed today (important for students in different timezones)
     const tiempoInsuficiente = minutesUntil < BOOKING_MIN_ADVANCE_MINUTES;
 
-    // ESS events: skip the step/jump filter — they always show regardless of active step
-    if (!evt.esESS) {
+    // ESS y Talleres (CLUB): omiten el filtro de step/jump — se muestran todos
+    // los del curso sin importar el step actual del alumno.
+    if (!evt.esESS && !esTaller) {
       const evtStepNum = extractStepNumber(evt.step || evt.nombreEvento || '');
       const isJumpEvent = evtStepNum !== null && evtStepNum > 0 && evtStepNum % 5 === 0;
 
