@@ -52,6 +52,32 @@ function detectSep(line: string): string {
   return semi >= comma ? ';' : ','
 }
 
+// Decodifica bytes tolerando codificación MIXTA UTF-8 / Latin-1 (los CSV de los
+// cursos vienen así). Cada secuencia UTF-8 válida se decodifica como UTF-8; los
+// bytes sueltos ≥0x80 se interpretan como Latin-1. Réplica de smartDecode() de
+// scripts/seed-niveles-curso.js — evita el mojibake "Lecci�n" → "Lección".
+function smartDecode(bytes: Uint8Array): string {
+  const utf8 = new TextDecoder('utf-8')
+  let out = ''
+  let i = 0
+  while (i < bytes.length) {
+    const b = bytes[i]
+    if (b < 0x80) { out += String.fromCharCode(b); i++; continue }
+    let len = 0
+    if ((b & 0xe0) === 0xc0) len = 2
+    else if ((b & 0xf0) === 0xe0) len = 3
+    else if ((b & 0xf8) === 0xf0) len = 4
+    if (len && i + len <= bytes.length) {
+      let ok = true
+      for (let k = 1; k < len; k++) if ((bytes[i + k] & 0xc0) !== 0x80) { ok = false; break }
+      if (ok) { out += utf8.decode(bytes.subarray(i, i + len)); i += len; continue }
+    }
+    out += String.fromCharCode(b) // Latin-1
+    i++
+  }
+  return out
+}
+
 // Parser de línea CSV con comillas dobles ("" = comilla escapada). Necesario para
 // campos como clubs = "[""BASICO - Leccion 00"",""AVANZADO - Leccion 00""]".
 function parseCsvLine(line: string, sep: string): string[] {
@@ -154,12 +180,13 @@ export default function SubirCursoPage() {
     setFileName(file.name)
     const reader = new FileReader()
     reader.onload = e => {
-      const text = String(e.target?.result || '')
+      const buf = e.target?.result as ArrayBuffer
+      const text = smartDecode(new Uint8Array(buf))
       const { rows: parsed, error } = parseCSV(text)
       setRows(parsed)
       setParseError(error)
     }
-    reader.readAsText(file, 'utf-8')
+    reader.readAsArrayBuffer(file)
   }, [])
 
   const onDrop = useCallback((e: React.DragEvent) => {
