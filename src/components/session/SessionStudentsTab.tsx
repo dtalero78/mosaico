@@ -14,6 +14,7 @@ interface CalendarioEvent {
   _id: string
   nombreEvento: string
   evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
+  tipo?: string
   dia: string
   advisor: string
   tituloONivel: string
@@ -94,6 +95,13 @@ export default function SessionStudentsTab({
   const [lecciones, setLecciones] = useState<Array<{ value: string; label: string; modulo: string }>>([])
   const [moduloActual, setModuloActual] = useState<string | null>(null)
   const [savingNivel, setSavingNivel] = useState(false)
+
+  // Cierre de nivelación cuando el EVENTO es tipo NIVELACION
+  const esNivelacionEvent = (evento?.tipo || evento?.evento) === 'NIVELACION'
+  const [showNivelComentario, setShowNivelComentario] = useState(false)
+  const [nivelComentarioText, setNivelComentarioText] = useState('')
+  const [showNivelReminder, setShowNivelReminder] = useState(false)
+  const [savingNivelClose, setSavingNivelClose] = useState(false)
 
   // Cargar lecciones del curso del evento (evento.nivel = tipoCurso en MOSAICO)
   useEffect(() => {
@@ -206,9 +214,8 @@ export default function SessionStudentsTab({
     }
   }
 
-  const handleSaveClassRecord = async () => {
+  const doSaveClassRecord = async (comentarioNivel?: string) => {
     if (!selectedStudent) return
-
     try {
       // Extraer solo el número del step del nombreEvento
       // Ej: "Step 5 Club - Conversation Practice" → "Step 5"
@@ -232,24 +239,60 @@ export default function SessionStudentsTab({
           actividadPropuesta,
           nivel: evento?.tituloONivel,
           step: evento?.nombreEvento ? extractStepNumber(evento.nombreEvento) : evento?.nombreEvento,
+          ...(comentarioNivel !== undefined ? { nivelacionComentario: comentarioNivel } : {}),
         })
       })
 
-      if (!response.ok) throw new Error('Error al guardar')
+      if (!response.ok) {
+        let msg = 'Error al guardar'
+        try { const j = await response.json(); msg = j.error || j.message || msg } catch {}
+        throw new Error(msg)
+      }
 
       const data = await response.json()
-
       if (data.success) {
         alert('Datos guardados exitosamente')
         onDataUpdate()
-
-        // Debug code removed - diagnostic endpoint no longer needed after Wix → PostgreSQL migration
       } else {
         throw new Error(data.error)
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving class record:', err)
-      alert('Error al guardar los datos')
+      alert(err?.message || 'Error al guardar los datos')
+    }
+  }
+
+  const handleSaveClassRecord = async () => {
+    if (!selectedStudent) return
+    // Evento tipo NIVELACION: el guardado CIERRA la nivelación.
+    //  - Asistió Y Participó → modal de comentario obligatorio → REALIZADA.
+    //  - Ninguna → no asistió (guarda directo; backend limpia detalle y baja conteo).
+    //  - Solo una → recordatorio (requiere ambas).
+    if (esNivelacionEvent) {
+      if (asistencia && participacion) {
+        setNivelComentarioText('')
+        setShowNivelComentario(true)
+        return
+      }
+      if (!asistencia && !participacion) {
+        await doSaveClassRecord()
+        return
+      }
+      setShowNivelReminder(true)
+      return
+    }
+    await doSaveClassRecord()
+  }
+
+  const confirmNivelComentario = async () => {
+    const c = nivelComentarioText.trim()
+    if (!c) return
+    setSavingNivelClose(true)
+    try {
+      await doSaveClassRecord(c)
+      setShowNivelComentario(false)
+    } finally {
+      setSavingNivelClose(false)
     }
   }
 
@@ -385,7 +428,10 @@ export default function SessionStudentsTab({
                     />
                     <span className="text-gray-700">Participó activamente</span>
                   </label>
-                  {/* Nivelación — casilla + dropdown de lecciones del curso */}
+                  {/* Nivelación — casilla + dropdown de lecciones del curso.
+                      Se OCULTA cuando el evento es tipo NIVELACION (el evento ya
+                      es la nivelación; marcar asistencia la cierra). */}
+                  {!esNivelacionEvent && (
                   <div>
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input
@@ -418,6 +464,7 @@ export default function SessionStudentsTab({
                       )
                     })()}
                   </div>
+                  )}
                   {isJumpStep() && (
                     <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
@@ -541,6 +588,58 @@ export default function SessionStudentsTab({
           </>
         )}
       </div>
+
+      {/* Modal: comentario OBLIGATORIO al cerrar una nivelación (asistió + participó) */}
+      {showNivelComentario && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Comentario de la nivelación</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              El estudiante asistió y participó. Registra un comentario sobre la nivelación
+              (se guarda en el historial). <span className="text-red-600 font-medium">Obligatorio.</span>
+            </p>
+            <textarea
+              value={nivelComentarioText}
+              onChange={(e) => setNivelComentarioText(e.target.value)}
+              rows={4}
+              autoFocus
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Ej: reforzó suma con soroban; avanzó bien en…"
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button type="button" onClick={() => setShowNivelComentario(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmNivelComentario}
+                disabled={!nivelComentarioText.trim() || savingNivelClose}
+                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {savingNivelClose ? 'Guardando…' : 'Guardar nivelación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: recordatorio de que la nivelación requiere marcar AMBAS opciones */}
+      {showNivelReminder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">⚠️ Asistencia incompleta</h3>
+            <p className="text-sm text-gray-700 mb-4">
+              La asistencia de la Nivelación requiere marcar <strong>ambas</strong> opciones:
+              <strong> Asistió a la clase</strong> y <strong>Participó activamente</strong>.
+              Si el estudiante no asistió, deja las dos sin marcar.
+            </p>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setShowNivelReminder(false)}
+                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700">
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
