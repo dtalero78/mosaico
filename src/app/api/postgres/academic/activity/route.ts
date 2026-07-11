@@ -40,7 +40,7 @@ export const POST = handlerWithAuth(async (request) => {
 
   const studentName = `${student.primerNombre || ''} ${student.primerApellido || ''}`.trim();
 
-  const prompt = `Eres un advisor de inglés de la plataforma Let's Go Speak. Genera una actividad personalizada breve para un estudiante.
+  const prompt = `Eres un advisor de la plataforma MOSAICO. Genera una actividad personalizada breve para un estudiante.
 
 Estudiante: ${studentName}
 Nivel: ${studentNivel}

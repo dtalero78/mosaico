@@ -539,7 +539,7 @@ export const pagosTitularesService = {
 
     <div class="footer">
       <div class="line"></div>
-      <div class="caption">Departamento de Recaudos · Let's Go Speak</div>
+      <div class="caption">Departamento de Recaudos · MOSAICO</div>
     </div>
   </div>
 </body>
