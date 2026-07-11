@@ -25,14 +25,14 @@ const SEED = [
     slug: 'bienvenida',
     nombre: 'Bienvenida',
     descripcion: 'Mensaje de bienvenida al estudiante recién registrado.',
-    contenido: 'Hola {{nombre}}, te damos la bienvenida a Let\'s Go Speak. Tu nivel actual es {{nivel}} - {{step}}. Cualquier duda escríbenos.',
+    contenido: 'Hola {{nombre}}, te damos la bienvenida a MOSAICO. Tu nivel actual es {{nivel}} - {{step}}. Cualquier duda escríbenos.',
     placeholders: ['nombre', 'nivel', 'step'],
   },
   {
     slug: 'recordatorio-clase',
     nombre: 'Recordatorio de Clase',
     descripcion: 'Recuerda al estudiante que ingrese a su panel para revisar su próxima clase.',
-    contenido: 'Hola {{nombre}}, te recordamos tu próxima clase. Ingresa a tu panel para ver detalles: https://lgs-plataforma.com/login',
+    contenido: 'Hola {{nombre}}, te recordamos tu próxima clase. Ingresa a tu panel para ver detalles: https://mosaicosorobanplataforma.com/login',
     placeholders: ['nombre'],
   },
   {

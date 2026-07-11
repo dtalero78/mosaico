@@ -208,7 +208,6 @@ const getNavigation = (userEmail: string, userRole: string) => [
       },
       {
         name: 'Scripts', isSubmenu: true, children: [
-          { name: 'Usuarios Pegados', href: '/admin/scripts/usuarios-pegados', newTab: true },
           { name: 'Consulta', href: '/admin/scripts/consulta', newTab: true },
         ],
       },

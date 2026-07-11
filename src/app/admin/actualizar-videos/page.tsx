@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeftIcon, VideoCameraIcon, AcademicCapIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon, VideoCameraIcon } from '@heroicons/react/24/outline'
 
 export default function ActualizarVideosPage() {
   const open = (path: string) => window.open(path, '_blank', 'noopener,noreferrer')
@@ -22,7 +22,7 @@ export default function ActualizarVideosPage() {
         </div>
 
         {/* Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           <button
             onClick={() => open('/admin/actualizar-videos/instructivos')}
             className="group bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-left hover:shadow-md hover:border-blue-300 transition-all"
@@ -38,23 +38,10 @@ export default function ActualizarVideosPage() {
               Gestionar →
             </span>
           </button>
-
-          <button
-            onClick={() => open('/admin/actualizar-videos/sesiones')}
-            className="group bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-left hover:shadow-md hover:border-purple-300 transition-all"
-          >
-            <div className="h-14 w-14 bg-purple-100 rounded-xl flex items-center justify-center mb-5 group-hover:bg-purple-200 transition-colors">
-              <AcademicCapIcon className="h-7 w-7 text-purple-600" />
-            </div>
-            <h2 className="text-lg font-bold text-gray-900 mb-1">Sesiones</h2>
-            <p className="text-sm text-gray-500">
-              Gestiona los videos de cada sesión por nivel y step (subir archivo MP4 o enlace externo).
-            </p>
-            <span className="mt-4 inline-flex items-center text-sm font-medium text-purple-600 group-hover:gap-2 transition-all">
-              Gestionar →
-            </span>
-          </button>
         </div>
+        <p className="mt-4 text-xs text-gray-400 text-center">
+          Los videos por lección se gestionan en <strong>Académico › Guías › Mantenimiento Cursos › Videos</strong> (cascada Curso → Módulo → Lección).
+        </p>
       </div>
     </div>
   )

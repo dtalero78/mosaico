@@ -242,7 +242,7 @@ export async function executeBloqueo(personIds: string[]): Promise<BloqueoExecut
   }
 
   const personas = await queryMany(
-    `SELECT "_id", "primerNombre", "primerApellido", "numeroId", "email"
+    `SELECT "_id", "primerNombre", "primerApellido", "numeroId", "email", "userLogin"
      FROM "PEOPLE"
      WHERE "_id" = ANY($1::text[])`,
     [personIds]
@@ -287,7 +287,17 @@ export async function executeBloqueo(personIds: string[]): Promise<BloqueoExecut
         }
       }
 
-      if (p.email) {
+      // Bloquear el ACCESO (login). En MOSAICO el login es por `userLogin` (los
+      // hermanos comparten el email del apoderado), así que bloqueamos la cuenta
+      // POR userLogin — preciso por alumno, sin afectar a los demás. Fallback a
+      // email (legacy) con guarda de email compartido para cuentas sin userLogin.
+      if (p.userLogin) {
+        await query(
+          `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
+           WHERE "userLogin" = $1`,
+          [p.userLogin]
+        ).catch(() => {});
+      } else if (p.email) {
         const otroLogin = await queryMany(
           `SELECT 1 FROM "PEOPLE"
            WHERE LOWER("email") = LOWER($1) AND "tipoUsuario" = 'BENEFICIARIO'
