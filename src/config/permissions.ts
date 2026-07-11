@@ -567,6 +567,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/lista-usuarios (Académico › Guías). Reporte de estudiantes con filtros por campaña, curso, salón, guía y rango de fecha de contrato. Columnas: nombre, fecha de nacimiento, edad, apoderado, guía, módulo y lección actual.',
   },
   {
+    code: AcademicoPermission.SOLICITUD_SESIONES_VER,
+    module: Module.ACADEMICO,
+    section: 'Solicitud Sesiones',
+    name: 'Ver Solicitud de Sesiones',
+    description: 'Acceso a /dashboard/academic/solicitud-sesiones. Reporte de solicitudes "Repetir Lección" marcadas por los guías, con filtros por guía, curso, salón y fechas.',
+  },
+  {
+    code: AcademicoPermission.SOLICITUD_SESIONES_GESTION,
+    module: Module.ACADEMICO,
+    section: 'Solicitud Sesiones',
+    name: 'Autorizar Solicitudes de Sesión',
+    description: 'Permite autorizar (aprobar) las solicitudes de "Repetir Lección" desde el reporte Solicitud de Sesiones.',
+  },
+  {
     code: AcademicoPermission.LISTA_USUARIOS_EXPORTAR,
     module: Module.ACADEMICO,
     section: 'Lista de Usuarios',

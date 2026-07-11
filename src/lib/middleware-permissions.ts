@@ -148,6 +148,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/sesiones-sin-gestion': [
     'ACADEMICO.SESIONES_SIN_GESTION.VER' as Permission,
   ],
+  '/dashboard/academic/solicitud-sesiones': [
+    'ACADEMICO.SOLICITUD_SESIONES.VER' as Permission,
+  ],
   '/dashboard/academic/eventos-administrativos': [
     'ACADEMICO.ADMIN_EVENTS.GESTIONAR' as Permission,
   ],

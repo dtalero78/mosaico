@@ -380,16 +380,19 @@ export default function SesionPage() {
                     Ir a Zoom
                   </a>
                 )}
-                <RegistrarSesionButton
-                  evento={evento}
-                  windowState={windowState}
-                  totalInscritos={students.length}
-                  totalConAsistencia={totalConAsistencia}
-                  onClosed={() => loadEventoData()}
-                  isShared={isShared}
-                  nextSibling={nextSibling}
-                  groupSize={groupSiblings.length}
-                />
+                <div className="flex flex-col items-end gap-2">
+                  <RegistrarSesionButton
+                    evento={evento}
+                    windowState={windowState}
+                    totalInscritos={students.length}
+                    totalConAsistencia={totalConAsistencia}
+                    onClosed={() => loadEventoData()}
+                    isShared={isShared}
+                    nextSibling={nextSibling}
+                    groupSize={groupSiblings.length}
+                  />
+                  <RepetirLeccionButton eventoId={evento._id} onMarked={() => loadEventoData()} />
+                </div>
               </div>
             </div>
           </div>
@@ -867,6 +870,84 @@ function RegistrarSesionButton({
                 Continuar con {nextSibling.nivel || 'siguiente'} →
               </button>
             </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
+ * Botón "Repetir Lección": el guía solicita repetir una lección del módulo actual
+ * del salón. Abre un modal que carga las lecciones del módulo (server-side) y, al
+ * confirmar, marca CALENDARIO.repetirSesion=true con la lección asignada.
+ */
+function RepetirLeccionButton({ eventoId, onMarked }: { eventoId: string; onMarked: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [info, setInfo] = useState<any>(null)
+  const [leccion, setLeccion] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const abrir = async () => {
+    setOpen(true); setLoading(true); setInfo(null); setLeccion('')
+    try {
+      const r = await fetch(`/api/postgres/calendario/${eventoId}/repetir-sesion`)
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error || 'Error')
+      setInfo(j)
+      if (j.yaMarcado && j.leccionMarcada) setLeccion(j.leccionMarcada)
+    } catch (e: any) { toast.error(e.message); setOpen(false) } finally { setLoading(false) }
+  }
+
+  const confirmar = async () => {
+    if (!leccion) { toast.error('Selecciona la lección'); return }
+    setSaving(true)
+    try {
+      const r = await fetch(`/api/postgres/calendario/${eventoId}/repetir-sesion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leccion }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error || 'Error')
+      toast.success('Solicitud de repetir lección registrada')
+      setOpen(false); onMarked()
+    } catch (e: any) { toast.error(e.message) } finally { setSaving(false) }
+  }
+
+  return (
+    <>
+      <button type="button" onClick={abrir}
+        className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium">
+        🔁 Repetir Lección
+      </button>
+      {open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Repetir Lección</h3>
+            {loading ? (
+              <p className="text-sm text-gray-400 py-6 text-center">Cargando…</p>
+            ) : info ? (
+              <>
+                <p className="text-sm text-gray-500 mb-4">Curso <b>{info.curso}</b> · Módulo <b>{info.modulo}</b> · Salón <b>{info.salon || '—'}</b></p>
+                {info.yaMarcado && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">Ya hay una solicitud para este evento; puedes actualizar la lección.</p>
+                )}
+                <label className="block text-xs font-medium text-gray-500 mb-1">Lección a repetir (del módulo actual)</label>
+                <select value={leccion} onChange={e => setLeccion(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-5">
+                  <option value="">— Selecciona la lección —</option>
+                  {(info.lecciones || []).map((l: string) => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={() => setOpen(false)} disabled={saving}
+                    className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+                  <button type="button" onClick={confirmar} disabled={saving || !leccion}
+                    className="px-4 py-2 rounded-lg bg-amber-500 text-white font-medium hover:bg-amber-600 disabled:opacity-40">
+                    {saving ? 'Guardando…' : 'Confirmar'}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}
