@@ -237,7 +237,7 @@ export default function AprobacionPage() {
 
   // Descargar contrato PDF
   const downloadContrato = (contratoId: string) => {
-    const downloadUrl = `https://bsl-utilidades-yp78a.ondigitalocean.app/descargar-pdf-drive/${contratoId}?empresa=MOSAICO`
+    const downloadUrl = `https://bsl-utilidades-yp78a.ondigitalocean.app/descargar-pdf-drive/${contratoId}?empresa=LGS`
     window.open(downloadUrl, '_blank')
   }
 

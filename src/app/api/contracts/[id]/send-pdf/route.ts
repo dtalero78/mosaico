@@ -124,7 +124,10 @@ export const POST = handler(async (_request, { params }) => {
   const uploadPromise = fetch(BSL_UPLOAD_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pdfUrl: tempPdfUrl, documento: titularId, empresa: 'MOSAICO' }),
+    // empresa='LGS': el servicio bsl-utilidades aún NO tiene configurada la empresa
+    // "MOSAICO" (error "No se encontró configuración para la empresa MOSAICO").
+    // Volver a 'MOSAICO' cuando bsl-utilidades tenga esa empresa + su carpeta de Drive.
+    body: JSON.stringify({ pdfUrl: tempPdfUrl, documento: titularId, empresa: 'LGS' }),
   }).then(r => r.json()).catch(() => ({}));
 
   // 8. Send PDF via Whapi using the API2PDF direct URL (clean S3 link, no redirects)

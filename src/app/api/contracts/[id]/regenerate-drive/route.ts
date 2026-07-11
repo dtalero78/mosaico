@@ -129,7 +129,8 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
   const uploadRes = await fetch(BSL_UPLOAD_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pdfUrl: tempPdfUrl, documento: titularId, empresa: 'MOSAICO' }),
+    // empresa='LGS' hasta que bsl-utilidades configure la empresa "MOSAICO" + carpeta.
+    body: JSON.stringify({ pdfUrl: tempPdfUrl, documento: titularId, empresa: 'LGS' }),
   });
   const driveUpload = await uploadRes.json().catch(() => ({}));
 

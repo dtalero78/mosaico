@@ -27,7 +27,7 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
       alert('No se puede descargar el contrato: ID no disponible')
       return
     }
-    const downloadUrl = `https://bsl-utilidades-yp78a.ondigitalocean.app/descargar-pdf-drive/${person._id}?empresa=MOSAICO`
+    const downloadUrl = `https://bsl-utilidades-yp78a.ondigitalocean.app/descargar-pdf-drive/${person._id}?empresa=LGS`
     window.open(downloadUrl, '_blank')
   }
 

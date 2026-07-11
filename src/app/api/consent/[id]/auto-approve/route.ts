@@ -160,7 +160,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
               body: JSON.stringify({
                 pdfUrl,
                 documento: params.id,
-                empresa: 'MOSAICO',
+                empresa: 'LGS', // pendiente: bsl-utilidades no tiene empresa "MOSAICO" aún
               }),
             }).then(r => r.json()).catch(() => ({ error: 'Drive upload failed' }));
           }
