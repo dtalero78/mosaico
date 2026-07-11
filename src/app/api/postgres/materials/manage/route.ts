@@ -82,15 +82,16 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const nivel = searchParams.get('nivel')
   const tipo  = searchParams.get('tipo')    // 'usuario' | 'advisor'
+  const curso = searchParams.get('curso')   // MOSAICO: el code (módulo) se repite entre cursos
   if (!nivel || !tipo) return NextResponse.json({ error: 'nivel and tipo requeridos' }, { status: 400 })
 
   const field = tipo === 'usuario' ? 'materialUsuario' : 'material'
   const rows = await queryMany(
     `SELECT "_id", "code", "step", "${field}", "orden"
      FROM "NIVELES"
-     WHERE "code" = $1
+     WHERE "code" = $1 AND ($2::text IS NULL OR "curso" = $2)
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
-    [nivel]
+    [nivel, curso || null]
   )
 
   const steps = rows.map(row => ({
@@ -112,6 +113,7 @@ export async function POST(req: Request) {
   const step     = form.get('step')     as string
   const stepId   = form.get('stepId')   as string
   const tipo     = form.get('tipo')     as string
+  const curso    = (form.get('curso')   as string | null) || null
   const file     = form.get('file')     as File
   const anterior = (form.get('archivoAnterior') as string | null) || null
 
@@ -119,10 +121,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Faltan parámetros requeridos' }, { status: 400 })
   }
 
-  // Build Spaces key: materials/<nivel>/<tipo>/<sanitizedStep>-<filename>
-  const safeStep = step.replace(/[^a-zA-Z0-9\-]/g, '-')
-  const safeName = file.name.replace(/[^a-zA-Z0-9._\-]/g, '_')
-  const key      = `materials/${nivel}/${tipo}/${safeStep}-${safeName}`
+  // Build Spaces key: materials/[<curso>/]<nivel>/<tipo>/<sanitizedStep>-<filename>
+  // El curso se incluye porque en MOSAICO el code (módulo) se repite entre cursos
+  // → evita colisión de archivos entre cursos con el mismo módulo/lección.
+  const safeStep  = step.replace(/[^a-zA-Z0-9\-]/g, '-')
+  const safeName  = file.name.replace(/[^a-zA-Z0-9._\-]/g, '_')
+  const safeCurso = curso ? curso.replace(/[^a-zA-Z0-9\-]/g, '-') : ''
+  const key       = `materials/${safeCurso ? `${safeCurso}/` : ''}${nivel}/${tipo}/${safeStep}-${safeName}`
 
   // Upload to DO Spaces
   const buffer = Buffer.from(await file.arrayBuffer())

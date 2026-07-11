@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
+import { TIPOS_CURSO } from '@/lib/cursos-campaign'
 
 interface MaterialFile {
   key: string
@@ -24,11 +25,12 @@ interface Props {
 const FIELD_LABEL: Record<string, string> = { usuario: 'materialUsuario', advisor: 'material' }
 
 export default function MaterialManagePage({ tipo, title, description, accentColor }: Props) {
-  const [niveles, setNiveles] = useState<string[]>([])
-  const [selectedNivel, setSelectedNivel] = useState('')
+  const [curso, setCurso] = useState('')
+  const [modulos, setModulos] = useState<{ code: string; steps: string[] }[]>([])
+  const [selectedNivel, setSelectedNivel] = useState('')   // code del módulo seleccionado
   const [steps, setSteps] = useState<StepMaterial[]>([])
   const [loading, setLoading] = useState(false)
-  const [loadingNiveles, setLoadingNiveles] = useState(true)
+  const [loadingModulos, setLoadingModulos] = useState(false)
 
   // Modal state
   const [modal, setModal] = useState<{
@@ -42,24 +44,23 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
   // Hidden file input per step
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
 
-  // ── Load niveles ───────────────────────────────────────────────────────────
+  // ── Curso → módulos ─────────────────────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/postgres/niveles')
+    if (!curso) { setModulos([]); setSelectedNivel(''); setSteps([]); return }
+    setLoadingModulos(true); setSelectedNivel(''); setSteps([])
+    fetch(`/api/postgres/niveles?curso=${encodeURIComponent(curso)}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(data => {
-        const list: string[] = (data.niveles ?? data.data ?? []).map((n: any) => n.code as string)
-        setNiveles(list)
-      })
-      .catch(() => toast.error('Error cargando niveles'))
-      .finally(() => setLoadingNiveles(false))
-  }, [])
+      .then(data => setModulos(data.modulos ?? []))
+      .catch(() => toast.error('Error cargando módulos'))
+      .finally(() => setLoadingModulos(false))
+  }, [curso])
 
-  // ── Load steps for selected nivel ─────────────────────────────────────────
+  // ── Load steps (lecciones) del módulo seleccionado, scopeado por curso ──────
   const loadSteps = useCallback(async (nivel: string) => {
-    if (!nivel) return
+    if (!nivel || !curso) { setSteps([]); return }
     setLoading(true)
     try {
-      const r = await fetch(`/api/postgres/materials/manage?nivel=${encodeURIComponent(nivel)}&tipo=${tipo}`)
+      const r = await fetch(`/api/postgres/materials/manage?nivel=${encodeURIComponent(nivel)}&curso=${encodeURIComponent(curso)}&tipo=${tipo}`)
       const data = await r.json()
       setSteps(data.steps ?? [])
     } catch {
@@ -67,7 +68,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
     } finally {
       setLoading(false)
     }
-  }, [tipo])
+  }, [tipo, curso])
 
   useEffect(() => { loadSteps(selectedNivel) }, [selectedNivel, loadSteps])
 
@@ -120,6 +121,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
         form.append('step', modal.step)
         form.append('stepId', modal.stepId)
         form.append('tipo', tipo)
+        form.append('curso', curso)
         form.append('file', modal.newFile as File)
         if (modal.file?.key) form.append('archivoAnterior', modal.file.key)
 
@@ -177,22 +179,33 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
           </button>
         </div>
 
-        {/* Nivel selector */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Nivel</label>
-          {loadingNiveles ? (
-            <div className="h-10 bg-gray-100 animate-pulse rounded-lg" />
-          ) : (
+        {/* Selectores: Curso → Módulo */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6 flex flex-wrap gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Curso</label>
+            <select
+              value={curso}
+              onChange={e => setCurso(e.target.value)}
+              className="w-full sm:w-56 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 focus:border-transparent"
+              style={{ '--tw-ring-color': accentColor === 'blue' ? '#3b82f6' : '#22c55e' } as any}
+            >
+              <option value="">-- Selecciona un curso --</option>
+              {TIPOS_CURSO.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Módulo</label>
             <select
               value={selectedNivel}
               onChange={e => setSelectedNivel(e.target.value)}
-              className="w-full sm:w-72 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 focus:border-transparent"
+              disabled={!curso || loadingModulos}
+              className="w-full sm:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-0 focus:border-transparent"
               style={{ '--tw-ring-color': accentColor === 'blue' ? '#3b82f6' : '#22c55e' } as any}
             >
-              <option value="">-- Selecciona un nivel --</option>
-              {niveles.map(n => <option key={n} value={n}>{n}</option>)}
+              <option value="">{loadingModulos ? 'Cargando…' : '-- Selecciona un módulo --'}</option>
+              {modulos.map(m => <option key={m.code} value={m.code}>{m.code}</option>)}
             </select>
-          )}
+          </div>
         </div>
 
         {/* Steps table */}
@@ -202,7 +215,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
             </svg>
-            <p className="text-sm">Selecciona un nivel para ver y gestionar el material</p>
+            <p className="text-sm">Selecciona un curso y un módulo para ver y gestionar el material</p>
           </div>
         )}
 
@@ -216,7 +229,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
 
         {selectedNivel && !loading && steps.length === 0 && (
           <div className="text-center py-16 text-gray-400 text-sm">
-            No se encontraron steps para el nivel <strong>{selectedNivel}</strong>.
+            No se encontraron lecciones para el módulo <strong>{selectedNivel}</strong>.
           </div>
         )}
 
@@ -340,7 +353,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                   {modal.file?.name}
                 </p>
                 <p className="text-xs text-gray-400 text-center mb-6">
-                  Step: <strong>{modal.step}</strong> · Nivel: <strong>{modal.nivel}</strong>
+                  Curso: <strong>{curso}</strong> · Módulo: <strong>{modal.nivel}</strong> · Lección: <strong>{modal.step}</strong>
                 </p>
                 <p className="text-xs text-red-500 text-center mb-6">Esta acción no se puede deshacer.</p>
               </>
@@ -367,7 +380,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                   {modal.newFile?.name}
                 </p>
                 <p className="text-xs text-gray-400 text-center mb-6">
-                  Step: <strong>{modal.step}</strong> · Nivel: <strong>{modal.nivel}</strong>
+                  Curso: <strong>{curso}</strong> · Módulo: <strong>{modal.nivel}</strong> · Lección: <strong>{modal.step}</strong>
                 </p>
               </>
             )}
