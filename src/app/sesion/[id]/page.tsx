@@ -928,15 +928,18 @@ function RepetirLeccionButton({ eventoId, onMarked }: { eventoId: string; onMark
               <p className="text-sm text-gray-400 py-6 text-center">Cargando…</p>
             ) : info ? (
               <>
-                <p className="text-sm text-gray-500 mb-4">Curso <b>{info.curso}</b> · Módulo <b>{info.modulo}</b> · Salón <b>{info.salon || '—'}</b></p>
+                <p className="text-sm text-gray-500 mb-4">
+                  Campaña <b>{info.campaign || '—'}</b> · Curso <b>{info.curso}</b> · Salón <b>{info.salon || '—'}</b>
+                  {info.horario ? <> · <b>{info.horario}</b></> : null}
+                </p>
                 {info.yaMarcado && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">Ya hay una solicitud para este evento; puedes actualizar la lección.</p>
                 )}
-                <label className="block text-xs font-medium text-gray-500 mb-1">Lección a repetir (del módulo actual)</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Lección a repetir</label>
                 <select value={leccion} onChange={e => setLeccion(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-5">
                   <option value="">— Selecciona la lección —</option>
-                  {(info.lecciones || []).map((l: string) => <option key={l} value={l}>{l}</option>)}
+                  {(info.lecciones || []).map((l: any) => <option key={l.value} value={l.value}>{l.value}</option>)}
                 </select>
                 <div className="flex justify-end gap-3">
                   <button type="button" onClick={() => setOpen(false)} disabled={saving}

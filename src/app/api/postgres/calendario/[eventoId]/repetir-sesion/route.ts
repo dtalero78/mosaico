@@ -12,21 +12,31 @@ export const GET = handlerWithAuth(async (_request, { params }, session) => {
   const email = (session?.user as any)?.email;
   if (!email) throw new UnauthorizedError('Sesión sin email');
 
+  // Los eventos generados por campaña guardan curso/salón/campaña en CURSOS_CAMPAIGN
+  // (vía cursoCampaignId), no en la fila de CALENDARIO. El "nivel" del evento es el
+  // curso (ej. OKINA), no un módulo. Resolvemos todo por el enlace.
   const ev = await queryOne<any>(
-    `SELECT "_id","curso","nivel","step","salon","repetirSesion","repetirLeccion" FROM "CALENDARIO" WHERE "_id" = $1`,
+    `SELECT c."_id", c."nivel", c."repetirSesion", c."repetirLeccion",
+            COALESCE(cc."tipoCurso", c."curso", c."nivel") AS "curso",
+            COALESCE(cc."campaign", c."campaign") AS "campaign",
+            COALESCE(cc."salon", c."salon") AS "salon",
+            cc."horarioCurso" AS "horario"
+     FROM "CALENDARIO" c
+     LEFT JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
+     WHERE c."_id" = $1`,
     [params.eventoId]
   );
   if (!ev) throw new NotFoundError('Evento', params.eventoId);
 
-  // Lecciones del módulo actual (curso + code=nivel).
-  const lec = await queryMany<{ step: string }>(
-    `SELECT "step" FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2 ORDER BY "orden" NULLS LAST, "step"`,
-    [ev.curso, ev.nivel]
+  // Todas las lecciones del curso (con su módulo), para que el guía elija cuál repetir.
+  const lec = await queryMany<{ code: string; step: string }>(
+    `SELECT "code","step" FROM "NIVELES" WHERE "curso" = $1 ORDER BY "orden" NULLS LAST, "step"`,
+    [ev.curso]
   );
 
   return successResponse({
-    curso: ev.curso, modulo: ev.nivel, salon: ev.salon, stepActual: ev.step,
-    lecciones: lec.map(l => l.step),
+    curso: ev.curso, campaign: ev.campaign, salon: ev.salon, horario: ev.horario,
+    lecciones: lec.map(l => ({ value: `${l.code} - ${l.step}`, modulo: l.code, leccion: l.step })),
     yaMarcado: ev.repetirSesion === true,
     leccionMarcada: ev.repetirLeccion || null,
   });

@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 
 interface Row {
   _id: string; advisor: string; guiaNombre: string; curso: string; salon: string | null
-  campaign: string | null; nivel: string | null; step: string | null
+  campaign: string | null; horario: string | null
   dia: string; repetirLeccion: string | null; fechaRepetirSesion: string | null; repetirMarcadoPor: string | null
 }
 interface Opciones { guias: { id: string; nombre: string }[]; cursos: string[]; salones: string[] }
@@ -139,25 +139,27 @@ export default function SolicitudSesionesPage() {
                   <tr>
                     {puedeGestionar && <th className="px-3 py-2 w-8"><input type="checkbox" checked={rows.length > 0 && sel.size === rows.length} onChange={toggleAll} /></th>}
                     <th className="px-3 py-2 text-left">Guía</th>
+                    <th className="px-3 py-2 text-left">Campaña</th>
                     <th className="px-3 py-2 text-left">Curso</th>
                     <th className="px-3 py-2 text-left">Salón</th>
-                    <th className="px-3 py-2 text-left">Módulo · Lección solicitada</th>
+                    <th className="px-3 py-2 text-left">Lección solicitada</th>
                     <th className="px-3 py-2 text-left">Fecha del evento</th>
                     <th className="px-3 py-2 text-left">Fecha de solicitud</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {loading ? (
-                    <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400"><ArrowPathIcon className="w-5 h-5 animate-spin inline" /> Cargando…</td></tr>
+                    <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400"><ArrowPathIcon className="w-5 h-5 animate-spin inline" /> Cargando…</td></tr>
                   ) : rows.length === 0 ? (
-                    <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">No hay solicitudes pendientes.</td></tr>
+                    <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">No hay solicitudes pendientes.</td></tr>
                   ) : rows.map(r => (
                     <tr key={r._id} className={sel.has(r._id) ? 'bg-emerald-50/50' : ''}>
                       {puedeGestionar && <td className="px-3 py-2"><input type="checkbox" checked={sel.has(r._id)} onChange={() => toggle(r._id)} /></td>}
                       <td className="px-3 py-2 font-medium text-gray-800">{r.guiaNombre}</td>
+                      <td className="px-3 py-2">{r.campaign || '—'}</td>
                       <td className="px-3 py-2">{r.curso}</td>
                       <td className="px-3 py-2">{r.salon || '—'}</td>
-                      <td className="px-3 py-2">{r.nivel} · <b>{r.repetirLeccion || '—'}</b></td>
+                      <td className="px-3 py-2"><b>{r.repetirLeccion || '—'}</b></td>
                       <td className="px-3 py-2">{fmtDia(r.dia)}</td>
                       <td className="px-3 py-2">{fmt(r.fechaRepetirSesion)}</td>
                     </tr>
