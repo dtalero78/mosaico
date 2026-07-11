@@ -358,13 +358,13 @@ export default function ContratoDetailPage() {
       setSendingWhatsApp(true)
       setWhatsAppStatus('idle')
 
-      // Build the contract URL - use the Wix contract page URL (same as original flow)
-      const contractUrl = `https://lgs-plataforma.com/contrato/${titularId}`
+      // Build the contract URL (dominio MOSAICO; APP_URL en prod)
+      const contractUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://mosaicosorobanplataforma.com'}/contrato/${titularId}`
       const nombre = titular?.primerNombre || ''
 
       const message =
         `Hola ${nombre}: \n\n` +
-        `*Tu contrato con LetsGoSpeak esta listo!*\n\n` +
+        `*Tu contrato con MOSAICO esta listo!*\n\n` +
         `Para revisarlo sigue este enlace:\n\n` +
         `${contractUrl}\n\n` +
         `Si tienes alguna pregunta, no dudes en contactarnos.`

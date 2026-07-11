@@ -133,7 +133,7 @@ export const POST = handler(async (_request, { params }) => {
   const nameParts = [titular.primerNombre, titular.primerApellido, titular.numeroId].filter(Boolean);
   const filename = nameParts.length > 0
     ? `${nameParts.join(' ')}.pdf`
-    : `Contrato-LGS.pdf`;
+    : `Contrato-MOSAICO.pdf`;
 
   const whapiRes = await fetch('https://gate.whapi.cloud/messages/document', {
     method: 'POST',
@@ -146,7 +146,7 @@ export const POST = handler(async (_request, { params }) => {
       to: phone,
       media: tempPdfUrl,
       filename,
-      caption: `Hola ${titular.primerNombre || ''}, adjunto encontrarás tu contrato con LetsGoSpeak. 📄`,
+      caption: `Hola ${titular.primerNombre || ''}, adjunto encontrarás tu contrato con MOSAICO. 📄`,
     }),
   });
 

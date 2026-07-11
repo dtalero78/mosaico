@@ -58,7 +58,7 @@ export const POST = handler(async (request) => {
   saveOtp(normalizedEmail, code, celular);
 
   const maskedPhone = celular.length >= 4 ? '********' + celular.slice(-4) : celular;
-  const message = `Tu código de verificación LetsGoSpeak para restablecer tu contraseña es: *${code}*\n\nEste código expira en 10 minutos. No lo compartas con nadie.`;
+  const message = `Tu código de verificación MOSAICO para restablecer tu contraseña es: *${code}*\n\nEste código expira en 10 minutos. No lo compartas con nadie.`;
 
   await sendWhatsAppMessage(celular, message);
 
