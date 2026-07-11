@@ -56,6 +56,18 @@ function detectSep(line: string): string {
 // cursos vienen así). Cada secuencia UTF-8 válida se decodifica como UTF-8; los
 // bytes sueltos ≥0x80 se interpretan como Latin-1. Réplica de smartDecode() de
 // scripts/seed-niveles-curso.js — evita el mojibake "Lecci�n" → "Lección".
+// Mapa windows-1252 para 0x80–0x9F (único rango donde CP1252 difiere de Latin-1).
+// Explícito para no depender de TextDecoder('windows-1252') (que difiere entre
+// navegador y Node). 0xA0–0xFF son idénticos a Latin-1 → String.fromCharCode.
+const CP1252_HIGH: Record<number, string> = {
+  0x80: '€', 0x82: '‚', 0x83: 'ƒ', 0x84: '„', 0x85: '…',
+  0x86: '†', 0x87: '‡', 0x88: 'ˆ', 0x89: '‰', 0x8A: 'Š',
+  0x8B: '‹', 0x8C: 'Œ', 0x8E: 'Ž', 0x91: '‘', 0x92: '’',
+  0x93: '“', 0x94: '”', 0x95: '•', 0x96: '–', 0x97: '—',
+  0x98: '˜', 0x99: '™', 0x9A: 'š', 0x9B: '›', 0x9C: 'œ',
+  0x9E: 'ž', 0x9F: 'Ÿ',
+}
+
 function smartDecode(bytes: Uint8Array): string {
   const utf8 = new TextDecoder('utf-8')
   let out = ''
@@ -72,10 +84,28 @@ function smartDecode(bytes: Uint8Array): string {
       for (let k = 1; k < len; k++) if ((bytes[i + k] & 0xc0) !== 0x80) { ok = false; break }
       if (ok) { out += utf8.decode(bytes.subarray(i, i + len)); i += len; continue }
     }
-    out += String.fromCharCode(b) // Latin-1
+    // Byte suelto ≥0x80: CP1252 (0x96/0x97 → en/em-dash, no controles □);
+    // 0xA0–0xFF = Latin-1 (acentos á é í ó ú ñ).
+    out += (b >= 0x80 && b <= 0x9f) ? (CP1252_HIGH[b] ?? '') : String.fromCharCode(b)
     i++
   }
   return out
+}
+
+// Normaliza caracteres tipográficos "especiales" a ASCII conservando acentos:
+// en/em-dash → "-", comillas curvas → " y ', puntos suspensivos → "...",
+// espacios no separables → " ", y elimina controles C1 / carácter de reemplazo.
+function cleanSpecialChars(s: string): string {
+  return s
+    .replace(/[‐-―]/g, '-')
+    .replace(/[‘’‚‛′]/g, "'")
+    .replace(/[“”„‟″]/g, '"')
+    .replace(/…/g, '...')
+    .replace(/[  ]/g, ' ')
+    .replace(/[-�]/g, '')
+}
+function tidy(s: string): string {
+  return cleanSpecialChars(s).replace(/\s{2,}/g, ' ').trim()
 }
 
 // Parser de línea CSV con comillas dobles ("" = comilla escapada). Necesario para
@@ -136,15 +166,15 @@ function parseCSV(text: string): { rows: Leccion[]; error: string | null } {
       if (field === 'descripcion' && idx === colMap.length - 1 && parts.length > colMap.length) {
         val = parts.slice(idx).join(sep).trim()
       }
-      row[field] = val.replace(/[}\s]+$/, '').trim()
+      row[field] = tidy(val.replace(/[}\s]+$/, ''))
     })
     // Columnas nativas extra del export (clubs / contenido / esParalelo / orden).
     if (hasHeader) {
       if (nameIdx.clubs != null) {
         const raw = (parts[nameIdx.clubs] ?? '').trim()
-        if (raw) { try { const c = JSON.parse(raw); if (Array.isArray(c)) row.clubs = c.map((x: any) => String(x)) } catch { /* ignora */ } }
+        if (raw) { try { const c = JSON.parse(raw); if (Array.isArray(c)) row.clubs = c.map((x: any) => tidy(String(x))) } catch { /* ignora */ } }
       }
-      if (nameIdx.contenido != null) row.contenido = (parts[nameIdx.contenido] ?? '').trim()
+      if (nameIdx.contenido != null) row.contenido = cleanSpecialChars((parts[nameIdx.contenido] ?? '').trim())
       if (nameIdx.orden != null) { const n = parseInt((parts[nameIdx.orden] ?? '').trim(), 10); if (!isNaN(n)) row.orden = n }
       if (nameIdx.esparalelo != null) {
         const v = (parts[nameIdx.esparalelo] ?? '').trim().toLowerCase()
