@@ -124,7 +124,7 @@ export const POST = handler(async (_request, { params }) => {
   const uploadPromise = fetch(BSL_UPLOAD_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pdfUrl: tempPdfUrl, documento: titularId, empresa: 'LGS' }),
+    body: JSON.stringify({ pdfUrl: tempPdfUrl, documento: titularId, empresa: 'MOSAICO' }),
   }).then(r => r.json()).catch(() => ({}));
 
   // 8. Send PDF via Whapi using the API2PDF direct URL (clean S3 link, no redirects)

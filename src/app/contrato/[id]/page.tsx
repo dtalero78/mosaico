@@ -78,7 +78,7 @@ export default function ContratoPublicoPage() {
   useEffect(() => {
     if (pageState !== 'VERIFIED') return
     const timer = setTimeout(() => {
-      router.replace('https://letsgospeak.cl/')
+      router.replace('https://mosaicosoroban.cl')
     }, 2000)
     return () => clearTimeout(timer)
   }, [pageState, router])
