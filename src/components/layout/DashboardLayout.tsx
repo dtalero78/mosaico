@@ -196,14 +196,18 @@ const getNavigation = (userEmail: string, userRole: string) => [
         ],
       },
       {
-        name: 'Usuarios', isSubmenu: true, children: [
+        name: 'Contratos', isSubmenu: true, children: [
           { name: 'Bloqueo Contrato', href: '/admin/bloqueo-contrato', newTab: true },
-          { name: 'Clear Historic',   href: '/admin/clear-historic',   newTab: true },
           { name: 'Contratos Prueba', href: '/admin/contratos-prueba', newTab: true },
           { name: 'Edición Contrato', href: '/admin/edicion-contrato', newTab: true },
           { name: 'Generar Contrato', href: '/admin/generar-contrato', newTab: true },
           { name: 'Migrar Contrato',  href: '/admin/migrar-contrato',  newTab: true },
-          { name: 'Crea UserRol',     href: '/admin/roles/create',     newTab: true },
+        ],
+      },
+      {
+        name: 'Usuarios', isSubmenu: true, children: [
+          { name: 'Clear Historic', href: '/admin/clear-historic', newTab: true },
+          { name: 'Crea UserRol',   href: '/admin/roles/create',   newTab: true },
         ],
       },
       {
