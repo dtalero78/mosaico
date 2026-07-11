@@ -159,7 +159,7 @@ function Content() {
         <h1 className="text-2xl font-bold text-gray-900">Material Interactivo</h1>
       </div>
       <p className="text-sm text-gray-500 mb-6">
-        Gestión de los libros que verá el estudiante en el panel. Cada libro se sube una vez y los sub-niveles (BN1/BN2/BN3, P1/P2/P3, F1/F2/F3) son <strong>rangos</strong> de páginas del mismo libro padre.
+        Gestión de los libros que verá el estudiante en el panel. En MOSAICO hay <strong>un libro por curso</strong> (YOJI, OKINA, KODOMO, DANSHI, SENPAI, IMPULSA); cada libro se sube una vez con el script de carga.
       </p>
 
       {/* Feature flag */}
