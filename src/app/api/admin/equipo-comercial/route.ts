@@ -5,17 +5,9 @@ import { MantenimientoPermission } from '@/types/permissions';
 import { ValidationError, ConflictError } from '@/lib/errors';
 import { query, queryOne } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
+import { generarClave } from '@/lib/password-gen';
 
 const ROLES_COMERCIAL = ['COMERCIAL', 'COMERCIAL_JEFE'];
-
-/** Genera una clave legible de 10 caracteres (sin caracteres ambiguos). */
-function generarClave(): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let out = '';
-  const buf = require('crypto').randomBytes(10);
-  for (let i = 0; i < 10; i++) out += chars[buf[i] % chars.length];
-  return out;
-}
 
 /**
  * POST /api/admin/equipo-comercial

@@ -265,6 +265,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/admin/roles/create/comercial': [
     'MANTENIMIENTO.USUARIOS.CREAR_ROL' as Permission,
   ],
+  '/admin/roles/create/administrativo': [
+    'MANTENIMIENTO.USUARIOS.CREAR_ROL' as Permission,
+  ],
   '/admin/roles/create/filiales': [
     'MANTENIMIENTO.USUARIOS.CREAR_ROL' as Permission,
   ],

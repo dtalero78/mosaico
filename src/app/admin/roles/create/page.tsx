@@ -80,8 +80,6 @@ export default function CrearUsuariosHub() {
               icon={<BriefcaseIcon className="w-6 h-6" />}
               title="Administrativo"
               desc="Cuenta de staff: selecciona el rol y se genera la clave automáticamente."
-              badge="próximamente"
-              disabled
               onClick={() => go('/admin/roles/create/administrativo')}
             />
             <Card
