@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { AcademicoPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
-import { ArrowPathIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import { ArrowPathIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
 interface Row {
@@ -31,8 +31,11 @@ export default function SolicitudSesionesPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [opciones, setOpciones] = useState<Opciones>({ guias: [], cursos: [], salones: [] })
   const [loading, setLoading] = useState(true)
-  const [sel, setSel] = useState<Set<string>>(new Set())
-  const [authorizing, setAuthorizing] = useState(false)
+
+  // modal de autorización (por fila)
+  const [modalRow, setModalRow] = useState<Row | null>(null)
+  const [comentario, setComentario] = useState('')
+  const [procesando, setProcesando] = useState(false)
 
   // filtros
   const [guia, setGuia] = useState('')
@@ -51,29 +54,31 @@ export default function SolicitudSesionesPage() {
     if (endDate) qs.set('endDate', endDate)
     fetch(`/api/postgres/reports/academico/solicitud-sesiones?${qs}`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { setRows(d.rows || []); setOpciones(d.opciones || { guias: [], cursos: [], salones: [] }); setSel(new Set()) })
+      .then(d => { setRows(d.rows || []); setOpciones(d.opciones || { guias: [], cursos: [], salones: [] }) })
       .catch(() => toast.error('Error al cargar solicitudes'))
       .finally(() => setLoading(false))
   }, [guia, curso, salon, startDate, endDate])
   useEffect(() => { load() }, [load])
 
-  const toggle = (id: string) => setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  const toggleAll = () => setSel(prev => prev.size === rows.length ? new Set() : new Set(rows.map(r => r._id)))
+  const abrirModal = (r: Row) => { setModalRow(r); setComentario('') }
 
-  const autorizar = async () => {
-    if (sel.size === 0) return
-    if (!confirm(`¿Autorizar ${sel.size} solicitud(es) de repetir lección?`)) return
-    setAuthorizing(true)
+  const resolver = async (autorizar: boolean) => {
+    if (!modalRow) return
+    setProcesando(true)
     try {
       const r = await fetch('/api/postgres/reports/academico/solicitud-sesiones/autorizar', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventoIds: Array.from(sel) }),
+        body: JSON.stringify({ eventoId: modalRow._id, autorizar, comentario }),
       })
       const j = await r.json()
-      if (!r.ok) throw new Error(j?.error || 'Error')
-      toast.success(`${j.autorizadas} autorizada(s)`)
-      load()
-    } catch (e: any) { toast.error(e.message) } finally { setAuthorizing(false) }
+      if (!r.ok) throw new Error(j?.error || j?.message || 'Error')
+      if (autorizar) {
+        toast.success(`Autorizado. ${j.sesionesCreadas ? `+${j.sesionesCreadas} sesión(es), curso hasta ${j.nuevoFinalCurso}` : 'sin extensión'}`)
+      } else {
+        toast.success('Solicitud rechazada')
+      }
+      setModalRow(null); load()
+    } catch (e: any) { toast.error(e.message) } finally { setProcesando(false) }
   }
 
   const limpiar = () => { setGuia(''); setCurso(''); setSalon(''); setStartDate(''); setEndDate('') }
@@ -118,17 +123,9 @@ export default function SolicitudSesionesPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={limpiar} className="text-sm text-gray-500 hover:text-gray-700">Limpiar filtros</button>
-              <span className="text-sm text-gray-400">{rows.length} solicitud(es)</span>
-            </div>
-            {puedeGestionar && (
-              <button type="button" onClick={autorizar} disabled={sel.size === 0 || authorizing}
-                className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-40 flex items-center gap-1">
-                <CheckCircleIcon className="w-4 h-4" /> {authorizing ? 'Autorizando…' : `Autorizar (${sel.size})`}
-              </button>
-            )}
+          <div className="flex items-center gap-3 mb-3">
+            <button type="button" onClick={limpiar} className="text-sm text-gray-500 hover:text-gray-700">Limpiar filtros</button>
+            <span className="text-sm text-gray-400">{rows.length} solicitud(es)</span>
           </div>
 
           {/* Tabla */}
@@ -137,7 +134,6 @@ export default function SolicitudSesionesPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
-                    {puedeGestionar && <th className="px-3 py-2 w-8"><input type="checkbox" checked={rows.length > 0 && sel.size === rows.length} onChange={toggleAll} /></th>}
                     <th className="px-3 py-2 text-left">Guía</th>
                     <th className="px-3 py-2 text-left">Campaña</th>
                     <th className="px-3 py-2 text-left">Curso</th>
@@ -145,6 +141,7 @@ export default function SolicitudSesionesPage() {
                     <th className="px-3 py-2 text-left">Lección solicitada</th>
                     <th className="px-3 py-2 text-left">Fecha del evento</th>
                     <th className="px-3 py-2 text-left">Fecha de solicitud</th>
+                    {puedeGestionar && <th className="px-3 py-2 text-right">Acción</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -153,8 +150,7 @@ export default function SolicitudSesionesPage() {
                   ) : rows.length === 0 ? (
                     <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">No hay solicitudes pendientes.</td></tr>
                   ) : rows.map(r => (
-                    <tr key={r._id} className={sel.has(r._id) ? 'bg-emerald-50/50' : ''}>
-                      {puedeGestionar && <td className="px-3 py-2"><input type="checkbox" checked={sel.has(r._id)} onChange={() => toggle(r._id)} /></td>}
+                    <tr key={r._id}>
                       <td className="px-3 py-2 font-medium text-gray-800">{r.guiaNombre}</td>
                       <td className="px-3 py-2">{r.campaign || '—'}</td>
                       <td className="px-3 py-2">{r.curso}</td>
@@ -162,6 +158,12 @@ export default function SolicitudSesionesPage() {
                       <td className="px-3 py-2"><b>{r.repetirLeccion || '—'}</b></td>
                       <td className="px-3 py-2">{fmtDia(r.dia)}</td>
                       <td className="px-3 py-2">{fmt(r.fechaRepetirSesion)}</td>
+                      {puedeGestionar && (
+                        <td className="px-3 py-2 text-right">
+                          <button type="button" onClick={() => abrirModal(r)}
+                            className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">Revisar</button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -169,6 +171,37 @@ export default function SolicitudSesionesPage() {
             </div>
           </div>
         </div>
+
+        {/* Modal de autorización */}
+        {modalRow && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Autorizar repetición</h3>
+              <p className="text-sm text-gray-600">
+                Se repetirá <b>una sesión</b> para el curso <b>{modalRow.curso}</b>, salón <b>{modalRow.salon || '—'}</b>,
+                lección <b>{modalRow.repetirLeccion || '—'}</b>, guía <b>{modalRow.guiaNombre}</b>.
+              </p>
+              <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                Al autorizar: se extiende el curso una semana si hace falta, se crean las sesiones + bookings para los usuarios del salón y el avance se detiene una lección.
+              </p>
+              <label className="block text-xs font-medium text-gray-500 mt-4 mb-1">Comentario (quién autoriza / motivo)</label>
+              <textarea value={comentario} onChange={e => setComentario(e.target.value)} rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Comentario de autorización…" />
+              <div className="mt-5 flex justify-between gap-3">
+                <button type="button" onClick={() => setModalRow(null)} disabled={procesando}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => resolver(false)} disabled={procesando}
+                    className="px-4 py-2 rounded-lg bg-red-100 text-red-700 font-medium hover:bg-red-200 disabled:opacity-40">No autorizar</button>
+                  <button type="button" onClick={() => resolver(true)} disabled={procesando}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-40">
+                    {procesando ? 'Procesando…' : 'Autorizar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </PermissionGuard>
     </DashboardLayout>
   )

@@ -3,31 +3,30 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
-import { query } from '@/lib/postgres';
+import { autorizarRepetir, rechazarRepetir } from '@/services/repetir-clase.service';
 
 /**
  * POST /api/postgres/reports/academico/solicitud-sesiones/autorizar
- *   { eventoIds: string[] }
- * Autoriza una o varias solicitudes de "Repetir Lección": marca autorizadoRepetir=true
- * (las saca del listado de pendientes) + registra quién/cuándo.
+ *   { eventoId, autorizar: boolean, comentario? }
+ *
+ * autorizar=true  → registra en historicRepet, extiende el curso por semanas si
+ *                   faltan sesiones (crea eventos + bookings para los usuarios del
+ *                   salón), re-mapea la secuencia y marca el evento autorizado.
+ * autorizar=false → rechaza (repetClass −1, anula la marca, no toca finalCurso).
  * Gateado por ACADEMICO.SOLICITUD_SESIONES.GESTION.
  */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.SOLICITUD_SESIONES_GESTION);
   const email = (session?.user as any)?.email || 'desconocido';
   const body = await request.json();
-  const eventoIds: string[] = Array.isArray(body?.eventoIds) ? body.eventoIds.filter((x: any) => typeof x === 'string') : [];
-  if (!eventoIds.length) throw new ValidationError('Selecciona al menos una solicitud.');
+  const eventoId = String(body?.eventoId || '').trim();
+  if (!eventoId) throw new ValidationError('eventoId es requerido.');
 
-  const res = await query(
-    `UPDATE "CALENDARIO" SET
-       "autorizadoRepetir" = true,
-       "fechaAutorizadoRepetir" = NOW(),
-       "autorizadoRepetirPor" = $2,
-       "_updatedDate" = NOW()
-     WHERE "_id" = ANY($1::text[]) AND "repetirSesion" = true`,
-    [eventoIds, email]
-  );
+  if (body?.autorizar === false) {
+    const r = await rechazarRepetir(eventoId);
+    return successResponse({ ...r, autorizada: false });
+  }
 
-  return successResponse({ autorizadas: res.rowCount ?? 0 });
+  const r = await autorizarRepetir(eventoId, String(body?.comentario || '').trim(), email);
+  return successResponse({ ...r, autorizada: true });
 });
