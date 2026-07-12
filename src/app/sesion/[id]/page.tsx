@@ -896,7 +896,7 @@ function RepetirLeccionButton({ eventoId, onMarked }: { eventoId: string; onMark
       const j = await r.json()
       if (!r.ok) throw new Error(j?.error || 'Error')
       setInfo(j)
-      if (j.yaMarcado && j.leccionMarcada) setLeccion(j.leccionMarcada)
+      if (j.leccionMarcada) setLeccion(j.leccionMarcada)
     } catch (e: any) { toast.error(e.message); setOpen(false) } finally { setLoading(false) }
   }
 
@@ -928,10 +928,15 @@ function RepetirLeccionButton({ eventoId, onMarked }: { eventoId: string; onMark
               <p className="text-sm text-gray-400 py-6 text-center">Cargando…</p>
             ) : info ? (
               <>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-2">
                   Campaña <b>{info.campaign || '—'}</b> · Curso <b>{info.curso}</b> · Salón <b>{info.salon || '—'}</b>
                   {info.horario ? <> · <b>{info.horario}</b></> : null}
                 </p>
+                {info.sesionActual && (
+                  <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-2 mb-3">
+                    Esta sesión cubre: <b>{info.sesionActual}</b>
+                  </p>
+                )}
                 {info.yaMarcado && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">Ya hay una solicitud para este evento; puedes actualizar la lección.</p>
                 )}

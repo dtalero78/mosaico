@@ -2,6 +2,7 @@ import 'server-only';
 import { query, transaction } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
+import { mapearLeccionesSalon } from './repetir-clase.service';
 
 /**
  * Generación de eventos de CALENDARIO a partir de un curso de campaña.
@@ -96,6 +97,8 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
   });
 
   await query(`INSERT INTO "CALENDARIO" (${cols}) VALUES ${rows.join(', ')}`, params);
+  // Camino B: asigna a cada sesión su lección (secuencia del curso por fecha).
+  try { await mapearLeccionesSalon(curso._id); } catch { /* best-effort */ }
   return fechas.length;
 }
 

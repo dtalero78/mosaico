@@ -13,10 +13,11 @@ export const GET = handlerWithAuth(async (_request, { params }, session) => {
   if (!email) throw new UnauthorizedError('Sesión sin email');
 
   // Los eventos generados por campaña guardan curso/salón/campaña en CURSOS_CAMPAIGN
-  // (vía cursoCampaignId), no en la fila de CALENDARIO. El "nivel" del evento es el
-  // curso (ej. OKINA), no un módulo. Resolvemos todo por el enlace.
+  // (vía cursoCampaignId), no en la fila de CALENDARIO. Con el mapeo (camino B) la
+  // sesión ya trae su módulo/lección → el dropdown se acota al módulo actual.
   const ev = await queryOne<any>(
     `SELECT c."_id", c."nivel", c."repetirSesion", c."repetirLeccion",
+            c."sesionModulo", c."sesionLeccion",
             COALESCE(cc."tipoCurso", c."curso", c."nivel") AS "curso",
             COALESCE(cc."campaign", c."campaign") AS "campaign",
             COALESCE(cc."salon", c."salon") AS "salon",
@@ -28,17 +29,24 @@ export const GET = handlerWithAuth(async (_request, { params }, session) => {
   );
   if (!ev) throw new NotFoundError('Evento', params.eventoId);
 
-  // Todas las lecciones del curso (con su módulo), para que el guía elija cuál repetir.
-  const lec = await queryMany<{ code: string; step: string }>(
-    `SELECT "code","step" FROM "NIVELES" WHERE "curso" = $1 ORDER BY "orden" NULLS LAST, "step"`,
-    [ev.curso]
-  );
+  // Lecciones del MÓDULO ACTUAL de la sesión (si está mapeada); si no, todo el curso.
+  const lec = ev.sesionModulo
+    ? await queryMany<{ code: string; step: string }>(
+        `SELECT "code","step" FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2 ORDER BY "orden" NULLS LAST, "step"`,
+        [ev.curso, ev.sesionModulo])
+    : await queryMany<{ code: string; step: string }>(
+        `SELECT "code","step" FROM "NIVELES" WHERE "curso" = $1 ORDER BY "orden" NULLS LAST, "step"`,
+        [ev.curso]);
+
+  const sesionActual = ev.sesionModulo && ev.sesionLeccion ? `${ev.sesionModulo} - ${ev.sesionLeccion}` : null;
 
   return successResponse({
     curso: ev.curso, campaign: ev.campaign, salon: ev.salon, horario: ev.horario,
+    modulo: ev.sesionModulo || null,
+    sesionActual, // "Modulo 02 - Lección 11" de esta sesión
     lecciones: lec.map(l => ({ value: `${l.code} - ${l.step}`, modulo: l.code, leccion: l.step })),
     yaMarcado: ev.repetirSesion === true,
-    leccionMarcada: ev.repetirLeccion || null,
+    leccionMarcada: ev.repetirLeccion || sesionActual || null,
   });
 });
 
@@ -59,8 +67,11 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   const leccion = String(body?.leccion || '').trim();
   if (!leccion) throw new ValidationError('Debes asignar la lección a repetir.');
 
-  const ev = await queryOne<{ _id: string }>(`SELECT "_id" FROM "CALENDARIO" WHERE "_id" = $1`, [eventoId]);
+  const ev = await queryOne<{ _id: string; repetirSesion: boolean | null; cursoCampaignId: string | null }>(
+    `SELECT "_id","repetirSesion","cursoCampaignId" FROM "CALENDARIO" WHERE "_id" = $1`, [eventoId]
+  );
   if (!ev) throw new NotFoundError('Evento', eventoId);
+  const yaMarcado = ev.repetirSesion === true;
 
   await query(
     `UPDATE "CALENDARIO" SET
@@ -73,6 +84,14 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
      WHERE "_id" = $1`,
     [eventoId, leccion, email]
   );
+
+  // Contador del salón: +1 al solicitar (solo si es una solicitud nueva).
+  if (!yaMarcado && ev.cursoCampaignId) {
+    await query(
+      `UPDATE "CURSOS_CAMPAIGN" SET "repetClass" = COALESCE("repetClass",0) + 1, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      [ev.cursoCampaignId]
+    );
+  }
 
   return successResponse({ marcado: true, eventoId, leccion, message: 'Solicitud de repetir lección registrada.' });
 });
