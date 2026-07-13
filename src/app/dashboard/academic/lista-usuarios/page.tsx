@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { exportToExcel } from '@/lib/export-excel'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -54,6 +54,17 @@ function ListaUsuariosContent() {
   const [salones, setSalones] = useState<string[]>([])
   const [guias, setGuias] = useState<Guia[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Barra de scroll horizontal sincronizada (arriba de la tabla)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const topRef = useRef<HTMLDivElement>(null)
+  const [scrollW, setScrollW] = useState(0)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) setScrollW(el.scrollWidth)
+  }, [rows, loading, puedeEditar])
+  const syncFromTop = () => { if (scrollRef.current && topRef.current) scrollRef.current.scrollLeft = topRef.current.scrollLeft }
+  const syncFromBottom = () => { if (scrollRef.current && topRef.current) topRef.current.scrollLeft = scrollRef.current.scrollLeft }
 
   const fetchData = useCallback(async (f?: { campaign?: string; curso?: string; salon?: string; guia?: string; startDate?: string; endDate?: string }) => {
     setLoading(true)
@@ -184,8 +195,12 @@ function ListaUsuariosContent() {
       </div>
 
       {/* Tabla */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white border border-gray-200 rounded-xl">
+        {/* Barra de scroll superior sincronizada */}
+        <div ref={topRef} onScroll={syncFromTop} className="overflow-x-auto rounded-t-xl border-b border-gray-100">
+          <div style={{ width: scrollW, height: 1 }} />
+        </div>
+        <div ref={scrollRef} onScroll={syncFromBottom} className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
