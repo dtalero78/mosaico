@@ -2,7 +2,14 @@ import 'server-only';
 import { query, transaction } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
+import { esFestivoChile } from '@/lib/festivos-chile';
 import { mapearLeccionesSalon } from './repetir-clase.service';
+
+/** iso + n días (UTC, sin desfase de zona horaria). */
+function addDaysISO(iso: string, n: number): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + n * 86400000).toISOString().slice(0, 10);
+}
 
 /**
  * Generación de eventos de CALENDARIO a partir de un curso de campaña.
@@ -54,9 +61,28 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
   await eliminarEventosCurso(curso._id);
 
   if (!parsed || !inicio || !fin) return 0;
-  let fechas = fechasEntre(inicio, fin, parsed.dias);
-  if (fechas.length === 0) return 0;
-  if (fechas.length > MAX_EVENTOS_POR_CURSO) fechas = fechas.slice(0, MAX_EVENTOS_POR_CURSO);
+  const base = fechasEntre(inicio, fin, parsed.dias);
+  if (base.length === 0) return 0;
+
+  // Feriados de Chile: NO se agenda clase en un festivo; esa sesión se corre al
+  // FINAL del curso (se mantiene el nº total de sesiones = nº de clases del horario
+  // en el intervalo). Ej.: si un miércoles cae festivo, la última sesión pasa al
+  // siguiente día-clase después de finalCurso.
+  const objetivo = Math.min(base.length, MAX_EVENTOS_POR_CURSO);
+  let fechas = base.filter((d) => !esFestivoChile(d));
+  if (fechas.length < objetivo) {
+    let cursor = fin;
+    let guard = 0;
+    while (fechas.length < objetivo && guard < 520) {
+      for (const d of fechasEntre(addDaysISO(cursor, 1), addDaysISO(cursor, 7), parsed.dias)) {
+        if (!esFestivoChile(d)) { fechas.push(d); if (fechas.length >= objetivo) break; }
+      }
+      cursor = addDaysISO(cursor, 7);
+      guard++;
+    }
+  }
+  if (fechas.length > objetivo) fechas = fechas.slice(0, objetivo);
+  fechas.sort();
 
   const hora = parsed.hora.length === 4 ? `0${parsed.hora}` : parsed.hora; // "9:00"→"09:00"
   const salon = (curso.salon || '').trim();
