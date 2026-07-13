@@ -44,11 +44,14 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   const rows = (await query(
     `SELECT
+       p."_id" AS id, p."numeroId",
        TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido"), '\\s+', ' ', 'g')) AS nombre,
+       p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido",
        p."fechaNacimiento"::text AS "fechaNacimiento",
        CASE WHEN p."fechaNacimiento" IS NOT NULL
             THEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, p."fechaNacimiento"::date))::int END AS edad,
-       p."apoderado",
+       p."apoderado", p."apoderadoTelefono", p."apoderadoMail",
+       p."email", p."celular", p."domicilio", p."ciudad",
        COALESCE(NULLIF(CASE WHEN a."curso" = 'WELCOME' OR a."curso" IS NULL THEN p."nivel" ELSE a."nivel" END, ''), p."nivel") AS modulo,
        COALESCE(NULLIF(CASE WHEN a."curso" = 'WELCOME' OR a."curso" IS NULL THEN p."step"  ELSE a."step"  END, ''), p."step")  AS leccion,
        p."tipoCurso" AS curso, p."salon", p."campaign",

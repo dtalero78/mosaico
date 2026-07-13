@@ -6,14 +6,28 @@ import { exportToExcel } from '@/lib/export-excel'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
 
 interface Row {
+  id: string
+  numeroId: string | null
   nombre: string
+  primerNombre: string | null
+  segundoNombre: string | null
+  primerApellido: string | null
+  segundoApellido: string | null
   curso: string | null
+  salon: string | null
   fechaNacimiento: string | null
   edad: number | null
   apoderado: string | null
+  apoderadoTelefono: string | null
+  apoderadoMail: string | null
+  email: string | null
+  celular: string | null
+  domicilio: string | null
+  ciudad: string | null
   guia: string | null
   modulo: string | null
   leccion: string | null
@@ -21,6 +35,13 @@ interface Row {
 interface Guia { id: string; nombre: string }
 
 function ListaUsuariosContent() {
+  const { hasPermission, isRole } = usePermissions()
+  const puedeEditar = isRole('SUPER_ADMIN') || isRole('ADMIN') || hasPermission(AcademicoPermission.LISTA_USUARIOS_EDITAR)
+
+  const [editRow, setEditRow] = useState<Row | null>(null)
+  const [form, setForm] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+
   const [campaign, setCampaign] = useState('')
   const [curso, setCurso] = useState('')
   const [salon, setSalon] = useState('')
@@ -68,6 +89,7 @@ function ListaUsuariosContent() {
     exportToExcel(rows, [
       { header: 'Nombre', accessor: r => r.nombre },
       { header: 'Curso', accessor: r => r.curso || '' },
+      { header: 'Salón', accessor: r => r.salon || '' },
       { header: 'Fecha nacimiento', accessor: r => r.fechaNacimiento || '' },
       { header: 'Edad', accessor: r => (r.edad ?? '') },
       { header: 'Apoderado', accessor: r => r.apoderado || '' },
@@ -75,6 +97,33 @@ function ListaUsuariosContent() {
       { header: 'Módulo', accessor: r => r.modulo || '' },
       { header: 'Lección', accessor: r => r.leccion || '' },
     ], 'lista-usuarios')
+  }
+
+  const abrirEditar = (r: Row) => {
+    setEditRow(r)
+    setForm({
+      primerNombre: r.primerNombre || '', segundoNombre: r.segundoNombre || '',
+      primerApellido: r.primerApellido || '', segundoApellido: r.segundoApellido || '',
+      fechaNacimiento: (r.fechaNacimiento || '').slice(0, 10),
+      email: r.email || '', celular: r.celular || '', domicilio: r.domicilio || '', ciudad: r.ciudad || '',
+      apoderado: r.apoderado || '', apoderadoTelefono: r.apoderadoTelefono || '', apoderadoMail: r.apoderadoMail || '',
+    })
+  }
+  const setF = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }))
+  const guardar = async () => {
+    if (!editRow) return
+    setSaving(true)
+    try {
+      const payload: Record<string, any> = {}
+      Object.entries(form).forEach(([k, v]) => { payload[k] = v.trim() === '' ? null : v })
+      const r = await fetch(`/api/postgres/people/${editRow.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      }).then(x => x.json())
+      if (r.error) throw new Error(r.error)
+      toast.success('Datos actualizados')
+      setEditRow(null)
+      fetchData({ campaign, curso, salon, guia, startDate, endDate })
+    } catch (e: any) { toast.error(e?.message || 'Error al guardar') } finally { setSaving(false) }
   }
 
   return (
@@ -140,32 +189,110 @@ function ListaUsuariosContent() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Nombre', 'Curso', 'Fecha nacimiento', 'Edad', 'Apoderado', 'Guía', 'Módulo', 'Lección'].map(h => (
+                {['Nombre', 'Curso', 'Salón', 'Fecha nacimiento', 'Edad', 'Apoderado', 'Guía', 'Módulo', 'Lección'].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
+                {puedeEditar && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Editar</th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
+                <tr><td colSpan={puedeEditar ? 10 : 9} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">Sin resultados</td></tr>
+                <tr><td colSpan={puedeEditar ? 10 : 9} className="px-3 py-10 text-center text-gray-400">Sin resultados</td></tr>
               ) : rows.map((r, idx) => (
                 <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{r.nombre || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.curso || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.salon || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.fechaNacimiento || '—'}</td>
                   <td className="px-3 py-2 text-gray-600">{r.edad ?? '—'}</td>
                   <td className="px-3 py-2 text-gray-600">{r.apoderado || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.modulo || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.leccion || '—'}</td>
+                  {puedeEditar && (
+                    <td className="px-3 py-2">
+                      <button type="button" onClick={() => abrirEditar(r)}
+                        className="px-3 py-1 text-xs bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 font-medium">Editar</button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal editar */}
+      {editRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !saving && setEditRow(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Editar datos del estudiante</h2>
+                <p className="text-xs text-gray-500">{editRow.nombre}{editRow.numeroId ? ` · ${editRow.numeroId}` : ''}</p>
+              </div>
+              <button type="button" onClick={() => !saving && setEditRow(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Nombres del estudiante</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Primer nombre" value={form.primerNombre} onChange={v => setF('primerNombre', v)} />
+                  <Field label="Segundo nombre" value={form.segundoNombre} onChange={v => setF('segundoNombre', v)} />
+                  <Field label="Primer apellido" value={form.primerApellido} onChange={v => setF('primerApellido', v)} />
+                  <Field label="Segundo apellido" value={form.segundoApellido} onChange={v => setF('segundoApellido', v)} />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Datos del contrato</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Fecha de nacimiento" type="date" value={form.fechaNacimiento} onChange={v => setF('fechaNacimiento', v)} />
+                  <Field label="Correo" type="email" value={form.email} onChange={v => setF('email', v)} />
+                  <Field label="Celular" value={form.celular} onChange={v => setF('celular', v)} />
+                  <Field label="Ciudad" value={form.ciudad} onChange={v => setF('ciudad', v)} />
+                  <div className="sm:col-span-2">
+                    <Field label="Domicilio" value={form.domicilio} onChange={v => setF('domicilio', v)} />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Apoderado</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <Field label="Nombre del apoderado" value={form.apoderado} onChange={v => setF('apoderado', v)} />
+                  </div>
+                  <Field label="Teléfono del apoderado" value={form.apoderadoTelefono} onChange={v => setF('apoderadoTelefono', v)} />
+                  <Field label="Correo del apoderado" type="email" value={form.apoderadoMail} onChange={v => setF('apoderadoMail', v)} />
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditRow(null)} disabled={saving}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={guardar} disabled={saving}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
+                {saving ? 'Guardando…' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+      <input type={type} value={value || ''} onChange={e => onChange(e.target.value)}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
     </div>
   )
 }

@@ -567,6 +567,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/lista-usuarios (Académico › Guías). Reporte de estudiantes con filtros por campaña, curso, salón, guía y rango de fecha de contrato. Columnas: nombre, fecha de nacimiento, edad, apoderado, guía, módulo y lección actual.',
   },
   {
+    code: AcademicoPermission.LISTA_USUARIOS_EDITAR,
+    module: Module.ACADEMICO,
+    section: 'Lista de Usuarios',
+    name: 'Editar datos del estudiante',
+    description: 'Permite editar/alimentar los datos del contrato del estudiante (nombres, fecha de nacimiento, contacto, apoderado, domicilio) desde la Lista de Usuarios.',
+  },
+  {
     code: AcademicoPermission.SOLICITUD_SESIONES_VER,
     module: Module.ACADEMICO,
     section: 'Solicitud Sesiones',

@@ -182,6 +182,7 @@ export enum AcademicoPermission {
   // Lista de Usuarios — reporte de estudiantes (Académico › Guías)
   LISTA_USUARIOS_VER      = 'ACADEMICO.LISTA_USUARIOS.VER',
   LISTA_USUARIOS_EXPORTAR = 'ACADEMICO.LISTA_USUARIOS.EXPORTAR',
+  LISTA_USUARIOS_EDITAR   = 'ACADEMICO.LISTA_USUARIOS.EDITAR',
 
   // Solicitud de Sesiones (Repetir Lección)
   SOLICITUD_SESIONES_VER      = 'ACADEMICO.SOLICITUD_SESIONES.VER',
