@@ -52,6 +52,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             THEN EXTRACT(YEAR FROM AGE(CURRENT_DATE, p."fechaNacimiento"::date))::int END AS edad,
        p."apoderado", p."apoderadoTelefono", p."apoderadoMail",
        p."email", p."celular", p."domicilio", p."ciudad",
+       a."_id" AS "academicaId",
        COALESCE(NULLIF(CASE WHEN a."curso" = 'WELCOME' OR a."curso" IS NULL THEN p."nivel" ELSE a."nivel" END, ''), p."nivel") AS modulo,
        COALESCE(NULLIF(CASE WHEN a."curso" = 'WELCOME' OR a."curso" IS NULL THEN p."step"  ELSE a."step"  END, ''), p."step")  AS leccion,
        p."tipoCurso" AS curso, p."salon", p."campaign",
@@ -59,7 +60,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        p."fechaContrato"::text AS "fechaContrato"
      FROM "PEOPLE" p
      LEFT JOIN LATERAL (
-       SELECT "curso", "nivel", "step" FROM "ACADEMICA" WHERE "peopleId" = p."_id" LIMIT 1
+       SELECT "_id", "curso", "nivel", "step" FROM "ACADEMICA" WHERE "peopleId" = p."_id" LIMIT 1
      ) a ON true
      LEFT JOIN "CURSOS_CAMPAIGN" cc
        ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"

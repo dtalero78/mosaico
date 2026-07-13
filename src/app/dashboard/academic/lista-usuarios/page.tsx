@@ -11,6 +11,7 @@ import { TIPOS_CURSO } from '@/lib/cursos-campaign'
 
 interface Row {
   id: string
+  academicaId: string | null
   numeroId: string | null
   nombre: string
   primerNombre: string | null
@@ -217,7 +218,13 @@ function ListaUsuariosContent() {
                 <tr><td colSpan={puedeEditar ? 10 : 9} className="px-3 py-10 text-center text-gray-400">Sin resultados</td></tr>
               ) : rows.map((r, idx) => (
                 <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{r.nombre || '—'}</td>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                    <a href={r.academicaId ? `/student/${r.academicaId}` : `/person/${r.id}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-primary-700 hover:text-primary-900 hover:underline">
+                      {r.nombre || '—'}
+                    </a>
+                  </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.curso || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.salon || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.fechaNacimiento || '—'}</td>
