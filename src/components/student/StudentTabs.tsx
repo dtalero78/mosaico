@@ -17,6 +17,7 @@ import StudentNivelacionHistorial from './StudentNivelacionHistorial'
 import StudentChangeStep from './StudentChangeStep'
 import StudentInicializarNivel from './StudentInicializarNivel'
 import StudentCambioStepAuditado from './StudentCambioStepAuditado'
+import StudentCambioAcademico from './StudentCambioAcademico'
 
 interface StudentTabsProps {
   student: Student
@@ -60,6 +61,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   const [showChangeStepModal, setShowChangeStepModal] = useState(false)
   const [showInicializarModal, setShowInicializarModal] = useState(false)
   const [showCambioStepAuditadoModal, setShowCambioStepAuditadoModal] = useState(false)
+  const [showCambioAcademicoModal, setShowCambioAcademicoModal] = useState(false)
   const [welcomeModal, setWelcomeModal] = useState<{
     loading: boolean
     submitting: boolean
@@ -86,14 +88,21 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   // Control de acceso: permiso para aprobar/promover desde WELCOME
   const canAprobarWelcome = hasPermission(StudentPermission.APROBAR_WELCOME)
 
-  // Filtrar submenu académico basado en permisos
+  // Control de acceso: ítems que antes no estaban gateados (ahora todos requieren permiso)
+  const canVerAsistencia = hasPermission(StudentPermission.VER_ASISTENCIA)
+  const canVerNivelacion = hasPermission(StudentPermission.NIVELACION_HISTORIAL)
+  const canAgendar = hasPermission(StudentPermission.AGENDAR_CLASE)
+  const canCambioAcademico = hasPermission(StudentPermission.CAMBIO_ACADEMICO)
+
+  // Filtrar submenu académico basado en permisos — TODOS los ítems gateados
   const academicSubmenu = [
-    { id: 'attendance', name: 'Tabla de Asistencia', icon: '📋' },
+    ...(canVerAsistencia ? [{ id: 'attendance', name: 'Tabla de Asistencia', icon: '📋' }] : []),
     ...(canAccessProgress ? [{ id: 'progress', name: '¿Cómo voy?', icon: '📈' }] : []),
-    { id: 'nivelacion-historial', name: 'Nivelación Historial', icon: '📜' },
-    { id: 'schedule', name: 'Agendar Nueva Clase', icon: '📅' },
+    ...(canVerNivelacion ? [{ id: 'nivelacion-historial', name: 'Nivelación Historial', icon: '📜' }] : []),
+    ...(canAgendar ? [{ id: 'schedule', name: 'Agendar Nueva Clase', icon: '📅' }] : []),
     ...(canAccessSteps ? [{ id: 'steps', name: 'Gestión de Steps', icon: '📊' }] : []),
     ...(canChangeStep ? [{ id: 'change-step', name: 'Cambiar Step', icon: '👣' }] : []),
+    ...(canCambioAcademico ? [{ id: 'cambio-academico', name: 'Cambio Académico', icon: '🔀' }] : []),
     ...(canInicializarNivel ? [{ id: 'inicializar-nivel', name: 'Reiniciar Nivel', icon: '🔄' }] : []),
     ...(canAprobarWelcome ? [{ id: 'aprobar-welcome', name: 'Aprobar Welcome', icon: '✅' }] : []),
   ]
@@ -224,6 +233,12 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
                                 if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
                                 return
                               }
+                              if (item.id === 'cambio-academico') {
+                                setShowCambioAcademicoModal(true)
+                                setShowAcademicSubmenu(false)
+                                if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
+                                return
+                              }
                               if (item.id === 'change-step') {
                                 setShowChangeStepModal(true)
                                 setShowAcademicSubmenu(false)
@@ -315,6 +330,19 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
           currentStep={student.step || 'Sin step'}
           currentNivel={student.nivel || 'Sin nivel'}
           onClose={() => setShowCambioStepAuditadoModal(false)}
+          onSuccess={() => window.location.reload()}
+        />
+      )}
+
+      {/* Modal Cambio Académico */}
+      {showCambioAcademicoModal && (
+        <StudentCambioAcademico
+          studentId={student._id}
+          studentName={`${student.primerNombre} ${student.primerApellido}`}
+          currentCampaign={student.campaign}
+          currentCurso={student.tipoCurso || student.curso}
+          currentSalon={student.salon}
+          onClose={() => setShowCambioAcademicoModal(false)}
           onSuccess={() => window.location.reload()}
         />
       )}

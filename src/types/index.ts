@@ -33,6 +33,9 @@ export interface Student {
   // tipoCurso: PEOPLE.tipoCurso (curso REAL: YOJI/OKINA/…/IMPULSA)
   curso?: string
   tipoCurso?: string
+  campaign?: string
+  salon?: string
+  horarioCurso?: string
   clave?: string
   claveLogin?: string
   usuarioId?: string

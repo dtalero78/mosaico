@@ -223,6 +223,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Descargar tabla de asistencia como CSV',
   },
   {
+    code: StudentPermission.VER_ASISTENCIA,
+    module: Module.STUDENT,
+    section: 'Tab Académica',
+    name: 'Ítem "Tabla de Asistencia"',
+    description: 'Ver la tabla de asistencia del estudiante (ítem del menú Académica).',
+  },
+  {
+    code: StudentPermission.NIVELACION_HISTORIAL,
+    module: Module.STUDENT,
+    section: 'Tab Académica',
+    name: 'Ítem "Nivelación Historial"',
+    description: 'Ver el historial de nivelaciones del estudiante (ítem del menú Académica).',
+  },
+  {
+    code: StudentPermission.CAMBIO_ACADEMICO,
+    module: Module.STUDENT,
+    section: 'Tab Académica',
+    name: 'Ítem "Cambio Académico"',
+    description: 'Mover al beneficiario de campaña/curso/salón: actualiza curso, cupos, reagenda los bookings futuros al curso nuevo y lo ubica en la lección actual del curso destino. Requiere motivo y confirmación.',
+  },
+  {
     code: StudentPermission.COMO_VOY,
     module: Module.STUDENT,
     section: 'Tab Académica > Progreso',
