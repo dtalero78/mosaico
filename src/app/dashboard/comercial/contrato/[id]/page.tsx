@@ -852,6 +852,28 @@ export default function ContratoDetailPage() {
                           />
                         ))}
                       </dl>
+                      {/* Curso del beneficiario (solo lectura) */}
+                      <div className="mt-3 pt-3 border-t border-green-100">
+                        <p className="text-[11px] font-semibold text-green-700 mb-2">Curso</p>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-gray-500">Campaña</dt>
+                            <dd className="text-sm text-gray-900">{ben.campaign || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-gray-500">Curso</dt>
+                            <dd className="text-sm text-gray-900">{ben.tipoCurso || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-gray-500">Salón</dt>
+                            <dd className="text-sm text-gray-900">{ben.salon || '—'}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-gray-500">Horario</dt>
+                            <dd className="text-sm text-gray-900">{ben.horarioCurso || '—'}</dd>
+                          </div>
+                        </dl>
+                      </div>
                       {/* Apoderado de este beneficiario (solo lectura) */}
                       {(ben.apoderado || ben.apoderadoTelefono || ben.apoderadoMail) && (
                         <div className="mt-3 pt-3 border-t border-green-100">
