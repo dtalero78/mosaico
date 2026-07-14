@@ -82,6 +82,7 @@ async function PersonContent({ personId, initialTab }: { personId: string; initi
       nivel: person.nivel,
       curso: person.tipoCurso,
       salon: person.salon,
+      horarioCurso: person.horarioCurso,
       existeEnAcademica: person.existeEnAcademica,
       estadoInactivo: person.estadoInactivo || false
     }))

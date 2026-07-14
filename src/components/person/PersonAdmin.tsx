@@ -913,6 +913,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     {beneficiary.celular && ` • Tel: ${beneficiary.celular}`}
                     {beneficiary.curso && ` • Curso: ${beneficiary.curso}`}
                     {beneficiary.salon && ` • Salón: ${beneficiary.salon}`}
+                    {(beneficiary as any).horarioCurso && ` • Horario: ${(beneficiary as any).horarioCurso}`}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
