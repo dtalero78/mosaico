@@ -43,6 +43,7 @@ interface Contrato {
 
 interface FilterState {
   estado: string
+  campaign: string
   fechaInicio: Date | null
   fechaFin: Date | null
 }
@@ -69,6 +70,7 @@ export default function AprobacionPage() {
     // Default = "Firmado sin aprobar" para que el aprobador entre directo al
     // backlog operativo (contratos que el cliente ya firmó y esperan visto bueno).
     estado: 'Firmado sin aprobar',
+    campaign: '',
     fechaInicio: null,
     fechaFin: null
   })
@@ -164,6 +166,11 @@ export default function AprobacionPage() {
       }
     }
 
+    // Filtrar por campaña
+    if (filters.campaign) {
+      data = data.filter(c => (c.campaign || '') === filters.campaign)
+    }
+
     // Filtrar por fechas
     if (filters.fechaInicio) {
       data = data.filter(c => new Date(c._createdDate) >= filters.fechaInicio!)
@@ -184,7 +191,10 @@ export default function AprobacionPage() {
       const filtered = getFilteredData()
       updatePagination(filtered)
     }
-  }, [searchApellido, filters.estado, filters.fechaInicio, filters.fechaFin])
+  }, [searchApellido, filters.estado, filters.campaign, filters.fechaInicio, filters.fechaFin])
+
+  // Campañas disponibles (para el dropdown)
+  const campaignOptions = Array.from(new Set(allContratos.map(c => c.campaign).filter(Boolean))).sort() as string[]
 
   // Obtener estado display
   const getEstadoDisplay = (contrato: Contrato) => {
@@ -322,7 +332,7 @@ export default function AprobacionPage() {
         <div className="card p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
             {/* Búsqueda por apellido/nombre */}
-            <div className="lg:col-span-4">
+            <div className="lg:col-span-3">
               <label htmlFor="searchApellido" className="block text-sm font-medium text-gray-700 mb-1">
                 Buscar por apellido o nombre
               </label>
@@ -337,7 +347,7 @@ export default function AprobacionPage() {
             </div>
 
             {/* Filtro de estado */}
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Estado
               </label>
@@ -354,8 +364,23 @@ export default function AprobacionPage() {
               </select>
             </div>
 
+            {/* Filtro de campaña */}
+            <div className="lg:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Campaña
+              </label>
+              <select
+                value={filters.campaign}
+                onChange={(e) => setFilters(prev => ({ ...prev, campaign: e.target.value }))}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Todas</option>
+                {campaignOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+
             {/* Rango de fechas */}
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Rango de fechas
               </label>
@@ -400,7 +425,7 @@ export default function AprobacionPage() {
         {/* Información de resultados */}
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-semibold">
-            {searchApellido || filters.estado || filters.fechaInicio || filters.fechaFin
+            {searchApellido || filters.estado || filters.campaign || filters.fechaInicio || filters.fechaFin
               ? `Registros filtrados (${getFilteredData().length})`
               : `Registros pendientes de aprobación (${allContratos.length})`
             }

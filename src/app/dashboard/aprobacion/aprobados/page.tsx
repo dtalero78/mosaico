@@ -51,6 +51,7 @@ export default function AprobadosPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [estado, setEstado] = useState('')
+  const [campaign, setCampaign] = useState('')
   const [fechaInicio, setFechaInicio] = useState<Date | null>(null)
   const [fechaFin, setFechaFin] = useState<Date | null>(null)
   const [page, setPage] = useState(1)
@@ -72,6 +73,7 @@ export default function AprobadosPage() {
         || (c.contrato || '').toLowerCase().includes(s) || (c.numeroId || '').includes(s))
     }
     if (estado) d = d.filter(c => estadoDe(c).key === estado)
+    if (campaign) d = d.filter(c => (c.campaign || '') === campaign)
     if (fechaInicio) d = d.filter(c => new Date(c._createdDate) >= fechaInicio)
     if (fechaFin) { const f = new Date(fechaFin); f.setHours(23, 59, 59, 999); d = d.filter(c => new Date(c._createdDate) <= f) }
     return d
@@ -81,7 +83,9 @@ export default function AprobadosPage() {
     const d = filtered()
     setPage(1)
     setRows(d.slice(0, RECORDS_PER_PAGE))
-  }, [all, search, estado, fechaInicio, fechaFin])
+  }, [all, search, estado, campaign, fechaInicio, fechaFin])
+
+  const campaignOptions = Array.from(new Set(all.map(c => c.campaign).filter(Boolean))).sort() as string[]
 
   const data = filtered()
   const totalPages = Math.ceil(data.length / RECORDS_PER_PAGE)
@@ -129,7 +133,7 @@ export default function AprobadosPage() {
           {/* Filtros */}
           <div className="card p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
-              <div className="lg:col-span-4">
+              <div className="lg:col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Buscar por apellido, nombre o contrato</label>
                 <input type="text" placeholder="Apellido, nombre o contrato..." value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -142,7 +146,15 @@ export default function AprobadosPage() {
                   {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
                 </select>
               </div>
-              <div className="lg:col-span-5">
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Campaña</label>
+                <select value={campaign} onChange={(e) => setCampaign(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                  <option value="">Todas</option>
+                  {campaignOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="lg:col-span-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rango de fechas</label>
                 <div className="flex gap-2">
                   <input type="date" value={fechaInicio ? fechaInicio.toISOString().split('T')[0] : ''}
