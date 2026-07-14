@@ -206,7 +206,7 @@ export async function generarBookingsBeneficiario(
         plataforma: persona.plataforma || null,
         nivel: e.nivel || e.tituloONivel || null,
         step: e.step || e.nombreEvento || null,
-        advisor: e.advisor || null,
+        advisor: e.advisor || '', // ACADEMICA_BOOKINGS.advisor es NOT NULL ('' = sin guía)
         fecha: e.dia,
         fechaEvento: e.dia,
         hora: e.hora || null,

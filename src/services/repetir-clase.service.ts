@@ -58,17 +58,29 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
   const sesiones = await queryMany<{ _id: string }>(
     `SELECT "_id" FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 ORDER BY "dia" ASC`, [cursoCampaignId]
   );
+  if (sesiones.length === 0) return 0;
 
-  let n = 0;
+  // Batch: un solo UPDATE con arrays paralelos (antes: 1 query por sesión).
+  const idsArr: string[] = [];
+  const ordArr: Array<number | null> = [];
+  const modArr: Array<string | null> = [];
+  const lecArr: Array<string | null> = [];
   for (let i = 0; i < sesiones.length; i++) {
     const l = seq[i];
-    await query(
-      `UPDATE "CALENDARIO" SET "leccionOrden"=$2, "sesionModulo"=$3, "sesionLeccion"=$4, "_updatedDate"=NOW() WHERE "_id"=$1`,
-      [sesiones[i]._id, l ? i + 1 : null, l?.code || null, l?.step || null]
-    );
-    n++;
+    idsArr.push(sesiones[i]._id);
+    ordArr.push(l ? i + 1 : null);
+    modArr.push(l?.code || null);
+    lecArr.push(l?.step || null);
   }
-  return n;
+  await query(
+    `UPDATE "CALENDARIO" c
+       SET "leccionOrden" = v.ord, "sesionModulo" = v."mod", "sesionLeccion" = v.lec, "_updatedDate" = NOW()
+     FROM (SELECT unnest($1::text[]) AS id, unnest($2::int[]) AS ord,
+                  unnest($3::text[]) AS "mod", unnest($4::text[]) AS lec) v
+     WHERE c."_id" = v.id`,
+    [idsArr, ordArr, modArr, lecArr]
+  );
+  return sesiones.length;
 }
 
 /**
