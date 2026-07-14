@@ -28,7 +28,8 @@ export const GET = handler(async (_request, { params }) => {
     beneficiarios = await queryMany(
       `SELECT "_id", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
               "numeroId", "celular", "email", "plataforma", "contrato", "domicilio", "ciudad",
-              "fechaNacimiento", "apoderado", "apoderadoTelefono", "apoderadoMail"
+              "fechaNacimiento", "apoderado", "apoderadoTelefono", "apoderadoMail",
+              "campaign", "tipoCurso", "salon", "horarioCurso"
        FROM "PEOPLE"
        WHERE "contrato" = $1 AND "tipoUsuario" = 'BENEFICIARIO'
        ORDER BY "primerNombre" ASC`,

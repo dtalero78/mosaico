@@ -61,6 +61,10 @@ export function fillContractTemplate(
         `- Ciudad: ${b.ciudad || ''}\n` +
         `- Domicilio: ${b.domicilio || ''}\n` +
         `- Email: ${b.email || ''}\n` +
+        `- Campaña: ${b.campaign || ''}\n` +
+        `- Curso: ${b.tipoCurso || ''}\n` +
+        `- Salon: ${b.salon || ''}\n` +
+        `- Horario: ${b.horarioCurso || ''}\n` +
         `- Apoderado: ${b.apoderado || ''}\n` +
         `- Telefono Apoderado: ${b.apoderadoTelefono || ''}\n` +
         `- Correo Apoderado: ${b.apoderadoMail || ''}`
