@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { Person, Beneficiary } from '@/types'
 import { formatDate } from '@/lib/utils'
@@ -40,6 +41,35 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   })
   const [selectedEstado, setSelectedEstado] = useState(person.aprobacion || 'Pendiente')
   const [newComment, setNewComment] = useState('')
+  // Edición del apoderado (vive en la fila del TITULAR)
+  const [editApoderado, setEditApoderado] = useState(false)
+  const [savingApoderado, setSavingApoderado] = useState(false)
+  const [apoderadoForm, setApoderadoForm] = useState({
+    apoderado: (person as any).apoderado || '',
+    apoderadoTelefono: (person as any).apoderadoTelefono || '',
+    apoderadoMail: (person as any).apoderadoMail || '',
+  })
+
+  const handleSaveApoderado = async () => {
+    setSavingApoderado(true)
+    try {
+      const payload = {
+        apoderado: apoderadoForm.apoderado.trim() || null,
+        apoderadoTelefono: apoderadoForm.apoderadoTelefono.trim() || null,
+        apoderadoMail: apoderadoForm.apoderadoMail.trim() || null,
+      }
+      const r = await fetch(`/api/postgres/people/${person._id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      }).then(x => x.json())
+      if (r.error) throw new Error(r.error)
+      toast.success('Apoderado actualizado')
+      setEditApoderado(false)
+      setTimeout(() => window.location.reload(), 600)
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al guardar el apoderado')
+      setSavingApoderado(false)
+    }
+  }
   const [showBeneficiaryForm, setShowBeneficiaryForm] = useState(false)
   const [newBeneficiaryId, setNewBeneficiaryId] = useState<string | null>(null)
   const [currentFormStep, setCurrentFormStep] = useState(1)
@@ -800,16 +830,57 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
       {/* Beneficiaries Management */}
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-4">Gestión de Beneficiarios</h3>
-        {((person as any).apoderado || (person as any).apoderadoTelefono || (person as any).apoderadoMail) && (
-          <div className="mb-4 bg-white border border-gray-200 rounded-lg p-4">
-            <p className="text-xs font-semibold text-gray-700 mb-2">Apoderado</p>
+        <div className="mb-4 bg-white border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-gray-700">Apoderado</p>
+            {!editApoderado ? (
+              <button type="button" onClick={() => {
+                setApoderadoForm({
+                  apoderado: (person as any).apoderado || '',
+                  apoderadoTelefono: (person as any).apoderadoTelefono || '',
+                  apoderadoMail: (person as any).apoderadoMail || '',
+                })
+                setEditApoderado(true)
+              }} className="text-xs px-3 py-1 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 font-medium">Editar</button>
+            ) : (
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setEditApoderado(false)} disabled={savingApoderado}
+                  className="text-xs px-3 py-1 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+                <button type="button" onClick={handleSaveApoderado} disabled={savingApoderado}
+                  className="text-xs px-3 py-1 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
+                  {savingApoderado ? 'Guardando…' : 'Guardar'}</button>
+              </div>
+            )}
+          </div>
+          {!editApoderado ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-gray-900">
               <div><span className="block text-[11px] uppercase tracking-wide text-gray-400">Nombre</span>{(person as any).apoderado || '—'}</div>
               <div><span className="block text-[11px] uppercase tracking-wide text-gray-400">Teléfono</span>{(person as any).apoderadoTelefono || '—'}</div>
               <div><span className="block text-[11px] uppercase tracking-wide text-gray-400">Correo</span>{(person as any).apoderadoMail || '—'}</div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Nombre</label>
+                <input type="text" value={apoderadoForm.apoderado}
+                  onChange={e => setApoderadoForm(f => ({ ...f, apoderado: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Teléfono</label>
+                <input type="text" value={apoderadoForm.apoderadoTelefono}
+                  onChange={e => setApoderadoForm(f => ({ ...f, apoderadoTelefono: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Correo</label>
+                <input type="email" value={apoderadoForm.apoderadoMail}
+                  onChange={e => setApoderadoForm(f => ({ ...f, apoderadoMail: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+            </div>
+          )}
+        </div>
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
           <div className="space-y-4">
           {currentBeneficiaries.map((beneficiary) => {
