@@ -85,7 +85,7 @@ export default function EdicionContratoPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-        <DocumentTextIcon className="h-6 w-6 text-blue-600" />
+        <DocumentTextIcon className="h-6 w-6 text-primary-600" />
         <h1 className="text-xl font-bold text-gray-900">Edición de Contrato</h1>
       </div>
 
@@ -108,13 +108,13 @@ export default function EdicionContratoPage() {
               onChange={e => { setInput(e.target.value); setResult(null); setNotFound(false) }}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               placeholder="prs_... o 01-M5-09004-26"
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
             />
             <button
               type="button"
               onClick={handleSearch}
               disabled={loading}
-              className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2 text-sm font-medium"
+              className="px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors flex items-center gap-2 text-sm font-medium"
             >
               {loading
                 ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -136,8 +136,8 @@ export default function EdicionContratoPage() {
         {result && titular && contractUrl && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             {/* Card header */}
-            <div className="bg-blue-600 px-6 py-4">
-              <p className="text-xs text-blue-200 uppercase font-semibold tracking-wide mb-1">Contrato encontrado</p>
+            <div className="bg-primary-600 px-6 py-4">
+              <p className="text-xs text-primary-200 uppercase font-semibold tracking-wide mb-1">Contrato encontrado</p>
               <p className="text-white font-bold text-lg">
                 {result.contrato !== '—' ? `Contrato ${result.contrato}` : 'ID directo'}
               </p>
@@ -176,7 +176,7 @@ export default function EdicionContratoPage() {
               <button
                 type="button"
                 onClick={() => handleOpen(titular._id)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold text-sm"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-accent-600 text-white rounded-lg hover:bg-accent-700 transition-colors font-semibold text-sm"
               >
                 <ArrowTopRightOnSquareIcon className="h-5 w-5" />
                 Abrir Edición del Contrato
