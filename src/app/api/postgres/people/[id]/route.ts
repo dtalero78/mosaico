@@ -38,6 +38,19 @@ export const GET = handler(async (
     tipoUsuario: parsedPerson?.tipoUsuario,
   });
 
+  // Campaña: los beneficiarios la traen en su fila; el TITULAR la toma de un
+  // beneficiario de su contrato (para mostrarla en la ficha).
+  if (!parsedPerson.campaign && parsedPerson?.contrato) {
+    try {
+      const camp = await queryOne(
+        `SELECT "campaign" FROM "PEOPLE"
+         WHERE "contrato" = $1 AND "tipoUsuario" = 'BENEFICIARIO' AND "campaign" IS NOT NULL LIMIT 1`,
+        [parsedPerson.contrato]
+      );
+      if (camp?.campaign) parsedPerson.campaign = camp.campaign;
+    } catch (e) { /* non-critical */ }
+  }
+
   // Look up login password from USUARIOS_ROLES by email
   if (parsedPerson?.email) {
     try {

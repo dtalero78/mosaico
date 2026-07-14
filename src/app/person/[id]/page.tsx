@@ -103,6 +103,9 @@ async function PersonContent({ personId, initialTab }: { personId: string; initi
               <div className="mt-1 space-y-1">
                 <div className="flex items-center flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500">
                   <span>ID: {personData.person.numeroId || 'No disponible'}</span>
+                  {personData.person.campaign && (
+                    <span>Campaña: {personData.person.campaign}</span>
+                  )}
                   {personData.person.contrato && (
                     <span>Contrato: {personData.person.contrato}</span>
                   )}
