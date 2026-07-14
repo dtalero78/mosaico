@@ -5,15 +5,21 @@ import { query } from '@/lib/postgres';
 export const GET = handlerWithAuth(async () => {
   // Traer de PEOPLE todos los titulares cuyo campo aprobacion NO sea 'Aprobado'
   const result = await query(
-    `SELECT "_id", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
-            "numeroId", "contrato", "celular", "email", "plataforma", "tipoUsuario",
-            "aprobacion", "hashConsentimiento", "documentacion", "extemporanea",
-            "_createdDate", "fechaCreacion"
-     FROM "PEOPLE"
-     WHERE "tipoUsuario" = 'TITULAR'
-       AND ("aprobacion" IS NULL OR "aprobacion" != 'Aprobado')
-       AND COALESCE("contrato",'') NOT LIKE 'PRB-%'
-     ORDER BY "_createdDate" DESC`
+    `SELECT p."_id", p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido",
+            p."numeroId", p."contrato", p."celular", p."email", p."plataforma", p."tipoUsuario",
+            p."aprobacion", p."hashConsentimiento", p."documentacion", p."extemporanea",
+            p."_createdDate", p."fechaCreacion",
+            camp."campaign"
+     FROM "PEOPLE" p
+     LEFT JOIN LATERAL (
+       SELECT "campaign" FROM "PEOPLE"
+       WHERE "contrato" = p."contrato" AND "tipoUsuario" = 'BENEFICIARIO' AND "campaign" IS NOT NULL
+       LIMIT 1
+     ) camp ON true
+     WHERE p."tipoUsuario" = 'TITULAR'
+       AND (p."aprobacion" IS NULL OR p."aprobacion" != 'Aprobado')
+       AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
+     ORDER BY p."_createdDate" DESC`
   );
 
   return successResponse({

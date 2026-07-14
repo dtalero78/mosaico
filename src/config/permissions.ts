@@ -875,6 +875,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Ver el ítem del submenú y la página Gestión Aprobaciones (/dashboard/aprobacion/gestion)',
   },
   {
+    code: AprobacionPermission.APROBADOS_VER,
+    module: Module.APROBACION,
+    section: 'Acceso (ítems del menú)',
+    name: 'Ítem "Aprobados"',
+    description: 'Ver el ítem del submenú y la consulta de contratos Aprobados/Inactivos/Finalizados (/dashboard/aprobacion/aprobados)',
+  },
+  {
     code: AprobacionPermission.ACTUALIZAR,
     module: Module.APROBACION,
     section: 'Lista de Aprobaciones',

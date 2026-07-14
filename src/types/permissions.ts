@@ -374,6 +374,7 @@ export enum AprobacionPermission {
   // Acceso por ítem del submenú Aprobación (MOSAICO)
   CENTRO_VER = 'APROBACION.CENTRO.VER',
   GESTION_VER = 'APROBACION.GESTION.VER',
+  APROBADOS_VER = 'APROBACION.APROBADOS.VER',
 
   // Modificar (usado en Wix)
   ACTUALIZAR = 'APROBACION.MODIFICAR.ACTUALIZAR',

@@ -29,6 +29,7 @@ interface Contrato {
   segundoApellido?: string
   numeroId: string
   contrato: string
+  campaign?: string
   celular: string
   email: string
   plataforma: string
@@ -48,7 +49,6 @@ interface FilterState {
 
 const ESTADOS_APROBACION = [
   { value: '', label: 'Todos los contratos' },
-  { value: 'Aprobado', label: 'Aprobado', color: 'bg-green-100 text-green-800' },
   { value: 'Rechazado', label: 'Rechazado', color: 'bg-red-100 text-red-800' },
   { value: 'Pendiente', label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'En revisión', label: 'En revisión', color: 'bg-blue-100 text-blue-800' },
@@ -295,6 +295,7 @@ export default function AprobacionPage() {
                 { header: 'Nombre', accessor: (c) => `${c.primerNombre} ${c.primerApellido}`.trim() },
                 { header: 'Documento', accessor: (c) => c.numeroId },
                 { header: 'Contrato', accessor: (c) => c.contrato },
+                { header: 'Campaña', accessor: (c) => c.campaign || '' },
                 { header: 'Plataforma', accessor: (c) => c.plataforma },
                 { header: 'Celular', accessor: (c) => c.celular },
                 { header: 'Email', accessor: (c) => c.email },
@@ -460,6 +461,9 @@ export default function AprobacionPage() {
                       Contrato
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Campaña
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Contacto
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -504,6 +508,9 @@ export default function AprobacionPage() {
                               ⏰ Extemporánea
                             </span>
                           )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{contrato.campaign || '—'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{contrato.celular}</div>
