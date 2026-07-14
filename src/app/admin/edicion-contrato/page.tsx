@@ -18,7 +18,8 @@ interface ContractResult {
   beneficiarios: any[]
 }
 
-const BASE_URL = 'https://lgs-plataforma.com/dashboard/comercial/contrato'
+// URL relativa: abre en el MISMO dominio (MOSAICO), no en LGS.
+const BASE_URL = '/dashboard/comercial/contrato'
 
 function fullName(p: any) {
   return [p.primerNombre, p.segundoNombre, p.primerApellido, p.segundoApellido]
@@ -95,9 +96,8 @@ export default function EdicionContratoPage() {
           <div>
             <p className="text-sm font-semibold text-gray-700 mb-1">Buscar titular por:</p>
             <p className="text-xs text-gray-500">
-              ID directo — formato nuevo (ej: <code className="bg-gray-100 px-1 rounded">prs_177...</code>),
-              formato UUID Wix (ej: <code className="bg-gray-100 px-1 rounded">002af1cd-bdad-...</code>),
-              o número de contrato (ej: <code className="bg-gray-100 px-1 rounded">01-15256-26</code>)
+              ID directo del titular (ej: <code className="bg-gray-100 px-1 rounded">prs_177...</code>)
+              o número de contrato (ej: <code className="bg-gray-100 px-1 rounded">01-M5-09004-26</code>)
             </p>
           </div>
 
@@ -107,7 +107,7 @@ export default function EdicionContratoPage() {
               value={input}
               onChange={e => { setInput(e.target.value); setResult(null); setNotFound(false) }}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              placeholder="prs_... o 01-15256-26"
+              placeholder="prs_... o 01-M5-09004-26"
               className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
             />
             <button
