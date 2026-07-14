@@ -8,6 +8,8 @@ import {
   VideoCameraIcon,
   XMarkIcon,
   UserCircleIcon,
+  SparklesIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import { useQuery } from 'react-query'
 import {
@@ -51,6 +53,7 @@ function PanelEstudianteContent() {
   const [videoErr, setVideoErr] = useState(false)
   const [showInstructivos, setShowInstructivos] = useState(false)
   const [showPerfil, setShowPerfil] = useState(false)
+  const [showActividades, setShowActividades] = useState(false)
 
   // Instructivos from API
   const instructivosQuery = useQuery(
@@ -194,6 +197,27 @@ function PanelEstudianteContent() {
           </button>
 
           <div className="flex-1" />
+
+          {/* Grupo desplegable Actividades */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowActividades(v => !v)}
+              className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <SparklesIcon className="h-4 w-4" />
+              Actividades
+              <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${showActividades ? 'rotate-180' : ''}`} />
+            </button>
+            {showActividades && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowActividades(false)} />
+                <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
+                  <p className="px-3 py-2 text-xs text-gray-400">Sin actividades por ahora</p>
+                </div>
+              </>
+            )}
+          </div>
 
           <button
             onClick={() => setShowMaterials(true)}
