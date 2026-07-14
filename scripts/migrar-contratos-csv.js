@@ -53,6 +53,14 @@ const EMAIL = args.email || 'admin@mosaico.com';
 const PASSWORD = args.password || process.env.ADMIN_PASSWORD || '';
 const CSV = args.csv || 'docs/cargaContratoMosaico_MAYO.csv';
 const ONLY = typeof args.only === 'string' ? new Set(args.only.split(',').map(s => s.trim())) : null;
+// Mapeo extra de campañas del CSV → BD, ej: --campaignMap=ABRIL2026:JUNIO082026,MARZO2026:JUNIO082026
+const CAMPAIGN_MAP = {};
+if (typeof args.campaignMap === 'string') {
+  args.campaignMap.split(',').forEach(pair => {
+    const [from, to] = pair.split(':').map(s => s.trim());
+    if (from && to) CAMPAIGN_MAP[from.toUpperCase().replace(/[^A-Z0-9]/g, '')] = to;
+  });
+}
 
 // ── helpers de normalización ───────────────────────────────────────────────────
 const stripAccents = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -68,10 +76,11 @@ function parseFecha(s) { // "1/06/2026" → "2026-06-01"
 /** Normaliza el nombre de campaña del CSV al de CURSOS_CAMPAIGN. */
 function normCampaign(s) {
   const u = stripAccents(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (CAMPAIGN_MAP[u]) return CAMPAIGN_MAP[u];
   if (u.startsWith('JUNIO')) return 'JUNIO082026';
   if (u.startsWith('AGOSTO')) return 'AGOSTO172026';
-  if (u.startsWith('SINCAMPAIGN')) return 'SINCAMPAIGN'; // marcador → se resuelve por IMPULSA/default
-  return null; // basura (p.ej. "iere retirar (pendiente)") → queda sin campaña (se omite)
+  if (u.startsWith('SINCAMPAIGN') || u.startsWith('SINCANPAIGN')) return 'SINCAMPAIGN'; // typo tolerado
+  return null; // basura → queda sin campaña (se omite)
 }
 
 const TIPOS = ['YOJI', 'OKINA', 'KODOMO', 'DANSHI', 'SENPAI', 'IMPULSA'];
