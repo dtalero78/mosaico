@@ -90,6 +90,9 @@ async function PersonContent({ personId, initialTab }: { personId: string; initi
       apoderadoTelefono: person.apoderadoTelefono || '',
       apoderadoMail: person.apoderadoMail || '',
       estado: person.estadoInactivo ? 'Inactivo' : (person.aprobacion || 'Pendiente'),
+      // `estado` mezcla aprobación y actividad; los botones de la tarjeta necesitan
+      // la aprobación cruda para distinguir "sin aprobar" de "aprobado e inactivo".
+      aprobacion: person.aprobacion || null,
       fechaCreacion: person._createdDate,
       nivel: person.nivel,
       curso: person.tipoCurso,

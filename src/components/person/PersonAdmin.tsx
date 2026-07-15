@@ -34,6 +34,18 @@ const PREFIJOS_CELULAR = [
   { pais: "Perú", codigo: "PE", prefijo: "+51" },
 ]
 
+/**
+ * ¿El beneficiario ya está aprobado? Se mira `aprobacion` (no el `estado` derivado,
+ * que mezcla aprobación con actividad): uno recién agregado nace inactivo y sin
+ * aprobar, y debe poder aprobarse. Tolera la variante legacy 'Aprobada'.
+ */
+function isBeneficiaryApproved(b: Beneficiary): boolean {
+  const a = (b as any).aprobacion
+  if (a) return a === 'Aprobado' || a === 'Aprobada'
+  // Sin `aprobacion` en el payload (p.ej. estado optimista), caemos al estado.
+  return b.estado === 'Aprobado'
+}
+
 export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps) {
   console.log('🧪 PersonAdmin render - Props:', {
     personId: person._id,
@@ -182,7 +194,16 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
       if (response.ok && data.success) {
         setCurrentBeneficiaries(prev =>
           prev.map(ben =>
-            ben._id === beneficiaryId ? { ...ben, estado: 'Aprobado', aprobacion: 'Aprobado' } : ben
+            ben._id === beneficiaryId
+              ? {
+                  ...ben,
+                  estado: 'Aprobado',
+                  aprobacion: 'Aprobado',
+                  // La aprobación activa al beneficiario y le crea la ACADEMICA si faltaba.
+                  estadoInactivo: false,
+                  ...(data.academicId ? { academicaId: data.academicId, existeEnAcademica: true } : {}),
+                }
+              : ben
           )
         )
 
@@ -712,8 +733,10 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
             apellido: [created.primerApellido, created.segundoApellido].filter(Boolean).join(' '),
             celular: (created.celular || '').replace(/\D/g, '') || created.celular || '',
             // Nace inactivo/sin aprobar, igual que en Crear Contrato: es la
-            // aprobación la que genera los bookings y lo activa.
+            // aprobación la que genera los bookings y lo activa. `aprobacion: null`
+            // deja visible el botón Aprobar de su tarjeta.
             estado: 'Inactivo',
+            aprobacion: null,
             fechaCreacion: created._createdDate || new Date().toISOString(),
             apoderado: beneficiaryData.apoderado,
             apoderadoTelefono: beneficiaryData.apoderadoTelefono,
@@ -722,10 +745,14 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
             curso: created.tipoCurso,
             salon: created.salon,
             horarioCurso: created.horarioCurso,
+            // El alta ya crea la ACADEMICA (puente WELCOME); sin esto la tarjeta
+            // mostraría "SIN REGISTRO ACADÉMICO" hasta recargar.
+            academicaId: result.academicaId || null,
+            existeEnAcademica: !!result.academicaId,
           } as Beneficiary
           setCurrentBeneficiaries(prev => [...prev, newBen])
           if (result.userLogin) {
-            alert(`Beneficiario creado.\n\nUsuario de login: ${result.userLogin}\n\nQueda pendiente de aprobación — al aprobarlo se generan sus agendamientos y se habilita el acceso.`)
+            alert(`Beneficiario creado.\n\nUsuario de login: ${result.userLogin}\n\nQueda pendiente de aprobación — usa el botón "Aprobar" de su tarjeta para generar sus agendamientos y habilitar el acceso.`)
           }
         }
 
@@ -911,9 +938,15 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     <h4 className="font-medium text-gray-900">
                       {beneficiary.nombre} {beneficiary.apellido}
                     </h4>
-                    <span className={`badge ${getEstadoBadgeClass(beneficiary.estado)}`}>
-                      {beneficiary.estado}
-                    </span>
+                    {/* Un beneficiario sin aprobar nace inactivo — mostrarlo como
+                        "Inactivo" a secas confundía (parecía dado de baja). */}
+                    {isBeneficiaryApproved(beneficiary) ? (
+                      <span className={`badge ${getEstadoBadgeClass(beneficiary.estado)}`}>
+                        {beneficiary.estado}
+                      </span>
+                    ) : (
+                      <span className="badge badge-warning">Pendiente de aprobación</span>
+                    )}
                     {!(beneficiary as any).existeEnAcademica && (
                       <span className="badge bg-red-100 text-red-700">
                         SIN REGISTRO ACADÉMICO
@@ -943,12 +976,19 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                       Modificar
                     </button>
                   </PermissionGuard>
-                  {((!beneficiary.estado || beneficiary.estado === 'Pendiente') || approvingBeneficiaries.has(beneficiary._id)) && (
+                  {/* Aprobar — visible mientras el beneficiario NO esté aprobado, y
+                      desaparece al aprobarlo. Se decide por `aprobacion` (no por
+                      `estado`): un beneficiario recién agregado nace inactivo y
+                      antes quedaba como "Inactivo" sin forma de aprobarlo. Aprueba
+                      SOLO a este beneficiario (crea su ACADEMICA si falta, genera
+                      sus agendamientos y le envía el WhatsApp de bienvenida). */}
+                  {(!isBeneficiaryApproved(beneficiary) || approvingBeneficiaries.has(beneficiary._id)) && (
                     <PermissionGuard permission={PersonPermission.APROBAR}>
                       <button
                         onClick={() => handleApproveSpecificBeneficiary(beneficiary._id)}
                         disabled={approvingBeneficiaries.has(beneficiary._id)}
                         className="inline-flex items-center px-4 py-1.5 border border-black text-sm font-medium rounded text-black bg-white hover:bg-black hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Aprobar solo a este beneficiario"
                       >
                         {approvingBeneficiaries.has(beneficiary._id) ? (
                           <>
@@ -961,20 +1001,24 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                       </button>
                     </PermissionGuard>
                   )}
-                  {beneficiary.estado === 'Aprobado' ? (
-                    <PermissionGuard permission={PersonPermission.ACTIVAR_DESACTIVAR}>
-                      <button
-                        onClick={() => handleInactivateBeneficiary(beneficiary)}
-                        className="inline-flex items-center px-4 py-1.5 border border-orange-600 text-sm font-medium rounded text-orange-600 bg-white hover:bg-orange-600 hover:text-white transition-colors"
-                        title="Inactivar beneficiario"
-                      >
-                        Inactivar
-                      </button>
-                    </PermissionGuard>
-                  ) : beneficiary.estado === 'Inactivo' ? (
-                    <div className="inline-flex items-center px-4 py-1.5 border border-gray-400 text-sm font-medium rounded text-gray-500 bg-gray-50 cursor-not-allowed">
-                      Inactivo
-                    </div>
+                  {isBeneficiaryApproved(beneficiary) ? (
+                    // Aprobado y activo → se puede inactivar. Aprobado pero inactivo
+                    // (OnHold / inactivación admin) → solo se informa el estado.
+                    beneficiary.estado === 'Inactivo' ? (
+                      <div className="inline-flex items-center px-4 py-1.5 border border-gray-400 text-sm font-medium rounded text-gray-500 bg-gray-50 cursor-not-allowed">
+                        Inactivo
+                      </div>
+                    ) : (
+                      <PermissionGuard permission={PersonPermission.ACTIVAR_DESACTIVAR}>
+                        <button
+                          onClick={() => handleInactivateBeneficiary(beneficiary)}
+                          className="inline-flex items-center px-4 py-1.5 border border-orange-600 text-sm font-medium rounded text-orange-600 bg-white hover:bg-orange-600 hover:text-white transition-colors"
+                          title="Inactivar beneficiario"
+                        >
+                          Inactivar
+                        </button>
+                      </PermissionGuard>
+                    )
                   ) : (
                     <PermissionGuard permission={PersonPermission.ELIMINAR}>
                       <button

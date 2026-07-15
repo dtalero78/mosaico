@@ -111,15 +111,18 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
 
   await incrementarCupoCurso(b.campaign, b.tipoCurso, b.horarioCurso);
 
-  // userLogin definitivo (insertBeneficiarioTx pudo regenerarlo por colisión).
-  const login = await queryOne<any>(
-    `SELECT "userLogin" FROM "PEOPLE" WHERE "_id" = $1`, [person._id]
+  // ACADEMICA creada por insertBeneficiarioTx — la devolvemos para que la tarjeta
+  // no aparezca como "SIN REGISTRO ACADÉMICO" hasta recargar la página.
+  const academica = await queryOne<any>(
+    `SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = $1 LIMIT 1`, [b.numeroId]
   );
 
   return successResponse({
     message: 'Beneficiario creado exitosamente',
     person,
-    userLogin: login?.userLogin || null,
+    // userLogin definitivo (insertBeneficiarioTx pudo regenerarlo por colisión).
+    userLogin: person.userLogin || null,
+    academicaId: academica?._id || null,
     salon: curso.salon || null,
   });
 });
