@@ -62,6 +62,172 @@ export function parseMoney(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+export interface BeneficiarioInput {
+  primerNombre: string;
+  segundoNombre?: string | null;
+  primerApellido: string;
+  segundoApellido?: string | null;
+  numeroId: string;
+  fechaNacimiento?: string | null;
+  email?: string | null;
+  celular?: string | null;
+  domicilio?: string | null;
+  ciudad?: string | null;
+  campaign?: string | null;
+  tipoCurso?: string | null;
+  horarioCurso?: string | null;
+  apoderado?: string | null;
+  apoderadoTelefono?: string | null;
+  apoderadoMail?: string | null;
+  userLogin?: string | null;
+}
+
+/**
+ * Inserta UN beneficiario completo dentro de una transacción:
+ *   PEOPLE (inactivo, con el curso REAL) + ACADEMICA (curso puente WELCOME, inactiva)
+ *   + USUARIOS_ROLES (login bloqueado, activo=false).
+ *
+ * Es la única definición de "cómo nace un beneficiario en MOSAICO". La usan:
+ *   - createFullContract (Crear Contrato / Migrar Contrato) por cada beneficiario.
+ *   - POST /api/postgres/people/[id]/beneficiario (agregar a un contrato existente).
+ * Tenerla en un solo lugar evita que un beneficiario agregado después quede sin
+ * curso, sin login o fuera del puente WELCOME.
+ *
+ * NO toca los cupos — el llamador debe invocar `incrementarCupoCurso` después del
+ * commit (best-effort, igual que Crear Contrato).
+ */
+export async function insertBeneficiarioTx(
+  client: any,
+  args: {
+    b: BeneficiarioInput;
+    titularId: string;
+    contrato: string;
+    plataforma: string | null;
+    vigencia: any;
+    finalContrato: string | null;
+  }
+): Promise<any> {
+  const { b, titularId, contrato, plataforma, vigencia, finalContrato } = args;
+  const benefId = ids.person();
+
+  // Resolver el curso desde CURSOS_CAMPAIGN: salón + inicioCurso
+  let salon: string | null = null;
+  let inicioCurso: string | null = null;
+  if (b.campaign && b.tipoCurso && b.horarioCurso) {
+    const cr = await client.query(
+      `SELECT "_id", "salon", "inicioCurso" FROM "CURSOS_CAMPAIGN"
+       WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
+      [b.campaign, b.tipoCurso, b.horarioCurso]
+    );
+    salon = cr.rows[0]?.salon || null;
+    inicioCurso = cr.rows[0]?.inicioCurso || null;
+  }
+
+  // userLogin del estudiante (viene del wizard; fallback server-side). 10 chars,
+  // es el IDENTIFICADOR DE LOGIN → se garantiza único. Se verifica en USUARIOS_ROLES
+  // (índice único) Y en ACADEMICA, porque los estudiantes con login omitido (hermanos
+  // menores que comparten email) guardan su userLogin sólo en ACADEMICA — mirar ambas
+  // evita colisiones futuras. La query corre dentro de la transacción, así que también
+  // ve los beneficiarios ya insertados en este mismo contrato. Regenera hasta 6 veces.
+  let userLogin = String(b.userLogin || generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId)).slice(0, 10);
+  for (let intento = 0; intento < 6; intento++) {
+    const dup = await client.query(
+      `SELECT 1 FROM "USUARIOS_ROLES" WHERE "userLogin"=$1
+       UNION ALL
+       SELECT 1 FROM "ACADEMICA" WHERE "userLogin"=$1
+       LIMIT 1`,
+      [userLogin]
+    );
+    if (dup.rows.length === 0) break;
+    userLogin = generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId);
+  }
+
+  // Curso REAL → primer módulo/lección (de NIVELES por curso). Va a PEOPLE.
+  let realNivel = '';
+  let realStep = '';
+  if (b.tipoCurso) {
+    const nr = await client.query(
+      `SELECT "code", "step" FROM "NIVELES" WHERE "curso"=$1 ORDER BY "orden" NULLS LAST, "step" LIMIT 1`,
+      [b.tipoCurso]
+    );
+    realNivel = nr.rows[0]?.code || '';
+    realStep = nr.rows[0]?.step || '';
+  }
+  // Módulo del curso puente WELCOME según el curso real: IMPULSA → IMPULSA, resto → MOSAICO.
+  const welcomeModulo = (b.tipoCurso === 'IMPULSA') ? 'IMPULSA' : 'MOSAICO';
+
+  // 1. PEOPLE beneficiario — nace INACTIVO. Guarda el CURSO REAL.
+  const benefResult = await client.query(
+    `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
+      "email", "celular", "fechaNacimiento", "domicilio", "ciudad", "titularId",
+      "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
+      "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "nivel", "step", "userLogin",
+      "apoderado", "apoderadoTelefono", "apoderadoMail", "origen", "_createdDate", "_updatedDate")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$25,$26,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'POSTGRES',NOW(),NOW()) RETURNING *`,
+    [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
+     b.primerApellido, b.segundoApellido || null,
+     b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
+     contrato, plataforma || null, vigencia || null, finalContrato,
+     b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon, realNivel, realStep, userLogin,
+     b.apoderado || null, b.apoderadoTelefono || null, b.apoderadoMail || null,
+     b.domicilio || null, b.ciudad || null]
+  );
+
+  // 2. ACADEMICA del beneficiario — INACTIVO, nace en el curso puente WELCOME.
+  const exA = await client.query(`SELECT "_id" FROM "ACADEMICA" WHERE "numeroId"=$1 LIMIT 1`, [b.numeroId]);
+  if (exA.rows.length === 0) {
+    const academicId = ids.academic();
+    await client.query(
+      `INSERT INTO "ACADEMICA" (
+         "_id", "studentId", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
+         "email", "celular", "nivel", "step", "plataforma", "estadoInactivo", "tipoUsuario",
+         "contrato", "usuarioId", "peopleId", "campaign", "curso", "salon", "inicioCurso", "userLogin",
+         "_createdDate", "_updatedDate"
+       ) VALUES ($1,$13,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'BENEFICIARIO',$12,$13,$14,$15,'WELCOME','Salon 00',$16::date,$17,NOW(),NOW())`,
+      [academicId, b.numeroId, b.primerNombre, b.segundoNombre || null,
+       b.primerApellido, b.segundoApellido || null,
+       b.email || null, b.celular || null, welcomeModulo, 'Leccion 00', plataforma || null,
+       contrato, benefId, benefId, b.campaign || null, inicioCurso, userLogin]
+    );
+  }
+
+  // 3. USUARIOS_ROLES — login BLOQUEADO (activo=false), clave placeholder=numeroId.
+  //    El cron `activate-academica` lo enciende 1 semana antes de inicioCurso.
+  if (b.email) {
+    const exU = await client.query(
+      `SELECT "_id" FROM "USUARIOS_ROLES" WHERE LOWER("email")=LOWER($1) LIMIT 1`,
+      [b.email]
+    );
+    if (exU.rows.length === 0) {
+      await client.query(
+        `INSERT INTO "USUARIOS_ROLES" ("_id","email","password","nombre","apellido","celular",
+          "numberid","contrato","plataforma","userLogin","rol","activo","origen",
+          "fechaCreacion","fechaActualizacion","_createdDate","_updatedDate")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ESTUDIANTE',false,'POSTGRES',NOW(),NOW(),NOW(),NOW())`,
+        [randomUUID(), b.email, b.numeroId, b.primerNombre, b.primerApellido || null,
+         b.celular || null, b.numeroId, contrato, plataforma || null, userLogin]
+      );
+    }
+  }
+
+  return benefResult.rows[0];
+}
+
+/** Incrementa el cupo del curso (+1). Best-effort — no rompe la creación si falla. */
+export async function incrementarCupoCurso(campaign?: string | null, tipoCurso?: string | null, horarioCurso?: string | null) {
+  if (!campaign || !tipoCurso || !horarioCurso) return;
+  try {
+    await query(
+      `UPDATE "CURSOS_CAMPAIGN"
+         SET "usuInscritos" = COALESCE("usuInscritos", 0) + 1, "_updatedDate" = NOW()
+       WHERE "campaign" = $1 AND "tipoCurso" = $2 AND "horarioCurso" = $3`,
+      [campaign, tipoCurso, horarioCurso]
+    );
+  } catch (err: any) {
+    console.warn('[contract-creation] no se pudo incrementar usuInscritos:', err?.message || err);
+  }
+}
+
 export interface CreateContractInput {
   /** Número de contrato ya resuelto (auto-generado o digitado manualmente). */
   contrato: string;
@@ -139,123 +305,21 @@ export async function createFullContract(input: CreateContractInput) {
 
     // 3. BENEFICIARIOS — PEOPLE (inactivo) + ACADEMICA (inactivo) + USUARIOS_ROLES (activo=false)
     for (const b of allBeneficiarios) {
-      const benefId = ids.person();
-      // Resolver el curso desde CURSOS_CAMPAIGN: salón + inicioCurso
-      let salon: string | null = null;
-      let inicioCurso: string | null = null;
-      if (b.campaign && b.tipoCurso && b.horarioCurso) {
-        const cr = await client.query(
-          `SELECT "_id", "salon", "inicioCurso" FROM "CURSOS_CAMPAIGN"
-           WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
-          [b.campaign, b.tipoCurso, b.horarioCurso]
-        );
-        salon = cr.rows[0]?.salon || null;
-        inicioCurso = cr.rows[0]?.inicioCurso || null;
-      }
-
-      // userLogin del estudiante (viene del wizard; fallback server-side). 10 chars,
-      // es el IDENTIFICADOR DE LOGIN → se garantiza único. Se verifica en USUARIOS_ROLES
-      // (índice único) Y en ACADEMICA, porque los estudiantes con login omitido (hermanos
-      // menores que comparten email) guardan su userLogin sólo en ACADEMICA — mirar ambas
-      // evita colisiones futuras. La query corre dentro de la transacción, así que también
-      // ve los beneficiarios ya insertados en este mismo contrato. Regenera hasta 6 veces.
-      let userLogin = String(b.userLogin || generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId)).slice(0, 10);
-      for (let intento = 0; intento < 6; intento++) {
-        const dup = await client.query(
-          `SELECT 1 FROM "USUARIOS_ROLES" WHERE "userLogin"=$1
-           UNION ALL
-           SELECT 1 FROM "ACADEMICA" WHERE "userLogin"=$1
-           LIMIT 1`,
-          [userLogin]
-        );
-        if (dup.rows.length === 0) break;
-        userLogin = generateUserLogin(b.primerNombre, b.primerApellido, b.numeroId);
-      }
-
-      // Curso REAL → primer módulo/lección (de NIVELES por curso). Va a PEOPLE.
-      let realNivel = '';
-      let realStep = '';
-      if (b.tipoCurso) {
-        const nr = await client.query(
-          `SELECT "code", "step" FROM "NIVELES" WHERE "curso"=$1 ORDER BY "orden" NULLS LAST, "step" LIMIT 1`,
-          [b.tipoCurso]
-        );
-        realNivel = nr.rows[0]?.code || '';
-        realStep = nr.rows[0]?.step || '';
-      }
-      // Módulo del curso puente WELCOME según el curso real: IMPULSA → IMPULSA, resto → MOSAICO.
-      const welcomeModulo = (b.tipoCurso === 'IMPULSA') ? 'IMPULSA' : 'MOSAICO';
-
-      // 3a. PEOPLE beneficiario — nace INACTIVO. Guarda el CURSO REAL.
-      const benefResult = await client.query(
-        `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
-          "email", "celular", "fechaNacimiento", "domicilio", "ciudad", "titularId",
-          "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
-          "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "nivel", "step", "userLogin",
-          "apoderado", "apoderadoTelefono", "apoderadoMail", "origen", "_createdDate", "_updatedDate")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$25,$26,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'POSTGRES',NOW(),NOW()) RETURNING *`,
-        [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
-         b.primerApellido, b.segundoApellido || null,
-         b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
-         contrato, titular.plataforma || null, financial?.vigencia || null, finalContrato,
-         b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon, realNivel, realStep, userLogin,
-         b.apoderado || null, b.apoderadoTelefono || null, b.apoderadoMail || null,
-         b.domicilio || null, b.ciudad || null]
-      );
-      created.beneficiarios.push(benefResult.rows[0]);
-
-      // 3b. ACADEMICA del beneficiario — INACTIVO, nace en el curso puente WELCOME.
-      const exA = await client.query(`SELECT "_id" FROM "ACADEMICA" WHERE "numeroId"=$1 LIMIT 1`, [b.numeroId]);
-      if (exA.rows.length === 0) {
-        const academicId = ids.academic();
-        await client.query(
-          `INSERT INTO "ACADEMICA" (
-             "_id", "studentId", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
-             "email", "celular", "nivel", "step", "plataforma", "estadoInactivo", "tipoUsuario",
-             "contrato", "usuarioId", "peopleId", "campaign", "curso", "salon", "inicioCurso", "userLogin",
-             "_createdDate", "_updatedDate"
-           ) VALUES ($1,$13,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'BENEFICIARIO',$12,$13,$14,$15,'WELCOME','Salon 00',$16::date,$17,NOW(),NOW())`,
-          [academicId, b.numeroId, b.primerNombre, b.segundoNombre || null,
-           b.primerApellido, b.segundoApellido || null,
-           b.email || null, b.celular || null, welcomeModulo, 'Leccion 00', titular.plataforma || null,
-           contrato, benefId, benefId, b.campaign || null, inicioCurso, userLogin]
-        );
-      }
-
-      // 3c. USUARIOS_ROLES — login BLOQUEADO (activo=false), clave placeholder=numeroId.
-      if (b.email) {
-        const exU = await client.query(
-          `SELECT "_id" FROM "USUARIOS_ROLES" WHERE LOWER("email")=LOWER($1) LIMIT 1`,
-          [b.email]
-        );
-        if (exU.rows.length === 0) {
-          await client.query(
-            `INSERT INTO "USUARIOS_ROLES" ("_id","email","password","nombre","apellido","celular",
-              "numberid","contrato","plataforma","userLogin","rol","activo","origen",
-              "fechaCreacion","fechaActualizacion","_createdDate","_updatedDate")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ESTUDIANTE',false,'POSTGRES',NOW(),NOW(),NOW(),NOW())`,
-            [randomUUID(), b.email, b.numeroId, b.primerNombre, b.primerApellido || null,
-             b.celular || null, b.numeroId, contrato, titular.plataforma || null, userLogin]
-          );
-        }
-      }
+      const row = await insertBeneficiarioTx(client, {
+        b,
+        titularId,
+        contrato,
+        plataforma: titular.plataforma || null,
+        vigencia: financial?.vigencia || null,
+        finalContrato,
+      });
+      created.beneficiarios.push(row);
     }
   });
 
   // Incrementar usuInscritos (+1) en CURSOS_CAMPAIGN por cada inscrito. Best-effort.
-  try {
-    for (const b of allBeneficiarios) {
-      if (b.campaign && b.tipoCurso && b.horarioCurso) {
-        await query(
-          `UPDATE "CURSOS_CAMPAIGN"
-             SET "usuInscritos" = COALESCE("usuInscritos", 0) + 1, "_updatedDate" = NOW()
-           WHERE "campaign" = $1 AND "tipoCurso" = $2 AND "horarioCurso" = $3`,
-          [b.campaign, b.tipoCurso, b.horarioCurso]
-        );
-      }
-    }
-  } catch (err: any) {
-    console.warn('[contract-creation] no se pudo incrementar usuInscritos:', err?.message || err);
+  for (const b of allBeneficiarios) {
+    await incrementarCupoCurso(b.campaign, b.tipoCurso, b.horarioCurso);
   }
 
   // 4. FINANCIERO

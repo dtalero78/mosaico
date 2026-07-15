@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { Person, Beneficiary } from '@/types'
 import { formatDate } from '@/lib/utils'
@@ -8,6 +8,8 @@ import { UserPlusIcon } from '@heroicons/react/24/outline'
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
+import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
+import { generateUserLogin } from '@/lib/user-login'
 
 interface PersonAdminProps {
   person: Person
@@ -63,9 +65,43 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     // Apoderado propio del beneficiario
     apoderado: '',
     apoderadoTelefono: '',
-    apoderadoMail: ''
+    apoderadoMail: '',
+    // Curso (cascada Campaña → Curso → Horario sobre CURSOS_CAMPAIGN)
+    campaign: '',
+    tipoCurso: '',
+    horarioCurso: ''
   })
   const [currentBeneficiaries, setCurrentBeneficiaries] = useState<Beneficiary[]>(beneficiaries)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [editingBeneficiaryId, setEditingBeneficiaryId] = useState<string | null>(null)
+  // Catálogo de cursos para la cascada del alta. Se cargan TODOS los activos (no se
+  // aplica el filtro de matrícula de Crear Contrato): aquí se agrega a un contrato
+  // que ya existe, y la campaña de los hermanos suele estar ya en curso.
+  const [cursosCampaign, setCursosCampaign] = useState<CursoRow[]>([])
+
+  useEffect(() => {
+    fetch('/api/postgres/cursos-campaign')
+      .then(r => r.json())
+      .then(j => setCursosCampaign(j.rows || []))
+      .catch(err => console.warn('No se pudo cargar el catálogo de cursos:', err))
+  }, [])
+
+  /** Campaña de los beneficiarios ya existentes → default del nuevo. */
+  const campaignPorDefecto = useMemo(() => {
+    const c = currentBeneficiaries.map(b => (b as any).campaign).filter(Boolean)
+    return c[0] || ''
+  }, [currentBeneficiaries])
+
+  /** userLogin del nuevo beneficiario — se genera cuando hay nombre + documento. */
+  const nuevoUserLogin = useMemo(() => {
+    if (isEditMode) return ''
+    const { primerNombre, primerApellido, numeroId } = beneficiaryData
+    if (!primerNombre || !primerApellido || !numeroId) return ''
+    return generateUserLogin(primerNombre, primerApellido, numeroId)
+    // Estable mientras no cambien nombre/apellido/documento (generateUserLogin
+    // incluye una parte aleatoria; regenerarlo en cada render lo haría saltar).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beneficiaryData.primerNombre, beneficiaryData.primerApellido, beneficiaryData.numeroId, isEditMode])
   const [approvingBeneficiaries, setApprovingBeneficiaries] = useState<Set<string>>(new Set())
   const [processStatus, setProcessStatus] = useState<Record<string, string>>({})
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -75,8 +111,6 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   const [pendingEstado, setPendingEstado] = useState<string | null>(null)
   const [originalEstado, setOriginalEstado] = useState<string>(person.aprobacion || 'Pendiente')
   const [isUpdatingEstado, setIsUpdatingEstado] = useState(false)
-  const [isEditMode, setIsEditMode] = useState(false)
-  const [editingBeneficiaryId, setEditingBeneficiaryId] = useState<string | null>(null)
   const [isTogglingContract, setIsTogglingContract] = useState(false)
 
   // Modal "Motivo de suspensión administrativa" — usado por el toggle del
@@ -482,7 +516,11 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
             genero: ben.genero || '',
             apoderado: ben.apoderado || '',
             apoderadoTelefono: ben.apoderadoTelefono || '',
-            apoderadoMail: ben.apoderadoMail || ''
+            apoderadoMail: ben.apoderadoMail || '',
+            // Solo informativo al editar: el curso se cambia con "Cambio Académico".
+            campaign: ben.campaign || '',
+            tipoCurso: ben.tipoCurso || '',
+            horarioCurso: ben.horarioCurso || ''
           })
 
           setNewBeneficiaryId(beneficiaryId)
@@ -515,7 +553,11 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
       genero: '',
       apoderado: '',
       apoderadoTelefono: '',
-      apoderadoMail: ''
+      apoderadoMail: '',
+      // Default: la campaña en la que están los otros beneficiarios del contrato.
+      campaign: campaignPorDefecto,
+      tipoCurso: '',
+      horarioCurso: ''
     })
     setNewBeneficiaryId('__new__')
     setShowBeneficiaryForm(true)
@@ -543,6 +585,13 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
         beneficiaryData.celular.trim() !== '' &&
         beneficiaryData.email.trim() !== ''
       )
+    } else if (step === 3) {
+      // Sin curso no hay salón ni bookings al aprobar → obligatorio.
+      return (
+        beneficiaryData.campaign !== '' &&
+        beneficiaryData.tipoCurso !== '' &&
+        beneficiaryData.horarioCurso !== ''
+      )
     }
     return true
   }
@@ -550,7 +599,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   const handleFormNext = () => {
     // Validar campos obligatorios antes de avanzar
     if (validateRequiredFields(currentFormStep)) {
-      if (currentFormStep < 2) {
+      if (currentFormStep < 3) {
         setCurrentFormStep(currentFormStep + 1)
       }
     } else {
@@ -602,34 +651,33 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
           })
         })
       } else {
-        // POST - create new beneficiary in PEOPLE
-        response = await fetch('/api/postgres/people', {
+        // POST — alta en el contrato del titular. El endpoint reusa la misma lógica
+        // de Crear Contrato: PEOPLE con su curso real + ACADEMICA (puente WELCOME)
+        // + USUARIOS_ROLES con su userLogin, y descuenta el cupo del curso.
+        // El contrato, la plataforma y la vigencia se toman del titular server-side.
+        response = await fetch(`/api/postgres/people/${person._id}/beneficiario`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             primerNombre: beneficiaryData.primerNombre,
-            segundoNombre: beneficiaryData.segundoNombre || undefined,
+            segundoNombre: beneficiaryData.segundoNombre || null,
             primerApellido: beneficiaryData.primerApellido,
-            segundoApellido: beneficiaryData.segundoApellido || undefined,
+            segundoApellido: beneficiaryData.segundoApellido || null,
             numeroId: beneficiaryData.numeroId,
-            tipoUsuario: 'BENEFICIARIO',
-            contrato: person.contrato || '',
-            aprobacion: 'Pendiente',
-            email: beneficiaryData.email || undefined,
-            celular: normalizedCelular || undefined,
-            fechaNacimiento: beneficiaryData.fechaNacimiento || undefined,
-            ciudad: beneficiaryData.ciudad || undefined,
-            domicilio: beneficiaryData.domicilio || undefined,
-            // Campos del form
-            plataforma: beneficiaryData.pais || undefined,
+            email: beneficiaryData.email,
+            celular: normalizedCelular || null,
+            fechaNacimiento: beneficiaryData.fechaNacimiento || null,
+            ciudad: beneficiaryData.ciudad || null,
+            domicilio: beneficiaryData.domicilio || null,
+            // Curso del beneficiario
+            campaign: beneficiaryData.campaign,
+            tipoCurso: beneficiaryData.tipoCurso,
+            horarioCurso: beneficiaryData.horarioCurso,
+            userLogin: nuevoUserLogin || null,
             // Apoderado propio del beneficiario
-            apoderado: beneficiaryData.apoderado?.trim() || undefined,
-            apoderadoTelefono: beneficiaryData.apoderadoTelefono?.trim() || undefined,
-            apoderadoMail: beneficiaryData.apoderadoMail?.trim() || undefined,
-            // Campos heredados del titular
-            finalContrato: person.finalContrato || undefined,
-            vigencia: person.vigencia || undefined,
-            fechaIngreso: new Date().toISOString(),
+            apoderado: beneficiaryData.apoderado?.trim() || null,
+            apoderadoTelefono: beneficiaryData.apoderadoTelefono?.trim() || null,
+            apoderadoMail: beneficiaryData.apoderadoMail?.trim() || null,
           })
         })
       }
@@ -663,13 +711,22 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
             nombre: created.primerNombre,
             apellido: [created.primerApellido, created.segundoApellido].filter(Boolean).join(' '),
             celular: (created.celular || '').replace(/\D/g, '') || created.celular || '',
-            estado: 'Pendiente',
+            // Nace inactivo/sin aprobar, igual que en Crear Contrato: es la
+            // aprobación la que genera los bookings y lo activa.
+            estado: 'Inactivo',
             fechaCreacion: created._createdDate || new Date().toISOString(),
             apoderado: beneficiaryData.apoderado,
             apoderadoTelefono: beneficiaryData.apoderadoTelefono,
             apoderadoMail: beneficiaryData.apoderadoMail,
+            campaign: created.campaign,
+            curso: created.tipoCurso,
+            salon: created.salon,
+            horarioCurso: created.horarioCurso,
           } as Beneficiary
           setCurrentBeneficiaries(prev => [...prev, newBen])
+          if (result.userLogin) {
+            alert(`Beneficiario creado.\n\nUsuario de login: ${result.userLogin}\n\nQueda pendiente de aprobación — al aprobarlo se generan sus agendamientos y se habilita el acceso.`)
+          }
         }
 
         setShowBeneficiaryForm(false)
@@ -680,7 +737,8 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
           primerNombre: '', segundoNombre: '', primerApellido: '', segundoApellido: '',
           numeroId: '', fechaNacimiento: '', edad: '', pais: '', domicilio: '',
           ciudad: '', celularPrefijo: '+57', celular: '', email: '', genero: '',
-          apoderado: '', apoderadoTelefono: '', apoderadoMail: ''
+          apoderado: '', apoderadoTelefono: '', apoderadoMail: '',
+          campaign: '', tipoCurso: '', horarioCurso: ''
         })
         setCurrentFormStep(1)
       } else {
@@ -1356,6 +1414,34 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     </div>
                   </div>
                 )}
+
+                {/* Step 3: Curso (campaña → curso → horario) */}
+                {currentFormStep === 3 && (
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-gray-900">Curso del beneficiario</h4>
+                    <p className="text-sm text-gray-500 -mt-2">
+                      La campaña viene precargada con la de los demás beneficiarios del contrato.
+                      Al aprobar el beneficiario se generan sus agendamientos en este curso.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <CursoCampaignFields
+                        rows={cursosCampaign}
+                        values={{
+                          campaign: beneficiaryData.campaign,
+                          tipoCurso: beneficiaryData.tipoCurso,
+                          horarioCurso: beneficiaryData.horarioCurso,
+                        }}
+                        onPatch={(patch) => setBeneficiaryData(prev => ({ ...prev, ...patch }))}
+                        esImpulsa={(person as any).esCursoImpulsa === true}
+                        userLogin={nuevoUserLogin}
+                      />
+                    </div>
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+                      Se creará su <strong>usuario de login</strong> ({nuevoUserLogin || '—'}), bloqueado hasta
+                      una semana antes del inicio del curso. El beneficiario queda <strong>pendiente de aprobación</strong>.
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -1388,7 +1474,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                   </div>
 
                   <div className="flex space-x-2">
-                    {currentFormStep < 2 ? (
+                    {currentFormStep < 3 ? (
                       <button
                         onClick={handleFormNext}
                         className="btn-primary"
@@ -1397,7 +1483,10 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                       </button>
                     ) : (
                       <button
-                        onClick={() => { if (validateRequiredFields(2)) setConfirmBeneficiario(true) }}
+                        onClick={() => {
+                          if (validateRequiredFields(3)) setConfirmBeneficiario(true)
+                          else alert('Seleccione la campaña, el curso y el horario del beneficiario')
+                        }}
                         className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Crear Beneficiario
@@ -1409,7 +1498,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 {/* Step indicator */}
                 <div className="mt-4 flex justify-center">
                   <div className="flex space-x-2">
-                    {[1, 2].map((step) => (
+                    {[1, 2, 3].map((step) => (
                       <div
                         key={step}
                         className={`w-3 h-3 rounded-full ${
@@ -1643,11 +1732,22 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
               <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Ciudad:</dt><dd className="text-gray-900">{beneficiaryData.ciudad || '—'}</dd></div>
             </dl>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Apoderado</p>
-            <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-5">
+            <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-4">
               <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Nombre:</dt><dd className="text-gray-900">{beneficiaryData.apoderado || '—'}</dd></div>
               <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Teléfono:</dt><dd className="text-gray-900">{beneficiaryData.apoderadoTelefono || '—'}</dd></div>
               <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Correo:</dt><dd className="text-gray-900 break-all">{beneficiaryData.apoderadoMail || '—'}</dd></div>
             </dl>
+            {!isEditMode && (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Curso</p>
+                <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-5">
+                  <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Campaña:</dt><dd className="text-gray-900">{beneficiaryData.campaign || '—'}</dd></div>
+                  <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Curso:</dt><dd className="text-gray-900">{beneficiaryData.tipoCurso || '—'}</dd></div>
+                  <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Horario:</dt><dd className="text-gray-900">{beneficiaryData.horarioCurso || '—'}</dd></div>
+                  <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Usuario:</dt><dd className="text-gray-900 font-mono">{nuevoUserLogin || '—'}</dd></div>
+                </dl>
+              </>
+            )}
             <div className="flex justify-end gap-3">
               <button type="button" onClick={() => setConfirmBeneficiario(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancelar</button>
