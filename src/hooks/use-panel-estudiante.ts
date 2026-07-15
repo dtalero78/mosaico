@@ -14,6 +14,7 @@ const keys = {
   progress: ['panel-estudiante', 'progress'] as const,
   history: ['panel-estudiante', 'history'] as const,
   materials: ['panel-estudiante', 'materials'] as const,
+  actividades: ['panel-estudiante', 'actividades'] as const,
   comments: ['panel-estudiante', 'comments'] as const,
   availableEvents: (date: string, tipo?: string) =>
     ['panel-estudiante', 'available-events', date, tipo] as const,
@@ -65,6 +66,11 @@ export function useStudentHistory() {
 /** Fetch materials for current nivel */
 export function useStudentMaterials() {
   return useQuery(keys.materials, () => api.get(`${BASE}/materials`))
+}
+
+/** Fetch actividades (Kahoot/WordWall) de la lección actual */
+export function useStudentActividades() {
+  return useQuery(keys.actividades, () => api.get(`${BASE}/actividades`))
 }
 
 /** Fetch advisor comments */

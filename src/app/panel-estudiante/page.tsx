@@ -18,6 +18,7 @@ import {
   useStudentStats,
   useStudentPanelProgress,
   useStudentMaterials,
+  useStudentActividades,
   useStudentComments,
   useStudentHistory,
   useCancelBooking,
@@ -82,6 +83,7 @@ function PanelEstudianteContent() {
   const statsQuery = useStudentStats()
   const progressQuery = useStudentPanelProgress()
   const materialsQuery = useStudentMaterials()
+  const actividadesQuery = useStudentActividades()
   const commentsQuery = useStudentComments()
   const historyQuery = useStudentHistory()
 
@@ -212,8 +214,24 @@ function PanelEstudianteContent() {
             {showActividades && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowActividades(false)} />
-                <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
-                  <p className="px-3 py-2 text-xs text-gray-400">Sin actividades por ahora</p>
+                <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
+                  {actividadesQuery.data?.kahoot && (
+                    <a href={actividadesQuery.data.kahoot} target="_blank" rel="noopener noreferrer"
+                      onClick={() => setShowActividades(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      <span className="inline-block w-2 h-2 rounded-full bg-purple-500" /> Kahoot
+                    </a>
+                  )}
+                  {actividadesQuery.data?.wordwall && (
+                    <a href={actividadesQuery.data.wordwall} target="_blank" rel="noopener noreferrer"
+                      onClick={() => setShowActividades(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      <span className="inline-block w-2 h-2 rounded-full bg-pink-500" /> WordWall
+                    </a>
+                  )}
+                  {!actividadesQuery.data?.kahoot && !actividadesQuery.data?.wordwall && (
+                    <p className="px-3 py-2 text-xs text-gray-400">Sin actividades para tu lección actual</p>
+                  )}
                 </div>
               </>
             )}
