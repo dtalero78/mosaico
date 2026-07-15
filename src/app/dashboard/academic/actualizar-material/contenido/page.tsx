@@ -108,10 +108,6 @@ function LeccionEditor({
     <div className="border border-gray-200 rounded-xl p-4 bg-white">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-gray-900">{leccion.step}</h3>
-        <button type="button" onClick={save} disabled={busy || !dirty}
-          className="px-3 py-1.5 bg-primary text-white text-sm rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
-          {busy ? 'Guardando…' : 'Guardar'}
-        </button>
       </div>
       <label className="block text-xs font-medium text-gray-500 mb-1">Descripción (título de la lección)</label>
       <input value={description} onChange={(e) => setDescription(e.target.value)}
@@ -154,6 +150,15 @@ function LeccionEditor({
             placeholder="https://wordwall.net/…"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
         </div>
+      </div>
+
+      {/* Botón de actualización de la lección (descripción + temario + actividades) */}
+      <div className="mt-3 flex items-center justify-end gap-2">
+        {dirty && <span className="text-xs text-amber-600">Cambios sin guardar</span>}
+        <button type="button" onClick={save} disabled={busy || !dirty}
+          className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg disabled:opacity-40 hover:bg-primary-700 transition-colors">
+          {busy ? 'Guardando…' : 'Actualizar lección'}
+        </button>
       </div>
 
       {/* Evaluación: IA vs MANUAL */}
