@@ -10,6 +10,8 @@ interface Row {
   step: string;
   description: string | null;
   contenido: string | null;
+  actividadKahoot: string | null;
+  actividadWordwall: string | null;
   descripcionModulo: string | null;
   orden: number | null;
   evaluacionModo: string | null;
@@ -38,7 +40,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (!curso || !code) throw new ValidationError('curso y code son requeridos');
 
   const r = await query<Row>(
-    `SELECT "step","description","contenido","descripcionModulo","orden","evaluacionModo","preguntasManual"
+    `SELECT "step","description","contenido","actividadKahoot","actividadWordwall","descripcionModulo","orden","evaluacionModo","preguntasManual"
      FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
     [curso, code]
@@ -52,6 +54,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
       step: x.step,
       description: x.description ?? '',
       contenido: x.contenido ?? '',
+      actividadKahoot: x.actividadKahoot ?? '',
+      actividadWordwall: x.actividadWordwall ?? '',
       evaluacionModo: (x.evaluacionModo || 'IA').toUpperCase(),
       preguntasManual: parsePreguntas(x.preguntasManual),
     })),
@@ -92,15 +96,19 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
     // Modo lección: description, contenido, evaluacionModo y/o preguntasManual
     const hasDesc = Object.prototype.hasOwnProperty.call(body, 'description');
     const hasCont = Object.prototype.hasOwnProperty.call(body, 'contenido');
+    const hasKahoot = Object.prototype.hasOwnProperty.call(body, 'actividadKahoot');
+    const hasWordwall = Object.prototype.hasOwnProperty.call(body, 'actividadWordwall');
     const hasModo = Object.prototype.hasOwnProperty.call(body, 'evaluacionModo');
     const hasPreg = Object.prototype.hasOwnProperty.call(body, 'preguntasManual');
-    if (!hasDesc && !hasCont && !hasModo && !hasPreg) throw new ValidationError('nada que actualizar');
+    if (!hasDesc && !hasCont && !hasKahoot && !hasWordwall && !hasModo && !hasPreg) throw new ValidationError('nada que actualizar');
 
     const sets: string[] = [];
     const params: any[] = [curso, code, step];
     let i = 4;
     if (hasDesc) { sets.push(`"description" = $${i++}`); params.push(body.description ?? ''); }
     if (hasCont) { sets.push(`"contenido" = $${i++}`); params.push(body.contenido ?? ''); }
+    if (hasKahoot) { sets.push(`"actividadKahoot" = $${i++}`); params.push(body.actividadKahoot || null); }
+    if (hasWordwall) { sets.push(`"actividadWordwall" = $${i++}`); params.push(body.actividadWordwall || null); }
     if (hasModo) {
       const modo = String(body.evaluacionModo || 'IA').toUpperCase();
       if (modo !== 'IA' && modo !== 'MANUAL') throw new ValidationError('evaluacionModo inválido (IA | MANUAL)');

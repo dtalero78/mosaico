@@ -13,6 +13,8 @@ interface Leccion {
   step: string
   description: string
   contenido: string
+  actividadKahoot?: string
+  actividadWordwall?: string
   evaluacionModo?: string
   preguntasManual?: ManualQuestion[]
 }
@@ -22,6 +24,8 @@ function LeccionEditor({
 }: { curso: string; code: string; leccion: Leccion; onSaved: () => void }) {
   const [description, setDescription] = useState(leccion.description)
   const [contenido, setContenido] = useState(leccion.contenido)
+  const [kahoot, setKahoot] = useState(leccion.actividadKahoot || '')
+  const [wordwall, setWordwall] = useState(leccion.actividadWordwall || '')
   const [busy, setBusy] = useState(false)
   const [eqOpen, setEqOpen] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -33,6 +37,7 @@ function LeccionEditor({
 
   useEffect(() => {
     setDescription(leccion.description); setContenido(leccion.contenido)
+    setKahoot(leccion.actividadKahoot || ''); setWordwall(leccion.actividadWordwall || '')
     setModo((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
     setPreguntas(leccion.preguntasManual || [])
   }, [leccion])
@@ -75,6 +80,7 @@ function LeccionEditor({
   }
 
   const dirty = description !== leccion.description || contenido !== leccion.contenido
+    || kahoot !== (leccion.actividadKahoot || '') || wordwall !== (leccion.actividadWordwall || '')
 
   const save = async () => {
     setBusy(true)
@@ -82,7 +88,11 @@ function LeccionEditor({
       const r = await fetch('/api/postgres/cursos-contenido', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ curso, code, step: leccion.step, description, contenido }),
+        body: JSON.stringify({
+          curso, code, step: leccion.step, description, contenido,
+          actividadKahoot: kahoot.trim() || null,
+          actividadWordwall: wordwall.trim() || null,
+        }),
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
       toast.success(`${leccion.step} guardada`)
@@ -129,6 +139,22 @@ function LeccionEditor({
         </div>
       )}
       <InsertEquationModal open={eqOpen} onClose={() => setEqOpen(false)} onInsert={insertSnippet} />
+
+      {/* Actividades externas (Kahoot / WordWall) */}
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Actividad Kahoot (URL)</label>
+          <input value={kahoot} onChange={(e) => setKahoot(e.target.value)} type="url"
+            placeholder="https://kahoot.it/…"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Actividad WordWall (URL)</label>
+          <input value={wordwall} onChange={(e) => setWordwall(e.target.value)} type="url"
+            placeholder="https://wordwall.net/…"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+        </div>
+      </div>
 
       {/* Evaluación: IA vs MANUAL */}
       <div className="mt-4 pt-4 border-t border-gray-100">
