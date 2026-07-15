@@ -95,6 +95,14 @@ export function fillContractTemplate(
       `---`;
   }
 
+  // Correo del asesor: sólo se acepta algo que REALMENTE sea un correo.
+  // `PEOPLE.asesor` guarda el nombre del comercial en la mayoría de los
+  // contratos, así que nunca puede usarse como correo.
+  const looksLikeEmail = (v: any) => typeof v === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  const asesorMailValue = looksLikeEmail(titular?.asesorMail)
+    ? String(titular.asesorMail).trim()
+    : (looksLikeEmail(ejecutivoComercial?.email) ? String(ejecutivoComercial!.email).trim() : '');
+
   // Build data map
   const data: Record<string, string> = {
     contrato: titular?.contrato || '',
@@ -138,10 +146,13 @@ export function fillContractTemplate(
     // al final del contrato (después del nombre del titular).
     asesor: ejecutivoComercial?.nombre || ejecutivoComercial?.email || titular?.asesor || '',
     // Correo del asesor comercial. La plantilla Chile usa {{asesorMail}} (camelCase);
-    // se registran AMBAS grafías por compatibilidad. Prefiere PEOPLE.asesorMail; si
-    // no, el email resuelto del ejecutivo o el asesor crudo.
-    asesorMail: titular?.asesorMail || ejecutivoComercial?.email || titular?.asesor || '',
-    asesormail: titular?.asesorMail || ejecutivoComercial?.email || titular?.asesor || '',
+    // se registran AMBAS grafías por compatibilidad. Prefiere PEOPLE.asesorMail y,
+    // si no, el email resuelto del ejecutivo.
+    // OJO: NO cae a `titular.asesor` — esa columna guarda el NOMBRE del comercial
+    // en la mayoría de los contratos, y ese fallback era el que hacía imprimir
+    // "Correo del ejecutivo: Antonella Calderón". Sin correo, va vacío.
+    asesorMail: asesorMailValue,
+    asesormail: asesorMailValue,
     telefonoRefDos: titular?.telefonoRefDos || '',
     firma: firmaText,
   };

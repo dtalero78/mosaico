@@ -60,7 +60,7 @@ export const POST = handler(async (_request, { params }) => {
     : { hasConsent: false };
 
   // 3b. Resolve ejecutivo comercial (asesor) — incluido al final del bloque de consentimiento.
-  const asesorInfo = await getAsesorInfo((titular as any).asesor);
+  const asesorInfo = await getAsesorInfo((titular as any).asesor, (titular as any).asesorMail);
 
   // 4. Fill template with data (full contract text)
   const contractText = fillContractTemplate(

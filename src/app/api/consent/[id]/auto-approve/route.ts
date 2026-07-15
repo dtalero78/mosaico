@@ -105,7 +105,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
           hash: result.hash,
         };
 
-        const asesorInfo = await getAsesorInfo((titular as any).asesor);
+        const asesorInfo = await getAsesorInfo((titular as any).asesor, (titular as any).asesorMail);
         const contractText = fillContractTemplate(
           templateRow.template,
           titular,

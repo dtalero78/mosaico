@@ -66,7 +66,7 @@ export const GET = handler(async (_request, { params }) => {
   }
 
   // Resolve asesor info (used at end of consent block in template).
-  const asesorInfo = await getAsesorInfo((titular as any).asesor);
+  const asesorInfo = await getAsesorInfo((titular as any).asesor, (titular as any).asesorMail);
 
   return successResponse({ titular, beneficiarios, financial, template, asesorInfo });
 });

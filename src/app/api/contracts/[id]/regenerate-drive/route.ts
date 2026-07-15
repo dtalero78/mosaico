@@ -6,16 +6,18 @@ import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { getAsesorInfo } from '@/lib/asesor';
 import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
-
-const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
-const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
+import { htmlToPdfBuffer } from '@/lib/pdf';
+import { uploadPdfToDrive, isDriveConfigured } from '@/lib/gdrive';
 
 /**
  * POST /api/contracts/[id]/regenerate-drive
  *
- * Regenera el PDF del contrato (mismo flujo que /send-pdf — API2PDF) y lo
- * sube al Drive vía bsl-utilidades, sobreescribiendo el PDF anterior por
- * el mismo `documento: titularId`. NO envía WhatsApp.
+ * Regenera el PDF del contrato con Chromium propio (puppeteer-core) y lo sube al
+ * Drive de MOSAICO con su cuenta de servicio, sobreescribiendo el anterior del
+ * mismo titular. NO envía WhatsApp.
+ *
+ * Antes esto dependía de dos servicios de LGS (API2PDF para renderizar y
+ * bsl-utilidades para subir, que además dejaba el PDF en la carpeta de LGS).
  *
  * Útil para casos donde se detecta un error en un contrato ya entregado:
  *   - bug que dejó valores financieros vacíos
@@ -71,7 +73,7 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
     ? { hasConsent: true, consent: consentObj, hash: titular.hashConsentimiento }
     : { hasConsent: false };
 
-  const asesorInfo = await getAsesorInfo((titular as any).asesor);
+  const asesorInfo = await getAsesorInfo((titular as any).asesor, (titular as any).asesorMail);
   const contractText = fillContractTemplate(
     templateRow.template,
     titular,
@@ -103,40 +105,24 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
 <body>${contractText}</body>
 </html>`;
 
-  // 1. Generar PDF con API2PDF
-  const pdfRes = await fetch('https://v2018.api2pdf.com/chrome/html', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': API2PDF_KEY,
-    },
-    body: JSON.stringify({
-      html: htmlContent,
-      options: { printBackground: true },
-    }),
-  });
-  if (!pdfRes.ok) {
-    const err = await pdfRes.text();
-    throw new Error(`API2PDF error ${pdfRes.status}: ${err}`);
+  if (!isDriveConfigured()) {
+    throw new ValidationError(
+      'Google Drive no está configurado. Faltan GOOGLE_SERVICE_ACCOUNT_JSON y/o GDRIVE_CONTRATOS_FOLDER_ID.'
+    );
   }
-  const pdfData = await pdfRes.json();
-  if (!pdfData.success || !pdfData.pdf) {
-    throw new Error(`API2PDF falló: ${pdfData.error || 'Sin URL de PDF'}`);
-  }
-  const tempPdfUrl: string = pdfData.pdf;
 
-  // 2. Subir al Drive vía bsl-utilidades (sobreescribe por documento=titularId)
-  const uploadRes = await fetch(BSL_UPLOAD_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    // empresa='LGS' hasta que bsl-utilidades configure la empresa "MOSAICO" + carpeta.
-    body: JSON.stringify({ pdfUrl: tempPdfUrl, documento: titularId, empresa: 'LGS' }),
-  });
-  const driveUpload = await uploadRes.json().catch(() => ({}));
+  // 1. Generar el PDF con Chromium propio (sin API2PDF)
+  const pdf = await htmlToPdfBuffer(htmlContent);
+
+  // 2. Subir al Drive de MOSAICO. El nombre lleva el número de contrato para que
+  //    sea legible en la carpeta, y el titularId para que sea único y estable:
+  //    regenerar sobreescribe en vez de duplicar.
+  const filename = `${titular.contrato || 'SIN-CONTRATO'}_${titularId}.pdf`;
+  const driveUpload = await uploadPdfToDrive(pdf, filename);
 
   return successResponse({
-    pdfUrl: tempPdfUrl,
     driveUpload,
+    pdfBytes: pdf.length,
     contrato: titular.contrato,
     titular: {
       _id: titular._id,

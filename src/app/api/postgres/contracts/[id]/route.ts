@@ -92,7 +92,7 @@ export const GET = handler(async (
   }
 
   // 4. Resolve asesor (ejecutivo comercial) info — used at end of consent block.
-  const asesorInfo = await getAsesorInfo(parsedTitular.asesor);
+  const asesorInfo = await getAsesorInfo(parsedTitular.asesor, parsedTitular.asesorMail);
 
   return successResponse({
     titular: parsedTitular,

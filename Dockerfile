@@ -37,6 +37,21 @@ FROM node:18-alpine AS runner
 
 WORKDIR /app
 
+# Chromium para la generación de PDFs (puppeteer-core).
+# Se instala el de Alpine a propósito: el Chromium que descarga `puppeteer` está
+# compilado contra glibc y NO corre sobre musl. Por eso la dependencia es
+# puppeteer-CORE (no descarga navegador) y se le apunta el ejecutable del sistema.
+RUN apk add --no-cache \
+      chromium \
+      nss \
+      freetype \
+      harfbuzz \
+      ca-certificates \
+      ttf-freefont
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Set environment to production
 ENV NODE_ENV production
 
