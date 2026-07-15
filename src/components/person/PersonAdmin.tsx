@@ -54,8 +54,15 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   })
   const [selectedEstado, setSelectedEstado] = useState(person.aprobacion || 'Pendiente')
   const [newComment, setNewComment] = useState('')
-  // Confirmación antes de guardar el beneficiario (y su apoderado)
+  // Confirmación antes de guardar el beneficiario
   const [confirmBeneficiario, setConfirmBeneficiario] = useState(false)
+  // Edición del apoderado POR beneficiario, desde su tarjeta. Va aparte del
+  // formulario "Modificar Beneficiario" a propósito: el apoderado se corrige
+  // solo, sin que los campos obligatorios del beneficiario lo bloqueen.
+  const [editApoderadoBenId, setEditApoderadoBenId] = useState<string | null>(null)
+  const [confirmApoderadoBenId, setConfirmApoderadoBenId] = useState<string | null>(null)
+  const [savingApoderado, setSavingApoderado] = useState(false)
+  const [apoderadoForm, setApoderadoForm] = useState({ apoderado: '', apoderadoTelefono: '', apoderadoMail: '' })
   const [showBeneficiaryForm, setShowBeneficiaryForm] = useState(false)
   const [newBeneficiaryId, setNewBeneficiaryId] = useState<string | null>(null)
   const [currentFormStep, setCurrentFormStep] = useState(1)
@@ -176,6 +183,48 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   const PRE_APPROVAL_ONLY = ['Contrato nulo', 'Devuelto', 'Rechazado']
   // Estados post-aprobación que requieren confirmación simple (sin bloqueo)
   const SIMPLE_CONFIRM_POST_APPROVAL = ['Pendiente', 'Retractado']
+
+  /** Abre la edición del apoderado de UNA tarjeta, precargada con sus datos. */
+  const handleEditApoderado = (b: Beneficiary) => {
+    setApoderadoForm({
+      apoderado: (b as any).apoderado || '',
+      apoderadoTelefono: (b as any).apoderadoTelefono || '',
+      apoderadoMail: (b as any).apoderadoMail || '',
+    })
+    setEditApoderadoBenId(b._id)
+  }
+
+  /**
+   * Guarda SOLO los 3 campos del apoderado de ese beneficiario. No envía ningún
+   * otro campo, así que no lo condiciona el estado de los datos del beneficiario
+   * (p.ej. registros sin domicilio o sin ciudad).
+   */
+  const handleSaveApoderado = async (beneficiaryId: string) => {
+    setSavingApoderado(true)
+    try {
+      const payload = {
+        apoderado: apoderadoForm.apoderado.trim() || null,
+        apoderadoTelefono: apoderadoForm.apoderadoTelefono.trim() || null,
+        apoderadoMail: apoderadoForm.apoderadoMail.trim() || null,
+      }
+      const res = await fetch(`/api/postgres/people/${beneficiaryId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo guardar el apoderado')
+
+      setCurrentBeneficiaries(prev =>
+        prev.map(ben => (ben._id === beneficiaryId ? ({ ...ben, ...payload } as Beneficiary) : ben))
+      )
+      setEditApoderadoBenId(null)
+    } catch (e: any) {
+      alert(`Error al guardar el apoderado: ${e?.message || e}`)
+    } finally {
+      setSavingApoderado(false)
+    }
+  }
 
   const handleApproveSpecificBeneficiary = async (beneficiaryId: string) => {
     if (!beneficiaryId) return
@@ -650,7 +699,8 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
       let response: Response
 
       if (isEditMode && editingBeneficiaryId) {
-        // PATCH — datos del beneficiario + su apoderado.
+        // PATCH — datos del beneficiario. El apoderado NO viaja aquí: tiene su
+        // propio guardado en la tarjeta, independiente de estos campos.
         // numeroId NO se edita (llave de identidad: enlaza PEOPLE/ACADEMICA/bookings).
         // Campaña/curso/salón/horario se cambian con "Cambio Académico" (ajusta cupos y bookings).
         response = await fetch(`/api/postgres/people/${editingBeneficiaryId}`, {
@@ -666,9 +716,6 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
             email: beneficiaryData.email,
             domicilio: beneficiaryData.domicilio || null,
             ciudad: beneficiaryData.ciudad || null,
-            apoderado: beneficiaryData.apoderado?.trim() || null,
-            apoderadoTelefono: beneficiaryData.apoderadoTelefono?.trim() || null,
-            apoderadoMail: beneficiaryData.apoderadoMail?.trim() || null,
           })
         })
       } else {
@@ -716,9 +763,6 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     apellido: [beneficiaryData.primerApellido, beneficiaryData.segundoApellido].filter(Boolean).join(' '),
                     celular: normalizedCelular || beneficiaryData.celular,
                     email: beneficiaryData.email,
-                    apoderado: beneficiaryData.apoderado,
-                    apoderadoTelefono: beneficiaryData.apoderadoTelefono,
-                    apoderadoMail: beneficiaryData.apoderadoMail,
                   } as Beneficiary
                 : ben
             )
@@ -1033,23 +1077,69 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 </div>
               </div>
 
-              {/* Apoderado propio de este beneficiario */}
+              {/* Apoderado propio de este beneficiario — se edita y guarda aparte
+                  de los datos del beneficiario (su propio botón y su propio PATCH). */}
               <div className="mt-3 pt-3 border-t border-blue-200">
-                <p className="text-[11px] uppercase tracking-wide text-blue-500 font-semibold mb-1.5">Apoderado</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <span className="block text-[11px] uppercase tracking-wide text-gray-400">Nombre</span>
-                    <span className="text-gray-900">{(beneficiary as any).apoderado || '—'}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[11px] uppercase tracking-wide text-gray-400">Teléfono</span>
-                    <span className="text-gray-900">{(beneficiary as any).apoderadoTelefono || '—'}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[11px] uppercase tracking-wide text-gray-400">Correo</span>
-                    <span className="text-gray-900 break-all">{(beneficiary as any).apoderadoMail || '—'}</span>
-                  </div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-[11px] uppercase tracking-wide text-blue-500 font-semibold">Apoderado</p>
+                  {editApoderadoBenId === beneficiary._id ? (
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setEditApoderadoBenId(null)} disabled={savingApoderado}
+                        className="text-xs px-3 py-1 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                        Cancelar
+                      </button>
+                      <button type="button" onClick={() => setConfirmApoderadoBenId(beneficiary._id)} disabled={savingApoderado}
+                        className="text-xs px-3 py-1 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
+                        {savingApoderado ? 'Guardando…' : 'Guardar'}
+                      </button>
+                    </div>
+                  ) : (
+                    <PermissionGuard permission={PersonPermission.MODIFICAR}>
+                      <button type="button" onClick={() => handleEditApoderado(beneficiary)}
+                        className="text-xs px-3 py-1 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 font-medium"
+                        title="Editar solo el apoderado de este beneficiario">
+                        Editar apoderado
+                      </button>
+                    </PermissionGuard>
+                  )}
                 </div>
+                {editApoderadoBenId === beneficiary._id ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Nombre</label>
+                      <input type="text" value={apoderadoForm.apoderado}
+                        onChange={e => setApoderadoForm(f => ({ ...f, apoderado: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Nombre completo" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Teléfono</label>
+                      <input type="tel" value={apoderadoForm.apoderadoTelefono}
+                        onChange={e => setApoderadoForm(f => ({ ...f, apoderadoTelefono: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Correo</label>
+                      <input type="email" value={apoderadoForm.apoderadoMail}
+                        onChange={e => setApoderadoForm(f => ({ ...f, apoderadoMail: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <span className="block text-[11px] uppercase tracking-wide text-gray-400">Nombre</span>
+                      <span className="text-gray-900">{(beneficiary as any).apoderado || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[11px] uppercase tracking-wide text-gray-400">Teléfono</span>
+                      <span className="text-gray-900">{(beneficiary as any).apoderadoTelefono || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[11px] uppercase tracking-wide text-gray-400">Correo</span>
+                      <span className="text-gray-900 break-all">{(beneficiary as any).apoderadoMail || '—'}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             )
@@ -1186,7 +1276,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                         className="input-field" placeholder="Correo electrónico" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Domicilio *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Domicilio</label>
                       <input type="text" value={beneficiaryData.domicilio}
                         onChange={(e) => handleBeneficiaryDataChange('domicilio', e.target.value)}
                         className="input-field" placeholder="Dirección de domicilio" />
@@ -1200,29 +1290,10 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-gray-200">
-                  <h4 className="font-medium text-gray-900 mb-3">Apoderado de este beneficiario</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del apoderado</label>
-                      <input type="text" value={beneficiaryData.apoderado}
-                        onChange={(e) => handleBeneficiaryDataChange('apoderado', e.target.value)}
-                        className="input-field" placeholder="Nombre completo" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono del apoderado</label>
-                      <input type="tel" value={beneficiaryData.apoderadoTelefono}
-                        onChange={(e) => handleBeneficiaryDataChange('apoderadoTelefono', e.target.value)}
-                        className="input-field" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Correo del apoderado</label>
-                      <input type="email" value={beneficiaryData.apoderadoMail}
-                        onChange={(e) => handleBeneficiaryDataChange('apoderadoMail', e.target.value)}
-                        className="input-field" />
-                    </div>
-                  </div>
-                </div>
+                <p className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                  El <strong>apoderado</strong> se edita aparte, con el botón “Editar apoderado”
+                  de la tarjeta del beneficiario.
+                </p>
               </div>
             ) : (
               <>
@@ -1492,11 +1563,21 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
             {/* Form Navigation */}
             {isEditMode ? (
               <div className="flex justify-end mt-6 pt-4 border-t border-gray-200">
+                {/* Sólo se exige lo que identifica a la persona y su login (nombre,
+                    celular y email). Domicilio y ciudad NO bloquean: muchos
+                    beneficiarios nunca los capturaron y exigirlos impedía editar
+                    cualquier otro dato (p.ej. el apoderado) en esos registros. */}
                 <button
                   onClick={() => setConfirmBeneficiario(true)}
                   disabled={
-                    !beneficiaryData.primerNombre || !beneficiaryData.primerApellido ||
-                    !beneficiaryData.celular || !beneficiaryData.domicilio || !beneficiaryData.email
+                    !beneficiaryData.primerNombre.trim() || !beneficiaryData.primerApellido.trim() ||
+                    !beneficiaryData.celular.trim() || !beneficiaryData.email.trim()
+                  }
+                  title={
+                    !beneficiaryData.primerNombre.trim() || !beneficiaryData.primerApellido.trim() ||
+                    !beneficiaryData.celular.trim() || !beneficiaryData.email.trim()
+                      ? 'Complete nombre, apellido, celular y email'
+                      : 'Guardar cambios del beneficiario'
                   }
                   className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1754,6 +1835,35 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
         )
       })()}
 
+      {/* Confirmación: guardar el apoderado de un beneficiario (flujo aparte) */}
+      {confirmApoderadoBenId && (() => {
+        const ben = currentBeneficiaries.find(b => b._id === confirmApoderadoBenId)
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setConfirmApoderadoBenId(null)} />
+            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirmar apoderado</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Se actualizará el apoderado de <strong>{ben ? `${ben.nombre} ${ben.apellido}` : 'este beneficiario'}</strong>:
+              </p>
+              <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-5">
+                <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Nombre:</dt><dd className="text-gray-900">{apoderadoForm.apoderado || '—'}</dd></div>
+                <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Teléfono:</dt><dd className="text-gray-900">{apoderadoForm.apoderadoTelefono || '—'}</dd></div>
+                <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Correo:</dt><dd className="text-gray-900 break-all">{apoderadoForm.apoderadoMail || '—'}</dd></div>
+              </dl>
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setConfirmApoderadoBenId(null)} disabled={savingApoderado}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50">Cancelar</button>
+                <button type="button" disabled={savingApoderado}
+                  onClick={() => { const id = confirmApoderadoBenId; setConfirmApoderadoBenId(null); if (id) handleSaveApoderado(id) }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50">
+                  {savingApoderado ? 'Guardando…' : 'Confirmar'}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Confirmación: guardar beneficiario (datos + apoderado) */}
       {confirmBeneficiario && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -1775,14 +1885,14 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
               <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Domicilio:</dt><dd className="text-gray-900">{beneficiaryData.domicilio || '—'}</dd></div>
               <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Ciudad:</dt><dd className="text-gray-900">{beneficiaryData.ciudad || '—'}</dd></div>
             </dl>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Apoderado</p>
-            <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-4">
-              <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Nombre:</dt><dd className="text-gray-900">{beneficiaryData.apoderado || '—'}</dd></div>
-              <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Teléfono:</dt><dd className="text-gray-900">{beneficiaryData.apoderadoTelefono || '—'}</dd></div>
-              <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Correo:</dt><dd className="text-gray-900 break-all">{beneficiaryData.apoderadoMail || '—'}</dd></div>
-            </dl>
             {!isEditMode && (
               <>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Apoderado</p>
+                <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-4">
+                  <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Nombre:</dt><dd className="text-gray-900">{beneficiaryData.apoderado || '—'}</dd></div>
+                  <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Teléfono:</dt><dd className="text-gray-900">{beneficiaryData.apoderadoTelefono || '—'}</dd></div>
+                  <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Correo:</dt><dd className="text-gray-900 break-all">{beneficiaryData.apoderadoMail || '—'}</dd></div>
+                </dl>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Curso</p>
                 <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-5">
                   <div className="flex gap-2"><dt className="text-gray-500 w-28 flex-shrink-0">Campaña:</dt><dd className="text-gray-900">{beneficiaryData.campaign || '—'}</dd></div>
