@@ -44,6 +44,9 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   // Edición del apoderado (vive en la fila del TITULAR)
   const [editApoderado, setEditApoderado] = useState(false)
   const [savingApoderado, setSavingApoderado] = useState(false)
+  // Confirmaciones antes de guardar
+  const [confirmApoderado, setConfirmApoderado] = useState(false)
+  const [confirmBeneficiario, setConfirmBeneficiario] = useState(false)
   const [apoderadoForm, setApoderadoForm] = useState({
     apoderado: (person as any).apoderado || '',
     apoderadoTelefono: (person as any).apoderadoTelefono || '',
@@ -846,7 +849,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
               <div className="flex gap-2">
                 <button type="button" onClick={() => setEditApoderado(false)} disabled={savingApoderado}
                   className="text-xs px-3 py-1 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-                <button type="button" onClick={handleSaveApoderado} disabled={savingApoderado}
+                <button type="button" onClick={() => setConfirmApoderado(true)} disabled={savingApoderado}
                   className="text-xs px-3 py-1 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
                   {savingApoderado ? 'Guardando…' : 'Guardar'}</button>
               </div>
@@ -1283,7 +1286,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
             {isEditMode ? (
               <div className="flex justify-end mt-6 pt-4 border-t border-gray-200">
                 <button
-                  onClick={handleSaveBeneficiary}
+                  onClick={() => setConfirmBeneficiario(true)}
                   disabled={!beneficiaryData.celular || !beneficiaryData.domicilio || !beneficiaryData.email}
                   className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1538,6 +1541,53 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
           </div>
         )
       })()}
+
+      {/* Confirmación: guardar apoderado */}
+      {confirmApoderado && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setConfirmApoderado(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirmar cambio de apoderado</h3>
+            <p className="text-sm text-gray-600 mb-4">Se actualizarán los datos del apoderado del contrato:</p>
+            <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-5">
+              <div className="flex gap-2"><dt className="text-gray-500 w-20">Nombre:</dt><dd className="text-gray-900">{apoderadoForm.apoderado || '—'}</dd></div>
+              <div className="flex gap-2"><dt className="text-gray-500 w-20">Teléfono:</dt><dd className="text-gray-900">{apoderadoForm.apoderadoTelefono || '—'}</dd></div>
+              <div className="flex gap-2"><dt className="text-gray-500 w-20">Correo:</dt><dd className="text-gray-900">{apoderadoForm.apoderadoMail || '—'}</dd></div>
+            </dl>
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setConfirmApoderado(false)} disabled={savingApoderado}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={() => { setConfirmApoderado(false); handleSaveApoderado() }} disabled={savingApoderado}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50">
+                {savingApoderado ? 'Guardando…' : 'Confirmar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación: modificar beneficiario */}
+      {confirmBeneficiario && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setConfirmBeneficiario(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirmar cambios del beneficiario</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Se actualizarán los datos de <strong>{[beneficiaryData.primerNombre, beneficiaryData.primerApellido].filter(Boolean).join(' ') || 'el beneficiario'}</strong>:
+            </p>
+            <dl className="text-sm bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1 mb-5">
+              <div className="flex gap-2"><dt className="text-gray-500 w-20">Celular:</dt><dd className="text-gray-900">{beneficiaryData.celular || '—'}</dd></div>
+              <div className="flex gap-2"><dt className="text-gray-500 w-20">Domicilio:</dt><dd className="text-gray-900">{beneficiaryData.domicilio || '—'}</dd></div>
+              <div className="flex gap-2"><dt className="text-gray-500 w-20">Email:</dt><dd className="text-gray-900">{beneficiaryData.email || '—'}</dd></div>
+            </dl>
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setConfirmBeneficiario(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">Cancelar</button>
+              <button type="button" onClick={() => { setConfirmBeneficiario(false); handleSaveBeneficiary() }}
+                className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
