@@ -13,10 +13,6 @@ import StudentContract from './StudentContract'
 import StudentWhatsApp from './StudentWhatsApp'
 import StudentComments from './StudentComments'
 import StudentProgress from './StudentProgress'
-import StudentNivelacionHistorial from './StudentNivelacionHistorial'
-import StudentChangeStep from './StudentChangeStep'
-import StudentInicializarNivel from './StudentInicializarNivel'
-import StudentCambioStepAuditado from './StudentCambioStepAuditado'
 import StudentCambioAcademico from './StudentCambioAcademico'
 
 interface StudentTabsProps {
@@ -58,9 +54,6 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   }, [searchParams])
   const [showAcademicSubmenu, setShowAcademicSubmenu] = useState(false)
   const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null)
-  const [showChangeStepModal, setShowChangeStepModal] = useState(false)
-  const [showInicializarModal, setShowInicializarModal] = useState(false)
-  const [showCambioStepAuditadoModal, setShowCambioStepAuditadoModal] = useState(false)
   const [showCambioAcademicoModal, setShowCambioAcademicoModal] = useState(false)
   const [welcomeModal, setWelcomeModal] = useState<{
     loading: boolean
@@ -68,42 +61,26 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     error: string | null
     preview: WelcomePreview | null
   } | null>(null)
-  const { hasPermission, hasAnyPermission } = usePermissions()
+  const { hasPermission } = usePermissions()
 
-  // Control de acceso: usuario necesita al menos uno de los permisos de Steps para ver el botón
-  const canAccessSteps = hasAnyPermission([
-    StudentPermission.MARCAR_STEP,
-    StudentPermission.ASIGNAR_STEP,
-  ])
-
-  // Control de acceso: permiso para ver diagnóstico "¿Cómo voy?"
-  const canAccessProgress = hasPermission(StudentPermission.COMO_VOY)
-
-  // Control de acceso: permiso para cambiar step
-  const canChangeStep = hasPermission(StudentPermission.ASIGNAR_STEP)
-
-  // Control de acceso: permiso para inicializar nivel
-  const canInicializarNivel = hasPermission(StudentPermission.INICIALIZAR_NIVEL)
-
-  // Control de acceso: permiso para aprobar/promover desde WELCOME
-  const canAprobarWelcome = hasPermission(StudentPermission.APROBAR_WELCOME)
-
-  // Control de acceso: ítems que antes no estaban gateados (ahora todos requieren permiso)
+  // Control de acceso — un permiso por ítem del submenú Académica.
   const canVerAsistencia = hasPermission(StudentPermission.VER_ASISTENCIA)
-  const canVerNivelacion = hasPermission(StudentPermission.NIVELACION_HISTORIAL)
+  const canAccessProgress = hasPermission(StudentPermission.COMO_VOY)
   const canAgendar = hasPermission(StudentPermission.AGENDAR_CLASE)
   const canCambioAcademico = hasPermission(StudentPermission.CAMBIO_ACADEMICO)
+  const canAprobarWelcome = hasPermission(StudentPermission.APROBAR_WELCOME)
 
-  // Filtrar submenu académico basado en permisos — TODOS los ítems gateados
+  // Filtrar submenu académico basado en permisos — TODOS los ítems gateados.
+  // Se retiraron "Nivelación Historial", "Gestión de Steps", "Cambiar Step" y
+  // "Reiniciar Nivel": los tres últimos operan el motor de Steps de LGS, que
+  // MOSAICO no usa (aquí se mueve al alumno con "Cambio Académico"). El ciclo de
+  // nivelación (marcar en /sesion → reporte Servicio › Nivelaciones → aprobar →
+  // agendar → cierre) sigue intacto; sólo deja de verse su historial.
   const academicSubmenu = [
     ...(canVerAsistencia ? [{ id: 'attendance', name: 'Tabla de Asistencia', icon: '📋' }] : []),
     ...(canAccessProgress ? [{ id: 'progress', name: '¿Cómo voy?', icon: '📈' }] : []),
-    ...(canVerNivelacion ? [{ id: 'nivelacion-historial', name: 'Nivelación Historial', icon: '📜' }] : []),
-    ...(canAgendar ? [{ id: 'schedule', name: 'Agendar Nueva Clase', icon: '📅' }] : []),
-    ...(canAccessSteps ? [{ id: 'steps', name: 'Gestión de Steps', icon: '📊' }] : []),
-    ...(canChangeStep ? [{ id: 'change-step', name: 'Cambiar Step', icon: '👣' }] : []),
+    ...(canAgendar ? [{ id: 'schedule', name: 'Agendar Sesión', icon: '📅' }] : []),
     ...(canCambioAcademico ? [{ id: 'cambio-academico', name: 'Cambio Académico', icon: '🔀' }] : []),
-    ...(canInicializarNivel ? [{ id: 'inicializar-nivel', name: 'Reiniciar Nivel', icon: '🔄' }] : []),
     ...(canAprobarWelcome ? [{ id: 'aprobar-welcome', name: 'Aprobar Welcome', icon: '✅' }] : []),
   ]
 
@@ -119,9 +96,6 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
         // Si la vista académica es "progress", mostrar el componente de diagnóstico
         if (academicView === 'progress') {
           return <StudentProgress student={student} />
-        }
-        if (academicView === 'nivelacion-historial') {
-          return <StudentNivelacionHistorial student={student} />
         }
         return <StudentAcademic student={student} classes={classes} view={academicView as any} />
       case 'contract':
@@ -220,40 +194,19 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
                                   .catch(e => setWelcomeModal({ loading: false, submitting: false, error: e.message || 'Error', preview: null }))
                                 return
                               }
-                              // Si es "change-step" o "inicializar-nivel", abrir modal en lugar de cambiar vista
-                              if (item.id === 'inicializar-nivel') {
-                                setShowInicializarModal(true)
-                                setShowAcademicSubmenu(false)
-                                if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
-                                return
-                              }
-                              if (item.id === 'cambio-step-auditado') {
-                                setShowCambioStepAuditadoModal(true)
-                                setShowAcademicSubmenu(false)
-                                if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
-                                return
-                              }
+                              // Cambio Académico: abre modal en lugar de cambiar de vista
                               if (item.id === 'cambio-academico') {
                                 setShowCambioAcademicoModal(true)
                                 setShowAcademicSubmenu(false)
                                 if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
                                 return
                               }
-                              if (item.id === 'change-step') {
-                                setShowChangeStepModal(true)
-                                setShowAcademicSubmenu(false)
-                                if (closeTimeout) {
-                                  clearTimeout(closeTimeout)
-                                  setCloseTimeout(null)
-                                }
-                              } else {
-                                setActiveTab('academic')
-                                setAcademicView(item.id)
-                                setShowAcademicSubmenu(false)
-                                if (closeTimeout) {
-                                  clearTimeout(closeTimeout)
-                                  setCloseTimeout(null)
-                                }
+                              setActiveTab('academic')
+                              setAcademicView(item.id)
+                              setShowAcademicSubmenu(false)
+                              if (closeTimeout) {
+                                clearTimeout(closeTimeout)
+                                setCloseTimeout(null)
                               }
                             }}
                             className={cn(
@@ -295,44 +248,6 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
       <div className="mt-6">
         {renderTabContent()}
       </div>
-
-      {/* Modal Cambiar Step */}
-      {showChangeStepModal && (
-        <StudentChangeStep
-          studentId={student._id}
-          numeroId={student.numeroId}
-          currentStep={student.step || 'Sin step'}
-          currentNivel={student.nivel || 'Sin nivel'}
-          studentName={`${student.primerNombre} ${student.primerApellido}`}
-          onClose={() => setShowChangeStepModal(false)}
-          onSuccess={() => {
-            // Recargar la página para actualizar los datos
-            window.location.reload()
-          }}
-        />
-      )}
-
-      {/* Modal Inicializar Nivel */}
-      {showInicializarModal && (
-        <StudentInicializarNivel
-          studentId={student._id}
-          studentName={`${student.primerNombre} ${student.primerApellido}`}
-          onClose={() => setShowInicializarModal(false)}
-          onSuccess={() => window.location.reload()}
-        />
-      )}
-
-      {/* Modal Cambio Step Auditado */}
-      {showCambioStepAuditadoModal && (
-        <StudentCambioStepAuditado
-          studentId={student._id}
-          studentName={`${student.primerNombre} ${student.primerApellido}`}
-          currentStep={student.step || 'Sin step'}
-          currentNivel={student.nivel || 'Sin nivel'}
-          onClose={() => setShowCambioStepAuditadoModal(false)}
-          onSuccess={() => window.location.reload()}
-        />
-      )}
 
       {/* Modal Cambio Académico */}
       {showCambioAcademicoModal && (
