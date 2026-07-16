@@ -2,9 +2,9 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { ValidationError, NotFoundError } from '@/lib/errors';
-import { queryOne } from '@/lib/postgres';
 import { generateOtp, saveOtp } from '@/lib/otp-store';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { resolveAccount } from '@/lib/forgot-password-account';
 
 /**
  * ¿El celular escrito corresponde al guardado?
@@ -49,19 +49,17 @@ export function celularCoincide(guardadoRaw: string, ingresadoRaw: string): bool
 export const POST = handler(async (request) => {
   const { email, celular } = await request.json();
 
-  if (!email?.trim())   throw new ValidationError('Email requerido');
+  if (!email?.trim())   throw new ValidationError('Ingresa tu email o usuario');
   if (!celular?.trim()) throw new ValidationError('El número de celular es requerido');
 
-  const normalizedEmail = email.trim().toLowerCase();
+  // Acepta correo o userLogin. El OTP se guarda con la llave de la CUENTA
+  // (USUARIOS_ROLES._id), no con el email: los hermanos comparten correo y ese
+  // dato no identifica a una persona.
+  const cuenta = await resolveAccount(email);
+  if (!cuenta) throw new NotFoundError('Usuario', email.trim());
+  if (!cuenta.celular) throw new ValidationError('Tu cuenta no tiene un celular registrado.');
 
-  const academica = await queryOne<{ _id: string; celular: string | null; numeroId: string | null }>(
-    `SELECT a."_id", a."celular", a."numeroId"
-     FROM "ACADEMICA" a WHERE LOWER(a."email") = $1 LIMIT 1`,
-    [normalizedEmail]
-  );
-  if (!academica) throw new NotFoundError('Registro académico', normalizedEmail);
-
-  if (!celularCoincide(academica.celular || '', celular)) {
+  if (!celularCoincide(cuenta.celular, celular)) {
     return NextResponse.json(
       { success: false, mismatch: true, error: 'Los datos no coinciden con nuestros registros' },
       { status: 400 }
@@ -69,9 +67,9 @@ export const POST = handler(async (request) => {
   }
 
   // Generar y enviar el OTP
-  const celularGuardado = academica.celular!;
+  const celularGuardado = cuenta.celular;
   const code = generateOtp();
-  saveOtp(normalizedEmail, code, celularGuardado);
+  saveOtp(cuenta.usuarioRolId, code, celularGuardado);
 
   const maskedPhone = celularGuardado.length >= 4
     ? '********' + celularGuardado.slice(-4)

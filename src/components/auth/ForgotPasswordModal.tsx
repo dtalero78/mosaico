@@ -13,13 +13,10 @@ interface ForgotPasswordModalProps {
 
 export default function ForgotPasswordModal({ initialEmail = '', onClose }: ForgotPasswordModalProps) {
   const [step,          setStep]          = useState<Step>('EMAIL')
-  // `initialEmail` es lo que el usuario tecleó en el login, y ahí los estudiantes
-  // entran con su userLogin ("hijpru989g"). Sólo se prellena si de verdad parece
-  // un correo; si no, el campo arranca vacío en vez de con un valor que jamás va
-  // a encontrarse.
-  const [email,         setEmail]         = useState(
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(initialEmail.trim()) ? initialEmail.trim().toLowerCase() : ''
-  )
+  // Se prellena con lo que el usuario tecleó en el login — sea su correo o su
+  // userLogin: el flujo ahora acepta ambos. Editable siempre, por si se equivocó
+  // o quiere probar con el otro.
+  const [email,         setEmail]         = useState(initialEmail.trim().toLowerCase())
   // El celular enmascarado sólo se conoce DESPUÉS de verificarlo (lo devuelve
   // verify-identity): mostrarlo antes sería dar la respuesta del paso 2.
   const [maskedPhone,   setMaskedPhone]   = useState('')
@@ -182,17 +179,22 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
           {/* ── Step 1: EMAIL ── */}
           {step === 'EMAIL' && (
             <>
-              <p className="text-sm text-gray-600">Ingresa tu email y verificamos si está registrado.</p>
+              <p className="text-sm text-gray-600">
+                Ingresa tu email o tu usuario y verificamos si está registrado.
+              </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                {/* SIEMPRE editable. Antes iba readOnly cuando llegaba `initialEmail`,
-                    que es lo que el usuario hubiera escrito en el login — y los
-                    estudiantes entran con su userLogin, no con su correo. Así el
-                    campo quedaba fijado en algo como "hijpru989g", que nunca va a
-                    encontrarse: la recuperación busca por email. */}
-                <input type="email" value={email}
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email o usuario
+                  <span className="text-xs text-gray-400 ml-1">(el mismo con el que inicias sesión)</span>
+                </label>
+                {/* type="text", no "email": los estudiantes entran con su userLogin
+                    ("hijpru989g"), que el navegador rechazaría como correo.
+                    SIEMPRE editable — antes iba readOnly con lo tecleado en el
+                    login, dejándolo fijado en un usuario que la búsqueda por email
+                    nunca encontraba. */}
+                <input type="text" value={email}
                   onChange={e => setEmail(e.target.value.toLowerCase())}
-                  placeholder="tu@email.com"
+                  placeholder="tu@email.com  o  tuusuario"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>

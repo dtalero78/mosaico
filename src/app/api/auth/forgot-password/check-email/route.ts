@@ -1,37 +1,32 @@
 import 'server-only';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { ValidationError, NotFoundError } from '@/lib/errors';
-import { queryOne } from '@/lib/postgres';
+import { resolveAccount } from '@/lib/forgot-password-account';
 
 /**
  * POST /api/auth/forgot-password/check-email
- * Validates that the email exists in both ACADEMICA and USUARIOS_ROLES.
- * Returns masked phone for display.
+ *
+ * Paso 1: comprueba que exista la cuenta. Acepta el CORREO o el USUARIO
+ * (userLogin) — los estudiantes entran con su userLogin, así que exigir el email
+ * dejaba fuera a la mayoría.
+ *
+ * NO devuelve el celular (ni enmascarado): el paso siguiente lo PIDE para
+ * verificar la identidad, así que darlo aquí sería regalar la respuesta.
  */
 export const POST = handler(async (request) => {
   const { email } = await request.json();
-  if (!email?.trim()) throw new ValidationError('El email es requerido');
 
-  const normalizedEmail = email.trim().toLowerCase();
+  if (!email?.trim()) throw new ValidationError('Ingresa tu email o usuario');
 
-  // Check USUARIOS_ROLES
-  const userRole = await queryOne<{ _id: string; activo: boolean }>(
-    `SELECT "_id", "activo" FROM "USUARIOS_ROLES" WHERE LOWER("email") = $1 LIMIT 1`,
-    [normalizedEmail]
-  );
-  if (!userRole) throw new NotFoundError('Usuario', normalizedEmail);
+  const cuenta = await resolveAccount(email);
+  if (!cuenta) throw new NotFoundError('Usuario', email.trim());
 
-  // Check ACADEMICA + get celular for masked display
-  const academica = await queryOne<{ _id: string; celular: string | null; numeroId: string | null }>(
-    `SELECT "_id", "celular", "numeroId" FROM "ACADEMICA" WHERE LOWER("email") = $1 LIMIT 1`,
-    [normalizedEmail]
-  );
-  if (!academica) throw new NotFoundError('Registro académico', normalizedEmail);
+  // Sin celular no hay a dónde enviar el código: se avisa aquí y no en el paso 2.
+  if (!cuenta.celular) {
+    throw new ValidationError(
+      'Tu cuenta no tiene un celular registrado. Contacta a soporte para restablecer tu contraseña.'
+    );
+  }
 
-  // NO se devuelve el celular (ni enmascarado): el paso siguiente lo PIDE para
-  // verificar la identidad, así que entregar aquí sus últimos dígitos a un anónimo
-  // sería regalar la respuesta. El celular enmascarado se devuelve recién en
-  // verify-identity, cuando el usuario YA demostró conocerlo.
-  const celular = academica.celular || '';
-  return successResponse({ hasPhone: !!celular });
+  return successResponse({ hasPhone: true });
 });

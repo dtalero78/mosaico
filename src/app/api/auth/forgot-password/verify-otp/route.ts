@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { ValidationError } from '@/lib/errors';
 import { verifyOtp, issueResetToken } from '@/lib/otp-store';
+import { resolveAccount } from '@/lib/forgot-password-account';
 
 /**
  * POST /api/auth/forgot-password/verify-otp
@@ -15,11 +16,14 @@ import { verifyOtp, issueResetToken } from '@/lib/otp-store';
 export const POST = handler(async (request) => {
   const { email, code } = await request.json();
 
-  if (!email?.trim()) throw new ValidationError('Email requerido');
+  if (!email?.trim()) throw new ValidationError('Ingresa tu email o usuario');
   if (!code?.trim())  throw new ValidationError('Código requerido');
 
-  const normalizedEmail = email.trim().toLowerCase();
-  const result = verifyOtp(normalizedEmail, code.trim());
+  // Misma llave que usó verify-identity: la CUENTA, no el email.
+  const cuenta = await resolveAccount(email);
+  if (!cuenta) throw new ValidationError('Código inválido o expirado');
+
+  const result = verifyOtp(cuenta.usuarioRolId, code.trim());
 
   if (!result.valid) {
     // Tras agotar los intentos el código se invalida: hay que pedir uno nuevo.
@@ -29,6 +33,6 @@ export const POST = handler(async (request) => {
     return NextResponse.json({ success: false, error }, { status: 400 });
   }
 
-  const resetToken = issueResetToken(normalizedEmail);
+  const resetToken = issueResetToken(cuenta.usuarioRolId);
   return successResponse({ message: 'Código verificado correctamente', resetToken });
 });
