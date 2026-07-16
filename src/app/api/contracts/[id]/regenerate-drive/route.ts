@@ -7,7 +7,7 @@ import { getAsesorInfo } from '@/lib/asesor';
 import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
 import { htmlToPdfBuffer } from '@/lib/pdf';
-import { buildContractHtml, buildContractPdfOptions } from '@/lib/contract-pdf';
+import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { uploadPdfToDrive, isDriveConfigured } from '@/lib/gdrive';
 import { putBuffer, deleteObject, getPresignedGetUrl } from '@/lib/spaces';
 
@@ -105,12 +105,8 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
   // 1. Generar el PDF con Chromium propio (sin API2PDF)
   const pdf = await htmlToPdfBuffer(htmlContent, buildContractPdfOptions(titular.contrato));
 
-  // Nombre del archivo: MOS_<contrato>.pdf. El nº de contrato es único por titular,
-  // así que regenerar SOBREESCRIBE en vez de duplicar. Sin nº de contrato se cae al
-  // id del titular para no colisionar.
-  const baseName = titular.contrato
-    ? `MOS_${titular.contrato}`
-    : `MOS_SIN-CONTRATO_${titularId}`;
+  // Nombre del archivo en Drive (compartido con send-pdf y auto-approve).
+  const baseName = buildContractFileBase(titular.contrato, titularId);
 
   // 2a. Destino definitivo: Drive propio de MOSAICO (cuando esté configurado).
   if (isDriveConfigured()) {

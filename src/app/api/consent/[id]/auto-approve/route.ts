@@ -4,7 +4,7 @@ import { autoApproveConsent } from '@/services/consent.service';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
-import { buildContractHtml, buildContractPdfOptions } from '@/lib/contract-pdf';
+import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { getAsesorInfo } from '@/lib/asesor';
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
@@ -143,7 +143,10 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 pdfUrl,
-                documento: params.id,
+                // `documento` = nombre del archivo en Drive. MOS_<contrato> (no el
+                // id del titular) para archivar con el mismo nombre que send-pdf y
+                // regenerate-drive.
+                documento: buildContractFileBase(titular.contrato, params.id),
                 empresa: 'LGS', // pendiente: bsl-utilidades no tiene empresa "MOSAICO" aún
               }),
             }).then(r => r.json()).catch(() => ({ error: 'Drive upload failed' }));

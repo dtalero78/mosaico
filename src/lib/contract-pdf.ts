@@ -20,6 +20,24 @@ import path from 'path';
 /** Márgenes: el top/bottom deben dejar sitio al membrete y al pie. */
 export const CONTRACT_MARGIN = { top: '25mm', bottom: '18mm', left: '20mm', right: '15mm' };
 
+/**
+ * Nombre del archivo del contrato en Drive, SIN extensión: `MOS_<contrato>`.
+ *
+ * Lo usan los tres flujos que archivan el contrato (send-pdf, auto-approve y
+ * regenerate-drive) para que el mismo contrato no aparezca en Drive con dos
+ * nombres distintos. El Nº de contrato es único por titular, así que sirve además
+ * como clave de sobreescritura al regenerar; sin él se cae al id del titular.
+ *
+ * OJO: NO es el nombre del adjunto que recibe el cliente por WhatsApp — ese es
+ * aparte y va con el nombre de la persona ("Leydi Ladino 240004844.pdf").
+ *
+ * bsl-utilidades le agrega el ".pdf" (recibe esto como `documento`); el Drive
+ * propio (uploadPdfToDrive) espera el nombre ya con extensión.
+ */
+export function buildContractFileBase(contrato?: string | null, titularId?: string | null): string {
+  return contrato ? `MOS_${contrato}` : `MOS_SIN-CONTRATO_${titularId || 'desconocido'}`;
+}
+
 // El logo se lee del disco una vez y se cachea: va embebido como data URI en cada
 // PDF (en el header de Chrome las URLs externas no cargan, tiene que ser data:).
 // Se usa `logo-contrato.png` (160px, ~16 KB) y NO `logo.png` (1525px, 66 KB): el
