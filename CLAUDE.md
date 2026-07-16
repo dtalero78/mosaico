@@ -541,6 +541,16 @@ URL, el PDF pasa unos minutos por el bucket propio con URL firmada y se borra.
 **⚠ BSL DUPLICA**: cada regeneración crea otro archivo (verificado; no hay endpoint de
 borrado). Se resuelve al pasar al Drive propio, que sobreescribe por nombre.
 
+> **⚠ ANTES de cargar las credenciales de Drive (OAuth), migrar los otros dos flujos.**
+> Sólo `regenerate-drive` consulta `isDriveConfigured()`; **`send-pdf` y `auto-approve`
+> llaman a BSL directo**. Si se cargan las env vars tal como está el código hoy, *Generar
+> Contrato* pasaría a CONTRATOS MOS y los otros dos seguirían archivando en LGS → **los
+> contratos quedarían repartidos en dos carpetas** (peor que ahora, que están todos
+> juntos). La migración es corta: esos dos ya obtienen del PDF una URL de API2PDF (que
+> necesitan igual para WhatsApp), así que basta descargar esos bytes y pasarlos a
+> `uploadPdfToDrive` en vez de a BSL — y de paso desaparecen las copias duplicadas en los
+> tres. Nada de esto rompe BSL: el puente sigue intacto mientras no haya credenciales.
+
 **Por qué OAuth y no cuenta de servicio**: *CONTRATOS MOS* está en "Mi unidad" de un Gmail
 personal. Desde 2021 Google exige que todo archivo tenga un **dueño con cuota** y una cuenta
 de servicio tiene **0 bytes**: el archivo que crea le pertenece a ella → *"Service Accounts
