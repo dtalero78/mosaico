@@ -114,10 +114,13 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
   // 1. Generar el PDF con Chromium propio (sin API2PDF)
   const pdf = await htmlToPdfBuffer(htmlContent);
 
-  // 2. Subir al Drive de MOSAICO. El nombre lleva el número de contrato para que
-  //    sea legible en la carpeta, y el titularId para que sea único y estable:
-  //    regenerar sobreescribe en vez de duplicar.
-  const filename = `${titular.contrato || 'SIN-CONTRATO'}_${titularId}.pdf`;
+  // 2. Subir al Drive de MOSAICO. Nombre: MOS_<contrato>.pdf — el prefijo marca la
+  //    marca en la carpeta y el nº de contrato lo hace único (un contrato = un
+  //    titular), así que regenerar sobreescribe en vez de duplicar. Sin nº de
+  //    contrato se cae al id del titular para no colisionar entre sí.
+  const filename = titular.contrato
+    ? `MOS_${titular.contrato}.pdf`
+    : `MOS_SIN-CONTRATO_${titularId}.pdf`;
   const driveUpload = await uploadPdfToDrive(pdf, filename);
 
   return successResponse({

@@ -3,26 +3,47 @@ import { Readable } from 'stream';
 import { google } from 'googleapis';
 
 /**
- * Subida de PDFs a Google Drive con cuenta de servicio PROPIA de MOSAICO.
+ * Subida de PDFs a Google Drive, propia de MOSAICO (reemplaza a `bsl-utilidades`,
+ * el servicio de LGS que dejaba los contratos en la carpeta de LGS).
  *
- * Reemplaza la dependencia de `bsl-utilidades` (servicio de LGS que subía a la
- * carpeta de LGS). Aquí MOSAICO habla directo con la API de Drive.
+ * Soporta DOS modos de autenticación:
  *
- * Configuración (env vars en DO):
- *   GOOGLE_SERVICE_ACCOUNT_JSON  → el JSON de la cuenta de servicio. Se acepta
- *                                  crudo o en base64 (recomendado: el JSON tiene
- *                                  saltos de línea en la private_key que se
- *                                  corrompen fácil al pegarlos en un panel).
- *   GDRIVE_CONTRATOS_FOLDER_ID   → ID de la carpeta destino.
+ * 1. OAuth de usuario (el que usamos). La app actúa COMO la cuenta dueña de la
+ *    carpeta, así que los PDFs quedan a su nombre y contra SU cuota.
+ *      GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_OAUTH_REFRESH_TOKEN
  *
- * La carpeta debe estar COMPARTIDA (rol Editor) con el email de la cuenta de
- * servicio (client_email del JSON). Sin eso, Drive responde 404 en la carpeta.
+ * 2. Cuenta de servicio (JWT). Sólo sirve si la carpeta vive en una UNIDAD
+ *    COMPARTIDA (Google Workspace), donde los archivos pertenecen a la unidad.
+ *      GOOGLE_SERVICE_ACCOUNT_JSON  (JSON crudo o base64 — la private_key se
+ *                                    corrompe fácil al pegarla en un panel)
+ *
+ * Por qué NO usamos cuenta de servicio contra la carpeta actual: desde 2021 todo
+ * archivo de Drive necesita un dueño con cuota, y una cuenta de servicio tiene 0
+ * bytes. Al crear el archivo, éste le pertenecería a ella → Google rechaza la
+ * subida con "Service Accounts do not have storage quota", aunque la carpeta esté
+ * compartida como Editor. Con una carpeta en "Mi unidad" de un Gmail, la única
+ * salida gratuita es actuar como el usuario (modo 1).
+ *
+ * En ambos modos: GDRIVE_CONTRATOS_FOLDER_ID → ID de la carpeta destino.
  */
 
-const SCOPES = ['https://www.googleapis.com/auth/drive'];
+// drive.file = acceso sólo a los archivos que crea esta app. Es el scope mínimo
+// (no es "sensible", así que no exige verificación de Google) y nos basta: subimos
+// y sobreescribimos nuestros propios PDFs, sin ver el resto del Drive del usuario.
+const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
+
+/** ¿Hay credenciales de OAuth de usuario? */
+function hasOAuth(): boolean {
+  return !!(
+    process.env.GOOGLE_OAUTH_CLIENT_ID &&
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+    process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+  );
+}
 
 export function isDriveConfigured(): boolean {
-  return !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GDRIVE_CONTRATOS_FOLDER_ID);
+  if (!process.env.GDRIVE_CONTRATOS_FOLDER_ID) return false;
+  return hasOAuth() || !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 }
 
 function loadCredentials(): { client_email: string; private_key: string } {
@@ -49,6 +70,20 @@ function loadCredentials(): { client_email: string; private_key: string } {
 }
 
 function driveClient() {
+  // OAuth de usuario primero: es el modo que funciona con una carpeta en "Mi
+  // unidad". La cuenta de servicio queda como alternativa para Unidades
+  // compartidas (Workspace), donde el dueño del archivo es la unidad.
+  if (hasOAuth()) {
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_OAUTH_CLIENT_ID,
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    );
+    // Con el refresh_token la librería renueva el access_token sola en cada
+    // llamada; no hay que persistir nada más.
+    auth.setCredentials({ refresh_token: process.env.GOOGLE_OAUTH_REFRESH_TOKEN });
+    return google.drive({ version: 'v3', auth });
+  }
+
   const creds = loadCredentials();
   const auth = new google.auth.JWT({
     email: creds.client_email,
