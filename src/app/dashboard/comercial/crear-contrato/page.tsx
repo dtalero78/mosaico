@@ -458,7 +458,10 @@ function CrearContratoContent() {
   const validateStep = (step: number): boolean => {
     switch (step) {
       case 1:
-        return titular.asesor !== '';
+        // El correo del asesor es obligatorio: alimenta EQUIPO_COMERCIAL (catálogo
+        // nombre→correo) y es lo que imprime el PDF como "Correo del ejecutivo".
+        return titular.asesor.trim() !== '' &&
+               /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(titular.asesorMail.trim());
       case 2:
         return titular.primerNombre !== '' &&
                titular.primerApellido !== '' &&
@@ -574,8 +577,12 @@ function CrearContratoContent() {
           titular: {
             ...titular,
             celular: getPhonePrefix() + titular.celular,
-            // asesor es el email del comercial → también lo guardamos como asesorMail
-            asesorMail: titular.asesorMail || titular.asesor,
+            // `asesor` es el NOMBRE del comercial y `asesorMail` su correo: son
+            // campos distintos. Antes se hacía `asesorMail || asesor`, y cuando el
+            // correo iba vacío el NOMBRE terminaba guardado como correo (por eso el
+            // PDF imprimía "Correo del ejecutivo: Antonella Calderón"). El correo
+            // ahora es obligatorio en el paso 1, así que no hace falta fallback.
+            asesorMail: titular.asesorMail,
             extemporanea: esExtemporanea,
           },
           financial,
@@ -759,7 +766,7 @@ function CrearContratoContent() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Correo del asesor
+                  Correo del asesor *
                 </label>
                 <input
                   type="email"
@@ -768,6 +775,9 @@ function CrearContratoContent() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   placeholder="asesor@correo.com"
                 />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Sale en el contrato como “Correo del ejecutivo” y registra al asesor en el equipo comercial.
+                </p>
               </div>
             </div>
           )}

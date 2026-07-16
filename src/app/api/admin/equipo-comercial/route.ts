@@ -42,7 +42,6 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   const clave = generarClave();
   const usuarioRolId = generateId('usr');
-  const comercialId = generateId('com');
 
   // 1) Login en USUARIOS_ROLES (por correo, activo).
   await query(
@@ -53,17 +52,42 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     [usuarioRolId, correo.trim(), nombre, clave, rol, plataforma]
   );
 
-  // 2) Fila en EQUIPO_COMERCIAL enlazada al login.
-  await query(
-    `INSERT INTO "EQUIPO_COMERCIAL" (
-       "_id","nombre","correo","plataforma","filial","clave","rol","usuarioRolId","activo","origen","_createdDate","_updatedDate"
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,'ADMIN',NOW(),NOW())`,
-    [comercialId, nombre, correo.trim(), plataforma, filial || null, clave, rol, usuarioRolId]
+  // 2) Ficha en EQUIPO_COMERCIAL enlazada al login.
+  //    El asesor puede YA estar en el catálogo si vendió un contrato antes de que
+  //    lo dieran de alta (Crear Contrato registra nombre+correo+plataforma, sin
+  //    login, con origen='CONTRATO'). En ese caso se le ENGANCHA el login a esa
+  //    ficha en vez de crear otra: el correo es único, y duplicar dejaría dos
+  //    fichas de la misma persona. Se pasa a origen='ADMIN' (ya es gestionada).
+  const existente = await queryOne<{ _id: string }>(
+    `SELECT "_id" FROM "EQUIPO_COMERCIAL" WHERE LOWER(TRIM("correo")) = LOWER(TRIM($1)) LIMIT 1`,
+    [correo]
   );
+
+  let comercialId: string;
+  if (existente) {
+    comercialId = existente._id;
+    await query(
+      `UPDATE "EQUIPO_COMERCIAL"
+          SET "nombre" = $2, "plataforma" = $3, "filial" = $4, "clave" = $5, "rol" = $6,
+              "usuarioRolId" = $7, "activo" = true, "origen" = 'ADMIN', "_updatedDate" = NOW()
+        WHERE "_id" = $1`,
+      [comercialId, nombre, plataforma, filial || null, clave, rol, usuarioRolId]
+    );
+  } else {
+    comercialId = generateId('com');
+    await query(
+      `INSERT INTO "EQUIPO_COMERCIAL" (
+         "_id","nombre","correo","plataforma","filial","clave","rol","usuarioRolId","activo","origen","_createdDate","_updatedDate"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true,'ADMIN',NOW(),NOW())`,
+      [comercialId, nombre, correo.trim(), plataforma, filial || null, clave, rol, usuarioRolId]
+    );
+  }
 
   return successResponse({
     comercial: { _id: comercialId, nombre, correo, plataforma, filial: filial || null, rol },
     clave, // se muestra una sola vez para compartir
-    message: 'Comercial creado con login.',
+    message: existente
+      ? 'Comercial ya registrado por un contrato: se le creó el login y se actualizó su ficha.'
+      : 'Comercial creado con login.',
   });
 });

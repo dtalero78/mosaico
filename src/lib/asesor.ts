@@ -42,11 +42,30 @@ export async function getAsesorInfo(
 
   if (isEmail(raw)) return await byEmail(raw, raw);
 
-  // `asesor` es un nombre: intentar resolver su email real por nombre completo.
+  // `asesor` es un nombre: resolver su correo real. Se busca primero en
+  // EQUIPO_COMERCIAL —el catálogo del equipo comercial, que se alimenta solo al
+  // crear cada contrato— y luego en USUARIOS_ROLES (por si el comercial tiene
+  // login pero no ficha). Esto permite que un contrato viejo, que sólo guardó el
+  // NOMBRE del asesor, imprima el correo correcto al regenerar su PDF.
+  //
+  // El match ignora mayúsculas y acentos: los nombres vienen tecleados a mano y
+  // conviven variantes ("Karla Díaz" / "KARLA DÍAZ"). translate() no requiere
+  // extensiones de Postgres.
+  const norm = (col: string) => `translate(lower(trim(${col})),'áéíóúñ','aeioun')`;
   try {
+    const eq = await queryOne<{ correo: string }>(
+      `SELECT "correo" FROM "EQUIPO_COMERCIAL"
+        WHERE ${norm('"nombre"')} = ${norm('$1')}
+          AND "correo" IS NOT NULL AND "correo" <> ''
+        ORDER BY "activo" DESC NULLS LAST, "_createdDate" ASC
+        LIMIT 1`,
+      [raw],
+    );
+    if (eq?.correo) return { nombre: raw, email: eq.correo };
+
     const row = await queryOne<{ email: string }>(
       `SELECT "email" FROM "USUARIOS_ROLES"
-        WHERE LOWER(TRIM(CONCAT_WS(' ', "nombre", "apellido"))) = LOWER(TRIM($1))
+        WHERE ${norm(`CONCAT_WS(' ', "nombre", "apellido")`)} = ${norm('$1')}
           AND "email" IS NOT NULL AND "email" <> ''
         LIMIT 1`,
       [raw],

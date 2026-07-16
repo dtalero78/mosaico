@@ -35,4 +35,5 @@ export const ids = {
   audit: () => generateId('aud'),
   payment: () => generateId('pag'),
   advisorEventLog: () => generateId('ael'),
+  comercial: () => generateId('com'),
 };

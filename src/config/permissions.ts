@@ -300,13 +300,6 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Modal para asignar nuevo step/nivel al estudiante',
   },
   {
-    code: StudentPermission.INICIALIZAR_NIVEL,
-    module: Module.STUDENT,
-    section: 'Tab Académica > Gestión Steps',
-    name: 'Botón "Reiniciar Nivel"',
-    description: 'Reinicia al estudiante al primer step de su nivel actual y borra el historial de bookings del nivel. Solo se puede realizar una vez por estudiante.',
-  },
-  {
     code: StudentPermission.APROBAR_WELCOME,
     module: Module.STUDENT,
     section: 'Tab Académica > Gestión Steps',

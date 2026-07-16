@@ -213,6 +213,48 @@ export async function insertBeneficiarioTx(
   return benefResult.rows[0];
 }
 
+/**
+ * Registra al asesor comercial del contrato en EQUIPO_COMERCIAL (nombre + correo +
+ * plataforma), construyendo el catálogo del equipo comercial a medida que se vende.
+ *
+ * Por qué existe: `PEOPLE.asesor` guarda el NOMBRE del comercial, no su correo, y
+ * los asesores no están en USUARIOS_ROLES → el correo del ejecutivo no se podía
+ * resolver y salía vacío en el PDF del contrato. Con esto, cada contrato deja el
+ * par nombre→correo registrado y `getAsesorInfo` puede resolverlo (incluso para
+ * contratos viejos que sólo tienen el nombre).
+ *
+ * Es alta de CATÁLOGO: NO crea login. El alta con login vive en
+ * `/admin/roles/create` → `POST /api/admin/equipo-comercial`; crear cuentas activas
+ * sólo porque alguien tecleó un nombre en un contrato sería un agujero de
+ * seguridad. Se marca `origen='CONTRATO'` para distinguir ambos orígenes.
+ *
+ * Si el correo ya existe NO se toca la fila (decisión de negocio): un typo en un
+ * contrato no debe pisar el registro oficial de alguien dado de alta por un admin.
+ *
+ * Best-effort: nunca debe romper la creación del contrato.
+ */
+export async function registrarAsesorEnEquipoComercial(titular: any): Promise<void> {
+  const nombre = String(titular?.asesor || '').trim();
+  const correo = String(titular?.asesorMail || '').trim();
+  const plataforma = String(titular?.plataforma || '').trim();
+
+  // Sin correo válido no hay fila que crear (EQUIPO_COMERCIAL.correo es NOT NULL).
+  if (!nombre || !correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return;
+
+  try {
+    // ON CONFLICT sobre el índice único de LOWER(TRIM(correo)): si ya está, no se toca.
+    await query(
+      `INSERT INTO "EQUIPO_COMERCIAL"
+         ("_id","nombre","correo","plataforma","rol","activo","origen","_createdDate","_updatedDate")
+       VALUES ($1,$2,$3,$4,'COMERCIAL',true,'CONTRATO',NOW(),NOW())
+       ON CONFLICT (LOWER(TRIM("correo"))) DO NOTHING`,
+      [ids.comercial(), nombre, correo, plataforma || null]
+    );
+  } catch (err: any) {
+    console.warn('[contract-creation] no se pudo registrar el asesor en EQUIPO_COMERCIAL:', err?.message || err);
+  }
+}
+
 /** Incrementa el cupo del curso (+1). Best-effort — no rompe la creación si falla. */
 export async function incrementarCupoCurso(campaign?: string | null, tipoCurso?: string | null, horarioCurso?: string | null) {
   if (!campaign || !tipoCurso || !horarioCurso) return;
@@ -321,6 +363,10 @@ export async function createFullContract(input: CreateContractInput) {
   for (const b of allBeneficiarios) {
     await incrementarCupoCurso(b.campaign, b.tipoCurso, b.horarioCurso);
   }
+
+  // Registrar al asesor (nombre + correo + plataforma) en EQUIPO_COMERCIAL, para
+  // que el correo del ejecutivo quede resoluble en el PDF. Best-effort.
+  await registrarAsesorEnEquipoComercial(titular);
 
   // 4. FINANCIERO
   if (financial && financial.totalPlan) {

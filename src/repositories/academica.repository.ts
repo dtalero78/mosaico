@@ -234,47 +234,6 @@ class AcademicaRepositoryClass extends BaseRepository {
     );
   }
 
-  /**
-   * Ensure inicianivel/checkinicianivel columns exist (idempotent).
-   * Called once before the first use of Inicializar Nivel.
-   */
-  async ensureInicializarNivelColumns() {
-    const { query: q } = await import('@/lib/postgres');
-    await q(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "checkinicianivel" INTEGER`, []);
-    await q(`ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "inicianivel" JSONB`, []);
-  }
-
-  /**
-   * Check if inicializar nivel has already been done (checkinicianivel >= 1).
-   */
-  async getInicializarNivelStatus(academicaId: string): Promise<{ done: boolean; data: any }> {
-    await this.ensureInicializarNivelColumns();
-    const row = await queryOne(
-      `SELECT "checkinicianivel", "inicianivel", "nivel", "step" FROM "ACADEMICA" WHERE "_id" = $1`,
-      [academicaId]
-    );
-    return {
-      done: !!row?.checkinicianivel && row.checkinicianivel >= 1,
-      data: row,
-    };
-  }
-
-  /**
-   * Execute nivel reset: set step to firstStep, write audit to inicianivel, set checkinicianivel=1.
-   */
-  async resetNivel(academicaId: string, firstStep: string, auditData: Record<string, any>) {
-    await this.ensureInicializarNivelColumns();
-    return queryOne(
-      `UPDATE "ACADEMICA"
-       SET "step" = $1,
-           "checkinicianivel" = 1,
-           "inicianivel" = $2::jsonb,
-           "_updatedDate" = NOW()
-       WHERE "_id" = $3
-       RETURNING "_id", "nivel", "step", "checkinicianivel", "inicianivel"`,
-      [firstStep, JSON.stringify(auditData), academicaId]
-    );
-  }
 }
 
 export const AcademicaRepository = new AcademicaRepositoryClass();
