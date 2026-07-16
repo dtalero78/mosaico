@@ -59,11 +59,16 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export interface PdfOptions {
-  /** Márgenes CSS (@page del propio HTML manda si los define). */
   format?: 'A4' | 'Letter';
   printBackground?: boolean;
   /** Espera extra tras cargar el HTML (ms). Sólo si hay contenido async. */
   delayMs?: number;
+  /** Membrete y pie repetidos en cada página (ver src/lib/contract-pdf.ts). */
+  displayHeaderFooter?: boolean;
+  headerTemplate?: string;
+  footerTemplate?: string;
+  /** Márgenes. Con header/footer hay que dejarles sitio en top/bottom. */
+  margin?: { top?: string; bottom?: string; left?: string; right?: string };
 }
 
 /**
@@ -72,7 +77,10 @@ export interface PdfOptions {
  * aquí obtenemos los bytes directamente, sin pasar por un tercero.
  */
 export async function htmlToPdfBuffer(html: string, opts: PdfOptions = {}): Promise<Buffer> {
-  const { format = 'Letter', printBackground = true, delayMs = 0 } = opts;
+  const {
+    format = 'Letter', printBackground = true, delayMs = 0,
+    displayHeaderFooter, headerTemplate, footerTemplate, margin,
+  } = opts;
 
   return enqueue(async () => {
     let browser: Browser | null = null;
@@ -101,7 +109,11 @@ export async function htmlToPdfBuffer(html: string, opts: PdfOptions = {}): Prom
       const pdf = await page.pdf({
         format,
         printBackground,
-        preferCSSPageSize: true, // respeta el @page del template
+        // preferCSSPageSize sólo si el HTML NO trae márgenes propios: cuando hay
+        // header/footer, los márgenes deben venir de las opciones (el membrete se
+        // dibuja dentro del margen, y un @page del CSS lo dejaría sin sitio).
+        ...(margin ? { margin } : { preferCSSPageSize: true }),
+        ...(displayHeaderFooter ? { displayHeaderFooter, headerTemplate, footerTemplate } : {}),
       });
       return Buffer.from(pdf);
     } finally {

@@ -4,6 +4,7 @@ import { autoApproveConsent } from '@/services/consent.service';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
+import { buildContractHtml, buildContractPdfOptions } from '@/lib/contract-pdf';
 import { getAsesorInfo } from '@/lib/asesor';
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
@@ -115,26 +116,9 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
           asesorInfo,
         );
 
-        const htmlContent = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Contrato ${titular.contrato}</title>
-  <style>
-    @page { margin: 15mm 15mm 15mm 20mm; }
-    body {
-      font-family: Georgia, 'Times New Roman', serif;
-      font-size: 10.5pt;
-      line-height: 1.5;
-      color: #111;
-      margin: 0; padding: 0;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-  </style>
-</head>
-<body>${contractText}</body>
-</html>`;
+        // HTML + presentación (membrete con logo y "Página X de Y") compartidos
+        // con send-pdf y regenerate-drive: los tres PDFs salen idénticos.
+        const htmlContent = buildContractHtml(contractText, titular.contrato);
 
         const pdfRes = await fetch('https://v2018.api2pdf.com/chrome/html', {
           method: 'POST',
@@ -144,7 +128,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
           },
           body: JSON.stringify({
             html: htmlContent,
-            options: { printBackground: true },
+            options: buildContractPdfOptions(titular.contrato),
           }),
         });
 

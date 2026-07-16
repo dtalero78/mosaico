@@ -7,6 +7,7 @@ import { getAsesorInfo } from '@/lib/asesor';
 import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
 import { htmlToPdfBuffer } from '@/lib/pdf';
+import { buildContractHtml, buildContractPdfOptions } from '@/lib/contract-pdf';
 import { uploadPdfToDrive, isDriveConfigured } from '@/lib/gdrive';
 import { putBuffer, deleteObject, getPresignedGetUrl } from '@/lib/spaces';
 
@@ -97,30 +98,12 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
     asesorInfo,
   );
 
-  const htmlContent = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Contrato ${titular.contrato || ''}</title>
-  <style>
-    @page { margin: 15mm 15mm 15mm 20mm; }
-    body {
-      font-family: Georgia, 'Times New Roman', serif;
-      font-size: 10.5pt;
-      line-height: 1.5;
-      color: #111;
-      margin: 0;
-      padding: 0;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-  </style>
-</head>
-<body>${contractText}</body>
-</html>`;
+  // HTML y presentación (membrete con logo + "Página X de Y") compartidos con
+  // send-pdf y auto-approve, para que los tres PDFs salgan idénticos.
+  const htmlContent = buildContractHtml(contractText, titular.contrato);
 
   // 1. Generar el PDF con Chromium propio (sin API2PDF)
-  const pdf = await htmlToPdfBuffer(htmlContent);
+  const pdf = await htmlToPdfBuffer(htmlContent, buildContractPdfOptions(titular.contrato));
 
   // Nombre del archivo: MOS_<contrato>.pdf. El nº de contrato es único por titular,
   // así que regenerar SOBREESCRIBE en vez de duplicar. Sin nº de contrato se cae al
