@@ -28,11 +28,10 @@ export const POST = handler(async (request) => {
   );
   if (!academica) throw new NotFoundError('Registro académico', normalizedEmail);
 
-  // Mask phone: show only last 4 digits
+  // NO se devuelve el celular (ni enmascarado): el paso siguiente lo PIDE para
+  // verificar la identidad, así que entregar aquí sus últimos dígitos a un anónimo
+  // sería regalar la respuesta. El celular enmascarado se devuelve recién en
+  // verify-identity, cuando el usuario YA demostró conocerlo.
   const celular = academica.celular || '';
-  const maskedPhone = celular.length >= 4
-    ? '********' + celular.slice(-4)
-    : celular ? '********' : 'No registrado';
-
-  return successResponse({ maskedPhone, hasPhone: !!celular });
+  return successResponse({ hasPhone: !!celular });
 });

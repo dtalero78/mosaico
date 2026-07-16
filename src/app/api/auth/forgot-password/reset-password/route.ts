@@ -2,15 +2,23 @@ import 'server-only';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { query, queryOne } from '@/lib/postgres';
+import { consumeResetToken } from '@/lib/otp-store';
 
 /**
  * POST /api/auth/forgot-password/reset-password
- * Saves the new password in plain text in USUARIOS_ROLES and ACADEMICA.
+ *
+ * Último paso de la recuperación. EXIGE el `resetToken` que emite verify-otp tras
+ * validar el código: es lo que ata este paso a los anteriores. Sin él, saber un
+ * correo bastaba para cambiarle la clave a cualquiera desde internet (el endpoint
+ * no consultaba el OTP en ningún momento).
+ *
+ * El ticket es de un solo uso: se quema aquí, acierte o falle.
  */
 export const POST = handler(async (request) => {
-  const { email, password, confirmPassword } = await request.json();
+  const { email, password, confirmPassword, resetToken } = await request.json();
 
   if (!email?.trim())           throw new ValidationError('Email requerido');
+  if (!resetToken?.trim())      throw new ValidationError('Falta la verificación del código. Reinicia el proceso.');
   if (!password?.trim())        throw new ValidationError('La nueva contraseña es requerida');
   if (!confirmPassword?.trim()) throw new ValidationError('Confirmar contraseña es requerido');
   if (password !== confirmPassword)
@@ -21,6 +29,12 @@ export const POST = handler(async (request) => {
     throw new ValidationError('La contraseña debe tener entre 6 y 10 caracteres');
 
   const normalizedEmail = email.trim().toLowerCase();
+
+  // PUERTA: sin un ticket válido para ESTE correo no se cambia nada. Va ANTES de
+  // tocar la BD y antes de revelar si el usuario existe.
+  if (!consumeResetToken(normalizedEmail, resetToken.trim())) {
+    throw new ValidationError('Verificación inválida o expirada. Vuelve a solicitar el código.');
+  }
 
   // Verify user exists
   const userRole = await queryOne<{ _id: string }>(

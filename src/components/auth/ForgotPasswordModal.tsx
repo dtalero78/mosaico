@@ -14,10 +14,13 @@ interface ForgotPasswordModalProps {
 export default function ForgotPasswordModal({ initialEmail = '', onClose }: ForgotPasswordModalProps) {
   const [step,          setStep]          = useState<Step>('EMAIL')
   const [email,         setEmail]         = useState(initialEmail)
+  // El celular enmascarado sólo se conoce DESPUÉS de verificarlo (lo devuelve
+  // verify-identity): mostrarlo antes sería dar la respuesta del paso 2.
   const [maskedPhone,   setMaskedPhone]   = useState('')
-  const [lastFourId,    setLastFourId]    = useState('')
-  const [lastFourPhone, setLastFourPhone] = useState('')
+  const [celular,       setCelular]       = useState('')
   const [otp,           setOtp]           = useState('')
+  // Ticket que emite verify-otp: sin él, reset-password rechaza el cambio.
+  const [resetToken,    setResetToken]    = useState('')
   const [password,      setPassword]      = useState('')
   const [confirm,       setConfirm]       = useState('')
   const [showPass,      setShowPass]      = useState(false)
@@ -36,7 +39,6 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
       })
       const data = await res.json()
       if (!data.success) throw new Error(data.error || 'Email no encontrado')
-      setMaskedPhone(data.maskedPhone)
       setStep('IDENTITY')
     } catch (e: any) {
       toast.error(e.message)
@@ -45,20 +47,20 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
 
   // ── Step 2: verify identity ─────────────────────────────────────────────
   const handleVerifyIdentity = async () => {
-    if (!lastFourId.trim() || !lastFourPhone.trim()) {
-      toast.error('Complete todos los campos'); return
-    }
+    if (!celular.trim()) { toast.error('Ingrese su número de celular'); return }
     setLoading(true)
     try {
       const res  = await fetch('/api/auth/forgot-password/verify-identity', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), lastFourId, lastFourPhone }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), celular }),
       })
       const data = await res.json()
       if (!data.success) {
         if (data.mismatch) { setShowMismatch(true); return }
         throw new Error(data.error || 'Error al verificar')
       }
+      // Ya demostró conocer el celular → recién ahora se puede mostrar enmascarado.
+      setMaskedPhone(data.maskedPhone || '')
       toast.success('Código enviado por WhatsApp')
       setStep('OTP')
     } catch (e: any) {
@@ -77,6 +79,9 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
       })
       const data = await res.json()
       if (!data.success) throw new Error(data.error || 'Código inválido')
+      // El ticket es lo único que habilita el paso 4.
+      if (!data.resetToken) throw new Error('No se pudo validar el código. Reinicia el proceso.')
+      setResetToken(data.resetToken)
       setStep('NEW_PASSWORD')
     } catch (e: any) {
       toast.error(e.message)
@@ -93,7 +98,7 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
     try {
       const res  = await fetch('/api/auth/forgot-password/reset-password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password, confirmPassword: confirm }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password, confirmPassword: confirm, resetToken }),
       })
       const data = await res.json()
       if (!data.success) throw new Error(data.error || 'Error al actualizar')
@@ -137,7 +142,7 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
           <h2 className="text-xl font-bold text-gray-900 mb-2">¡Contraseña actualizada!</h2>
           <p className="text-sm text-gray-500 mb-6">Ya puedes iniciar sesión con tu nueva contraseña.</p>
           <button type="button" onClick={onClose}
-            className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">
+            className="w-full py-2.5 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700">
             Ir al inicio de sesión
           </button>
         </div>
@@ -150,10 +155,10 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
 
         {/* Header */}
-        <div className="bg-blue-600 px-6 py-4 flex items-center justify-between">
+        <div className="bg-primary-600 px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white">Restablecer contraseña</h2>
-            <p className="text-blue-100 text-xs mt-0.5">
+            <p className="text-primary-100 text-xs mt-0.5">
               {step === 'EMAIL'        && 'Paso 1 de 4 — Verificar email'}
               {step === 'IDENTITY'     && 'Paso 2 de 4 — Verificar identidad'}
               {step === 'OTP'          && 'Paso 3 de 4 — Código de verificación'}
@@ -161,7 +166,7 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
             </p>
           </div>
           <button type="button" title="Cerrar" onClick={onClose}
-            className="text-white hover:text-blue-200 p-1">
+            className="text-white hover:text-primary-200 p-1">
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
@@ -177,11 +182,11 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
                 <input type="email" value={email} readOnly={!!initialEmail}
                   onChange={e => setEmail(e.target.value.toLowerCase())}
                   placeholder="tu@email.com"
-                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${initialEmail ? 'bg-gray-50 text-gray-600' : ''}`}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${initialEmail ? 'bg-gray-50 text-gray-600' : ''}`}
                 />
               </div>
               <button type="button" onClick={handleCheckEmail} disabled={loading}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50">
+                className="w-full py-2.5 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 disabled:opacity-50">
                 {loading ? 'Verificando...' : 'Continuar'}
               </button>
             </>
@@ -191,40 +196,30 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
           {step === 'IDENTITY' && (
             <>
               <p className="text-sm text-gray-600">
-                Para confirmar tu identidad, necesitamos verificar algunos datos.
+                Para confirmar tu identidad, ingresa el número de celular registrado
+                en tu cuenta. Te enviaremos ahí un código de verificación.
               </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                <span className="font-medium">Celular registrado:</span> {maskedPhone}
-              </div>
+              {/* A propósito NO se muestra el celular registrado: es justo el dato
+                  que se pide. Se revela enmascarado en el paso del código, cuando
+                  el usuario ya demostró conocerlo. */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Últimos 4 dígitos de tu número de ID
-                  <span className="text-xs text-gray-400 ml-1">(sin puntos ni guiones)</span>
+                  Número de celular
+                  <span className="text-xs text-gray-400 ml-1">(con o sin indicativo, solo números)</span>
                 </label>
-                <input type="text" value={lastFourId} maxLength={4}
-                  onChange={e => setLastFourId(e.target.value.replace(/[^0-9A-Za-z]/g, '').toUpperCase())}
-                  placeholder="Ej: 1234"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Número de celular completo
-                  <span className="text-xs text-gray-400 ml-1">(con indicativo, solo números)</span>
-                </label>
-                <input type="tel" value={lastFourPhone}
+                <input type="tel" value={celular}
                   onKeyDown={e => {
                     if (!/^\d$/.test(e.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key)) {
                       e.preventDefault()
                     }
                   }}
-                  onChange={e => setLastFourPhone(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Ej: 56912345678"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={e => setCelular(e.target.value.replace(/\D/g, ''))}
+                  placeholder="Ej: 991039009"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <button type="button" onClick={handleVerifyIdentity} disabled={loading}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50">
+                className="w-full py-2.5 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 disabled:opacity-50">
                 {loading ? 'Verificando...' : 'Verificar y enviar código'}
               </button>
             </>
@@ -241,11 +236,11 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
                 <input type="text" value={otp} maxLength={6}
                   onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
                   placeholder="000000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center tracking-widest text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center tracking-widest text-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
               <button type="button" onClick={handleVerifyOtp} disabled={loading}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50">
+                className="w-full py-2.5 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 disabled:opacity-50">
                 {loading ? 'Verificando...' : 'Verificar código'}
               </button>
             </>
@@ -263,7 +258,7 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
                   <input type={showPass ? 'text' : 'password'} value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Nueva contraseña"
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                   <button type="button" onClick={() => setShowPass(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -277,7 +272,7 @@ export default function ForgotPasswordModal({ initialEmail = '', onClose }: Forg
                   <input type={showConfirm ? 'text' : 'password'} value={confirm}
                     onChange={e => setConfirm(e.target.value)}
                     placeholder="Repite la contraseña"
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                   <button type="button" onClick={() => setShowConfirm(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">

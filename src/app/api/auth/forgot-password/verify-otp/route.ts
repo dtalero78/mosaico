@@ -2,11 +2,15 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { ValidationError } from '@/lib/errors';
-import { verifyOtp } from '@/lib/otp-store';
+import { verifyOtp, issueResetToken } from '@/lib/otp-store';
 
 /**
  * POST /api/auth/forgot-password/verify-otp
- * Verifies the OTP code sent via WhatsApp.
+ *
+ * Verifica el OTP enviado por WhatsApp y, si es correcto, EMITE EL TICKET que
+ * `reset-password` exige. Ese ticket es lo único que prueba que este paso ocurrió:
+ * antes se devolvía sólo un mensaje y el paso 4 no comprobaba nada, así que el
+ * flujo entero se podía saltar.
  */
 export const POST = handler(async (request) => {
   const { email, code } = await request.json();
@@ -18,11 +22,13 @@ export const POST = handler(async (request) => {
   const result = verifyOtp(normalizedEmail, code.trim());
 
   if (!result.valid) {
-    return NextResponse.json(
-      { success: false, error: 'Código inválido o expirado' },
-      { status: 400 }
-    );
+    // Tras agotar los intentos el código se invalida: hay que pedir uno nuevo.
+    const error = result.reason === 'attempts'
+      ? 'Demasiados intentos fallidos. Solicita un código nuevo.'
+      : 'Código inválido o expirado';
+    return NextResponse.json({ success: false, error }, { status: 400 });
   }
 
-  return successResponse({ message: 'Código verificado correctamente' });
+  const resetToken = issueResetToken(normalizedEmail);
+  return successResponse({ message: 'Código verificado correctamente', resetToken });
 });
