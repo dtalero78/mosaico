@@ -8,16 +8,30 @@ import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
 import { htmlToPdfBuffer } from '@/lib/pdf';
 import { uploadPdfToDrive, isDriveConfigured } from '@/lib/gdrive';
+import { putBuffer, deleteObject, getPresignedGetUrl } from '@/lib/spaces';
+
+const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
 
 /**
  * POST /api/contracts/[id]/regenerate-drive
  *
- * Regenera el PDF del contrato con Chromium propio (puppeteer-core) y lo sube al
- * Drive de MOSAICO con su cuenta de servicio, sobreescribiendo el anterior del
- * mismo titular. NO envía WhatsApp.
+ * Regenera el PDF del contrato con Chromium propio (puppeteer-core) y lo sube a
+ * Drive. NO envía WhatsApp.
  *
- * Antes esto dependía de dos servicios de LGS (API2PDF para renderizar y
- * bsl-utilidades para subir, que además dejaba el PDF en la carpeta de LGS).
+ * Destino del PDF — hay dos rutas y se elige sola:
+ *   1. Drive PROPIO de MOSAICO (carpeta CONTRATOS MOS), si está configurado
+ *      (OAuth de la cuenta dueña + GDRIVE_CONTRATOS_FOLDER_ID). Es el destino
+ *      definitivo: sube los bytes directo, sin terceros.
+ *   2. PUENTE TEMPORAL vía bsl-utilidades → carpeta de LGS, mientras se resuelve
+ *      el acceso a CONTRATOS MOS. bsl-utilidades es un servicio de LGS que pide
+ *      una URL del PDF (no acepta bytes), así que el PDF se deja unos minutos en
+ *      el bucket propio de MOSAICO con una URL firmada, y se borra después.
+ *      Va con empresa='LGS' porque bsl-utilidades NO tiene dada de alta la
+ *      empresa "MOSAICO" (responde "No se encontró configuración para la empresa
+ *      MOSAICO"), igual que send-pdf y auto-approve hoy.
+ *
+ * PENDIENTE: al terminar el OAuth, la ruta 1 se activa sola y este puente
+ * (BSL + el paso por Spaces) se puede borrar.
  *
  * Útil para casos donde se detecta un error en un contrato ya entregado:
  *   - bug que dejó valores financieros vacíos
@@ -105,33 +119,65 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
 <body>${contractText}</body>
 </html>`;
 
-  if (!isDriveConfigured()) {
-    throw new ValidationError(
-      'Google Drive no está configurado. Faltan GOOGLE_SERVICE_ACCOUNT_JSON y/o GDRIVE_CONTRATOS_FOLDER_ID.'
-    );
-  }
-
   // 1. Generar el PDF con Chromium propio (sin API2PDF)
   const pdf = await htmlToPdfBuffer(htmlContent);
 
-  // 2. Subir al Drive de MOSAICO. Nombre: MOS_<contrato>.pdf — el prefijo marca la
-  //    marca en la carpeta y el nº de contrato lo hace único (un contrato = un
-  //    titular), así que regenerar sobreescribe en vez de duplicar. Sin nº de
-  //    contrato se cae al id del titular para no colisionar entre sí.
-  const filename = titular.contrato
-    ? `MOS_${titular.contrato}.pdf`
-    : `MOS_SIN-CONTRATO_${titularId}.pdf`;
-  const driveUpload = await uploadPdfToDrive(pdf, filename);
+  // Nombre del archivo: MOS_<contrato>.pdf. El nº de contrato es único por titular,
+  // así que regenerar SOBREESCRIBE en vez de duplicar. Sin nº de contrato se cae al
+  // id del titular para no colisionar.
+  const baseName = titular.contrato
+    ? `MOS_${titular.contrato}`
+    : `MOS_SIN-CONTRATO_${titularId}`;
+
+  // 2a. Destino definitivo: Drive propio de MOSAICO (cuando esté configurado).
+  if (isDriveConfigured()) {
+    const driveUpload = await uploadPdfToDrive(pdf, `${baseName}.pdf`);
+    return successResponse({
+      destino: 'DRIVE_MOSAICO',
+      driveUpload,
+      pdfBytes: pdf.length,
+      contrato: titular.contrato,
+      titular: {
+        _id: titular._id, primerNombre: titular.primerNombre,
+        primerApellido: titular.primerApellido, numeroId: titular.numeroId,
+      },
+    });
+  }
+
+  // 2b. Puente temporal: bsl-utilidades sólo acepta una URL, así que el PDF pasa
+  //     unos minutos por el bucket propio con una URL firmada. `documento` es lo
+  //     que bsl-utilidades usa para NOMBRAR el archivo en Drive (y como clave de
+  //     sobreescritura), por eso se le manda el nombre completo.
+  const tmpKey = `contratos-tmp/${baseName}-${Date.now()}.pdf`;
+  let driveUpload: any;
+  try {
+    await putBuffer(tmpKey, pdf, 'application/pdf');
+    const pdfUrl = await getPresignedGetUrl(tmpKey, 600); // 10 min: sólo para que BSL lo descargue
+
+    const uploadRes = await fetch(BSL_UPLOAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdfUrl, documento: baseName, empresa: 'LGS' }),
+    });
+    driveUpload = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok || driveUpload?.error) {
+      throw new Error(`bsl-utilidades: ${driveUpload?.error || uploadRes.status}`);
+    }
+  } finally {
+    // El PDF ya está en Drive; el temporal no debe quedarse en el bucket.
+    await deleteObject(tmpKey).catch(() => {});
+  }
 
   return successResponse({
+    destino: 'DRIVE_LGS_TEMPORAL',
+    aviso: 'Subido a la carpeta de LGS vía bsl-utilidades (puente temporal). Pendiente: mover el proceso a la carpeta CONTRATOS MOS con el Drive propio.',
+    archivo: `${baseName}.pdf`,
     driveUpload,
     pdfBytes: pdf.length,
     contrato: titular.contrato,
     titular: {
-      _id: titular._id,
-      primerNombre: titular.primerNombre,
-      primerApellido: titular.primerApellido,
-      numeroId: titular.numeroId,
+      _id: titular._id, primerNombre: titular.primerNombre,
+      primerApellido: titular.primerApellido, numeroId: titular.numeroId,
     },
   });
 });
