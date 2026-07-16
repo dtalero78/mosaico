@@ -64,18 +64,31 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
   const base = fechasEntre(inicio, fin, parsed.dias);
   if (base.length === 0) return 0;
 
-  // Feriados de Chile: NO se agenda clase en un festivo; esa sesión se corre al
-  // FINAL del curso (se mantiene el nº total de sesiones = nº de clases del horario
-  // en el intervalo). Ej.: si un miércoles cae festivo, la última sesión pasa al
-  // siguiente día-clase después de finalCurso.
+  // Fechas suspendidas a mano para este curso (Académico › Sesiones › Suspende
+  // Sesión). Se tratan EXACTAMENTE igual que un festivo. Viven en tabla porque
+  // regenerar un curso borra y recrea sus eventos: sin persistirlas, la fecha
+  // suspendida reaparecería.
+  const susp = await query<{ fecha: string }>(
+    `SELECT "fecha"::text AS "fecha" FROM "CURSOS_SUSPENSIONES" WHERE "cursoCampaignId" = $1`,
+    [curso._id]
+  ).catch(() => ({ rows: [] as { fecha: string }[] })); // tabla aún no creada → sin suspensiones
+  const suspendidas = new Set(susp.rows.map((r) => String(r.fecha).slice(0, 10)));
+
+  /** No se dicta clase: festivo de Chile o suspensión manual. */
+  const noHayClase = (d: string) => esFestivoChile(d) || suspendidas.has(d);
+
+  // Feriados de Chile y suspensiones: NO se agenda clase ese día; esa sesión se
+  // corre al FINAL del curso (se mantiene el nº total de sesiones = nº de clases
+  // del horario en el intervalo). Ej.: si un miércoles cae festivo, la última
+  // sesión pasa al siguiente día-clase después de finalCurso.
   const objetivo = Math.min(base.length, MAX_EVENTOS_POR_CURSO);
-  let fechas = base.filter((d) => !esFestivoChile(d));
+  let fechas = base.filter((d) => !noHayClase(d));
   if (fechas.length < objetivo) {
     let cursor = fin;
     let guard = 0;
     while (fechas.length < objetivo && guard < 520) {
       for (const d of fechasEntre(addDaysISO(cursor, 1), addDaysISO(cursor, 7), parsed.dias)) {
-        if (!esFestivoChile(d)) { fechas.push(d); if (fechas.length >= objetivo) break; }
+        if (!noHayClase(d)) { fechas.push(d); if (fechas.length >= objetivo) break; }
       }
       cursor = addDaysISO(cursor, 7);
       guard++;
@@ -126,6 +139,100 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
   // Camino B: asigna a cada sesión su lección (secuencia del curso por fecha).
   try { await mapearLeccionesSalon(curso._id); } catch { /* best-effort */ }
   return fechas.length;
+}
+
+/** Campos de estado del booking que NO deben perderse al regenerar. */
+const STATE_COLS = ['asistio', 'asistencia', 'participacion', 'noAprobo', 'cancelo', 'calificacion', 'comentarios'] as const;
+
+export interface RegenResult {
+  eventos: number;
+  bookings: number;
+  alumnos: number;
+  estadoReaplicado: number;
+  /** Estado cuya fecha ya no existe como evento (p.ej. la fecha quedó suspendida). */
+  estadoSinMatch: number;
+}
+
+/**
+ * Regenera los eventos de UN curso preservando la asistencia ya tomada.
+ *
+ * Regenerar = borrar y recrear desde (inicio, final, horario), descontando
+ * festivos y suspensiones. Como eso destruiría la asistencia marcada, aquí se
+ * snapshotea el estado por (estudiante, fecha) y se re-aplica al booking nuevo de
+ * la misma fecha. Las fechas pasadas no cambian, así que el estado vuelve a su
+ * sitio; si una fecha con estado quedó suspendida, se reporta en `estadoSinMatch`.
+ *
+ * Los alumnos se derivan de PEOPLE (beneficiarios aprobados del curso), no de los
+ * bookings — así es robusto aunque los bookings se hayan borrado.
+ */
+export async function regenerarCursoPreservandoEstado(cursoId: string): Promise<RegenResult> {
+  const cursoRow = await query<any>(
+    `SELECT "_id","campaign","tipoCurso","salon","guia","horarioCurso",
+            "inicioCurso"::text AS "inicioCurso", "finalCurso"::text AS "finalCurso", "numeroUsuarios"
+     FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`,
+    [cursoId]
+  );
+  const curso = cursoRow.rows[0];
+  if (!curso) return { eventos: 0, bookings: 0, alumnos: 0, estadoReaplicado: 0, estadoSinMatch: 0 };
+
+  const est = (await query<any>(
+    `SELECT DISTINCT a."_id" AS acaid, a."numeroId", a."primerNombre", a."primerApellido", a."celular", a."plataforma"
+     FROM "PEOPLE" p
+     JOIN "ACADEMICA" a ON a."peopleId" = p."_id"
+     WHERE p."tipoUsuario" = 'BENEFICIARIO'
+       AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
+       AND p."aprobacion" IN ('Aprobado','Aprobada')
+       AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
+    [curso.campaign, curso.tipoCurso, curso.horarioCurso]
+  )).rows;
+
+  const snap = (await query<any>(
+    `SELECT b."idEstudiante" AS acaid, (b."fechaEvento")::date AS fecha,
+            b."asistio", b."asistencia", b."participacion", b."noAprobo", b."cancelo", b."calificacion", b."comentarios"
+     FROM "ACADEMICA_BOOKINGS" b
+     JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
+     WHERE c."cursoCampaignId" = $1
+       AND (b."asistio" = true OR b."asistencia" = true OR b."participacion" = true
+            OR b."noAprobo" = true OR b."cancelo" = true OR b."calificacion" IS NOT NULL)`,
+    [cursoId]
+  )).rows;
+
+  // 1) Borrar bookings del curso
+  await query(
+    `DELETE FROM "ACADEMICA_BOOKINGS" b USING "CALENDARIO" c
+     WHERE (c."_id" = b."eventoId" OR c."_id" = b."idEvento") AND c."cursoCampaignId" = $1`,
+    [cursoId]
+  );
+
+  // 2) Regenerar eventos (descuenta festivos + suspensiones)
+  const eventos = await generarEventosCurso(curso);
+
+  // 3) Regenerar bookings por alumno
+  let bookings = 0;
+  for (const s of est) {
+    bookings += await generarBookingsBeneficiario(s.acaid, {
+      campaign: curso.campaign, tipoCurso: curso.tipoCurso, horarioCurso: curso.horarioCurso,
+      numeroId: s.numeroId, primerNombre: s.primerNombre, primerApellido: s.primerApellido,
+      celular: s.celular, plataforma: s.plataforma,
+    });
+  }
+
+  // 4) Re-aplicar el estado preservado (por estudiante + fecha)
+  let estadoReaplicado = 0, estadoSinMatch = 0;
+  for (const sp of snap) {
+    const set = STATE_COLS.map((c, i) => `"${c}" = $${i + 3}`).join(', ');
+    const vals = STATE_COLS.map((c) => (sp as any)[c]);
+    const r = await query(
+      `UPDATE "ACADEMICA_BOOKINGS" b SET ${set}, "_updatedDate" = NOW()
+       FROM "CALENDARIO" c
+       WHERE (c."_id" = b."eventoId" OR c."_id" = b."idEvento") AND c."cursoCampaignId" = $1
+         AND b."idEstudiante" = $2 AND (b."fechaEvento")::date = $${STATE_COLS.length + 3}`,
+      [cursoId, sp.acaid, ...vals, sp.fecha]
+    );
+    if ((r.rowCount ?? 0) > 0) estadoReaplicado++; else estadoSinMatch++;
+  }
+
+  return { eventos, bookings, alumnos: est.length, estadoReaplicado, estadoSinMatch };
 }
 
 export interface BeneficiarioParaBookings {

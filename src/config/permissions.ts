@@ -616,6 +616,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Muestra el botón "Exportar CSV" en la Lista de Usuarios.',
   },
   {
+    code: AcademicoPermission.SUSPENDER_SESIONES_VER,
+    module: Module.ACADEMICO,
+    section: 'Suspender Sesiones',
+    name: 'Ver Suspender Sesiones',
+    description: 'Acceso a /dashboard/academic/suspender-sesiones. Consulta las sesiones de un curso/salón/guía en una fecha y muestra las suspensiones ya registradas.',
+  },
+  {
+    code: AcademicoPermission.SUSPENDER_SESIONES_GESTION,
+    module: Module.ACADEMICO,
+    section: 'Suspender Sesiones',
+    name: '↳ Suspender / reactivar sesiones',
+    description: 'Permite suspender las sesiones seleccionadas (y revertir una suspensión). La sesión suspendida se corre al final del curso, extendiéndolo para TODOS los alumnos de ese salón. Acción masiva — pensado para SUPER_ADMIN / ADMIN / COORDINADOR_ACADEMICO.',
+  },
+  {
     code: AcademicoPermission.ADMIN_EVENTS_GESTIONAR,
     module: Module.ACADEMICO,
     section: 'Eventos Administrativos',

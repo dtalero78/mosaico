@@ -187,10 +187,17 @@ export enum AcademicoPermission {
   LISTA_USUARIOS_EXPORTAR = 'ACADEMICO.LISTA_USUARIOS.EXPORTAR',
   LISTA_USUARIOS_EDITAR   = 'ACADEMICO.LISTA_USUARIOS.EDITAR',
 
-  // Solicitud de Sesiones (Repetir Lección)
+  // Refuerzo de Sesiones (antes "Solicitud de Sesiones" / Repetir Lección).
+  // Los códigos NO se renombran: sólo cambió la etiqueta del menú, y renombrarlos
+  // obligaría a re-sembrar los roles que ya los tienen.
   SOLICITUD_SESIONES_VER      = 'ACADEMICO.SOLICITUD_SESIONES.VER',
   SOLICITUD_SESIONES_GESTION  = 'ACADEMICO.SOLICITUD_SESIONES.GESTION',
   SOLICITUD_SESIONES_EXPORTAR = 'ACADEMICO.SOLICITUD_SESIONES.EXPORTAR',
+
+  // Suspender Sesiones — suspende clases de un curso/salón/guía en una fecha.
+  // La sesión suspendida se corre al final del curso para TODO el salón.
+  SUSPENDER_SESIONES_VER     = 'ACADEMICO.SUSPENDER_SESIONES.VER',
+  SUSPENDER_SESIONES_GESTION = 'ACADEMICO.SUSPENDER_SESIONES.GESTION',
 }
 
 /**

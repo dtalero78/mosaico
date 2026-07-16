@@ -57,10 +57,17 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Lista de Usuarios', href: '/dashboard/academic/lista-usuarios', newTab: true },
         ],
       },
+      // Submenú Sesiones — lo que opera sesiones fuera del calendario del día a día.
+      // Cada ítem se filtra por su propio permiso (ver pagePermissions).
+      {
+        name: 'Sesiones', isSubmenu: true, children: [
+          { name: 'Suspende Sesión', href: '/dashboard/academic/suspender-sesiones', newTab: true },
+          { name: 'Eventos Administrativos', href: '/dashboard/academic/eventos-administrativos', newTab: true },
+          { name: 'Refuerzo Sesiones', href: '/dashboard/academic/solicitud-sesiones', newTab: true },
+        ],
+      },
       { name: 'Mantenimiento Cursos', href: '/dashboard/academic/actualizar-material', newTab: true },
-      { name: 'Eventos Administrativos', href: '/dashboard/academic/eventos-administrativos', newTab: true },
       { name: 'Campañas', href: '/dashboard/academic/crear-campana', newTab: true },
-      { name: 'Solicitud Sesiones', href: '/dashboard/academic/solicitud-sesiones', newTab: true },
       { name: 'Evaluaciones Jump', href: '/dashboard/academic/jump-evaluaciones' },
     ],
   },
@@ -287,6 +294,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/dashboard/academic/eventos-administrativos': [
       AcademicoPermission.ADMIN_EVENTS_GESTIONAR,
+    ],
+    '/dashboard/academic/suspender-sesiones': [
+      AcademicoPermission.SUSPENDER_SESIONES_VER,
     ],
     '/dashboard/academic/jump-evaluaciones': [
       AcademicoPermission.JUMP_EVAL_REVISAR,
