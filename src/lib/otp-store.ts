@@ -25,7 +25,7 @@ interface OtpEntry {
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutos
 /** Intentos fallidos antes de invalidar el código. Sin esto los 10^6 códigos son
  *  forzables dentro de la ventana de 10 min (antes un fallo no penalizaba nada). */
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 3;
 
 const store = new Map<string, OtpEntry>();
 
