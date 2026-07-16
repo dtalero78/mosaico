@@ -8,7 +8,7 @@ import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS, ext
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -65,7 +65,7 @@ export default function EventModal({
   const [formData, setFormData] = useState({
     fecha: '',
     hora: '',
-    evento: 'SESSION' as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION',
+    evento: 'SESSION' as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA',
     tituloONivel: '',   // = Módulo (código de NIVELES) o 'Todos'
     nombreEvento: '',   // = Lección (step) o 'Todos'
     advisor: '',
@@ -132,7 +132,9 @@ export default function EventModal({
   // Para Taller: Lección = todas las lecciones del curso + "Todas" (Todas = todo el
   // curso puede acceder). "Tipo" = clubs de la lección elegida (o de todo el curso
   // si Lección = Todas). Se guarda tituloONivel = Tipo (club), nombreEvento = Lección.
-  const esTaller = formData.evento === 'CLUB'
+  // OLIMPIADA usa la MISMA estructura que TALLER (curso + "Tipo" del catálogo de
+  // clubs + Lección con "Todas"); sólo cambia el tipo guardado y el color.
+  const esTaller = formData.evento === 'CLUB' || formData.evento === 'OLIMPIADA'
   const cursoClubs = clubsByCurso[cursoModulos] || { clubsPorLeccion: {}, clubsCurso: [] }
   const todasLeccionesCurso = Array.from(new Set(currentModulos.flatMap(m => m.steps)))
   const tipoClubsOpciones = (formData.nombreEvento && formData.nombreEvento !== TODOS)
@@ -248,7 +250,7 @@ export default function EventModal({
       setFormData({
         fecha: format(eventDate, 'yyyy-MM-dd'),
         hora: format(eventDate, 'HH:mm'),
-        evento: (editingEvent.evento || editingEvent.tipo || 'SESSION') as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION',
+        evento: (editingEvent.evento || editingEvent.tipo || 'SESSION') as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA',
         tituloONivel: resolvedNivel,
         nombreEvento: nombreEventoValue,
         advisor: advisorId,
@@ -483,7 +485,7 @@ export default function EventModal({
 
   const getOptionsForNivelTipo = (
     nivelCode: string,
-    tipo: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION',
+    tipo: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA',
     clubPrefixFilter?: string | null,
   ): StepOption[] => {
     const niv = niveles.find(n => n.code === nivelCode)
@@ -717,11 +719,11 @@ export default function EventModal({
       }
       if (compartidoConPayload) eventData.compartidoCon = compartidoConPayload
 
-      // TALLER (CLUB): "Tipo" (tituloONivel del form) = el club; "Lección"
-      // (nombreEvento) = la lección. Se mandan como `club` y `leccion`; el
-      // backend arma nivel=curso, step=lección, nombreEvento=club y
+      // TALLER (CLUB) y OLIMPIADA: "Tipo" (tituloONivel del form) = el club;
+      // "Lección" (nombreEvento) = la lección. Se mandan como `club` y `leccion`;
+      // el backend arma nivel=curso, step=lección, nombreEvento=club y
       // tituloONivel="Curso - Tipo". (Lección='Todos' → todo el curso accede.)
-      if (formData.evento === 'CLUB') {
+      if (esTaller) {
         eventData.club = formData.tituloONivel || undefined
         eventData.leccion = formData.nombreEvento || undefined
         // Evitar que el backend interprete tituloONivel/nombreEvento del form
@@ -911,6 +913,7 @@ export default function EventModal({
                 >
                   <option value="SESSION">Sesión</option>
                   <option value="CLUB">Taller</option>
+                  <option value="OLIMPIADA">Olimpiada</option>
                   <option value="NIVELACION">Nivelación</option>
                 </select>
               </div>

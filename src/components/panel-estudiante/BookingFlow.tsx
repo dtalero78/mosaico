@@ -66,21 +66,42 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
     else if (step === 'confirm') { setStep('events') }
   }
 
-  // Only allow Today and Tomorrow (using local timezone)
-  const dates: { date: string; label: string }[] = []
+  /** YYYY-MM-DD en la zona horaria LOCAL del alumno (no UTC: cambiaría el día). */
+  const toLocalISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
   const today = new Date()
-  const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  dates.push({
-    date: localToday,
-    label: 'Hoy',
-  })
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const localTomorrow = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`
-  dates.push({
-    date: localTomorrow,
-    label: 'Mañana',
-  })
+  const localToday = toLocalISO(today)
+
+  // Fechas ofrecidas. Los TALLERES y las OLIMPIADAS se agendan mirando la semana
+  // completa (lunes a viernes de la semana en curso, con los días ya pasados en
+  // gris); el resto de agendamientos sigue con Hoy/Mañana.
+  const dates: { date: string; label: string; disabled?: boolean }[] = []
+  const esSemanal = initialTipo === 'CLUB' || initialTipo === 'OLIMPIADA'
+
+  if (esSemanal) {
+    // Lunes de ESTA semana: getDay() es 0=domingo, así que el domingo cuenta como
+    // el final de la semana en curso (retrocede 6 días, no 0).
+    const dow = today.getDay()
+    const lunes = new Date(today)
+    lunes.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1))
+    const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(lunes)
+      d.setDate(lunes.getDate() + i)
+      const iso = toLocalISO(d)
+      dates.push({
+        date: iso,
+        label: iso === localToday ? 'Hoy' : DIAS[i],
+        disabled: iso < localToday, // comparación de strings YYYY-MM-DD: segura
+      })
+    }
+  } else {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    dates.push({ date: localToday, label: 'Hoy' })
+    dates.push({ date: toLocalISO(tomorrow), label: 'Mañana' })
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
@@ -112,17 +133,26 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
           {/* Step 1: Date Selection */}
           {step === 'date' && (
             <div className="grid grid-cols-2 gap-2">
-              {dates.map(({ date, label }) => {
+              {dates.map(({ date, label, disabled }) => {
                 const d = new Date(date + 'T12:00:00')
+                const esHoy = label === 'Hoy'
                 return (
                   <button
                     key={date}
-                    onClick={() => handleDateSelect(date)}
-                    className="flex items-center gap-2 p-4 bg-gray-50 rounded-lg hover:bg-primary-50 hover:border-primary-300 border border-gray-200 transition-colors text-left"
+                    onClick={() => !disabled && handleDateSelect(date)}
+                    disabled={disabled}
+                    title={disabled ? 'Este día ya pasó' : undefined}
+                    className={
+                      disabled
+                        ? 'flex items-center gap-2 p-4 bg-gray-50 rounded-lg border border-gray-200 text-left opacity-40 cursor-not-allowed'
+                        : `flex items-center gap-2 p-4 rounded-lg hover:bg-primary-50 hover:border-primary-300 border transition-colors text-left ${
+                            esHoy ? 'bg-primary-50 border-primary-300' : 'bg-gray-50 border-gray-200'
+                          }`
+                    }
                   >
-                    <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
+                    <CalendarDaysIcon className={`h-5 w-5 ${disabled ? 'text-gray-300' : esHoy ? 'text-primary-600' : 'text-gray-400'}`} />
                     <div>
-                      <div className="text-sm font-bold text-gray-900">{label}</div>
+                      <div className={`text-sm font-bold ${disabled ? 'text-gray-400' : 'text-gray-900'}`}>{label}</div>
                       <div className="text-xs text-gray-500">
                         {format(d, "EEEE d 'de' MMMM", { locale: es })}
                       </div>

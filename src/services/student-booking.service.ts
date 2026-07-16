@@ -154,10 +154,12 @@ export async function getAvailableEvents(
   const startDate = new Date(dayStart.getTime() + offsetMs).toISOString();
   const endDate = new Date(dayEnd.getTime() + offsetMs).toISOString();
 
-  // MOSAICO — Talleres (CLUB): se filtran por CURSO (YOJI/OKINA/…), no por módulo.
-  // Un alumno YOJI ve TODOS los talleres de YOJI sin importar su módulo actual.
-  // (Igual criterio que Nivelación.) El filtro por step/jump se omite para Talleres.
-  const esTaller = String(tipo || '').toUpperCase() === 'CLUB';
+  // MOSAICO — Talleres (CLUB) y Olimpiadas (OLIMPIADA): se filtran por CURSO
+  // (YOJI/OKINA/…), no por módulo. Un alumno YOJI ve TODOS los talleres/olimpiadas
+  // de YOJI sin importar su módulo actual. (Igual criterio que Nivelación.)
+  // El filtro por step/jump se omite para ellos.
+  const tipoUp = String(tipo || '').toUpperCase();
+  const esTaller = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA';
 
   // When the student's main nivel is ESS, mark all their events as esESS so the UI
   // displays them correctly (orange border, "English Speaking Session" label) and

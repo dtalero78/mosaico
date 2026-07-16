@@ -21,7 +21,7 @@ import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window'
 interface CalendarioEvent {
   _id: string
   nombreEvento: string
-  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION'
+  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA'
   tipo?: string
   dia: string
   advisor: string                          // ADVISORS._id (UUID)

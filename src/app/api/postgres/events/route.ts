@@ -20,7 +20,10 @@ export const POST = handlerWithAuth(async (request) => {
   // For CLUB events, nombreEvento contains the full step name (e.g. "TRAINING - Step 32"),
   // so prefer it over the raw step number to keep step consistent with nombreEvento.
   const eventTipoRaw = body.tipo || body.evento;
-  const esTaller = eventTipoRaw === 'CLUB';
+  // OLIMPIADA se estructura igual que TALLER (a nivel de CURSO, con "Tipo" del
+  // catálogo de clubs y Lección con opción "Todas"); sólo cambia el `tipo`
+  // guardado, para poder filtrarlas y pintarlas aparte.
+  const esTaller = eventTipoRaw === 'CLUB' || eventTipoRaw === 'OLIMPIADA';
 
   let nivel: string | undefined;
   let step: string | undefined;
