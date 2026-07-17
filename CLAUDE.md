@@ -534,30 +534,30 @@ que los PDFs no diverjan (antes el HTML estaba copiado en cada uno):
   el campo `documento` como NOMBRE del archivo. **Distinto del adjunto de WhatsApp**, que
   va con el nombre de la persona (`filename` de Whapi).
 
-**Dónde se archiva hoy (temporal)**: `regenerate-drive` elige destino solo — Drive propio
-si `isDriveConfigured()`, si no el **puente** bsl-utilidades → **carpeta de LGS**
-(`empresa: 'LGS'`; el servicio no tiene la empresa "MOSAICO"). Como BSL sólo acepta una
-URL, el PDF pasa unos minutos por el bucket propio con URL firmada y se borra.
-**⚠ BSL DUPLICA**: cada regeneración crea otro archivo (verificado; no hay endpoint de
-borrado). Se resuelve al pasar al Drive propio, que sobreescribe por nombre.
+**Dónde se archiva (destino único para los CUATRO flujos)**: **`archiveContractPdfFromUrl`**
+([contract-archive.service.ts](src/services/contract-archive.service.ts)) decide en UN solo
+sitio: si `isDriveConfigured()` → **Drive propio** (carpeta CONTRATOS MOS en la Unidad
+compartida, vía `uploadPdfToDrive`, que **sobreescribe por nombre** → sin duplicados); si no
+→ el **puente** bsl-utilidades → **carpeta de LGS** (`empresa: 'LGS'`). Lo usan `send-pdf`,
+`auto-approve` y `autoaprobar` (los tres por-URL de API2PDF); `regenerate-drive` (puppeteer,
+tiene el Buffer) hace la misma decisión con `isDriveConfigured() ? uploadPdfToDrive : BSL`.
+**Migración completada (jul-2026)**: antes sólo `regenerate-drive` era Drive-aware y los
+otros iban a BSL directo — ahora los cuatro migran juntos al cargar las credenciales, así
+que **ya no hay riesgo de repartir contratos en dos carpetas**. La rama BSL (`empresa:'LGS'`)
+sigue intacta como fallback mientras Drive no esté configurado. **⚠ BSL DUPLICA** (crea otro
+archivo por regeneración, sin endpoint de borrado) — sólo aplica al fallback; el Drive propio
+sobreescribe.
 
-> **⚠ ANTES de cargar las credenciales de Drive (OAuth), migrar los otros dos flujos.**
-> Sólo `regenerate-drive` consulta `isDriveConfigured()`; **`send-pdf` y `auto-approve`
-> llaman a BSL directo**. Si se cargan las env vars tal como está el código hoy, *Generar
-> Contrato* pasaría a CONTRATOS MOS y los otros dos seguirían archivando en LGS → **los
-> contratos quedarían repartidos en dos carpetas** (peor que ahora, que están todos
-> juntos). La migración es corta: esos dos ya obtienen del PDF una URL de API2PDF (que
-> necesitan igual para WhatsApp), así que basta descargar esos bytes y pasarlos a
-> `uploadPdfToDrive` en vez de a BSL — y de paso desaparecen las copias duplicadas en los
-> tres. Nada de esto rompe BSL: el puente sigue intacto mientras no haya credenciales.
-
-**Por qué OAuth y no cuenta de servicio**: *CONTRATOS MOS* está en "Mi unidad" de un Gmail
-personal. Desde 2021 Google exige que todo archivo tenga un **dueño con cuota** y una cuenta
-de servicio tiene **0 bytes**: el archivo que crea le pertenece a ella → *"Service Accounts
-do not have storage quota"*, **aunque la carpeta esté compartida como Editor** (verificado).
-Con OAuth la app actúa COMO el usuario y usa sus 15 GB. La cuenta de servicio sólo serviría
-con una **Unidad compartida** (Workspace). La app OAuth debe quedar **PUBLICADA**: en modo
-"Prueba" el refresh token **caduca a los 7 días**.
+**Cómo se conecta (Unidad compartida + cuenta de servicio)**: *CONTRATOS MOS* vive ahora en
+una **Unidad compartida de Workspace** ("ORGANIZACION"), no en "Mi unidad". En una Unidad
+compartida los archivos pertenecen **a la unidad** (con cuota de Workspace), no a la cuenta
+de servicio → se resuelve el *"Service Accounts do not have storage quota"* que impedía usar
+la cuenta de servicio contra "Mi unidad" (ahí sí haría falta OAuth). Config: la cuenta de
+servicio se agrega como **miembro** de la Unidad compartida y se cargan `GOOGLE_SERVICE_ACCOUNT_JSON`
++ `GDRIVE_CONTRATOS_FOLDER_ID` (= id de la carpeta CONTRATOS MOS dentro de la unidad).
+`uploadPdfToDrive` ya pasa `supportsAllDrives:true`. El scope `drive.file` basta (sólo ve/
+gestiona los archivos que la app crea). **OAuth queda como alternativa** (para "Mi unidad"),
+no se usa con la Unidad compartida.
 
 - **puppeteer-core, NO puppeteer**: el Chromium que descarga `puppeteer` está compilado
   contra glibc y **no corre en Alpine** (musl). El Dockerfile instala el de Alpine.

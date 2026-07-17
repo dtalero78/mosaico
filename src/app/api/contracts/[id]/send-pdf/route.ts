@@ -5,10 +5,10 @@ import { queryOne, queryMany } from '@/lib/postgres';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { getAsesorInfo } from '@/lib/asesor';
+import { archiveContractPdfFromUrl } from '@/services/contract-archive.service';
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
 const WHAPI_TOKEN = 'VSyDX4j7ooAJ7UGOhz8lGplUVDDs2EYj';
-const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
 
 export const POST = handler(async (_request, { params }) => {
   const titularId = params.id;
@@ -104,22 +104,13 @@ export const POST = handler(async (_request, { params }) => {
 
   const tempPdfUrl: string = pdfData.pdf;
 
-  // 7. Upload PDF to Drive via bsl-utilidades in parallel with WhatsApp send
-  const uploadPromise = fetch(BSL_UPLOAD_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    // empresa='LGS': el servicio bsl-utilidades aún NO tiene configurada la empresa
-    // "MOSAICO" (error "No se encontró configuración para la empresa MOSAICO").
-    // Volver a 'MOSAICO' cuando bsl-utilidades tenga esa empresa + su carpeta de Drive.
-    // `documento` = nombre del archivo en Drive. Va MOS_<contrato> (no el
-    // titularId) para que el contrato se archive con el mismo nombre por los tres
-    // flujos y no aparezca duplicado bajo dos nombres distintos.
-    body: JSON.stringify({
-      pdfUrl: tempPdfUrl,
-      documento: buildContractFileBase(titular.contrato, titularId),
-      empresa: 'LGS',
-    }),
-  }).then(r => r.json()).catch(() => ({}));
+  // 7. Archivar el PDF (Drive propio si está configurado, si no BSL→LGS) en
+  //    paralelo con el envío de WhatsApp. Destino resuelto en archiveContractPdfFromUrl,
+  //    con el mismo nombre MOS_<contrato> que auto-approve/autoaprobar/regenerate-drive.
+  const uploadPromise = archiveContractPdfFromUrl(
+    tempPdfUrl,
+    buildContractFileBase(titular.contrato, titularId),
+  ).then(r => r.driveUpload).catch(() => ({}));
 
   // 8. Send PDF via Whapi using the API2PDF direct URL (clean S3 link, no redirects)
   const phone = titular.celular.toString().replace(/\D/g, '');

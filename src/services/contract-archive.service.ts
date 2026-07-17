@@ -3,21 +3,48 @@ import { queryOne, queryMany } from '@/lib/postgres';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { getAsesorInfo } from '@/lib/asesor';
+import { isDriveConfigured, uploadPdfToDrive } from '@/lib/gdrive';
 
 /**
  * Genera el PDF del contrato y lo archiva. Extraído de
  * `api/consent/[id]/auto-approve/route.ts` para compartirlo con el "Autoaprobar"
- * del centro de aprobación (que también debe generar el contrato).
+ * del centro de aprobación y con `send-pdf`.
  *
- * Archiva vía **bsl-utilidades → carpeta de LGS** (`empresa: 'LGS'`), igual que
- * hoy send-pdf y auto-approve. NO usa el Drive propio a propósito: mientras
- * send-pdf siga en BSL, mover sólo este flujo a Drive repartiría los contratos en
- * dos carpetas (ver la nota "⚠ ANTES de cargar las credenciales de Drive" en
- * CLAUDE.md). Cuando se migren los tres a la vez, se cambia aquí en un solo sitio.
+ * **Destino único (Drive propio o BSL) decidido en `archiveContractPdfFromUrl`**:
+ * si `isDriveConfigured()` sube a la Unidad compartida propia (carpeta CONTRATOS
+ * MOS); si no, cae a bsl-utilidades → carpeta de LGS (`empresa: 'LGS'`). Como los
+ * tres flujos por-URL usan este helper, todos migran a Drive a la vez al cargar
+ * las credenciales — nunca quedan repartidos en dos carpetas.
  */
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
 const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
+
+/**
+ * Archiva un PDF ya generado (dado por su URL de API2PDF) en el destino vigente.
+ * Sólo descarga los bytes cuando hay Drive configurado (para no gastar ancho de
+ * banda cuando aún se usa BSL, que sólo necesita la URL). `filenameBase` =
+ * MOS_<contrato> (mismo nombre en los tres flujos).
+ */
+export async function archiveContractPdfFromUrl(
+  pdfUrl: string,
+  filenameBase: string
+): Promise<{ via: 'drive' | 'bsl'; driveUpload: any; webViewLink: string | null }> {
+  if (isDriveConfigured()) {
+    const res = await fetch(pdfUrl);
+    if (!res.ok) throw new Error(`descarga del PDF falló: ${res.status}`);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const up = await uploadPdfToDrive(bytes, `${filenameBase}.pdf`);
+    return { via: 'drive', driveUpload: up, webViewLink: up.webViewLink };
+  }
+  // BSL sólo acepta una URL (no bytes) → le pasamos la de API2PDF directamente.
+  const driveUpload = await fetch(BSL_UPLOAD_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pdfUrl, documento: filenameBase, empresa: 'LGS' }),
+  }).then(r => r.json()).catch(() => ({ error: 'Drive upload failed' }));
+  return { via: 'bsl', driveUpload, webViewLink: null };
+}
 
 export interface ConsentBlock {
   hasConsent: boolean;
@@ -120,17 +147,8 @@ export async function generateAndArchiveContractPdf(
   }
   const pdfUrl: string = pdfData.pdf;
 
-  const driveUpload = await fetch(BSL_UPLOAD_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      pdfUrl,
-      // `documento` = nombre del archivo en Drive: MOS_<contrato> (mismo que
-      // send-pdf y regenerate-drive).
-      documento: buildContractFileBase(built.contrato, titularId),
-      empresa: 'LGS', // pendiente: bsl-utilidades no tiene la empresa "MOSAICO" aún
-    }),
-  }).then(r => r.json()).catch(() => ({ error: 'Drive upload failed' }));
+  // Destino (Drive propio o BSL) resuelto en un solo sitio, MOS_<contrato>.
+  const archived = await archiveContractPdfFromUrl(pdfUrl, buildContractFileBase(built.contrato, titularId));
 
-  return { ok: true, pdfUrl, driveUpload };
+  return { ok: true, pdfUrl, driveUpload: archived.driveUpload };
 }
