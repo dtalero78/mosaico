@@ -88,15 +88,16 @@ export default function AprobacionPage() {
   // Estado de búsqueda (filtrado local)
   const [searchApellido, setSearchApellido] = useState('')
 
-  // ── Autoaprobar (casillas por fila) ──
+  // ── Autoaprobar (casillas por fila + botón único para los marcados) ──
   // hasPermission ya bypassa SUPER_ADMIN/ADMIN.
   const { hasPermission } = usePermissions()
   const canAutoaprobar = hasPermission(AprobacionPermission.AUTOAPROBAR)
   // Intención por fila: { auto, welcome }. WELCOME no puede ir sin auto.
   const [rowIntent, setRowIntent] = useState<Record<string, { auto: boolean; welcome: boolean }>>({})
-  const [autoTarget, setAutoTarget] = useState<Contrato | null>(null)   // fila en el modal
-  const [autoWelcome, setAutoWelcome] = useState(false)                 // promover WELCOME (dentro del modal)
-  const [autoBusy, setAutoBusy] = useState(false)
+  const [showBulkModal, setShowBulkModal] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  const [bulkResults, setBulkResults] = useState<Array<{ nombre: string; contrato: string; ok: boolean; detalle: string }> | null>(null)
   const [autoMsg, setAutoMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   const setIntent = (id: string, patch: Partial<{ auto: boolean; welcome: boolean }>) => {
@@ -109,36 +110,61 @@ export default function AprobacionPage() {
     })
   }
 
-  const doAutoaprobar = async () => {
-    if (!autoTarget) return
-    setAutoBusy(true)
+  // Contratos marcados (auto=true) que siguen pendientes. Incluye los marcados aunque
+  // un cambio de filtro los haya sacado de la página actual — el modal los lista todos.
+  const marcados = allContratos.filter(c => rowIntent[c._id]?.auto)
+
+  const aplicarMarcados = async () => {
+    setBulkBusy(true)
+    setBulkResults(null)
     setAutoMsg(null)
-    try {
-      const res = await fetch(`/api/postgres/approvals/${autoTarget._id}/autoaprobar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ promoverWelcome: autoWelcome }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || json?.success === false) {
-        throw new Error(json?.error || `Error ${res.status}`)
+    const targets = marcados
+    const results: Array<{ id: string; nombre: string; contrato: string; ok: boolean; detalle: string }> = []
+    for (let i = 0; i < targets.length; i++) {
+      setBulkProgress({ done: i, total: targets.length })
+      const c = targets[i]
+      const promoverWelcome = rowIntent[c._id]?.welcome || false
+      const nombre = `${c.primerNombre} ${c.primerApellido}`
+      try {
+        const res = await fetch(`/api/postgres/approvals/${c._id}/autoaprobar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ promoverWelcome }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json?.success === false) throw new Error(json?.error || `Error ${res.status}`)
+        const promo = promoverWelcome ? `, WELCOME +${json.welcomePromovidos ?? 0}` : ''
+        const pdf = json.pdfArchivado ? ', contrato archivado' : `, ⚠ contrato no archivado`
+        results.push({ id: c._id, nombre, contrato: c.contrato, ok: true, detalle: `benef ${json.beneficiariosAprobados ?? 0}${promo}${pdf}` })
+      } catch (err: any) {
+        results.push({ id: c._id, nombre, contrato: c.contrato, ok: false, detalle: err.message })
       }
-      const nombre = `${autoTarget.primerNombre} ${autoTarget.primerApellido}`
-      const promo = autoWelcome ? ` · WELCOME promovidos: ${json.welcomePromovidos ?? 0}` : ''
-      const pdf = json.pdfArchivado ? ' · contrato archivado' : ` · ⚠ contrato no archivado (${json.pdfError || 'error'})`
-      setAutoMsg({ text: `✅ ${nombre} autoaprobado (beneficiarios: ${json.beneficiariosAprobados ?? 0}${promo}${pdf})`, ok: true })
-      // Sale de la lista de pendientes.
-      const id = autoTarget._id
-      setAllContratos(prev => prev.filter(c => c._id !== id))
-      setContratos(prev => prev.filter(c => c._id !== id))
-      setRowIntent(prev => { const n = { ...prev }; delete n[id]; return n })
-      setAutoTarget(null)
-      setAutoWelcome(false)
-    } catch (err: any) {
-      setAutoMsg({ text: `❌ No se pudo autoaprobar: ${err.message}`, ok: false })
-    } finally {
-      setAutoBusy(false)
     }
+    setBulkProgress({ done: targets.length, total: targets.length })
+
+    // Los aprobados con éxito salen de la lista de pendientes.
+    const okIds = new Set(results.filter(r => r.ok).map(r => r.id))
+    if (okIds.size) {
+      setAllContratos(prev => prev.filter(c => !okIds.has(c._id)))
+      setContratos(prev => prev.filter(c => !okIds.has(c._id)))
+      setRowIntent(prev => { const n = { ...prev }; okIds.forEach(id => delete n[id]); return n })
+    }
+    const ok = results.filter(r => r.ok).length
+    const fail = results.length - ok
+    setAutoMsg({
+      text: fail === 0
+        ? `✅ ${ok} contrato(s) autoaprobado(s)`
+        : `⚠ ${ok} autoaprobado(s), ${fail} con error`,
+      ok: fail === 0,
+    })
+    setBulkResults(results.map(({ nombre, contrato, ok, detalle }) => ({ nombre, contrato, ok, detalle })))
+    setBulkBusy(false)
+  }
+
+  const cerrarBulk = () => {
+    setShowBulkModal(false)
+    setBulkResults(null)
+    setBulkProgress(null)
   }
 
   // Cargar contratos pendientes de aprobación (sin estado)
@@ -493,12 +519,25 @@ export default function AprobacionPage() {
 
         {/* Información de resultados */}
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold">
-            {searchApellido || filters.estado || filters.campaign || filters.fechaInicio || filters.fechaFin
-              ? `Registros filtrados (${getFilteredData().length})`
-              : `Registros pendientes de aprobación (${allContratos.length})`
-            }
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold">
+              {searchApellido || filters.estado || filters.campaign || filters.fechaInicio || filters.fechaFin
+                ? `Registros filtrados (${getFilteredData().length})`
+                : `Registros pendientes de aprobación (${allContratos.length})`
+              }
+            </h2>
+            {/* Botón único: aplica el autoaprobar a todas las filas marcadas */}
+            {canAutoaprobar && marcados.length > 0 && (
+              <button
+                type="button"
+                onClick={() => { setBulkResults(null); setBulkProgress(null); setAutoMsg(null); setShowBulkModal(true) }}
+                className="inline-flex items-center gap-2 px-4 py-1.5 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Aplicar a marcados ({marcados.length})
+              </button>
+            )}
+          </div>
 
           {/* Paginación */}
           {totalPages > 1 && (
@@ -650,18 +689,6 @@ export default function AprobacionPage() {
                                 />
                                 Promover WELCOME
                               </label>
-                              <button
-                                type="button"
-                                disabled={!rowIntent[contrato._id]?.auto}
-                                onClick={() => {
-                                  setAutoWelcome(rowIntent[contrato._id]?.welcome || false)
-                                  setAutoMsg(null)
-                                  setAutoTarget(contrato)
-                                }}
-                                className="mt-0.5 inline-flex items-center justify-center px-3 py-1 text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
-                              >
-                                Aplicar
-                              </button>
                             </div>
                           </td>
                         )}
@@ -674,57 +701,100 @@ export default function AprobacionPage() {
           </div>
         )}
 
-        {/* Modal de confirmación — Autoaprobar */}
-        {autoTarget && (
+        {/* Modal de confirmación — Autoaprobar en lote (los marcados) */}
+        {showBulkModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg p-6 max-w-lg w-full">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">Autoaprobar contrato</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                {autoTarget.primerNombre} {autoTarget.primerApellido} · {autoTarget.contrato}
-              </p>
+            <div className="bg-white rounded-lg p-6 max-w-xl w-full max-h-[85vh] flex flex-col">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                {bulkResults ? 'Resultado' : `Autoaprobar ${marcados.length} contrato(s)`}
+              </h3>
 
-              <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 mb-4">
-                Esta acción <strong>aprueba el contrato</strong> (titular y todos sus beneficiarios,
-                activa y genera los agendamientos), <strong>registra el consentimiento como
-                automático</strong> y <strong>genera/archiva el contrato en Drive</strong>, sin enviar
-                WhatsApp. Es <strong>irreversible</strong> y queda auditada.
-              </div>
+              {/* Antes de procesar: advertencia + lista de marcados */}
+              {!bulkResults && !bulkBusy && (
+                <>
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 mb-3">
+                    Cada contrato se <strong>aprueba</strong> (titular + beneficiarios, activa y genera
+                    agendamientos), se <strong>registra el consentimiento como automático</strong> y se
+                    <strong> genera/archiva el contrato en Drive</strong>, sin WhatsApp. Los marcados con
+                    <strong> WELCOME</strong> además promueven a sus beneficiarios al curso real. Es
+                    <strong> irreversible</strong> y queda auditado.
+                  </div>
+                  <div className="overflow-auto border border-gray-200 rounded-md divide-y divide-gray-100 mb-4">
+                    {marcados.map(c => (
+                      <div key={c._id} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <span className="text-gray-800">
+                          {c.primerNombre} {c.primerApellido}
+                          <span className="text-gray-400"> · {c.contrato}</span>
+                        </span>
+                        {rowIntent[c._id]?.welcome && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-primary-100 text-primary-700">
+                            + WELCOME
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
-              <label className={`flex items-start gap-3 rounded-md border p-3 mb-4 cursor-pointer ${
-                autoWelcome ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
-              }`}>
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
-                  checked={autoWelcome}
-                  onChange={e => setAutoWelcome(e.target.checked)}
-                />
-                <span className="text-sm text-gray-700">
-                  <span className="font-medium">Promover de WELCOME al curso real</span>
-                  <span className="block text-gray-500">
-                    Mueve a cada beneficiario que siga en el curso puente WELCOME al curso que le corresponde.
-                    Sólo disponible junto con la autoaprobación.
-                  </span>
-                </span>
-              </label>
+              {/* Durante el proceso: barra de progreso */}
+              {bulkBusy && bulkProgress && (
+                <div className="py-6">
+                  <p className="text-sm text-gray-600 mb-2">Procesando {bulkProgress.done} / {bulkProgress.total}…</p>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-2 bg-primary-600 transition-all"
+                      style={{ width: `${bulkProgress.total ? (bulkProgress.done / bulkProgress.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">Cada contrato genera su PDF; puede tardar unos segundos por fila.</p>
+                </div>
+              )}
 
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  disabled={autoBusy}
-                  onClick={() => { setAutoTarget(null); setAutoWelcome(false) }}
-                  className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  disabled={autoBusy}
-                  onClick={doAutoaprobar}
-                  className="px-4 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-60"
-                >
-                  {autoBusy ? 'Aplicando…' : (autoWelcome ? 'Autoaprobar y promover' : 'Autoaprobar')}
-                </button>
+              {/* Al terminar: resumen por contrato */}
+              {bulkResults && (
+                <div className="overflow-auto border border-gray-200 rounded-md divide-y divide-gray-100 mb-4">
+                  {bulkResults.map((r, i) => (
+                    <div key={i} className="flex items-start gap-2 px-3 py-2 text-sm">
+                      <span className={r.ok ? 'text-green-600' : 'text-red-600'}>{r.ok ? '✓' : '✗'}</span>
+                      <span className="text-gray-800 flex-1">
+                        {r.nombre} <span className="text-gray-400">· {r.contrato}</span>
+                        <span className="block text-xs text-gray-500">{r.detalle}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 mt-auto">
+                {!bulkResults ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={bulkBusy}
+                      onClick={cerrarBulk}
+                      className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={bulkBusy || marcados.length === 0}
+                      onClick={aplicarMarcados}
+                      className="px-4 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-60"
+                    >
+                      {bulkBusy ? 'Aplicando…' : `Autoaprobar ${marcados.length}`}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={cerrarBulk}
+                    className="px-4 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+                  >
+                    Cerrar
+                  </button>
+                )}
               </div>
             </div>
           </div>
