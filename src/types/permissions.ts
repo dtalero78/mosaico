@@ -389,6 +389,10 @@ export enum AprobacionPermission {
   ENVIAR_PDF = 'APROBACION.MODIFICAR.ENVIAR_PDF',
   DESCARGAR = 'APROBACION.MODIFICAR.DESCARGAR',
   APROBACION_AUTONOMA = 'APROBACION.MODIFICAR.APROBACION_AUTONOMA',
+  // Autoaprobar desde el centro de aprobación: aprueba el contrato (titular +
+  // beneficiarios, sin WhatsApp) + registra el consentimiento AUTOMÁTICA, y
+  // opcionalmente promueve a los beneficiarios de WELCOME a su curso real.
+  AUTOAPROBAR = 'APROBACION.MODIFICAR.AUTOAPROBAR',
 
   // Legacy (mantener compatibilidad)
   GLOBAL_ACTUALIZAR = 'APROBACION.GLOBAL.ACTUALIZAR',

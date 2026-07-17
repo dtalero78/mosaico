@@ -930,6 +930,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Botón "Aprobación Autónoma"',
     description: 'Aprobar contrato sin verificación OTP del cliente',
   },
+  {
+    code: AprobacionPermission.AUTOAPROBAR,
+    module: Module.APROBACION,
+    section: 'Lista de Aprobaciones',
+    name: 'Casillas "Autoaprobar" / "Promover WELCOME"',
+    description: 'En el centro de aprobación: autoaprobar el contrato (titular + beneficiarios, sin WhatsApp) registrando el consentimiento AUTOMÁTICA, y promover a los beneficiarios de WELCOME a su curso real',
+  },
 
   // ========== MANTENIMIENTO MODULE (Menú Mantenimiento) ==========
   {

@@ -20,6 +20,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { debounce } from 'lodash'
 import { exportToExcel } from '@/lib/export-excel'
+import { usePermissions } from '@/hooks/usePermissions'
 
 // Tipos
 interface Contrato {
@@ -86,6 +87,58 @@ export default function AprobacionPage() {
 
   // Estado de búsqueda (filtrado local)
   const [searchApellido, setSearchApellido] = useState('')
+
+  // ── Autoaprobar (casillas por fila) ──
+  // hasPermission ya bypassa SUPER_ADMIN/ADMIN.
+  const { hasPermission } = usePermissions()
+  const canAutoaprobar = hasPermission(AprobacionPermission.AUTOAPROBAR)
+  // Intención por fila: { auto, welcome }. WELCOME no puede ir sin auto.
+  const [rowIntent, setRowIntent] = useState<Record<string, { auto: boolean; welcome: boolean }>>({})
+  const [autoTarget, setAutoTarget] = useState<Contrato | null>(null)   // fila en el modal
+  const [autoWelcome, setAutoWelcome] = useState(false)                 // promover WELCOME (dentro del modal)
+  const [autoBusy, setAutoBusy] = useState(false)
+  const [autoMsg, setAutoMsg] = useState<{ text: string; ok: boolean } | null>(null)
+
+  const setIntent = (id: string, patch: Partial<{ auto: boolean; welcome: boolean }>) => {
+    setRowIntent(prev => {
+      const cur = prev[id] || { auto: false, welcome: false }
+      const next = { ...cur, ...patch }
+      // WELCOME jamás queda marcado sin auto.
+      if (!next.auto) next.welcome = false
+      return { ...prev, [id]: next }
+    })
+  }
+
+  const doAutoaprobar = async () => {
+    if (!autoTarget) return
+    setAutoBusy(true)
+    setAutoMsg(null)
+    try {
+      const res = await fetch(`/api/postgres/approvals/${autoTarget._id}/autoaprobar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ promoverWelcome: autoWelcome }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.error || `Error ${res.status}`)
+      }
+      const nombre = `${autoTarget.primerNombre} ${autoTarget.primerApellido}`
+      const promo = autoWelcome ? ` · WELCOME promovidos: ${json.welcomePromovidos ?? 0}` : ''
+      setAutoMsg({ text: `✅ ${nombre} autoaprobado (beneficiarios: ${json.beneficiariosAprobados ?? 0}${promo})`, ok: true })
+      // Sale de la lista de pendientes.
+      const id = autoTarget._id
+      setAllContratos(prev => prev.filter(c => c._id !== id))
+      setContratos(prev => prev.filter(c => c._id !== id))
+      setRowIntent(prev => { const n = { ...prev }; delete n[id]; return n })
+      setAutoTarget(null)
+      setAutoWelcome(false)
+    } catch (err: any) {
+      setAutoMsg({ text: `❌ No se pudo autoaprobar: ${err.message}`, ok: false })
+    } finally {
+      setAutoBusy(false)
+    }
+  }
 
   // Cargar contratos pendientes de aprobación (sin estado)
   const loadContratos = async () => {
@@ -427,6 +480,16 @@ export default function AprobacionPage() {
           </div>
         </div>
 
+        {/* Banner de resultado de autoaprobación */}
+        {autoMsg && (
+          <div className={`rounded-lg px-4 py-3 text-sm font-medium flex items-center justify-between ${
+            autoMsg.ok ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
+          }`}>
+            <span>{autoMsg.text}</span>
+            <button onClick={() => setAutoMsg(null)} className="ml-4 text-current opacity-60 hover:opacity-100">✕</button>
+          </div>
+        )}
+
         {/* Información de resultados */}
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-semibold">
@@ -502,6 +565,11 @@ export default function AprobacionPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Fecha
                     </th>
+                    {canAutoaprobar && (
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Acciones
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -554,11 +622,108 @@ export default function AprobacionPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(contrato._createdDate).toLocaleDateString()}
                         </td>
+                        {canAutoaprobar && (
+                          <td className="px-6 py-4 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                            <div className="flex flex-col gap-1.5">
+                              <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                                  checked={rowIntent[contrato._id]?.auto || false}
+                                  onChange={e => setIntent(contrato._id, { auto: e.target.checked })}
+                                />
+                                Autoaprobar
+                              </label>
+                              <label
+                                className={`inline-flex items-center gap-2 text-sm cursor-pointer ${
+                                  rowIntent[contrato._id]?.auto ? 'text-gray-700' : 'text-gray-300 cursor-not-allowed'
+                                }`}
+                                title={rowIntent[contrato._id]?.auto ? '' : 'Requiere marcar Autoaprobar'}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500 disabled:opacity-40"
+                                  disabled={!rowIntent[contrato._id]?.auto}
+                                  checked={rowIntent[contrato._id]?.welcome || false}
+                                  onChange={e => setIntent(contrato._id, { welcome: e.target.checked })}
+                                />
+                                Promover WELCOME
+                              </label>
+                              <button
+                                type="button"
+                                disabled={!rowIntent[contrato._id]?.auto}
+                                onClick={() => {
+                                  setAutoWelcome(rowIntent[contrato._id]?.welcome || false)
+                                  setAutoMsg(null)
+                                  setAutoTarget(contrato)
+                                }}
+                                className="mt-0.5 inline-flex items-center justify-center px-3 py-1 text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+                              >
+                                Aplicar
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de confirmación — Autoaprobar */}
+        {autoTarget && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg p-6 max-w-lg w-full">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Autoaprobar contrato</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                {autoTarget.primerNombre} {autoTarget.primerApellido} · {autoTarget.contrato}
+              </p>
+
+              <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 mb-4">
+                Esta acción <strong>aprueba el contrato</strong> (titular y todos sus beneficiarios,
+                activa y genera los agendamientos) y <strong>registra el consentimiento como
+                automático</strong>, sin enviar WhatsApp. Es <strong>irreversible</strong> y queda auditada.
+              </div>
+
+              <label className={`flex items-start gap-3 rounded-md border p-3 mb-4 cursor-pointer ${
+                autoWelcome ? 'border-primary-300 bg-primary-50' : 'border-gray-200'
+              }`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                  checked={autoWelcome}
+                  onChange={e => setAutoWelcome(e.target.checked)}
+                />
+                <span className="text-sm text-gray-700">
+                  <span className="font-medium">Promover de WELCOME al curso real</span>
+                  <span className="block text-gray-500">
+                    Mueve a cada beneficiario que siga en el curso puente WELCOME al curso que le corresponde.
+                    Sólo disponible junto con la autoaprobación.
+                  </span>
+                </span>
+              </label>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={autoBusy}
+                  onClick={() => { setAutoTarget(null); setAutoWelcome(false) }}
+                  className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={autoBusy}
+                  onClick={doAutoaprobar}
+                  className="px-4 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-60"
+                >
+                  {autoBusy ? 'Aplicando…' : (autoWelcome ? 'Autoaprobar y promover' : 'Autoaprobar')}
+                </button>
+              </div>
             </div>
           </div>
         )}
