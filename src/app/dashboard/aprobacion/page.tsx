@@ -101,8 +101,11 @@ export default function AprobacionPage() {
         const result = await response.json()
         if (result.success && result.approvals) {
           console.log('✅ Registros pendientes cargados:', result.count)
+          // NO paginar los datos crudos: el filtro por defecto ("Firmado sin
+          // aprobar") se aplica en el useEffect que depende de allContratos.
+          // Paginar aquí mostraba TODOS los registros (incluidos "Sin firmar")
+          // hasta que el usuario tocara un filtro.
           setAllContratos(result.approvals)
-          updatePagination(result.approvals)
         } else {
           console.error('Error en respuesta:', result.error)
           setAllContratos([])
@@ -185,13 +188,15 @@ export default function AprobacionPage() {
     return data
   }
 
-  // Aplicar filtros automáticamente cuando cambian los filtros o la búsqueda
+  // Aplicar filtros automáticamente cuando cambian los filtros, la búsqueda o
+  // cuando terminan de llegar los datos (allContratos). Sin `allContratos` en las
+  // dependencias, el filtro por defecto NO se aplicaba al cargar la página.
   useEffect(() => {
     if (allContratos.length > 0) {
       const filtered = getFilteredData()
       updatePagination(filtered)
     }
-  }, [searchApellido, filters.estado, filters.campaign, filters.fechaInicio, filters.fechaFin])
+  }, [allContratos, searchApellido, filters.estado, filters.campaign, filters.fechaInicio, filters.fechaFin])
 
   // Campañas disponibles (para el dropdown)
   const campaignOptions = Array.from(new Set(allContratos.map(c => c.campaign).filter(Boolean))).sort() as string[]
