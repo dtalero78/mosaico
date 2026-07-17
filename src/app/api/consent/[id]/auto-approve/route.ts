@@ -1,14 +1,9 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { autoApproveConsent } from '@/services/consent.service';
-import { query, queryOne, queryMany } from '@/lib/postgres';
+import { generateAndArchiveContractPdf } from '@/services/contract-archive.service';
+import { query, queryOne } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
-import { fillContractTemplate } from '@/lib/contract-template-filler';
-import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
-import { getAsesorInfo } from '@/lib/asesor';
-
-const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
-const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
 
 // One-time migration: ensure auditautoaprov table exists
 let auditTableReady = false;
@@ -69,91 +64,18 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     ]
   );
 
-  // 4. Generate PDF and upload to Drive (non-blocking — errors don't fail the consent)
+  // 4. Generar PDF y archivar en Drive (best-effort — un fallo no rompe el consentimiento).
+  //    Lógica compartida con el "Autoaprobar" del centro de aprobación.
   let driveUpload: any = null;
   let pdfUrl: string | null = null;
-
   try {
-    if (titular?.plataforma && titular?.contrato) {
-      const beneficiarios = await queryMany(
-        `SELECT * FROM "PEOPLE" WHERE "contrato" = $1 AND "_id" != $2 ORDER BY "_createdDate" ASC`,
-        [titular.contrato, params.id]
-      );
-
-      // FINANCIEROS se busca por "contrato" (mismo bug que send-pdf — la tabla no
-      // tiene titularId / esa columna legacy quedó NULL en la migración).
-      const financial = await queryOne(
-        `SELECT * FROM "FINANCIEROS" WHERE "contrato" = $1
-         ORDER BY "_createdDate" DESC LIMIT 1`,
-        [titular.contrato]
-      );
-
-      let templateRow = await queryOne(
-        `SELECT "template" FROM "ContractTemplates" WHERE "plataforma" = $1`,
-        [titular.plataforma]
-      );
-      if (!templateRow) {
-        templateRow = await queryOne(
-          `SELECT "template" FROM "ContractTemplates" WHERE LOWER("plataforma") = LOWER($1)`,
-          [titular.plataforma]
-        );
-      }
-
-      if (templateRow?.template) {
-        const consentData = {
-          hasConsent: true,
-          consent: result.consent,
-          hash: result.hash,
-        };
-
-        const asesorInfo = await getAsesorInfo((titular as any).asesor, (titular as any).asesorMail);
-        const contractText = fillContractTemplate(
-          templateRow.template,
-          titular,
-          beneficiarios,
-          financial,
-          consentData as any,
-          asesorInfo,
-        );
-
-        // HTML + presentación (membrete con logo y "Página X de Y") compartidos
-        // con send-pdf y regenerate-drive: los tres PDFs salen idénticos.
-        const htmlContent = buildContractHtml(contractText, titular.contrato);
-
-        const pdfRes = await fetch('https://v2018.api2pdf.com/chrome/html', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': API2PDF_KEY,
-          },
-          body: JSON.stringify({
-            html: htmlContent,
-            options: buildContractPdfOptions(titular.contrato),
-          }),
-        });
-
-        if (pdfRes.ok) {
-          const pdfData = await pdfRes.json();
-          if (pdfData.success && pdfData.pdf) {
-            pdfUrl = pdfData.pdf;
-
-            // Upload to Drive — no WhatsApp
-            driveUpload = await fetch(BSL_UPLOAD_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                pdfUrl,
-                // `documento` = nombre del archivo en Drive. MOS_<contrato> (no el
-                // id del titular) para archivar con el mismo nombre que send-pdf y
-                // regenerate-drive.
-                documento: buildContractFileBase(titular.contrato, params.id),
-                empresa: 'LGS', // pendiente: bsl-utilidades no tiene empresa "MOSAICO" aún
-              }),
-            }).then(r => r.json()).catch(() => ({ error: 'Drive upload failed' }));
-          }
-        }
-      }
-    }
+    const archive = await generateAndArchiveContractPdf(params.id, {
+      hasConsent: true,
+      consent: result.consent,
+      hash: result.hash,
+    });
+    pdfUrl = archive.pdfUrl;
+    driveUpload = archive.driveUpload;
   } catch (pdfErr: any) {
     console.warn('⚠️ [auto-approve] PDF/Drive upload failed (non-critical):', pdfErr.message);
   }

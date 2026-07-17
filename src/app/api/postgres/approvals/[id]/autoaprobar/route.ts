@@ -6,6 +6,7 @@ import { generateId } from '@/lib/id-generator';
 import { requirePermission } from '@/lib/api-permissions';
 import { AprobacionPermission } from '@/types/permissions';
 import { autoApproveConsent } from '@/services/consent.service';
+import { generateAndArchiveContractPdf, ConsentBlock } from '@/services/contract-archive.service';
 import { approveContract } from '@/services/approval.service';
 import { promoteFromWelcome } from '@/services/student.service';
 
@@ -79,8 +80,10 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
 
   // ── 1) Registrar consentimiento AUTOMÁTICA (sólo si aún no está firmado) ──
   let consentRegistrado = false;
+  let consentBlock: ConsentBlock | null = null; // el recién registrado, para el PDF
   if (!titular.hashConsentimiento) {
-    await autoApproveConsent(titularId, actorEmail, actorNombre, ip, ua);
+    const reg = await autoApproveConsent(titularId, actorEmail, actorNombre, ip, ua);
+    consentBlock = { hasConsent: true, consent: reg.consent, hash: reg.hash };
     await ensureAuditTable();
     await query(
       `INSERT INTO "auditautoaprov"
@@ -118,6 +121,22 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     }
   }
 
+  // ── 4) Generar y archivar el PDF del contrato (best-effort — no rompe la aprobación) ──
+  //    Si acabamos de registrar el consentimiento, usamos ese bloque; si el
+  //    contrato ya estaba firmado, el helper lee el consentimiento guardado.
+  let pdfUrl: string | null = null;
+  let pdfArchivado = false;
+  let pdfError: string | null = null;
+  try {
+    const archive = await generateAndArchiveContractPdf(titularId, consentBlock);
+    pdfUrl = archive.pdfUrl;
+    pdfArchivado = archive.ok;
+    if (!archive.ok) pdfError = archive.reason || 'No se pudo archivar';
+  } catch (err: any) {
+    pdfError = err?.message || String(err);
+    console.warn('⚠️ [autoaprobar] PDF/Drive falló (no crítico):', pdfError);
+  }
+
   return successResponse({
     message: 'Contrato autoaprobado',
     consentRegistrado,
@@ -125,5 +144,8 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     beneficiariosAprobados: beneficiaryResults.length,
     welcomePromovidos: promociones.filter(p => p.ok).length,
     welcomeErrores: promociones.filter(p => !p.ok),
+    pdfArchivado,
+    pdfUrl,
+    pdfError,
   });
 });

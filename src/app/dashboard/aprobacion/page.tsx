@@ -125,7 +125,8 @@ export default function AprobacionPage() {
       }
       const nombre = `${autoTarget.primerNombre} ${autoTarget.primerApellido}`
       const promo = autoWelcome ? ` · WELCOME promovidos: ${json.welcomePromovidos ?? 0}` : ''
-      setAutoMsg({ text: `✅ ${nombre} autoaprobado (beneficiarios: ${json.beneficiariosAprobados ?? 0}${promo})`, ok: true })
+      const pdf = json.pdfArchivado ? ' · contrato archivado' : ` · ⚠ contrato no archivado (${json.pdfError || 'error'})`
+      setAutoMsg({ text: `✅ ${nombre} autoaprobado (beneficiarios: ${json.beneficiariosAprobados ?? 0}${promo}${pdf})`, ok: true })
       // Sale de la lista de pendientes.
       const id = autoTarget._id
       setAllContratos(prev => prev.filter(c => c._id !== id))
@@ -684,8 +685,9 @@ export default function AprobacionPage() {
 
               <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 mb-4">
                 Esta acción <strong>aprueba el contrato</strong> (titular y todos sus beneficiarios,
-                activa y genera los agendamientos) y <strong>registra el consentimiento como
-                automático</strong>, sin enviar WhatsApp. Es <strong>irreversible</strong> y queda auditada.
+                activa y genera los agendamientos), <strong>registra el consentimiento como
+                automático</strong> y <strong>genera/archiva el contrato en Drive</strong>, sin enviar
+                WhatsApp. Es <strong>irreversible</strong> y queda auditada.
               </div>
 
               <label className={`flex items-start gap-3 rounded-md border p-3 mb-4 cursor-pointer ${
