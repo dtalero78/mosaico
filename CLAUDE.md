@@ -562,9 +562,15 @@ de servicio → se resuelve el *"Service Accounts do not have storage quota"* qu
 la cuenta de servicio contra "Mi unidad" (ahí sí haría falta OAuth). Config: la cuenta de
 servicio se agrega como **miembro** de la Unidad compartida y se cargan `GOOGLE_SERVICE_ACCOUNT_JSON`
 + `GDRIVE_CONTRATOS_FOLDER_ID` (= id de la carpeta CONTRATOS MOS dentro de la unidad).
-`uploadPdfToDrive` ya pasa `supportsAllDrives:true`. El scope `drive.file` basta (sólo ve/
-gestiona los archivos que la app crea). **OAuth queda como alternativa** (para "Mi unidad"),
-no se usa con la Unidad compartida.
+`uploadPdfToDrive` ya pasa `supportsAllDrives:true`. **Scope `drive` (NO `drive.file`)**:
+la sobreescritura por nombre necesita VER el `MOS_<contrato>` existente aunque lo haya
+creado otro deploy/sesión — con `drive.file` la cuenta sólo ve los archivos que creó en
+ESE contexto, así que no encontraba el original y **duplicaba** (verificado: `drive.file`
+listaba 1 de 2 copias, `drive` las 2). La cuenta de servicio sólo es miembro de la carpeta
+CONTRATOS MOS, así que el scope amplio no expande su alcance real, y en una cuenta de
+servicio (JWT) no hay consentimiento/verificación de Google. **La cuenta puede crear/
+actualizar/trash pero NO borrar** (es Colaborador, `canDelete=false`) — la app nunca borra.
+**OAuth queda como alternativa** (para "Mi unidad"), no se usa con la Unidad compartida.
 
 - **puppeteer-core, NO puppeteer**: el Chromium que descarga `puppeteer` está compilado
   contra glibc y **no corre en Alpine** (musl). El Dockerfile instala el de Alpine.
