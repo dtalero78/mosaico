@@ -27,10 +27,15 @@ import { google } from 'googleapis';
  * En ambos modos: GDRIVE_CONTRATOS_FOLDER_ID → ID de la carpeta destino.
  */
 
-// drive.file = acceso sólo a los archivos que crea esta app. Es el scope mínimo
-// (no es "sensible", así que no exige verificación de Google) y nos basta: subimos
-// y sobreescribimos nuestros propios PDFs, sin ver el resto del Drive del usuario.
-const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
+// `drive` (no `drive.file`): la sobreescritura por nombre necesita VER el archivo
+// existente aunque lo haya creado otro contexto (otro deploy/sesión/instancia).
+// Con `drive.file` la cuenta sólo ve los archivos que ELLA creó en ESE contexto, así
+// que al regenerar no encontraba el original y creaba un DUPLICADO (verificado:
+// drive.file veía 1 de 2 copias; drive ve las 2). La cuenta de servicio sólo tiene
+// acceso a la carpeta CONTRATOS MOS (es miembro), así que el scope amplio no expande
+// su alcance real, y en una cuenta de servicio (JWT) no hay pantalla de consentimiento
+// ni verificación de Google que penalice el scope.
+const SCOPES = ['https://www.googleapis.com/auth/drive'];
 
 /** ¿Hay credenciales de OAuth de usuario? */
 function hasOAuth(): boolean {
