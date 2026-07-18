@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import DashboardStats from '@/components/dashboard/DashboardStats'
 import DashboardMonthlyCharts from '@/components/dashboard/DashboardMonthlyCharts'
+import DashboardCampanias from '@/components/dashboard/DashboardCampanias'
 import AdvisorDashboard from '@/components/dashboard/AdvisorDashboard'
 import { isAuthDisabled } from '@/lib/utils'
 
@@ -56,6 +57,9 @@ export default async function HomePage() {
         <Suspense fallback={<div className="card p-6 animate-pulse h-64" />}>
           <DashboardMonthlyCharts />
         </Suspense>
+
+        {/* Campañas por estado + usuarios activos/inactivos + cursos activos por tipo */}
+        <DashboardCampanias />
       </div>
     </DashboardLayout>
   )

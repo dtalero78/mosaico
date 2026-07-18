@@ -152,3 +152,117 @@ export async function getMonthlyAggregates(_tz: string = 'America/Bogota'): Prom
   monthlyCache = { value, expires: nowMs + MONTHLY_TTL_MS };
   return value;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resumen de campañas + usuarios activos/inactivos + cursos activos por tipo.
+// Alimenta el bloque "Campañas y cursos" del dashboard admin.
+
+import { ordenTipoCurso } from '@/lib/cursos-campaign';
+
+export interface CampaniaResumen {
+  campaign: string;
+  cursos: number;
+  inscritos: number;
+  cupos: number;
+  cierreMatricula: string | null; // finalCampaign (YYYY-MM-DD)
+  finalCursoMax: string | null;
+}
+export interface CursoTipoActivo { tipo: string; cursos: number; inscritos: number }
+export interface CampaniasResumen {
+  enMatricula: CampaniaResumen[];
+  activas: CampaniaResumen[];
+  cerradas: CampaniaResumen[];
+  usuarios: { activos: number; inactivos: number };
+  cursosActivosPorTipo: CursoTipoActivo[];
+  totalCursosActivos: number;
+}
+
+const CAMPANIAS_TTL_MS = 60 * 1000;
+let campaniasCache: { value: CampaniasResumen; expires: number } | null = null;
+
+/** Estado de una campaña por sus fechas (mismo criterio que Consulta de Cursos). */
+function estadoCampania(cierreMatricula: string | null, finalCursoMax: string | null, hoy: string): 'matricula' | 'activo' | 'cerrado' {
+  const fc = (finalCursoMax || '').slice(0, 10);
+  const fcamp = (cierreMatricula || '').slice(0, 10);
+  if (fc && fc < hoy) return 'cerrado';        // el curso ya terminó
+  if (fcamp && fcamp >= hoy) return 'matricula'; // matrícula aún abierta
+  return 'activo';
+}
+
+export async function getCampaniasResumen(tz: string = 'America/Bogota'): Promise<CampaniasResumen> {
+  const nowMs = Date.now();
+  if (campaniasCache && campaniasCache.expires > nowMs) return campaniasCache.value;
+
+  // "Hoy" en la zona horaria pedida, en formato YYYY-MM-DD (comparación con DATE).
+  let hoy: string;
+  try { hoy = new Date().toLocaleDateString('en-CA', { timeZone: tz }); }
+  catch { hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }); }
+
+  const [campRows, cursosRows, userRow] = await Promise.all([
+    // Campañas agregadas (una fila por campaña).
+    queryMany<any>(
+      `SELECT "campaign",
+              MAX("finalCampaign"::text)          AS "cierreMatricula",
+              MAX("finalCurso"::text)             AS "finalCursoMax",
+              COUNT(*)::int                        AS "cursos",
+              SUM(COALESCE("usuInscritos",0))::int AS "inscritos",
+              SUM(COALESCE("numeroUsuarios",0))::int AS "cupos"
+         FROM "CURSOS_CAMPAIGN"
+        WHERE "campaign" IS NOT NULL
+        GROUP BY "campaign"`,
+      [],
+    ),
+    // Cursos activos (finalCurso >= hoy) por tipo.
+    queryMany<any>(
+      `SELECT "tipoCurso" AS "tipo", COUNT(*)::int AS "cursos", SUM(COALESCE("usuInscritos",0))::int AS "inscritos"
+         FROM "CURSOS_CAMPAIGN"
+        WHERE "finalCurso"::text >= $1
+        GROUP BY "tipoCurso"`,
+      [hoy],
+    ),
+    // Usuarios (beneficiarios) activos/inactivos, excluyendo pruebas.
+    queryOne<any>(
+      `SELECT COUNT(*) FILTER (WHERE "estadoInactivo" IS NOT TRUE)::int AS "activos",
+              COUNT(*) FILTER (WHERE "estadoInactivo" = true)::int      AS "inactivos"
+         FROM "PEOPLE"
+        WHERE "tipoUsuario" = 'BENEFICIARIO' AND ("contrato" IS NULL OR "contrato" NOT LIKE 'PRB-%')`,
+    ),
+  ]);
+
+  const mapCamp = (r: any): CampaniaResumen => ({
+    campaign: r.campaign,
+    cursos: r.cursos,
+    inscritos: r.inscritos,
+    cupos: r.cupos,
+    cierreMatricula: r.cierreMatricula ? r.cierreMatricula.slice(0, 10) : null,
+    finalCursoMax: r.finalCursoMax ? r.finalCursoMax.slice(0, 10) : null,
+  });
+
+  const enMatricula: CampaniaResumen[] = [];
+  const activas: CampaniaResumen[] = [];
+  const cerradas: CampaniaResumen[] = [];
+  for (const r of campRows) {
+    const c = mapCamp(r);
+    const est = estadoCampania(c.cierreMatricula, c.finalCursoMax, hoy);
+    if (est === 'matricula') enMatricula.push(c);
+    else if (est === 'activo') activas.push(c);
+    else cerradas.push(c);
+  }
+  // Más próximas primero por cierre de matrícula.
+  const byCierreDesc = (a: CampaniaResumen, b: CampaniaResumen) => (b.cierreMatricula || '').localeCompare(a.cierreMatricula || '');
+  enMatricula.sort(byCierreDesc); activas.sort(byCierreDesc); cerradas.sort(byCierreDesc);
+
+  const cursosActivosPorTipo: CursoTipoActivo[] = (cursosRows || [])
+    .map((r: any) => ({ tipo: r.tipo, cursos: r.cursos, inscritos: r.inscritos }))
+    .sort((a, b) => ordenTipoCurso(a.tipo) - ordenTipoCurso(b.tipo));
+  const totalCursosActivos = cursosActivosPorTipo.reduce((n, t) => n + t.cursos, 0);
+
+  const value: CampaniasResumen = {
+    enMatricula, activas, cerradas,
+    usuarios: { activos: userRow?.activos ?? 0, inactivos: userRow?.inactivos ?? 0 },
+    cursosActivosPorTipo,
+    totalCursosActivos,
+  };
+  campaniasCache = { value, expires: nowMs + CAMPANIAS_TTL_MS };
+  return value;
+}
