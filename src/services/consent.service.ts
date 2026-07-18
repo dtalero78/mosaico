@@ -172,7 +172,14 @@ export async function getConsentStatus(titularId: string) {
 
   if (person.hashConsentimiento && person.consentimientoDeclarativo) {
     try {
-      const consent = JSON.parse(person.consentimientoDeclarativo) as ConsentData;
+      // `consentimientoDeclarativo` es una columna JSONB → pg la devuelve ya como
+      // OBJETO, no como string. El `JSON.parse` crudo reventaba con
+      // "[object Object]" is not valid JSON → caía al catch y devolvía consent=null,
+      // y el filler (que exige hasConsent && consent) dejaba {{firma}} VACÍO: el
+      // contrato no mostraba el bloque de consentimiento en la vista admin. Se
+      // maneja objeto O string (los otros flujos —send-pdf, regenerate— ya lo hacían).
+      const raw = person.consentimientoDeclarativo;
+      const consent = (typeof raw === 'string' ? JSON.parse(raw) : raw) as ConsentData;
       return { hasConsent: true, consent, hash: person.hashConsentimiento };
     } catch {
       return { hasConsent: true, consent: null, hash: person.hashConsentimiento };
