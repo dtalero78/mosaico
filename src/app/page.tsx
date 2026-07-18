@@ -1,13 +1,9 @@
-import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import DashboardStats from '@/components/dashboard/DashboardStats'
-import DashboardMonthlyCharts from '@/components/dashboard/DashboardMonthlyCharts'
 import DashboardCampanias from '@/components/dashboard/DashboardCampanias'
 import AdvisorDashboard from '@/components/dashboard/AdvisorDashboard'
-import { isAuthDisabled } from '@/lib/utils'
 
 export default async function HomePage() {
   // SIEMPRE verificar auth (comentado el bypass)
@@ -48,33 +44,9 @@ export default async function HomePage() {
           </div>
         </div>
 
-        {/* Dashboard Statistics */}
-        <Suspense fallback={<DashboardStatsLoading />}>
-          <DashboardStats />
-        </Suspense>
-
-        {/* Agregados del mes — heatmap + donut + barras por nivel */}
-        <Suspense fallback={<div className="card p-6 animate-pulse h-64" />}>
-          <DashboardMonthlyCharts />
-        </Suspense>
-
         {/* Campañas por estado + usuarios activos/inactivos + cursos activos por tipo */}
         <DashboardCampanias />
       </div>
     </DashboardLayout>
-  )
-}
-
-function DashboardStatsLoading() {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="card p-4 animate-pulse">
-          <div className="h-3 bg-gray-200 rounded w-3/4 mb-3"></div>
-          <div className="h-7 bg-gray-200 rounded w-1/2 mb-2"></div>
-          <div className="h-3 bg-gray-200 rounded w-full"></div>
-        </div>
-      ))}
-    </div>
   )
 }
