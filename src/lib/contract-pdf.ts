@@ -86,7 +86,18 @@ export function buildContractPdfOptions(contrato?: string | null) {
     displayHeaderFooter: true,
     headerTemplate: buildHeaderTemplate(contrato),
     footerTemplate: buildFooterTemplate(),
+    // Los DOS motores esperan el margen en formato distinto y cada uno LEE el suyo
+    // (ignora el otro), así que van ambos:
+    //   - puppeteer (regenerate-drive) → objeto `margin` (htmlToPdfBuffer sólo lee éste).
+    //   - API2PDF (send-pdf/auto-approve/autoaprobar) → campos PLANOS marginTop/…
+    // API2PDF IGNORA el objeto `margin` → sin los planos usaba sus márgenes por
+    // defecto (chicos) y el logo del membrete se montaba sobre la 1ª línea del
+    // cuerpo ("Número de contrato"). Verificado con ambos motores.
     margin: CONTRACT_MARGIN,
+    marginTop: CONTRACT_MARGIN.top,
+    marginBottom: CONTRACT_MARGIN.bottom,
+    marginLeft: CONTRACT_MARGIN.left,
+    marginRight: CONTRACT_MARGIN.right,
   };
 }
 

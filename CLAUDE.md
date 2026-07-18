@@ -527,6 +527,13 @@ que los PDFs no diverjan (antes el HTML estaba copiado en cada uno):
 - API2PDF pasa `options` tal cual a Chrome, así que **acepta el mismo header/footer que
   puppeteer** (incluido el logo en base64) — verificado con ambos. Por eso no hizo falta
   migrar el flujo de WhatsApp.
+- **⚠ Márgenes — cada motor lee un formato distinto** (`buildContractPdfOptions` manda AMBOS):
+  puppeteer lee el **objeto** `margin:{top,…}`; **API2PDF IGNORA ese objeto** y lee los
+  campos **planos** `marginTop`/`marginBottom`/`marginLeft`/`marginRight`. Sin los planos,
+  API2PDF usaba sus márgenes por defecto (chicos) y **el logo del membrete se montaba sobre
+  la 1ª línea del cuerpo** ("Número de contrato") — bug jul-2026, reproducido y verificado
+  con pdftoppm. `htmlToPdfBuffer` (puppeteer) sólo destructura `margin`, así que ignora los
+  planos → no le afectan.
 - **Logo**: `public/logo-contrato.png` (160×172, 16 KB), NO `logo.png` (1525×1642, 66 KB):
   se embebe en CADA página (con el grande, un PDF de 3 págs pesaba 119 KB vs 47 KB). Va
   como **data URI** — en el header de Chrome las URLs externas no cargan.
