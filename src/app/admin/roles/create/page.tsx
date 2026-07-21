@@ -10,6 +10,7 @@ import {
   UserGroupIcon,
   BuildingOffice2Icon,
   ArrowTopRightOnSquareIcon,
+  TableCellsIcon,
 } from '@heroicons/react/24/outline'
 
 /**
@@ -31,6 +32,7 @@ export default function CrearUsuariosHub() {
     indigo:  { hover: 'hover:border-indigo-500',  iconBg: 'bg-indigo-50',  iconText: 'text-indigo-600' },
     green:   { hover: 'hover:border-green-500',   iconBg: 'bg-green-50',   iconText: 'text-green-600' },
     fuchsia: { hover: 'hover:border-fuchsia-500', iconBg: 'bg-fuchsia-50', iconText: 'text-fuchsia-600' },
+    amber:   { hover: 'hover:border-amber-500',   iconBg: 'bg-amber-50',   iconText: 'text-amber-600' },
   }
 
   const Card = ({
@@ -95,6 +97,13 @@ export default function CrearUsuariosHub() {
               title="Comercial"
               desc="Crea una persona del equipo comercial (EQUIPO_COMERCIAL + login por correo)."
               onClick={() => go('/admin/roles/create/comercial')}
+            />
+            <Card
+              accent="amber"
+              icon={<TableCellsIcon className="w-6 h-6" />}
+              title="Consultar usuarios"
+              desc="Consulta cuentas de login por rol: email, nombre, ID, usuario y clave. Exporta a CSV."
+              onClick={() => go('/admin/roles/create/consultar')}
             />
           </div>
 
