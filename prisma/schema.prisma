@@ -1,0 +1,862 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ACADEMICA {
+  id                                 String           @id @map("_id") @db.VarChar(50)
+  studentId                          String           @db.VarChar(50)
+  numeroId                           String           @db.VarChar(50)
+  nivel                              String           @db.VarChar(20)
+  step                               String           @db.VarChar(50)
+  nivelParalelo                      String?          @db.VarChar(20)
+  stepParalelo                       String?          @db.VarChar(50)
+  primerNombre                       String           @db.VarChar(255)
+  segundoNombre                      String?          @db.VarChar(255)
+  primerApellido                     String           @db.VarChar(255)
+  segundoApellido                    String?          @db.VarChar(255)
+  asesor                             String?          @db.VarChar(255)
+  fechaNacimiento                    DateTime?        @db.Date
+  celular                            String?          @db.VarChar(20)
+  telefono                           String?          @db.VarChar(20)
+  email                              String?          @db.VarChar(255)
+  contrato                           String?          @db.VarChar(50)
+  fechaCreacion                      DateTime         @default(now()) @db.Timestamptz(6)
+  tipoUsuario                        String?          @default("BENEFICIARIO") @db.VarChar(20)
+  plataforma                         String?          @db.VarChar(50)
+  clave                              String?
+  usuarioId                          String?          @db.VarChar(50)
+  peopleId                           String?          @db.VarChar(50)
+  estadoInactivo                     Boolean?         @default(false)
+  fechaContrato                      DateTime?        @db.Date
+  finalContrato                      DateTime?        @db.Date
+  nivelacion                         Boolean?
+  aprobadoNivelacion                 Boolean?         @default(false)
+  detalleNivelacion                  Json?            @default("[]")
+  NivelacionCount                    Int?             @default(0)
+  NivelacionHistory                  Json?            @default("[]")
+  createdDate                        DateTime?        @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate                        DateTime?        @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner                              String?          @map("_owner") @db.VarChar(50)
+  origen                             String?          @default("WIX") @db.VarChar(10)
+  userLogin                          String?          @db.VarChar(255)
+  campaign                           String?          @db.VarChar(255)
+  curso                              String?          @db.VarChar(100)
+  inicioCurso                        DateTime?        @db.Date
+  cambioStepHistory                  Json?
+  clrhistoric                        Json?
+  fechaInicioESS                     DateTime?        @db.Timestamptz(6)
+  fechaPromocionEspecial             DateTime?        @db.Timestamptz(6)
+  chkclrhistoric                     Int?
+  detallesPersonales                 String?
+  hobbies                            String?
+  foto                               String?
+  salon                              String?          @db.VarChar(100)
+  cambioAcademicoHistory             Json?            @default("[]")
+  PEOPLE_ACADEMICA_peopleIdToPEOPLE  PEOPLE?          @relation("ACADEMICA_peopleIdToPEOPLE", fields: [peopleId], references: [id], onUpdate: NoAction)
+  PEOPLE_ACADEMICA_studentIdToPEOPLE PEOPLE           @relation("ACADEMICA_studentIdToPEOPLE", fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  STEP_OVERRIDES                     STEP_OVERRIDES[]
+
+  @@index([asesor], map: "idx_academica_asesor")
+  @@index([contrato], map: "idx_academica_contrato")
+  @@index([estadoInactivo], map: "idx_academica_inactivo")
+  @@index([nivel], map: "idx_academica_nivel")
+  @@index([numeroId], map: "idx_academica_numeroid")
+  @@index([peopleId], map: "idx_academica_people")
+  @@index([step], map: "idx_academica_step")
+  @@index([studentId], map: "idx_academica_student")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ACADEMICA_BOOKINGS {
+  id                 String    @id @map("_id") @db.VarChar(50)
+  studentId          String    @db.VarChar(50)
+  eventoId           String    @db.VarChar(50)
+  tipo               String    @db.VarChar(50)
+  fecha              DateTime  @db.Date
+  hora               String    @db.VarChar(10)
+  advisor            String    @db.VarChar(255)
+  nivel              String    @db.VarChar(20)
+  step               String?   @db.VarChar(50)
+  asistencia         Boolean?  @default(false)
+  asistio            Boolean?  @default(false)
+  participacion      Boolean?  @default(false)
+  noAprobo           Boolean?  @default(false)
+  cancelo            Boolean?  @default(false)
+  calificacion       Int?
+  anotaciones        String?
+  comentarios        String?
+  advisorAnotaciones String?
+  actividadPropuesta String?
+  linkZoom           String?
+  primerNombre       String?   @db.VarChar(255)
+  primerApellido     String?   @db.VarChar(255)
+  asignadoPor        String?   @db.VarChar(255)
+  createdDate        DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate        DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner              String?   @map("_owner") @db.VarChar(50)
+  origen             String?   @default("WIX") @db.VarChar(10)
+  idEvento           String?   @db.VarChar(50)
+  idEstudiante       String?   @db.VarChar(50)
+  numeroId           String?   @db.VarChar(255)
+  celular            String?   @db.VarChar(50)
+  plataforma         String?   @db.VarChar(100)
+  fechaEvento        DateTime? @db.Timestamptz(6)
+  tipoEvento         String?   @db.VarChar(50)
+  nombreEvento       String?
+  tituloONivel       String?
+  agendadoPor        String?   @db.VarChar(255)
+  agendadoPorEmail   String?   @db.VarChar(255)
+  agendadoPorRol     String?   @db.VarChar(100)
+  fechaAgendamiento  DateTime? @db.Timestamptz(6)
+
+  @@index([advisor], map: "idx_bookings_advisor")
+  @@index([asistencia], map: "idx_bookings_asistencia")
+  @@index([asistio], map: "idx_bookings_asistio")
+  @@index([eventoId], map: "idx_bookings_evento")
+  @@index([eventoId, studentId], map: "idx_bookings_evento_student")
+  @@index([fecha], map: "idx_bookings_fecha")
+  @@index([nivel], map: "idx_bookings_nivel")
+  @@index([studentId], map: "idx_bookings_student")
+  @@index([studentId, fecha], map: "idx_bookings_student_fecha")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ACADEMICA_BOOKING_EVALUATIONS {
+  id            String    @id @map("_id") @db.VarChar(255)
+  bookingId     String    @unique @db.VarChar(255)
+  studentId     String    @db.VarChar(255)
+  advisorId     String?   @db.VarChar(255)
+  eventoId      String?   @db.VarChar(255)
+  tipo          String?   @db.VarChar(20)
+  subtipo       String?   @db.VarChar(50)
+  nivel         String?   @db.VarChar(20)
+  step          String?   @db.VarChar(50)
+  plataforma    String?   @db.VarChar(50)
+  fechaEvento   DateTime? @db.Timestamptz(6)
+  puntualidad   Int
+  claridad      Int
+  actividades   Int
+  ambiente      Int
+  promedio      Decimal   @db.Decimal(3, 2)
+  comentario    String?
+  aiCategorias  Json?
+  aiSentimiento String?   @db.VarChar(20)
+  aiAnalizadoEn DateTime? @db.Timestamptz(6)
+  ipAddress     String?   @db.VarChar(50)
+  userAgent     String?
+  createdDate   DateTime  @default(now()) @map("_createdDate") @db.Timestamptz(6)
+
+  @@index([advisorId, fechaEvento(sort: Desc)], map: "idx_eval_advisor_fecha")
+  @@index([eventoId], map: "idx_eval_evento")
+  @@index([fechaEvento], map: "idx_eval_fecha_evento")
+  @@index([promedio], map: "idx_eval_promedio")
+  @@index([studentId, createdDate(sort: Desc)], map: "idx_eval_student")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ADMIN_EVENTS {
+  id            String    @id @map("_id") @db.VarChar(255)
+  eventGroupId  String    @db.VarChar(255)
+  advisorId     String    @db.VarChar(255)
+  tipo          String    @db.VarChar(30)
+  titulo        String?   @db.VarChar(200)
+  descripcion   String?
+  fechaInicio   DateTime  @db.Timestamptz(6)
+  horas         Int
+  registrado    Boolean?  @default(false)
+  fechaRegistro DateTime? @db.Timestamptz(6)
+  timeout       String?   @db.VarChar(5)
+  notas         String?
+  motivoCierre  String?   @db.VarChar(30)
+  createdBy     String?   @db.VarChar(255)
+  createdDate   DateTime  @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate   DateTime  @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+
+  @@index([advisorId, fechaInicio(sort: Desc)], map: "idx_admin_events_advisor_fecha")
+  @@index([eventGroupId], map: "idx_admin_events_group")
+  @@index([registrado, fechaInicio], map: "idx_admin_events_registrado")
+}
+
+model ADVISOR_EVENT_LOG {
+  id               String    @id @map("_id") @db.VarChar(50)
+  advisorId        String    @db.VarChar(50)
+  eventoId         String    @db.VarChar(50)
+  estado           String    @db.VarChar(20)
+  fechaEvento      DateTime  @db.Timestamptz(6)
+  horaInicio       String?   @db.VarChar(5)
+  tipo             String?   @db.VarChar(20)
+  nivel            String?   @db.VarChar(20)
+  step             String?   @db.VarChar(50)
+  tituloEvento     String?
+  horaFin          String?   @db.VarChar(5)
+  observaciones    String?
+  canceladoPor     String    @db.VarChar(255)
+  fechaTransicion  DateTime? @default(now()) @db.Timestamptz(6)
+  motivoTransicion String?
+  createdDate      DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+
+  @@index([advisorId, fechaEvento(sort: Desc)], map: "idx_advlog_advisor_fecha")
+  @@index([eventoId], map: "idx_advlog_evento")
+}
+
+model ADVISOR_NOTES_AUDIT {
+  id                  String   @id @map("_id") @db.VarChar(50)
+  eventoId            String   @db.VarChar(50)
+  advisorIdAtEdit     String?  @db.VarChar(50)
+  actorEmail          String   @db.VarChar(255)
+  actorRole           String   @db.VarChar(50)
+  motivo              String
+  timeoutBefore       String?  @db.VarChar(5)
+  timeoutAfter        String?  @db.VarChar(5)
+  notasBefore         String?
+  notasAfter          String?
+  sesionEstabaCerrada Boolean  @default(false)
+  createdDate         DateTime @default(now()) @map("_createdDate") @db.Timestamptz(6)
+
+  @@index([actorEmail, createdDate(sort: Desc)], map: "idx_notes_audit_actor")
+  @@index([eventoId, createdDate(sort: Desc)], map: "idx_notes_audit_evento")
+}
+
+model APP_CONFIG {
+  key         String    @id @db.VarChar(100)
+  value       String
+  color       String?   @default("#ffffff") @db.VarChar(20)
+  updatedBy   String?   @db.VarChar(255)
+  updatedDate DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CALENDARIO {
+  id                     String    @id @map("_id") @db.VarChar(50)
+  tipo                   String    @db.VarChar(50)
+  fecha                  DateTime  @db.Date
+  hora                   String    @db.VarChar(10)
+  advisor                String    @db.VarChar(255)
+  nivel                  String    @db.VarChar(20)
+  step                   String?   @db.VarChar(50)
+  club                   String?   @db.VarChar(100)
+  titulo                 String
+  observaciones          String?
+  linkZoom               String?
+  limiteUsuarios         Int?      @default(10)
+  inscritos              Int?      @default(0)
+  createdDate            DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate            DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner                  String?   @map("_owner") @db.VarChar(50)
+  origen                 String?   @default("WIX") @db.VarChar(10)
+  timeout                String?   @db.VarChar(5)
+  notasadvisor           String?
+  sesionCerrada          Boolean?  @default(false)
+  fechaCierreSesion      DateTime? @db.Timestamptz(6)
+  dia                    DateTime? @db.Timestamptz(6)
+  evento                 String?   @db.VarChar(50)
+  nombreEvento           String?
+  tituloONivel           String?
+  eventoCompartidoId     String?   @db.Uuid
+  cursoCampaignId        String?   @db.VarChar(255)
+  campaign               String?   @db.VarChar(255)
+  curso                  String?   @db.VarChar(255)
+  salon                  String?   @db.VarChar(255)
+  repetirSesion          Boolean?  @default(false)
+  repetirLeccion         String?   @db.VarChar(120)
+  fechaRepetirSesion     DateTime? @db.Timestamptz(6)
+  repetirMarcadoPor      String?   @db.VarChar(200)
+  autorizadoRepetir      Boolean?  @default(false)
+  fechaAutorizadoRepetir DateTime? @db.Timestamptz(6)
+  autorizadoRepetirPor   String?   @db.VarChar(200)
+  leccionOrden           Int?
+  sesionModulo           String?   @db.VarChar(120)
+  sesionLeccion          String?   @db.VarChar(120)
+
+  @@index([advisor], map: "idx_calendario_advisor")
+  @@index([dia], map: "idx_calendario_dia")
+  @@index([fecha], map: "idx_calendario_fecha")
+  @@index([fecha, hora], map: "idx_calendario_fecha_hora")
+  @@index([fecha, tipo], map: "idx_calendario_fecha_tipo")
+  @@index([nivel], map: "idx_calendario_nivel")
+  @@index([tipo], map: "idx_calendario_tipo")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CLUBS {
+  id          String    @id @map("_id") @db.VarChar(50)
+  nombre      String    @unique @db.VarChar(255)
+  descripcion String?
+  activo      Boolean?  @default(true)
+  createdDate DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner       String?   @map("_owner") @db.VarChar(50)
+  origen      String?   @default("WIX") @db.VarChar(10)
+
+  @@index([activo], map: "idx_clubs_activo")
+  @@index([nombre], map: "idx_clubs_nombre")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model COMMENTS {
+  id            String    @id @map("_id") @db.VarChar(50)
+  targetId      String    @db.VarChar(50)
+  targetType    String    @db.VarChar(20)
+  tipo          String?   @db.VarChar(50)
+  prioridad     String?   @db.VarChar(50)
+  comentario    String
+  autor         String    @db.VarChar(255)
+  fechaCreacion DateTime  @default(now()) @db.Timestamptz(6)
+  createdDate   DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate   DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner         String?   @map("_owner") @db.VarChar(50)
+  origen        String?   @default("WIX") @db.VarChar(10)
+
+  @@index([autor], map: "idx_comments_autor")
+  @@index([fechaCreacion(sort: Desc)], map: "idx_comments_fecha")
+  @@index([targetId, targetType], map: "idx_comments_target")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model COMPLEMENTARIA_ATTEMPTS {
+  id            String    @id @map("_id") @db.VarChar(50)
+  studentId     String    @db.VarChar(50)
+  nivel         String    @db.VarChar(20)
+  step          String    @db.VarChar(50)
+  attemptNumber Int       @default(1)
+  questions     Json
+  answers       Json?
+  score         Decimal?  @db.Decimal(5, 2)
+  passed        Boolean?  @default(false)
+  bookingId     String?   @db.VarChar(50)
+  status        String    @default("IN_PROGRESS") @db.VarChar(20)
+  createdDate   DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate   DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+
+  @@index([studentId, nivel, step], map: "idx_comp_student_step")
+}
+
+model CRON_RUNS {
+  id             String    @id @map("_id") @db.VarChar(50)
+  cronName       String    @db.VarChar(50)
+  startedAt      DateTime  @default(now()) @db.Timestamptz(6)
+  finishedAt     DateTime? @db.Timestamptz(6)
+  status         String    @default("running") @db.VarChar(20)
+  processedCount Int?      @default(0)
+  successCount   Int?      @default(0)
+  failedCount    Int?      @default(0)
+  errorMessage   String?
+  metadata       Json?
+
+  @@index([cronName, startedAt(sort: Desc)], map: "idx_cron_runs_name_started")
+}
+
+model CURSOS_CAMPAIGN {
+  id             String    @id @map("_id") @db.VarChar(50)
+  campaign       String    @db.VarChar(120)
+  tipoCurso      String    @db.VarChar(50)
+  horarioCurso   String    @db.VarChar(120)
+  activa         Boolean?  @default(true)
+  paraMenores    Boolean?  @default(false)
+  createdDate    DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate    DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  inicioCampania DateTime? @db.Date
+  inicioCurso    DateTime? @db.Date
+  duracionCurso  Int?
+  finalCurso     DateTime? @db.Date
+  numeroUsuarios Int?
+  usuInscritos   Int?      @default(0)
+  finalCampaign  DateTime? @db.Date
+  salon          String?   @db.VarChar(120)
+  guia           String?   @db.VarChar(255)
+  repetClass     Int?      @default(0)
+  historicRepet  Json?     @default("[]")
+
+  @@unique([campaign, tipoCurso, horarioCurso])
+  @@index([activa, campaign], map: "idx_cursos_campaign_activa")
+}
+
+model CURSOS_IMAGENES {
+  id          String    @id @map("_id") @db.VarChar(60)
+  tipoCurso   String    @unique @db.VarChar(50)
+  imagen      String?
+  createdDate DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+}
+
+model CURSOS_SUSPENSIONES {
+  id                 String    @id @map("_id")
+  cursoCampaignId    String
+  fecha              DateTime  @db.Date
+  motivo             String
+  realizadoPor       String?
+  realizadoPorNombre String?
+  createdDate        DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+
+  @@unique([cursoCampaignId, fecha], map: "idx_cursos_suspensiones_curso_fecha")
+  @@index([cursoCampaignId], map: "idx_cursos_suspensiones_curso")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model ContractTemplates {
+  id          String    @id @map("_id") @db.VarChar(255)
+  plataforma  String?   @db.VarChar(100)
+  template    String?
+  nombre      String?   @db.VarChar(255)
+  descripcion String?
+  activo      Boolean?  @default(true)
+  createdDate DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model EQUIPO_COMERCIAL {
+  id           String    @id @map("_id")
+  nombre       String    @db.VarChar(200)
+  correo       String    @db.VarChar(200)
+  plataforma   String?   @db.VarChar(50)
+  filial       String?   @db.VarChar(120)
+  clave        String?
+  rol          String?   @default("COMERCIAL") @db.VarChar(30)
+  usuarioRolId String?
+  activo       Boolean?  @default(true)
+  origen       String?   @default("ADMIN") @db.VarChar(20)
+  createdDate  DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate  DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model FILIALES {
+  id          String    @id @map("_id")
+  plataforma  String    @db.VarChar(50)
+  nombre      String    @db.VarChar(120)
+  activo      Boolean?  @default(true)
+  createdDate DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model FINANCIEROS {
+  id              String    @id @map("_id") @db.VarChar(50)
+  contrato        String    @db.VarChar(50)
+  numeroId        String?   @db.VarChar(50)
+  primerNombre    String?   @db.VarChar(255)
+  primerApellido  String?   @db.VarChar(255)
+  totalPlan       String?   @db.VarChar(100)
+  valorCuota      String?   @db.VarChar(100)
+  pagoInscripcion String?   @db.VarChar(100)
+  numeroCuotas    Int?
+  cuotasPagadas   Int?      @default(0)
+  saldo           String?   @db.VarChar(100)
+  fechaPago       DateTime? @db.Date
+  fechaUltimoPago DateTime? @db.Date
+  medioPago       String?   @db.VarChar(100)
+  estado          String?   @db.VarChar(50)
+  vigencia        String?   @db.VarChar(50)
+  titularId       String?   @db.VarChar(50)
+  documentacion   Json?     @default("[]")
+  createdDate     DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate     DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner           String?   @map("_owner") @db.VarChar(50)
+  origen          String?   @default("WIX") @db.VarChar(10)
+  plan            String?
+
+  @@index([contrato], map: "idx_financieros_contrato")
+  @@index([estado], map: "idx_financieros_estado")
+  @@index([numeroId], map: "idx_financieros_numeroid")
+  @@index([titularId], map: "idx_financieros_titular")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model GUIAS {
+  id               String    @id @map("_id") @db.VarChar(255)
+  email            String?
+  primerNombre     String?
+  primerApellido   String?
+  nombreCompleto   String?
+  pais             String?
+  zoom             String?
+  telefono         String?
+  activo           Boolean?  @default(true)
+  fotoAdvisor      String?
+  domicilioadvisor String?
+  fechaNacimiento  DateTime? @db.Date
+  usuarioRolId     String?   @db.VarChar(255)
+  createdDate      DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate      DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  clave            String?
+  cuentaZoom       String?
+  claveZoom        String?
+
+  @@index([activo], map: "idx_guias_activo")
+}
+
+model JUMP_EVALUATIONS {
+  id            String    @id @map("_id") @db.VarChar(64)
+  studentId     String    @db.VarChar(64)
+  numeroId      String?   @db.VarChar(64)
+  nivel         String    @db.VarChar(20)
+  jumpStep      String    @db.VarChar(40)
+  plataforma    String?   @db.VarChar(50)
+  status        String    @default("IN_PROGRESS") @db.VarChar(20)
+  score         Int?
+  recomendacion String?   @db.VarChar(20)
+  criterios     Json?
+  fortalezas    Json?
+  debilidades   Json?
+  resumen       String?
+  transcript    Json?
+  durationSec   Int?
+  reviewStatus  String    @default("PENDIENTE") @db.VarChar(20)
+  reviewedBy    String?   @db.VarChar(255)
+  reviewedAt    DateTime? @db.Timestamptz(6)
+  reviewNota    String?
+  createdDate   DateTime  @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate   DateTime  @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+
+  @@index([reviewStatus, createdDate(sort: Desc)], map: "idx_jumpeval_review")
+  @@index([studentId, createdDate(sort: Desc)], map: "idx_jumpeval_student")
+}
+
+model LIBROS_INTERACTIVOS {
+  codigo       String   @id @db.VarChar(20)
+  titulo       String   @db.VarChar(200)
+  totalPaginas Int      @default(0)
+  audios       Json     @default("[]")
+  activo       Boolean  @default(true)
+  createdDate  DateTime @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate  DateTime @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+}
+
+model MATERIAL_AUDIT {
+  id              String    @id @map("_id")
+  tipo            String
+  nivel           String
+  step            String
+  accion          String
+  archivoAnterior String?
+  archivoNuevo    String?
+  realizadoPor    String
+  createdDate     DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+}
+
+model MESSAGE_TEMPLATES {
+  id           String   @id @map("_id") @db.VarChar(255)
+  slug         String   @unique @db.VarChar(60)
+  nombre       String   @db.VarChar(120)
+  descripcion  String?
+  contenido    String
+  placeholders Json?    @default("[]")
+  activo       Boolean? @default(true)
+  owner        String?  @map("_owner") @db.VarChar(255)
+  createdDate  DateTime @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate  DateTime @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+
+  @@index([activo], map: "idx_msg_tpl_activo")
+  @@index([slug], map: "idx_msg_tpl_slug")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model NIVELES {
+  id                   String    @id @map("_id") @db.VarChar(50)
+  code                 String    @db.VarChar(20)
+  step                 String?   @db.VarChar(50)
+  esParalelo           Boolean?  @default(false)
+  description          String?
+  material             Json?     @default("[]")
+  clubs                Json?     @default("[]")
+  steps                Json?     @default("[]")
+  materiales           Json?     @default("[]")
+  orden                Int?
+  createdDate          DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate          DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner                String?   @map("_owner") @db.VarChar(50)
+  origen               String?   @default("WIX") @db.VarChar(10)
+  libroInteractivoCode String?   @db.VarChar(20)
+  libroPaginaInicio    Int?      @default(1)
+  libroPaginaFin       Int?
+  curso                String?   @db.VarChar(100)
+  descripcionModulo    String?
+  videoUrl             String?
+  video                String?
+  contenido            String?
+  materialUsuario      Json?
+  nombreNivel          String?   @db.VarChar(255)
+  nivel                String?   @db.VarChar(100)
+  evaluacionModo       String?   @default("IA") @db.VarChar(10)
+  preguntasManual      Json?     @default("[]")
+  actividadKahoot      String?
+  actividadWordwall    String?
+
+  @@unique([curso, code, step], map: "idx_niveles_curso_code_step")
+  @@index([code], map: "idx_niveles_code")
+  @@index([orden], map: "idx_niveles_orden")
+  @@index([esParalelo], map: "idx_niveles_paralelo")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model NIVELES_MATERIAL {
+  id          String    @id @map("_id") @db.VarChar(50)
+  nivelCode   String    @db.VarChar(20)
+  titulo      String    @db.VarChar(255)
+  descripcion String?
+  url         String?
+  tipo        String?   @db.VarChar(50)
+  orden       Int?
+  createdDate DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner       String?   @map("_owner") @db.VarChar(50)
+  origen      String?   @default("WIX") @db.VarChar(10)
+
+  @@index([nivelCode], map: "idx_material_nivel")
+  @@index([orden], map: "idx_material_orden")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model PAGOS_TITULARES {
+  id                 String    @id @map("_id")
+  idPeople           String
+  numeroId           String?   @db.VarChar(50)
+  gestorRecaudo      String?   @db.VarChar(255)
+  plataforma         String?   @db.VarChar(100)
+  pagoTercero        String?   @db.VarChar(255)
+  idTercero          String?   @db.VarChar(50)
+  fechaPago          DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  fechaVencimiento   DateTime? @db.Date
+  fechaValidacion    DateTime? @db.Date
+  plan               String?
+  vlrTotalProg       Decimal?  @db.Decimal(12, 2)
+  numCuota           Int?
+  valorCuota         Decimal?  @db.Decimal(12, 2)
+  valorPagado        Decimal?  @db.Decimal(12, 2)
+  saldo              Decimal?  @db.Decimal(12, 2)
+  descuento          Decimal?  @default(0) @db.Decimal(12, 2)
+  medioPago          String?
+  numeroReferencia   String?   @db.VarChar(100)
+  numeroFactura      String?   @db.VarChar(100)
+  documentosAdjuntos Json?     @default("[]")
+  validado           Boolean?  @default(false)
+  createdBy          String?   @db.VarChar(255)
+  validadoPor        String?   @db.VarChar(255)
+  createdDate        DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate        DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  inscripcion        Decimal?  @db.Decimal(12, 2)
+  cuotasTotal        Int?
+  tipoCartera        String?   @default("normal") @db.VarChar(20)
+  PEOPLE             PEOPLE    @relation(fields: [idPeople], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_pagos_people")
+
+  @@index([fechaPago], map: "idx_pagos_fechaPago")
+  @@index([idPeople], map: "idx_pagos_idPeople")
+  @@index([numeroId], map: "idx_pagos_numeroId")
+  @@index([validado], map: "idx_pagos_validado")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model PEOPLE {
+  id                                    String            @id @map("_id") @db.VarChar(50)
+  numeroId                              String            @db.VarChar(50)
+  primerNombre                          String            @db.VarChar(255)
+  segundoNombre                         String?           @db.VarChar(255)
+  primerApellido                        String            @db.VarChar(255)
+  segundoApellido                       String?           @db.VarChar(255)
+  celular                               String?           @db.VarChar(20)
+  telefono                              String?           @db.VarChar(20)
+  email                                 String?           @db.VarChar(255)
+  domicilio                             String?
+  ciudad                                String?           @db.VarChar(255)
+  fechaNacimiento                       DateTime?         @db.Date
+  contrato                              String            @db.VarChar(50)
+  vigencia                              String?           @db.VarChar(50)
+  fechaCreacion                         DateTime          @default(now()) @db.Timestamptz(6)
+  tipoUsuario                           String            @db.VarChar(20)
+  plataforma                            String?           @db.VarChar(50)
+  clave                                 String?
+  nivel                                 String?           @db.VarChar(20)
+  step                                  String?           @db.VarChar(50)
+  nivelParalelo                         String?           @db.VarChar(20)
+  stepParalelo                          String?           @db.VarChar(50)
+  aprobacion                            String?           @db.VarChar(50)
+  estadoInactivo                        Boolean?          @default(false)
+  estado                                String?           @db.VarChar(50)
+  fechaOnHold                           DateTime?         @db.Date
+  fechaFinOnHold                        DateTime?         @db.Date
+  vigenciaOriginalPreOnHold             String?           @db.VarChar(50)
+  onHoldCount                           Int?              @default(0)
+  onHoldHistory                         Json?             @default("[]")
+  extensionCount                        Int?              @default(0)
+  extensionHistory                      Json?             @default("[]")
+  fechaContrato                         DateTime?         @db.Date
+  finalContrato                         DateTime?         @db.Date
+  titularId                             String?           @db.VarChar(50)
+  asesor                                String?           @db.VarChar(255)
+  usuarioId                             String?           @db.VarChar(50)
+  ingresos                              String?           @db.VarChar(100)
+  genero                                String?           @db.VarChar(50)
+  empresa                               String?           @db.VarChar(255)
+  cargo                                 String?           @db.VarChar(255)
+  referenciaUno                         String?           @db.VarChar(255)
+  parentezcoRefUno                      String?           @db.VarChar(100)
+  telefonoRefUno                        String?           @db.VarChar(20)
+  referenciaDos                         String?           @db.VarChar(255)
+  parentezcoRefDos                      String?           @db.VarChar(100)
+  telefonoRefDos                        String?           @db.VarChar(20)
+  createdDate                           DateTime?         @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate                           DateTime?         @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner                                 String?           @map("_owner") @db.VarChar(50)
+  origen                                String?           @default("WIX") @db.VarChar(10)
+  tipoCurso                             String?           @db.VarChar(50)
+  horarioCurso                          String?           @db.VarChar(120)
+  campaign                              String?           @db.VarChar(120)
+  apoderado                             String?           @db.VarChar(255)
+  apoderadoTelefono                     String?           @db.VarChar(50)
+  apoderadoMail                         String?           @db.VarChar(255)
+  esCursoImpulsa                        Boolean?          @default(false)
+  plan                                  String?
+  extemporanea                          Boolean?          @default(false)
+  salon                                 String?           @db.VarChar(120)
+  userLogin                             String?           @db.VarChar(255)
+  suspenddata                           Json?
+  suspendcount                          Int?              @default(0)
+  documentacion                         Json?
+  comentarios                           String?
+  consentimientoDeclarativo             Json?
+  hashConsentimiento                    String?
+  numeroDocumentoVerificado             String?           @db.VarChar(255)
+  inicioContrato                        DateTime?         @db.Date
+  fechaInicioESS                        DateTime?         @db.Timestamptz(6)
+  asesorMail                            String?           @db.VarChar(255)
+  observacionesContrato                 String?
+  medioPago                             String?           @db.VarChar(100)
+  ACADEMICA_ACADEMICA_peopleIdToPEOPLE  ACADEMICA[]       @relation("ACADEMICA_peopleIdToPEOPLE")
+  ACADEMICA_ACADEMICA_studentIdToPEOPLE ACADEMICA[]       @relation("ACADEMICA_studentIdToPEOPLE")
+  PAGOS_TITULARES                       PAGOS_TITULARES[]
+  STEP_OVERRIDES                        STEP_OVERRIDES[]
+
+  @@index([aprobacion], map: "idx_people_aprobacion")
+  @@index([asesor], map: "idx_people_asesor")
+  @@index([contrato], map: "idx_people_contrato")
+  @@index([email], map: "idx_people_email")
+  @@index([extensionHistory], map: "idx_people_extension_history", type: Gin)
+  @@index([finalContrato], map: "idx_people_final_contrato")
+  @@index([estadoInactivo], map: "idx_people_inactivo")
+  @@index([nivel], map: "idx_people_nivel")
+  @@index([numeroId], map: "idx_people_numeroid")
+  @@index([onHoldHistory], map: "idx_people_onhold_history", type: Gin)
+  @@index([plataforma], map: "idx_people_plataforma")
+  @@index([tipoUsuario], map: "idx_people_tipo")
+  @@index([titularId], map: "idx_people_titular")
+}
+
+model PURGE_LOG {
+  id                 String   @id @map("_id") @db.VarChar(255)
+  tipoPurga          String   @db.VarChar(50)
+  contrato           String?  @db.VarChar(50)
+  titularId          String?  @db.VarChar(255)
+  titularNombre      String?  @db.VarChar(255)
+  snapshot           Json
+  motivo             String
+  realizadoPor       String   @db.VarChar(255)
+  realizadoPorNombre String?  @db.VarChar(255)
+  ip                 String?  @db.VarChar(50)
+  userAgent          String?
+  filasBorradas      Json?
+  createdDate        DateTime @default(now()) @map("_createdDate") @db.Timestamptz(6)
+
+  @@index([realizadoPor, createdDate(sort: Desc)], map: "idx_purge_log_actor")
+  @@index([contrato], map: "idx_purge_log_contrato")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ROL_PERMISOS {
+  id                 String    @id @map("_id") @db.VarChar(50)
+  rol                String    @unique @db.VarChar(50)
+  descripcion        String?
+  permisos           Json?     @default("[]")
+  activo             Boolean?  @default(true)
+  fechaCreacion      DateTime? @db.Timestamptz(6)
+  fechaActualizacion DateTime? @db.Timestamptz(6)
+  createdDate        DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate        DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner              String?   @map("_owner") @db.VarChar(50)
+  origen             String?   @default("WIX") @db.VarChar(10)
+
+  @@index([activo], map: "idx_rol_permisos_activo")
+  @@index([permisos], map: "idx_rol_permisos_gin", type: Gin)
+  @@index([rol], map: "idx_rol_permisos_rol")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model STEP_OVERRIDES {
+  id             String     @id @map("_id") @db.VarChar(50)
+  studentId      String     @db.VarChar(50)
+  idEnAcademica  String?    @db.VarChar(50)
+  academicaId    String?    @db.VarChar(50)
+  nivel          String     @db.VarChar(20)
+  step           String     @db.VarChar(50)
+  isCompleted    Boolean?   @default(false)
+  primerNombre   String?    @db.VarChar(255)
+  primerApellido String?    @db.VarChar(255)
+  createdAt      DateTime?  @default(now()) @db.Timestamptz(6)
+  createdDate    DateTime?  @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate    DateTime?  @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner          String?    @map("_owner") @db.VarChar(50)
+  origen         String?    @default("WIX") @db.VarChar(10)
+  ACADEMICA      ACADEMICA? @relation(fields: [academicaId], references: [id], onUpdate: NoAction)
+  PEOPLE         PEOPLE     @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([isCompleted], map: "idx_overrides_completed")
+  @@index([nivel, step], map: "idx_overrides_nivel_step")
+  @@index([studentId], map: "idx_overrides_student")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model USUARIOS_ROLES {
+  id                 String    @id @map("_id") @db.VarChar(50)
+  email              String    @unique @db.VarChar(255)
+  nombre             String    @db.VarChar(255)
+  apellido           String?   @db.VarChar(255)
+  password           String
+  rol                String    @db.VarChar(50)
+  activo             Boolean?  @default(true)
+  celular            String?   @db.VarChar(20)
+  linkZoom           String?
+  fechaCreacion      DateTime? @db.Timestamptz(6)
+  fechaActualizacion DateTime? @db.Timestamptz(6)
+  createdDate        DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate        DateTime? @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+  owner              String?   @map("_owner") @db.VarChar(50)
+  origen             String?   @default("WIX") @db.VarChar(10)
+  numberid           String?   @db.VarChar(50)
+  contrato           String?   @db.VarChar(50)
+  plataforma         String?   @db.VarChar(50)
+  userLogin          String?   @db.VarChar(255)
+
+  @@index([activo], map: "idx_usuarios_activo")
+  @@index([email], map: "idx_usuarios_email")
+  @@index([rol], map: "idx_usuarios_rol")
+}
+
+model schema_version {
+  version     String    @id @db.VarChar(10)
+  applied_at  DateTime? @default(now()) @db.Timestamptz(6)
+  description String?
+
+  @@map("_schema_version")
+}
+
+model auditautoaprov {
+  id            String    @id @map("_id") @db.VarChar(60)
+  contrato      String?   @db.VarChar(50)
+  titularId     String?   @db.VarChar(60)
+  usuarioEmail  String?   @db.VarChar(200)
+  usuarioNombre String?   @db.VarChar(200)
+  ip            String?   @db.VarChar(100)
+  userAgent     String?
+  createdDate   DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+}
