@@ -105,7 +105,12 @@ function CrearContratoContent() {
 
   // Form data
   const [titular, setTitular] = useState({
-    asesor: searchParams.get('email') || '',
+    // `asesor` es el NOMBRE del comercial y `asesorMail` su correo (campos
+    // distintos). El puente CRM manda nombre/apellido + email; antes el email
+    // caía en el campo del nombre y el correo quedaba vacío.
+    asesor: [searchParams.get('nombre'), searchParams.get('apellido')]
+      .filter(Boolean)
+      .join(' '),
     primerNombre: '',
     segundoNombre: '',
     primerApellido: '',
@@ -138,7 +143,7 @@ function CrearContratoContent() {
     apoderado: '',
     apoderadoTelefono: '',
     apoderadoMail: '',
-    asesorMail: ''
+    asesorMail: searchParams.get('email') || ''
   });
 
   const [financial, setFinancial] = useState({

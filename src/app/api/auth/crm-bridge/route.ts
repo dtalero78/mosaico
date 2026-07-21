@@ -22,6 +22,11 @@ export async function GET(request: NextRequest) {
   const ts = searchParams.get('ts')
   const token = searchParams.get('token')
   const redirect = searchParams.get('redirect') || '/dashboard/comercial/crear-contrato'
+  // Nombre y apellido del asesor enviados por el CRM. NO forman parte del HMAC
+  // (la firma sigue siendo `${email}:${ts}`); sólo prellenan el formulario de
+  // contrato, así que no necesitan ir firmados.
+  const nombre = searchParams.get('nombre') || ''
+  const apellido = searchParams.get('apellido') || ''
 
   if (!email || !ts || !token) {
     return NextResponse.json({ error: 'Missing parameters' }, { status: 400 })
@@ -52,6 +57,8 @@ export async function GET(request: NextRequest) {
   // Build redirect URL with email param using the public base URL
   const redirectUrl = new URL(redirect, BASE_URL)
   redirectUrl.searchParams.set('email', email)
+  if (nombre) redirectUrl.searchParams.set('nombre', nombre)
+  if (apellido) redirectUrl.searchParams.set('apellido', apellido)
 
   const response = NextResponse.redirect(redirectUrl)
 

@@ -389,7 +389,10 @@ export async function createFullContract(input: CreateContractInput) {
       const saldoNum        = parseMoney(financial.saldo);
       const valorCuotaNum   = parseMoney(financial.valorCuota);
 
-      const comercialEmail = (titular.asesor || createdBy || '').trim().toLowerCase();
+      // El correo del comercial vive en `asesorMail`; `asesor` es su NOMBRE.
+      // (Antes se leía de `asesor` y sólo funcionaba porque el puente CRM
+      // metía el email en ese campo por error.)
+      const comercialEmail = (titular.asesorMail || createdBy || '').trim().toLowerCase();
       let comercialId: string | null = null;
       if (comercialEmail) {
         const found = await query(
