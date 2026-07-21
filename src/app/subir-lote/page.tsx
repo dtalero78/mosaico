@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { PermissionGuard } from '@/components/permissions';
 import { ComercialPermission } from '@/types/permissions';
+import SubirLoteContratos from '@/components/comercial/SubirLoteContratos';
 
 interface RegistroPeople {
   fila: number;
@@ -183,6 +184,7 @@ export default function SubirLotePage() {
   const [loading, setLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ exitosos: number; fallidos: number; errores: string[] } | null>(null);
   const [editingCell, setEditingCell] = useState<{ row: number; field: string } | null>(null);
+  const [modo, setModo] = useState<'personas' | 'contratos'>('personas');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((f: File) => {
@@ -313,11 +315,33 @@ export default function SubirLotePage() {
       <PermissionGuard permission={ComercialPermission.SUBIR_LOTE} showDefaultMessage>
       <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', padding: 40, maxWidth: 1400, margin: '0 auto' }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1F2937', marginBottom: 8 }}>
-          Subir Lote de Personas
+          Subir Lote
         </h1>
-        <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 32 }}>
-          Importa m&uacute;ltiples registros a PEOPLE desde un archivo CSV
+        <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>
+          {modo === 'personas'
+            ? 'Importa múltiples registros a PEOPLE desde un archivo CSV'
+            : 'Migra contratos MOSAICO (titular + beneficiarios) desde un archivo CSV'}
         </p>
+
+        {/* Toggle de modo */}
+        <div style={{ display: 'inline-flex', gap: 4, padding: 4, background: '#F3F4F6', borderRadius: 10, marginBottom: 28 }}>
+          {(['personas', 'contratos'] as const).map(m => (
+            <button key={m} type="button" onClick={() => setModo(m)}
+              style={{
+                padding: '8px 18px', borderRadius: 8, fontSize: 14, fontWeight: 500, border: 'none', cursor: 'pointer',
+                background: modo === m ? 'white' : 'transparent',
+                color: modo === m ? '#3b1d8a' : '#6B7280',
+                boxShadow: modo === m ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              }}>
+              {m === 'personas' ? 'Personas' : 'Contratos'}
+            </button>
+          ))}
+        </div>
+
+        {modo === 'contratos' ? (
+          <SubirLoteContratos />
+        ) : (
+        <>
 
         {/* Import result */}
         {importResult && (
@@ -613,6 +637,8 @@ export default function SubirLotePage() {
               </button>
             </div>
           </>
+        )}
+        </>
         )}
       </div>
       </PermissionGuard>
