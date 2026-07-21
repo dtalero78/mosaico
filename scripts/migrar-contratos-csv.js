@@ -102,9 +102,14 @@ function normHorario(s) { // "Martes y Jueves 18:15-19:15" → "MAR-JUE 18:15-19
 }
 
 // ── CSV ────────────────────────────────────────────────────────────────────────
-// El CSV viene en ISO-8859-1 (Latin-1): "Miércoles"/"Sábado" con byte 0xE9/0xE1.
-// Leer como utf8 rompe los acentos → el reconocimiento de horario falla.
-const raw = fs.readFileSync(path.resolve(CSV), 'latin1').replace(/^﻿/, '');
+// Auto-detección de codificación: hay plantillas en UTF-8 (con BOM EF BB BF) y
+// otras en ISO-8859-1 (Latin-1, "Miércoles"/"Sábado" en 0xE9/0xE1). Leer con la
+// equivocada rompe acentos y, en UTF-8, deja el BOM (ï»¿) pegado al 1er encabezado
+// → la columna noContrato no matchea y TODO sale bloqueado.
+const _buf = fs.readFileSync(path.resolve(CSV));
+const raw = (_buf[0] === 0xEF && _buf[1] === 0xBB && _buf[2] === 0xBF)
+  ? _buf.slice(3).toString('utf8')   // UTF-8 con BOM
+  : _buf.toString('latin1');         // ISO-8859-1 (migraciones previas)
 const lines = raw.split(/\r?\n/).filter(l => l.trim());
 const H = lines[0].split(';').map(clean);
 const col = (row, name) => { const i = H.indexOf(name); return i >= 0 ? clean(row[i]) : ''; };
