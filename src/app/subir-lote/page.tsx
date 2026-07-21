@@ -315,7 +315,7 @@ export default function SubirLotePage() {
       <PermissionGuard permission={ComercialPermission.SUBIR_LOTE} showDefaultMessage>
       <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', padding: 40, maxWidth: 1400, margin: '0 auto' }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1F2937', marginBottom: 8 }}>
-          Subir Lote
+          Subir Lote Contratos
         </h1>
         <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 20 }}>
           {modo === 'personas'
