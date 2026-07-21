@@ -21,6 +21,7 @@ interface Usuario {
   nombre: string | null
   apellido: string | null
   password: string | null
+  celular: string | null
   numberid: string | null
   rol: string
   activo: boolean | null
@@ -75,6 +76,7 @@ export default function ConsultarUsuariosPage() {
         { header: 'ID',        accessor: u => u._id },
         { header: 'Usuario',   accessor: u => u.userLogin || '' },
         { header: 'Clave',     accessor: u => u.password || '' },
+        { header: 'Teléfono',  accessor: u => u.celular || '' },
         { header: 'Documento', accessor: u => u.numberid || '' },
         { header: 'Activo',    accessor: u => (u.activo ? 'Sí' : 'No') },
       ],
@@ -159,12 +161,13 @@ export default function ConsultarUsuariosPage() {
                       <th className="px-4 py-2 text-left font-medium">ID</th>
                       <th className="px-4 py-2 text-left font-medium">Usuario</th>
                       <th className="px-4 py-2 text-left font-medium">Clave</th>
+                      <th className="px-4 py-2 text-left font-medium">Teléfono</th>
                       <th className="px-4 py-2 text-left font-medium">Activo</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filtrados.length === 0 ? (
-                      <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Sin resultados.</td></tr>
+                      <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Sin resultados.</td></tr>
                     ) : filtrados.map(u => (
                       <tr key={u._id} className="hover:bg-gray-50">
                         <td className="px-4 py-2 text-gray-800">{u.email || <span className="text-gray-300">—</span>}</td>
@@ -176,6 +179,7 @@ export default function ConsultarUsuariosPage() {
                             ? (verClaves ? <span className="text-gray-800">{u.password}</span> : <span className="text-gray-400 select-none">••••••••</span>)
                             : <span className="text-gray-300">—</span>}
                         </td>
+                        <td className="px-4 py-2 text-gray-800">{u.celular || <span className="text-gray-300">—</span>}</td>
                         <td className="px-4 py-2">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${u.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                             {u.activo ? 'Sí' : 'No'}
