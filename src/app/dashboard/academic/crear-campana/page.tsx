@@ -71,6 +71,21 @@ function CrearCampanaContent() {
     })
   }, [existing])
 
+  // Filtro + orden de la tabla "Campañas existentes" (Gestión): campaña de la más
+  // nueva a la más vieja por la fecha del nombre; dentro de cada campaña conserva
+  // el orden del backend (tipo/salón). El sort es estable → devolver 0 preserva.
+  const [gestionFiltro, setGestionFiltro] = useState('')
+  const existentesOrdenadas = useMemo(() => {
+    const arr = [...existing].sort((a: any, b: any) => {
+      const ca = a.campaign || '', cb = b.campaign || ''
+      if (ca === cb) return 0
+      const da = campaignNameToDate(ca), db = campaignNameToDate(cb)
+      if (da && db && da !== db) return db.localeCompare(da)
+      return cb.localeCompare(ca)
+    })
+    return gestionFiltro ? arr.filter((r: any) => r.campaign === gestionFiltro) : arr
+  }, [existing, gestionFiltro])
+
   const [guias, setGuias] = useState<{ _id: string; nombreCompleto: string }[]>([])
   const guiaNombre = useCallback((id: any) => {
     if (!id) return '—'
@@ -412,13 +427,24 @@ function CrearCampanaContent() {
 
       {/* Campañas existentes */}
       <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 className="text-lg font-semibold">Campañas existentes</h2>
           {existing.length > 0 && (
-            <button type="button" onClick={handleCSV}
-              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
-              <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                value={gestionFiltro}
+                onChange={e => setGestionFiltro(e.target.value)}
+                className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 min-w-[180px]"
+                title="Filtrar por campaña"
+              >
+                <option value="">Todas las campañas</option>
+                {campaniasOrdenadas.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button type="button" onClick={handleCSV}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
+                <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
+              </button>
+            </div>
           )}
         </div>
         {existing.length === 0 ? (
@@ -432,7 +458,7 @@ function CrearCampanaContent() {
                 </tr>
               </thead>
               <tbody>
-                {existing.map((r: any) => {
+                {existentesOrdenadas.map((r: any) => {
                   const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
                   const est = rowEstado(r)
                   return (
