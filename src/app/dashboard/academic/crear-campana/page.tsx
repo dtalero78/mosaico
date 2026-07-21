@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
-import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-campaign'
+import { TIPOS_CURSO, horariosFor, esMenores, addMonths, campaignNameToDate } from '@/lib/cursos-campaign'
 import { exportToExcel } from '@/lib/export-excel'
 import { PlusIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 
@@ -59,6 +59,17 @@ function CrearCampanaContent() {
   const [applied, setApplied] = useState<{ nombre: string; curso: string; desde: string; hasta: string; estado: 'todos' | 'matricula' | 'activo' | 'cerrado' }>({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' })
   const aplicarFiltros = () => setApplied({ nombre: repNombre, curso: repCurso, desde: repDesde, hasta: repHasta, estado: repEstado })
   const limpiarFiltros = () => { setRepNombre(''); setRepCurso(''); setRepDesde(''); setRepHasta(''); setRepEstado('todos'); setApplied({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' }) }
+
+  // Campañas únicas para el dropdown, de la más reciente a la más antigua
+  // (por la fecha embebida en el nombre, p.ej. AGOSTO172026 → 2026-08-17).
+  const campaniasOrdenadas = useMemo(() => {
+    const nombres = Array.from(new Set(existing.map((r: any) => r.campaign).filter(Boolean))) as string[]
+    return nombres.sort((a, b) => {
+      const da = campaignNameToDate(a), db = campaignNameToDate(b)
+      if (da && db && da !== db) return db.localeCompare(da) // fecha desc (más reciente primero)
+      return b.localeCompare(a)                              // fallback alfabético desc
+    })
+  }, [existing])
 
   const [guias, setGuias] = useState<{ _id: string; nombreCompleto: string }[]>([])
   const guiaNombre = useCallback((id: any) => {
@@ -218,7 +229,7 @@ function CrearCampanaContent() {
     cerrado:   { label: 'Cerrado',      cls: 'bg-gray-200 text-gray-700' },
   } as const
   const reporteRows = existing.filter((r: any) => {
-    if (applied.nombre.trim() && !String(r.campaign || '').toLowerCase().includes(applied.nombre.trim().toLowerCase())) return false
+    if (applied.nombre && String(r.campaign || '') !== applied.nombre) return false
     if (applied.curso && String(r.tipoCurso || '') !== applied.curso) return false
     const ini = r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : ''
     if (applied.desde && (!ini || ini < applied.desde)) return false
@@ -472,7 +483,10 @@ function CrearCampanaContent() {
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
             <div>
               <label className={lblCls}>Nombre campaña</label>
-              <input type="text" value={repNombre} onChange={e => setRepNombre(e.target.value)} className={inputCls} placeholder="Buscar..." />
+              <select value={repNombre} onChange={e => setRepNombre(e.target.value)} className={inputCls} title="Filtrar por campaña">
+                <option value="">Todas</option>
+                {campaniasOrdenadas.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
             <div>
               <label className={lblCls}>Curso</label>
