@@ -2,45 +2,37 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { UserCircleIcon, CameraIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
+import { UserCircleIcon, CameraIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
+/**
+ * Actualización de Datos (panel del usuario). Versión MOSAICO reducida:
+ * foto (opcional) + Usuario (userLogin, solo lectura) + Email (solo lectura)
+ * + Celular. Paleta primary/accent de MOSAICO.
+ */
 export default function StudentSetupPage() {
   const { data: session, status } = useSession()
   const sessionEmail = session?.user?.email ?? ''
 
-  const [password,        setPassword]        = useState('')
-  const [showPass,        setShowPass]        = useState(false)
-  const [password2,       setPassword2]       = useState('')
-  const [showPass2,       setShowPass2]       = useState(false)
-  const [celular,         setCelular]         = useState('')
-  const [domicilio,       setDomicilio]       = useState('')
-  const [ciudad,          setCiudad]          = useState('')
-  const [fechaNacimiento, setFechaNacimiento] = useState('')
-  const [fotoFile,        setFotoFile]        = useState<File | null>(null)
-  const [fotoPreview,     setFotoPreview]     = useState<string | null>(null)
-  const [saving,          setSaving]          = useState(false)
+  const [celular,       setCelular]       = useState('')
+  const [userLogin,     setUserLogin]     = useState('')
+  const [fotoFile,      setFotoFile]      = useState<File | null>(null)
+  const [fotoPreview,   setFotoPreview]   = useState<string | null>(null)
+  const [saving,        setSaving]        = useState(false)
+  const [profileLoaded, setProfileLoaded] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Campos opcionales: solo se muestran si están vacíos en el perfil
-  const [detallesPersonales, setDetallesPersonales] = useState('')
-  const [hobbies,             setHobbies]             = useState('')
-  const [showPersonalFields,  setShowPersonalFields]  = useState(false)
-  const [profileLoaded,       setProfileLoaded]       = useState(false)
-
-  // Cargar perfil para verificar si detallesPersonales/hobbies están vacíos
+  // Cargar perfil para mostrar el usuario de ingreso (userLogin)
   useEffect(() => {
     if (status !== 'authenticated') return
     fetch('/api/postgres/panel-estudiante/me')
       .then(r => r.json())
       .then(data => {
         const prof = data?.data?.profile ?? data?.profile
-        const hasDetalles = !!prof?.detallesPersonales?.trim()
-        const hasHobbies  = !!prof?.hobbies?.trim()
-        setShowPersonalFields(!hasDetalles || !hasHobbies)
+        setUserLogin(prof?.userLogin || '')
         setProfileLoaded(true)
       })
-      .catch(() => { setShowPersonalFields(true); setProfileLoaded(true) })
+      .catch(() => setProfileLoaded(true))
   }, [status])
 
   const handleFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,14 +52,6 @@ export default function StudentSetupPage() {
 
     if (!sessionEmail) { toast.error('No se encontró email en la sesión'); return }
     if (celular.trim() && !/^\d+$/.test(celular.trim())) { toast.error('El celular solo debe contener números (sin + ni espacios)'); return }
-    if (password.trim()) {
-      if (/\s/.test(password)) { toast.error('La contraseña no puede contener espacios'); return }
-      if (password !== password2) { toast.error('Las contraseñas no coinciden'); return }
-    }
-    if (showPersonalFields) {
-      if (!detallesPersonales.trim()) { toast.error('Por favor cuéntanos sobre ti'); return }
-      if (!hobbies.trim()) { toast.error('Por favor ingresa tus hobbies'); return }
-    }
 
     setSaving(true)
     try {
@@ -97,15 +81,9 @@ export default function StudentSetupPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email:              sessionEmail.toLowerCase(),
-          password:           password.trim() || undefined,
-          celular:            celular.trim() || undefined,
-          domicilio:          domicilio.trim() || undefined,
-          ciudad:             ciudad.trim() || undefined,
-          fechaNacimiento:    fechaNacimiento || undefined,
-          fotoUrl:            fotoUrl || undefined,
-          detallesPersonales: showPersonalFields ? detallesPersonales.trim() || undefined : undefined,
-          hobbies:            showPersonalFields ? hobbies.trim() || undefined : undefined,
+          email:   sessionEmail.toLowerCase(),
+          celular: celular.trim() || undefined,
+          fotoUrl: fotoUrl || undefined,
         }),
       })
       const data = await res.json()
@@ -123,7 +101,7 @@ export default function StudentSetupPage() {
   if (!profileLoaded || status === 'loading') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
       </div>
     )
   }
@@ -132,65 +110,48 @@ export default function StudentSetupPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg overflow-hidden">
 
-        {/* Header */}
-        <div className="bg-blue-600 px-6 py-5">
+        {/* Header — paleta MOSAICO */}
+        <div className="bg-gradient-to-r from-primary-700 to-accent-600 px-6 py-5">
           <h1 className="text-xl font-bold text-white">Actualización de Datos</h1>
-          <p className="text-blue-100 text-sm mt-1">
+          <p className="text-white/80 text-sm mt-1">
             Mantén tu información actualizada.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-6 space-y-4">
 
-          {/* Campos personales — solo si están vacíos en el perfil */}
-          {showPersonalFields && (
-            <>
-              <div>
-                <label htmlFor="ss-detalles" className="block text-sm font-medium text-gray-700 mb-1">
-                  Cuéntanos sobre ti *
-                </label>
-                <textarea
-                  id="ss-detalles"
-                  value={detallesPersonales}
-                  onChange={e => setDetallesPersonales(e.target.value)}
-                  rows={3}
-                  placeholder="¿Qué te motivó a tomar el curso? ¡Déjanos saber!"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="ss-hobbies" className="block text-sm font-medium text-gray-700 mb-1">
-                  Hobbies e intereses *
-                </label>
-                <textarea
-                  id="ss-hobbies"
-                  value={hobbies}
-                  onChange={e => setHobbies(e.target.value)}
-                  rows={2}
-                  placeholder="¿Qué te gusta hacer en tu tiempo libre?"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </>
-          )}
-
           {/* Foto */}
           <div className="flex flex-col items-center gap-2 mb-2">
             <div
-              className="relative w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-2 border-blue-200 cursor-pointer hover:opacity-90 transition"
+              className="relative w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-2 border-primary-200 cursor-pointer hover:opacity-90 transition"
               onClick={() => fileRef.current?.click()}
             >
               {fotoPreview
                 ? <img src={fotoPreview} alt="Foto" className="w-full h-full object-cover" />
                 : <UserCircleIcon className="w-full h-full text-gray-300 p-2" />
               }
-              <div className="absolute bottom-0 inset-x-0 bg-blue-600 bg-opacity-80 flex items-center justify-center py-1">
+              <div className="absolute bottom-0 inset-x-0 bg-primary-600 bg-opacity-80 flex items-center justify-center py-1">
                 <CameraIcon className="h-3.5 w-3.5 text-white" />
               </div>
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFoto}
               title="Subir foto de perfil" aria-label="Subir foto de perfil" />
             <p className="text-xs text-gray-500">Foto de perfil (opcional)</p>
+          </div>
+
+          {/* Usuario — readonly */}
+          <div>
+            <label htmlFor="ss-usuario" className="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
+            <input
+              id="ss-usuario"
+              type="text"
+              value={userLogin || '—'}
+              readOnly
+              title="Usuario de ingreso a la plataforma (no modificable)"
+              placeholder="usuario"
+              className="w-full px-3 py-2 border border-primary-200 rounded-lg text-sm bg-primary-50 text-primary-800 font-mono cursor-not-allowed"
+            />
+            <p className="text-xs text-gray-400 mt-1">Con este usuario ingresas a la plataforma.</p>
           </div>
 
           {/* Email — readonly */}
@@ -217,64 +178,7 @@ export default function StudentSetupPage() {
               onKeyDown={e => { if (!/^\d$/.test(e.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key)) e.preventDefault() }}
               onChange={e => setCelular(e.target.value.replace(/[^\d]/g, ''))}
               placeholder="56912345678"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-
-          {/* Fecha de Nacimiento */}
-          <div>
-            <label htmlFor="ss-fecha" className="block text-sm font-medium text-gray-700 mb-1">Fecha de Nacimiento</label>
-            <input id="ss-fecha" type="date" value={fechaNacimiento}
-              onChange={e => setFechaNacimiento(e.target.value)}
-              title="Fecha de nacimiento"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-
-          {/* Domicilio */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Domicilio</label>
-            <input type="text" value={domicilio} onChange={e => setDomicilio(e.target.value)}
-              placeholder="Calle, número, barrio"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-
-          {/* Ciudad */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
-            <input type="text" value={ciudad} onChange={e => setCiudad(e.target.value)}
-              placeholder="Tu ciudad"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-
-          {/* Contraseña */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nueva contraseña <span className="text-xs text-gray-400">(opcional — déjala vacía para no cambiarla)</span>
-            </label>
-            <div className="relative">
-              <input type={showPass ? 'text' : 'password'} value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Nueva contraseña"
-                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <button type="button" onClick={() => setShowPass(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                {showPass ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Confirmar contraseña — siempre visible */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar contraseña</label>
-            <div className="relative">
-              <input type={showPass2 ? 'text' : 'password'} value={password2}
-                onChange={e => setPassword2(e.target.value)}
-                placeholder="Repite la contraseña"
-                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <button type="button" onClick={() => setShowPass2(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                {showPass2 ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
-              </button>
-            </div>
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
           </div>
 
           {/* Buttons */}
@@ -284,7 +188,7 @@ export default function StudentSetupPage() {
               Cancelar
             </button>
             <button type="submit" disabled={saving}
-              className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              className="flex-1 py-2.5 bg-primary-600 text-white rounded-lg text-sm font-semibold hover:bg-primary-700 disabled:opacity-50 transition-colors">
               {saving ? 'Guardando...' : 'Guardar y Continuar'}
             </button>
           </div>
