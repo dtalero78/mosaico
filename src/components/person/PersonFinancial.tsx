@@ -320,7 +320,8 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
 
   return (
     <div className="space-y-6">
-      {/* Financial Summary */}
+      {/* Financial Summary — gateado por PERSON.FINANCIERA.RESUMEN_VER */}
+      <PermissionGuard permission={PersonPermission.RESUMEN_FINANCIERO_VER}>
       <div>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h3 className="text-lg font-medium text-gray-900">💳 Resumen Financiero del Titular</h3>
@@ -407,8 +408,10 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
           </div>
         </div>
       </div>
+      </PermissionGuard>
 
-      {/* Payment Information */}
+      {/* Payment Information — gateado por PERSON.FINANCIERA.INFO_PAGOS_VER */}
+      <PermissionGuard permission={PersonPermission.INFO_PAGOS_VER}>
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-4">💰 Información de Pagos</h3>
         <div className="bg-white border border-gray-200 rounded-lg p-6">
@@ -483,6 +486,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
 
         </div>
       </div>
+      </PermissionGuard>
 
       {/* ── Pagos del Titular ─────────────────────────────────────────────── */}
       {isTitular && (

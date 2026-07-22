@@ -61,6 +61,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Botón en la pestaña Financiera del titular que activa/desactiva la marca "OPC" (PEOPLE.marcaOpcional). Esa marca se visualiza en la columna Opcional de /dashboard/recaudos/asignacion. Toggle simple sin motivo ni auditoría — alimentación 100% manual por el equipo de recaudo. Sin este permiso el botón no aparece',
   },
   {
+    code: PersonPermission.RESUMEN_FINANCIERO_VER,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Sección "Resumen Financiero del Titular"',
+    description: 'Visualizar las tarjetas del resumen (Valor Plan, Inscripción, Saldo a la Firma, Total Cuotas, Saldo a la Fecha) y sus botones de acción. Sin este permiso la sección no aparece',
+  },
+  {
+    code: PersonPermission.INFO_PAGOS_VER,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Sección "Información de Pagos"',
+    description: 'Visualizar el bloque Información de Pagos (Ejecutivo de Recaudos, método de pago, tipo de plan, cuotas pagadas, valor cuota, estado cartera). Sin este permiso la sección no aparece',
+  },
+  {
     code: PersonPermission.PAGOS_VER,
     module: Module.PERSON,
     section: 'Financiera',
