@@ -154,7 +154,7 @@ export default function StudentSetupPage() {
                   value={detallesPersonales}
                   onChange={e => setDetallesPersonales(e.target.value)}
                   rows={3}
-                  placeholder="¿Qué te motivó a aprender inglés? ¿En qué trabajas?"
+                  placeholder="¿Qué te motivó a tomar el curso? ¡Déjanos saber!"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
