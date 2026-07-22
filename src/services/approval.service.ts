@@ -200,7 +200,7 @@ export async function approveOnePerson(
     if (celular) {
       try {
         const nombre = person.primerNombre || '';
-        const message = `Hola ${nombre} 👋:\n\n*¡Eres parte de MOSAICO!* 🎉 \n\nPara terminar tu registro y crear tu usuario sigue este enlace:\n\n${process.env.APP_URL || 'https://lgs-plataforma.com'}/nuevo-usuario/${academicId}\n\nSi tienes alguna pregunta, no dudes en contactarnos.\n\n¡Bienvenido a la familia MOSAICO! 🚀`;
+        const message = `Hola ${nombre} 👋:\n\n*¡Eres parte de MOSAICO!* 🎉 \n\nPara terminar tu registro y crear tu usuario sigue este enlace:\n\n${process.env.APP_URL || 'https://mosaicosorobanplataforma.com'}/nuevo-usuario/${academicId}\n\nSi tienes alguna pregunta, no dudes en contactarnos.\n\n¡Bienvenido a la familia MOSAICO! 🚀`;
         console.log(`📤 [Approve] Enviando WhatsApp a: ${celular}`);
         const whatsappResult = await sendWhatsAppMessage(celular, message);
         whatsappSent = true;

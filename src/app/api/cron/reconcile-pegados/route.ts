@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       const results = await aplicarReconciliacion({
         academicaIds: toReconcile.map(r => r.academicaId),
         motivo: '[Cron] Reconciliación nocturna automática (caso limpio, sin flags)',
-        realizadoPor: 'cron@lgs-plataforma.com',
+        realizadoPor: 'cron@mosaicosoroban.cl',
         realizadoPorNombre: 'Cron Reconciliación',
       })
 

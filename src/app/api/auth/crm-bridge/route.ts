@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 const CRM_BRIDGE_SECRET = process.env.CRM_BRIDGE_SECRET || ''
 const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || ''
-const BASE_URL = process.env.NEXTAUTH_URL || 'https://lgs-plataforma.com'
+const BASE_URL = process.env.NEXTAUTH_URL || 'https://mosaicosorobanplataforma.com'
 const TOKEN_MAX_AGE_MS = 5 * 60 * 1000 // 5 minutes
 
 function verifyHmac(email: string, ts: string, token: string): boolean {

@@ -437,7 +437,7 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
   }
 
   /**
-   * Asigna numeroRecibo si no tiene, en formato LGS-####.
+   * Asigna numeroRecibo si no tiene, en formato MOS-####.
    * Numeración global atómica via MAX+1 (mismo patrón que contracts).
    * Si ya tiene numeroRecibo lo conserva (idempotente).
    * Retorna el numeroRecibo final.
@@ -452,11 +452,11 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
     const maxRow = await queryOne<{ max_num: number | null }>(
       `SELECT MAX(CAST(SUBSTRING("numeroRecibo" FROM 5) AS INTEGER)) AS max_num
        FROM "PAGOS_TITULARES"
-       WHERE "numeroRecibo" LIKE 'LGS-%'
+       WHERE "numeroRecibo" LIKE 'MOS-%'
          AND SUBSTRING("numeroRecibo" FROM 5) ~ '^[0-9]+$'`
     );
     const next = (Number(maxRow?.max_num ?? 0) + 1).toString().padStart(4, '0');
-    const numeroRecibo = `LGS-${next}`;
+    const numeroRecibo = `MOS-${next}`;
 
     await queryOne(
       `UPDATE "PAGOS_TITULARES"

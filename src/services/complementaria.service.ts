@@ -277,7 +277,7 @@ async function callOpenAIGenerateQuestions(contenido: string, nivel: string, ste
     messages: [
       {
         role: 'system',
-        content: `You are an English language teacher creating a quiz for level ${nivel}, ${step}. Generate exactly 10 questions based on the provided lesson content.
+        content: `You are a course teacher creating a quiz (answer in Spanish) for level ${nivel}, ${step}. Generate exactly 10 questions based on the provided lesson content.
 
 Return a JSON object with a "questions" array containing exactly 10 questions in this order:
 1-4: Multiple choice (4 options each, exactly 1 correct)
@@ -289,7 +289,7 @@ Return a JSON object with a "questions" array containing exactly 10 questions in
 Each question object must have:
 - "id": number (1-10)
 - "type": "multiple_choice" | "true_false" | "open_ended"
-- "question": string (in English)
+- "question": string (in Spanish)
 - "options": string[] (for multiple_choice: 4 options; for true_false: ["True", "False"]; for open_ended: empty array [])
 - "correctAnswer": string (the correct option text, "True"/"False", or model answer)
 - "explanation": string (brief explanation of why the answer is correct)
@@ -332,7 +332,7 @@ async function callOpenAIGradeAnswers(
     messages: [
       {
         role: 'system',
-        content: `You are an English language teacher grading a quiz. Grade each answer strictly but fairly.
+        content: `You are a course teacher grading a quiz (feedback in Spanish). Grade each answer strictly but fairly.
 
 For multiple choice and true/false: exact match required.
 For open-ended: accept answers that demonstrate understanding, even with minor grammar/spelling mistakes.

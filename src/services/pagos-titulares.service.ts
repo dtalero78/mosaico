@@ -420,7 +420,7 @@ export const pagosTitularesService = {
    *   al saldo.
    */
   /**
-   * Genera el PDF del recibo de pago (LGS-####).
+   * Genera el PDF del recibo de pago (MOS-####).
    * - Disponible apenas se registra el pago — NO requiere validado=true.
    *   (El recaudo necesita entregar el recibo al titular en el momento; la
    *   validación contable suele venir después por el área financiera.)
@@ -459,7 +459,7 @@ export const pagosTitularesService = {
     const numCuotaText = pago.numCuota != null ? String(pago.numCuota) : '—';
     const periodo      = fmtDate(pago.fechaVencimiento);
     const recibeConforme = (pago.validadoPor || '—').toString();
-    const baseUrl = process.env.NEXTAUTH_URL || 'https://lgs-plataforma.com';
+    const baseUrl = process.env.NEXTAUTH_URL || 'https://mosaicosorobanplataforma.com';
     const logoUrl = `${baseUrl}/logo.png`;
 
     const htmlContent = `<!DOCTYPE html>
@@ -495,7 +495,7 @@ export const pagosTitularesService = {
 <body>
   <div class="page">
     <div class="header">
-      <span class="logo"><img src="${logoUrl}" alt="LGS"/></span>
+      <span class="logo"><img src="${logoUrl}" alt="MOSAICO"/></span>
       <h1>RECIBO DE PAGO</h1>
     </div>
 

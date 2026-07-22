@@ -197,7 +197,7 @@ function Content() {
 node scripts/upload-libro-interactivo.js \
   --codigo=BEGINNER \
   --pdf=./libro-beginner.pdf \
-  --titulo="Beginner — Let's Go Speak 2024" \
+  --titulo="Curso — MOSAICO 2026" \
   --apply
           </pre>
           <p className="text-gray-600">Requiere `pdftoppm` (poppler-utils) instalado en el sistema operativo del que ejecuta el script.</p>

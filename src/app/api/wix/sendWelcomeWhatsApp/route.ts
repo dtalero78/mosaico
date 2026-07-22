@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const registroUrl = `${process.env.APP_URL || 'https://lgs-plataforma.com'}/nuevo-usuario/${beneficiarioId}${noWelcome ? '?noWelcome=1' : ''}`
+    const registroUrl = `${process.env.APP_URL || 'https://mosaicosorobanplataforma.com'}/nuevo-usuario/${beneficiarioId}${noWelcome ? '?noWelcome=1' : ''}`
 
     // Create welcome message (similar to line 1061 in FICHA ADMINISTRATIVO)
     const message = `Hola ${nombre || ''} 👋:\n\n*¡Eres parte de MOSAICO!* 🎉 \n\nPara terminar tu registro y crear tu usuario sigue este enlace:\n\n${registroUrl}\n\nSi tienes alguna pregunta, no dudes en contactarnos.\n\n¡Bienvenido a la familia MOSAICO! 🚀`
