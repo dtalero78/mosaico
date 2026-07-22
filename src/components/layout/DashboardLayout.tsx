@@ -191,14 +191,6 @@ const getNavigation = (userEmail: string, userRole: string) => [
         ],
       },
       {
-        name: 'Juegos',
-        isSubmenu: true,
-        children: [
-          { name: 'Architecture Quiz', href: '/game.html', external: true },
-          { name: 'Pac-Man Data Flow', href: '/game-pacman.html', external: true },
-        ],
-      },
-      {
         name: 'Mensajes', isSubmenu: true, children: [
           { name: 'Plantillas', href: '/admin/plantillas/gestion', newTab: true },
           { name: 'Gestión',    href: '/admin/envio-mensajes',     newTab: true },
