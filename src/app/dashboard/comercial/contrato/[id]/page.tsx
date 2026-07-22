@@ -241,6 +241,10 @@ export default function ContratoDetailPage() {
   const [sendingPdf, setSendingPdf] = useState(false)
   const [pdfStatus, setPdfStatus] = useState<'idle' | 'sent' | 'error'>('idle')
 
+  // Cierre del modal de contrato: checklist de acciones + confirmación
+  const [printedContract, setPrintedContract] = useState(false)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+
   // Documentación
   const [showDocsModal, setShowDocsModal] = useState(false)
   const [docs, setDocs] = useState<any[]>([])
@@ -955,7 +959,7 @@ export default function ContratoDetailPage() {
                 {/* Backdrop */}
                 <div
                   className="fixed inset-0 bg-black/50 transition-opacity"
-                  onClick={() => setShowContractModal(false)}
+                  onClick={() => setShowCloseConfirm(true)}
                 />
 
                 {/* Modal panel */}
@@ -973,7 +977,7 @@ export default function ContratoDetailPage() {
                     <button
                       type="button"
                       title="Cerrar"
-                      onClick={() => setShowContractModal(false)}
+                      onClick={() => setShowCloseConfirm(true)}
                       className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
                     >
                       <XMarkIcon className="h-6 w-6" />
@@ -1013,32 +1017,6 @@ export default function ContratoDetailPage() {
 
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() => {
-                          if (typeof window !== 'undefined') {
-                            const printWindow = window.open('', '_blank')
-                            if (printWindow) {
-                              printWindow.document.write(`
-                                <html>
-                                  <head>
-                                    <title>Contrato ${titular.contrato}</title>
-                                    <style>
-                                      body { font-family: Georgia, serif; padding: 40px; line-height: 1.6; white-space: pre-wrap; font-size: 14px; color: #1a1a1a; }
-                                      @media print { body { padding: 20px; } }
-                                    </style>
-                                  </head>
-                                  <body>${contractHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</body>
-                                </html>
-                              `)
-                              printWindow.document.close()
-                              printWindow.print()
-                            }
-                          }
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 text-sm font-medium"
-                      >
-                        Imprimir
-                      </button>
-                      <button
                         onClick={sendContractWhatsApp}
                         disabled={sendingWhatsApp || !titular?.celular}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1061,7 +1039,34 @@ export default function ContratoDetailPage() {
                         {sendingPdf ? 'Generando PDF...' : 'Enviar PDF'}
                       </button>
                       <button
-                        onClick={() => setShowContractModal(false)}
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            const printWindow = window.open('', '_blank')
+                            if (printWindow) {
+                              printWindow.document.write(`
+                                <html>
+                                  <head>
+                                    <title>Contrato ${titular.contrato}</title>
+                                    <style>
+                                      body { font-family: Georgia, serif; padding: 40px; line-height: 1.6; white-space: pre-wrap; font-size: 14px; color: #1a1a1a; }
+                                      @media print { body { padding: 20px; } }
+                                    </style>
+                                  </head>
+                                  <body>${contractHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</body>
+                                </html>
+                              `)
+                              printWindow.document.close()
+                              printWindow.print()
+                              setPrintedContract(true)
+                            }
+                          }
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-400 text-gray-900 rounded-md hover:bg-yellow-500 text-sm font-medium"
+                      >
+                        Imprimir
+                      </button>
+                      <button
+                        onClick={() => setShowCloseConfirm(true)}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium"
                       >
                         Cerrar
@@ -1070,6 +1075,53 @@ export default function ContratoDetailPage() {
                   </div>
                 </div>
               </div>
+
+              {/* ── Confirmación al cerrar: checklist de acciones ── */}
+              {showCloseConfirm && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                  <div className="fixed inset-0 bg-black/60" onClick={() => setShowCloseConfirm(false)} />
+                  <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Antes de cerrar</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Asegúrese de que el contrato esté <strong>firmado</strong> y <strong>enviado al usuario</strong>,
+                      y si así lo requiere, <strong>imprímalo</strong>.
+                    </p>
+                    <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-5 text-sm">
+                      {[
+                        { label: 'Firma solicitada por WhatsApp', ok: whatsAppStatus === 'sent' },
+                        { label: 'Contrato firmado por el titular', ok: !!consentStatus?.hasConsent },
+                        { label: 'PDF enviado por WhatsApp', ok: pdfStatus === 'sent' },
+                        { label: 'Contrato impreso', ok: printedContract },
+                      ].map(item => (
+                        <div key={item.label} className="flex items-center justify-between px-4 py-2.5">
+                          <span className="text-gray-700">{item.label}</span>
+                          {item.ok ? (
+                            <span className="inline-flex items-center gap-1 text-green-600 font-medium">✓ Hecho</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-amber-600 font-medium">— Pendiente</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowCloseConfirm(false)}
+                        className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      >
+                        Volver al contrato
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowCloseConfirm(false); setShowContractModal(false) }}
+                        className="px-4 py-2 text-sm rounded-md bg-primary-600 text-white hover:bg-primary-700"
+                      >
+                        Aceptar y cerrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
