@@ -295,7 +295,7 @@ export default function NuevoUsuarioPage() {
             {student?.primerNombre}, ¡te estábamos esperando!
           </h1>
           <p className="text-gray-500">
-            Completa tu perfil para comenzar tu experiencia con Let&apos;s Go Speak
+            Completa tu perfil para comenzar tu experiencia con MOSAICO
           </p>
         </div>
 
@@ -547,11 +547,10 @@ function PageShell({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
-            LGS
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="MOSAICO" className="w-10 h-10 rounded-lg object-contain" />
           <div>
-            <h1 className="text-lg font-bold text-gray-800">Let&apos;s Go Speak</h1>
+            <h1 className="text-lg font-bold text-gray-800">MOSAICO</h1>
             <p className="text-xs text-gray-500">Registro de nuevo usuario</p>
           </div>
         </div>
@@ -565,7 +564,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
       {/* Footer */}
       <footer className="border-t bg-white mt-12">
         <div className="max-w-3xl mx-auto px-4 py-4 text-center text-xs text-gray-400">
-          Let&apos;s Go Speak &copy; {new Date().getFullYear()}
+          MOSAICO &copy; {new Date().getFullYear()}
         </div>
       </footer>
     </div>

@@ -74,7 +74,7 @@ export default function ContratoPublicoPage() {
     loadData()
   }, [loadData])
 
-  // Redirect to LGS website after successful verification
+  // Redirect al sitio de MOSAICO tras la verificación exitosa
   useEffect(() => {
     if (pageState !== 'VERIFIED') return
     const timer = setTimeout(() => {
@@ -354,10 +354,9 @@ function PageShell({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">LGS</span>
-          </div>
-          <span className="font-semibold text-gray-900">Let&apos;s Go Speak</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="MOSAICO" className="h-8 w-8 rounded-lg object-contain" />
+          <span className="font-semibold text-gray-900">MOSAICO</span>
         </div>
       </header>
 
@@ -369,7 +368,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
       {/* Footer */}
       <footer className="border-t border-gray-200 mt-8">
         <div className="max-w-3xl mx-auto px-4 py-4 text-center text-xs text-gray-400">
-          Let&apos;s Go Speak &copy; {new Date().getFullYear()}
+          MOSAICO &copy; {new Date().getFullYear()}
         </div>
       </footer>
     </div>
