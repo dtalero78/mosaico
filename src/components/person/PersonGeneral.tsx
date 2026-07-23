@@ -189,30 +189,24 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
         <div>
           <h3 className="text-lg font-medium text-gray-900 mb-4">📍 Contacto y Ubicación</h3>
           <div className="space-y-4">
-            {person.celular && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Celular</label>
-                <p className="mt-1 text-sm text-gray-900">{person.celular}</p>
-              </div>
-            )}
-            {person.email && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
-                <p className="mt-1 text-sm text-gray-900">{person.email}</p>
-              </div>
-            )}
-            {person.domicilio && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Domicilio</label>
-                <p className="mt-1 text-sm text-gray-900">{person.domicilio}</p>
-              </div>
-            )}
-            {person.ciudad && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Ciudad</label>
-                <p className="mt-1 text-sm text-gray-900">{person.ciudad}</p>
-              </div>
-            )}
+            {/* Siempre visibles — "—" cuando el dato falta, para que se note el vacío
+                (antes el campo desaparecía y parecía que el Email no existía). */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Celular</label>
+              <p className="mt-1 text-sm text-gray-900">{person.celular || <span className="text-gray-400">—</span>}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <p className="mt-1 text-sm text-gray-900">{person.email || <span className="text-gray-400">—</span>}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Domicilio</label>
+              <p className="mt-1 text-sm text-gray-900">{person.domicilio || <span className="text-gray-400">—</span>}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Ciudad</label>
+              <p className="mt-1 text-sm text-gray-900">{person.ciudad || <span className="text-gray-400">—</span>}</p>
+            </div>
           </div>
         </div>
       </div>
