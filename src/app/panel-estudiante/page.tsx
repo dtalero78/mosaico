@@ -721,7 +721,7 @@ function PanelEstudianteContent() {
                   <button
                     type="button"
                     onClick={() => { window.location.href = '/student-setup' }}
-                    className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                    className="w-full py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     Actualizar mis datos
                   </button>
