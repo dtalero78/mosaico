@@ -21,6 +21,15 @@ try { require('dotenv').config(); } catch {}
 
 const PORT = '5555'; // MOSAICO fijo (LGS = 5556)
 
-console.log(`🚀 Abriendo Prisma Studio MOSAICO en http://localhost:${PORT} (Ctrl+C para cerrar)…`);
-const child = spawn('npx', ['prisma', 'studio', '--port', PORT], { stdio: 'inherit', shell: true });
+const url = process.env.DATABASE_URL;
+if (!url) { console.error('❌ Falta DATABASE_URL en .env / .env.local'); process.exit(1); }
+
+// Studio NUEVO (Prisma 7): interfaz con Visualizer / Console / SQL + Tables.
+// Conecta DIRECTO a la BD por --url (introspección en vivo, no usa schema.prisma).
+// Se invoca con npx prisma@7 para no tocar la dependencia del proyecto.
+console.log(`🚀 Abriendo Prisma Studio MOSAICO (nuevo) en http://localhost:${PORT} (Ctrl+C para cerrar)…`);
+const child = spawn('npx', ['-y', 'prisma@7', 'studio', '--port', PORT, '--url', `"${url}"`], { stdio: 'inherit', shell: true });
+
+// Abrir el navegador (el studio nuevo no lo abre solo)
+setTimeout(() => { try { spawn('cmd', ['/c', 'start', '', `http://localhost:${PORT}`], { shell: false }); } catch {} }, 12000);
 child.on('exit', (code) => process.exit(code || 0));
