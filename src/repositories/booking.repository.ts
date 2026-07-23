@@ -486,39 +486,9 @@ class BookingRepositoryClass extends BaseRepository {
     );
   }
 
-  async countWeeklyBookingsByType(studentId: string, weekStart: string, weekEnd: string) {
-    return queryMany(
-      `SELECT COALESCE("tipo", "tipoEvento") as tipo, COUNT(*)::int as count
-       FROM "ACADEMICA_BOOKINGS"
-       WHERE ("idEstudiante" = $1 OR "studentId" = $1)
-         AND "fechaEvento" >= $2::timestamp
-         AND "fechaEvento" <= $3::timestamp
-         AND "cancelo" = false
-         AND NOT (
-           COALESCE("nivel", "tituloONivel") = 'WELCOME'
-           AND COALESCE("tipo", "tipoEvento") = 'SESSION'
-           AND ("asistio" = true OR "asistencia" = true)
-         )
-       GROUP BY COALESCE("tipo", "tipoEvento")`,
-      [studentId, weekStart, weekEnd]
-    );
-  }
-
-  async countWeeklyTrainingBookings(studentId: string, weekStart: string, weekEnd: string): Promise<number> {
-    const row = await queryOne<{ count: number }>(
-      `SELECT COUNT(*)::int as count
-       FROM "ACADEMICA_BOOKINGS"
-       WHERE ("idEstudiante" = $1 OR "studentId" = $1)
-         AND "fechaEvento" >= $2::timestamp
-         AND "fechaEvento" <= $3::timestamp
-         AND "cancelo" = false
-         AND (
-           COALESCE("nombreEvento", "step", '') ILIKE 'TRAINING%'
-         )`,
-      [studentId, weekStart, weekEnd]
-    );
-    return row?.count ?? 0;
-  }
+  // NOTA MOSAICO: aquí vivían countWeeklyBookingsByType, countWeeklyTrainingBookings,
+  // existsSameDaySession y hasPendingSession — soportaban los límites semanales y
+  // reglas de sesión del motor LGS, retirados de student-booking.service (2026-07-23).
 
   async existsByStudentAndEvent(studentId: string, eventId: string): Promise<boolean> {
     const row = await queryOne(
@@ -528,19 +498,6 @@ class BookingRepositoryClass extends BaseRepository {
          AND "cancelo" = false
        LIMIT 1`,
       [studentId, eventId]
-    );
-    return !!row;
-  }
-
-  async existsSameDaySession(studentId: string, dateStr: string): Promise<boolean> {
-    const row = await queryOne(
-      `SELECT 1 FROM "ACADEMICA_BOOKINGS"
-       WHERE ("idEstudiante" = $1 OR "studentId" = $1)
-         AND DATE("fechaEvento") = $2::date
-         AND COALESCE("tipo", "tipoEvento") = 'SESSION'
-         AND "cancelo" = false
-       LIMIT 1`,
-      [studentId, dateStr]
     );
     return !!row;
   }
@@ -556,22 +513,6 @@ class BookingRepositoryClass extends BaseRepository {
        WHERE b."_id" = $1`,
       [bookingId]
     );
-  }
-
-  /**
-   * Check if student has any future non-cancelled SESSION booking
-   */
-  async hasPendingSession(studentId: string): Promise<boolean> {
-    const row = await queryOne(
-      `SELECT 1 FROM "ACADEMICA_BOOKINGS"
-       WHERE ("idEstudiante" = $1 OR "studentId" = $1)
-         AND COALESCE("tipo", "tipoEvento") = 'SESSION'
-         AND "cancelo" = false
-         AND "fechaEvento" >= NOW()
-       LIMIT 1`,
-      [studentId]
-    );
-    return !!row;
   }
 
   /**

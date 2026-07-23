@@ -1,8 +1,23 @@
 /**
- * Student Booking Service
+ * Student Booking Service (MOSAICO)
  *
- * Business logic for student self-booking: browse available events,
- * book with capacity/weekly-limit/same-day checks, and cancel.
+ * Agendamiento desde el panel del alumno: Welcome, Nivelación, Sesiones,
+ * Talleres (CLUB) y Olimpiadas.
+ *
+ * REGLAS VIGENTES EN MOSAICO (decisión de negocio 2026-07-23):
+ *  - Cuenta inactiva no agenda.
+ *  - Cupo del evento (limiteUsuarios) y no inscribirse dos veces al mismo evento.
+ *  - Anticipación mínima de 30 min; cancelación hasta 60 min antes.
+ *  - No dos eventos en el MISMO instante (choque de horario).
+ *  - SIN límites semanales, SIN regla de "sesión pendiente", SIN "una sesión por
+ *    día": eran del motor LGS y en MOSAICO estorbaban (las sesiones del curso
+ *    nacen PRECARGADAS con la aprobación, así que esas reglas bloqueaban todo).
+ *  - SIN filtro Step/Jump ni ramas ESS: los eventos se filtran por módulo (nivel)
+ *    o por CURSO (Talleres/Olimpiadas/Nivelación), no por progresión de steps.
+ *
+ * `getEffectiveStepNumber` se conserva EXPORTADO porque lo usan el header del
+ * panel (panel-estudiante.service) y el auto-avance del motor dormido
+ * (student.service) — pero el agendamiento ya no depende de él.
  */
 
 import 'server-only';
@@ -116,9 +131,6 @@ export async function getEffectiveStepNumber(
   return 0; // all steps complete
 }
 
-const WEEKLY_SESSION_LIMIT = 2;
-const WEEKLY_CLUB_LIMIT = 3;
-const WEEKLY_TRAINING_LIMIT = 1;
 const CANCEL_DEADLINE_MINUTES = 60;
 const BOOKING_MIN_ADVANCE_MINUTES = 30;
 
@@ -130,19 +142,19 @@ function eventDiaToUTC(dia: any): Date {
 }
 
 /**
- * Get events available for a student to book.
- * Filters by date range, nivel, tipo, and annotates each event with
- * capacity status and whether the student is already enrolled.
- * When nivelParalelo = 'ESS', also fetches ESS events and merges them.
+ * Eventos disponibles para agendar desde el panel del alumno.
+ *
+ * Filtro MOSAICO: Talleres (CLUB), Olimpiadas y Nivelación van por CURSO
+ * (YOJI/OKINA/…); el resto por módulo (nivel). SIN filtro Step/Jump ni ramas
+ * ESS (motor LGS retirado — ver cabecera del archivo). Anota cupo, inscripción
+ * previa y "Próximamente" (menos de 30 min).
  */
 export async function getAvailableEvents(
   studentId: string,
   nivel: string,
-  step: string,
   date: string,
   tipo?: string,
   tzOffset: number = 0,
-  nivelParalelo?: string,
   curso?: string
 ) {
   // Build a date range for the selected day in the student's local timezone
@@ -154,41 +166,16 @@ export async function getAvailableEvents(
   const startDate = new Date(dayStart.getTime() + offsetMs).toISOString();
   const endDate = new Date(dayEnd.getTime() + offsetMs).toISOString();
 
-  // MOSAICO — Talleres (CLUB) y Olimpiadas (OLIMPIADA): se filtran por CURSO
-  // (YOJI/OKINA/…), no por módulo. Un alumno YOJI ve TODOS los talleres/olimpiadas
-  // de YOJI sin importar su módulo actual. (Igual criterio que Nivelación.)
-  // El filtro por step/jump se omite para ellos.
+  // Talleres (CLUB), Olimpiadas y Nivelación: se filtran por CURSO — un alumno
+  // YOJI ve TODOS los de YOJI sin importar su módulo actual.
   const tipoUp = String(tipo || '').toUpperCase();
-  const esTaller = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA';
+  const esPorCurso = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA' || tipoUp === 'NIVELACION';
 
-  // When the student's main nivel is ESS, mark all their events as esESS so the UI
-  // displays them correctly (orange border, "English Speaking Session" label) and
-  // the step/jump filter is bypassed (ESS has no step progression requirements).
-  const rawMainEvents = await CalendarioRepository.findEvents(
-    (esTaller && curso)
+  const events = await CalendarioRepository.findEvents(
+    (esPorCurso && curso)
       ? { startDate, endDate, curso, tipo }
       : { startDate, endDate, nivel, tipo }
   );
-  const mainEvents = nivel === 'ESS'
-    ? rawMainEvents.map((e: any) => ({ ...e, esESS: true }))
-    : rawMainEvents;
-
-  // Legacy: if student has ESS as parallel level, also fetch ESS events and merge
-  let essEvents: any[] = [];
-  if (nivelParalelo === 'ESS') {
-    const rawEss = await CalendarioRepository.findEvents({
-      startDate,
-      endDate,
-      nivel: 'ESS',
-      tipo,
-    });
-    essEvents = rawEss.map((e: any) => ({ ...e, esESS: true }));
-  }
-
-  // Deduplicate by _id (avoid showing same event twice if it matches both filters)
-  const seenIds = new Set(mainEvents.map((e: any) => e._id));
-  const uniqueEssEvents = essEvents.filter((e: any) => !seenIds.has(e._id));
-  const events = [...mainEvents, ...uniqueEssEvents];
 
   // Get student's upcoming bookings to check for duplicates
   const upcoming = await BookingRepository.findUpcomingByStudentId(studentId, 100);
@@ -204,15 +191,6 @@ export async function getAvailableEvents(
     studentId, startDate, endDate
   );
   const bookedTimestampsSet = new Set(bookedTimestamps);
-
-  // Determine the effective step based on actual progress
-  const effectiveStepNum = await getEffectiveStepNumber(studentId, nivel);
-
-  // Fallback to stored step if NIVELES has no data for this nivel
-  const fallbackStepNum = extractStepNumber(step) ?? 0;
-  const activeStepNum = effectiveStepNum > 0 ? effectiveStepNum : fallbackStepNum;
-
-  const isActiveJump = activeStepNum > 0 && activeStepNum % 5 === 0;
 
   const now = new Date();
 
@@ -243,21 +221,6 @@ export async function getAvailableEvents(
     // Event needs > 30 min advance to book; if closer, show as disabled so the student
     // can see the session existed today (important for students in different timezones)
     const tiempoInsuficiente = minutesUntil < BOOKING_MIN_ADVANCE_MINUTES;
-
-    // ESS y Talleres (CLUB): omiten el filtro de step/jump — se muestran todos
-    // los del curso sin importar el step actual del alumno.
-    if (!evt.esESS && !esTaller) {
-      const evtStepNum = extractStepNumber(evt.step || evt.nombreEvento || '');
-      const isJumpEvent = evtStepNum !== null && evtStepNum > 0 && evtStepNum % 5 === 0;
-
-      if (isActiveJump) {
-        // Student completed all regular steps → show ONLY the specific jump event
-        if (!isJumpEvent || evtStepNum !== activeStepNum) return null;
-      } else {
-        // Student is on a regular step → show all non-jump events, hide jump events
-        if (isJumpEvent) return null;
-      }
-    }
 
     return {
       ...evt,
@@ -338,74 +301,22 @@ export async function bookEvent(
 
   const eventTipo = event.tipo || event.evento || '';
 
-  // 5. Pending SESSION rule: can't book a new SESSION if you already have one pending
-  if (eventTipo === 'SESSION') {
-    const hasPending = await BookingRepository.hasPendingSession(studentId);
-    if (hasPending) {
-      throw new ConflictError('Ya tienes una sesión reservada y pendiente. Solo puedes reservar otra cuando pase tu sesión actual.');
-    }
-  }
+  // NOTA MOSAICO: aquí vivían las reglas del motor LGS — "sesión pendiente",
+  // límites semanales (2 SESSION / 3 CLUB / 1 TRAINING) y "una sesión por día".
+  // Se RETIRARON (decisión de negocio 2026-07-23): con las sesiones del curso
+  // PRECARGADAS por la aprobación, esas reglas bloqueaban cualquier agendamiento.
+  // Talleres y Olimpiadas quedan sin límite semanal; los frena solo el cupo.
 
-  // 6. Check weekly limits
+  // 5. Choque de horario: no agendar dos eventos en el MISMO instante
   const eventDay = eventDiaToUTC(event.dia);
-  const dayOfWeek = eventDay.getDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const weekStart = new Date(eventDay);
-  weekStart.setDate(eventDay.getDate() + mondayOffset);
-  weekStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  const weeklyCounts = await BookingRepository.countWeeklyBookingsByType(
-    studentId,
-    weekStart.toISOString(),
-    weekEnd.toISOString()
+  const sameMoment = await BookingRepository.findBookedTimestampsInRange(
+    studentId, eventDay.toISOString(), eventDay.toISOString()
   );
-
-  const weeklyMap: Record<string, number> = {};
-  for (const row of weeklyCounts) {
-    weeklyMap[(row as any).tipo] = (row as any).count;
+  if (sameMoment.includes(eventDay.toISOString())) {
+    throw new ConflictError('Ya tienes una clase agendada a esa misma hora');
   }
 
-  if (eventTipo === 'SESSION') {
-    const currentSessions = weeklyMap['SESSION'] || 0;
-    if (currentSessions >= WEEKLY_SESSION_LIMIT) {
-      throw new ConflictError(`Límite semanal alcanzado: máximo ${WEEKLY_SESSION_LIMIT} sesiones por semana`);
-    }
-  }
-
-  if (eventTipo === 'CLUB') {
-    const currentClubs = weeklyMap['CLUB'] || 0;
-    if (currentClubs >= WEEKLY_CLUB_LIMIT) {
-      throw new ConflictError(`Límite semanal alcanzado: máximo ${WEEKLY_CLUB_LIMIT} clubs por semana`);
-    }
-
-    // TRAINING limit: max 1 per week
-    const eventName = event.nombreEvento || event.titulo || '';
-    const isTraining = /^TRAINING\s*-/i.test(eventName);
-    if (isTraining) {
-      const currentTrainings = await BookingRepository.countWeeklyTrainingBookings(
-        studentId,
-        weekStart.toISOString(),
-        weekEnd.toISOString()
-      );
-      if (currentTrainings >= WEEKLY_TRAINING_LIMIT) {
-        throw new ConflictError(`Límite semanal alcanzado: máximo ${WEEKLY_TRAINING_LIMIT} TRAINING por semana`);
-      }
-    }
-  }
-
-  // 6. Check no duplicate session on same day
-  if (eventTipo === 'SESSION') {
-    const dateStr = eventDay.toISOString().split('T')[0];
-    const hasSameDay = await BookingRepository.existsSameDaySession(studentId, dateStr);
-    if (hasSameDay) {
-      throw new ConflictError('Ya tienes una sesión agendada para este día');
-    }
-  }
-
-  // 7. Create booking
+  // 6. Create booking
   const bookingData: Record<string, any> = {
     _id: ids.booking(),
     eventoId: eventId,
@@ -442,7 +353,7 @@ export async function bookEvent(
 
   const booking = await BookingRepository.createEnrollment(bookingData);
 
-  // 8. Increment inscritos
+  // 7. Increment inscritos
   await CalendarioRepository.incrementInscritos(eventId);
 
   return booking;

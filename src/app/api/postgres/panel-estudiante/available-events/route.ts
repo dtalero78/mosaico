@@ -21,6 +21,6 @@ export const GET = handlerWithAuth(async (request, context, session) => {
   const curso = (student as any).tipoCurso || (student as any).curso || '';
 
   const bookingId = student.academicaId || student._id;
-  const events = await getAvailableEvents(bookingId, nivel, step, date, tipo, tzOffset, nivelParalelo, curso);
+  const events = await getAvailableEvents(bookingId, nivel, date, tipo, tzOffset, curso);
   return successResponse({ events });
 });
