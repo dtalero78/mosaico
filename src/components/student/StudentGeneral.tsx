@@ -6,7 +6,7 @@ import { formatDate } from '@/lib/utils'
 import { MessageCircle, Loader2, Check, AlertCircle } from 'lucide-react'
 import { ArrowUpTrayIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import { PermissionGuard } from '@/components/permissions'
-import { PersonPermission } from '@/types/permissions'
+import { PersonPermission, StudentPermission } from '@/types/permissions'
 import { api, handleApiError } from '@/hooks/use-api'
 import toast from 'react-hot-toast'
 import SuspendidaBadge from '@/components/common/SuspendidaBadge'
@@ -282,6 +282,7 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium text-gray-700">Celular</label>
+                  <PermissionGuard permission={StudentPermission.ENVIAR_MENSAJE}>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -344,6 +345,7 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
                       )}
                     </button>
                   </div>
+                  </PermissionGuard>
                 </div>
                 <p className="mt-1 text-sm text-gray-900">{student.celular}</p>
               </div>

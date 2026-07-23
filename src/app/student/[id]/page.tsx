@@ -24,7 +24,20 @@ interface StudentPageProps {
 export default async function StudentPage({ params }: StudentPageProps) {
   return (
     <DashboardLayout>
-      <PermissionGuard permission={StudentPermission.ENVIAR_MENSAJE}>
+      {/* Ver la ficha del beneficiario requiere CUALQUIER permiso de acceso al
+          estudiante — no específicamente "Enviar Mensaje" (ese gate dejaba en
+          blanco a roles como ASISTENTE_ACADEMICO que sí consultan estudiantes).
+          Cada acción/pestaña interna conserva su propio permiso. */}
+      <PermissionGuard
+        anyPermissions={[
+          StudentPermission.CONSULTA_CONTRATO,
+          StudentPermission.CONSULTA,
+          StudentPermission.VER_ASISTENCIA,
+          StudentPermission.COMO_VOY,
+          StudentPermission.ENVIAR_MENSAJE,
+        ]}
+        showDefaultMessage
+      >
         <Suspense fallback={<StudentPageLoading />}>
           <StudentContent studentId={params.id} />
         </Suspense>
