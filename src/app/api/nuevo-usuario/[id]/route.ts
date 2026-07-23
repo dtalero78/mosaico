@@ -39,7 +39,7 @@ export const GET = handler(async (
   const student = await queryOne(
     `SELECT a."_id", a."numeroId", a."primerNombre", a."segundoNombre",
             a."primerApellido", a."segundoApellido", a."email", a."celular",
-            a."nivel", a."step", a."plataforma", a."usuarioId",
+            a."nivel", a."step", a."plataforma", a."usuarioId", a."curso",
             a."detallesPersonales", a."hobbies", a."foto", a."clave", a."userLogin"
      FROM "ACADEMICA" a
      WHERE a."_id" = $1`,
@@ -67,24 +67,38 @@ export const GET = handler(async (
   // Check if already registered (has detallesPersonales or clave)
   const alreadyRegistered = !!(student.clave && student.detallesPersonales);
 
-  // Get available WELCOME events (future dates only)
-  let welcomeEvents: any[] = [];
-  if (student.nivel === 'WELCOME') {
-    welcomeEvents = await queryMany(
-      `SELECT "_id", "dia", "hora", "advisor", "linkZoom", "limiteUsuarios", "inscritos",
-              "titulo", "nombreEvento"
-       FROM "CALENDARIO"
-       WHERE ("tipo" = 'WELCOME' OR "evento" = 'WELCOME' OR "nombreEvento" = 'WELCOME' OR "tituloONivel" LIKE '%WELCOME%')
-         AND "dia" > NOW()
-       ORDER BY "dia" ASC
-       LIMIT 30`,
-      []
-    );
-  }
+  // MOSAICO — módulo de WELCOME según el CURSO real del alumno: IMPULSA → eventos
+  // WELCOME de IMPULSA; cualquier otro curso (YOJI/OKINA/KODOMO/DANSHI/SENPAI) →
+  // WELCOME de MOSAICO. El curso real vive en PEOPLE.tipoCurso (fallback a
+  // ACADEMICA.curso si es un curso real y no el puente 'WELCOME').
+  const tipoCursoRow = student.numeroId
+    ? await queryOne<{ tipoCurso: string | null }>(
+        `SELECT "tipoCurso" FROM "PEOPLE" WHERE "numeroId" = $1 AND "tipoUsuario" = 'BENEFICIARIO' AND "tipoCurso" IS NOT NULL LIMIT 1`,
+        [student.numeroId]
+      ).catch(() => null)
+    : null;
+  const cursoReal = (tipoCursoRow?.tipoCurso
+    || ((student as any).curso && String((student as any).curso).toUpperCase() !== 'WELCOME' ? (student as any).curso : '')
+    || '').toUpperCase();
+  const welcomeModule = cursoReal === 'IMPULSA' ? 'IMPULSA' : 'MOSAICO';
+
+  // Eventos WELCOME del módulo del alumno, sólo de las PRÓXIMAS 2 SEMANAS.
+  const welcomeEvents = await queryMany(
+    `SELECT "_id", "dia", "hora", "advisor", "linkZoom", "limiteUsuarios", "inscritos",
+            "titulo", "nombreEvento"
+     FROM "CALENDARIO"
+     WHERE ("tipo" = 'WELCOME' OR "evento" = 'WELCOME' OR "nombreEvento" = 'WELCOME' OR "tituloONivel" LIKE '%WELCOME%')
+       AND (UPPER(COALESCE("nivel", '')) = $1 OR "tituloONivel" ILIKE '%WELCOME - ' || $1 || '%')
+       AND "dia" > NOW()
+       AND "dia" <= NOW() + INTERVAL '14 days'
+     ORDER BY "dia" ASC
+     LIMIT 30`,
+    [welcomeModule]
+  );
 
   // Check if student already has a future WELCOME booking
   let hasWelcomeBooking = false;
-  if (student.nivel === 'WELCOME') {
+  {
     const existingBooking = await queryOne(
       `SELECT "_id" FROM "ACADEMICA_BOOKINGS"
        WHERE ("studentId" = $1 OR "idEstudiante" = $1)
@@ -124,6 +138,7 @@ export const GET = handler(async (
     })),
     hasWelcomeBooking,
     alreadyRegistered,
+    welcomeModule, // 'MOSAICO' | 'IMPULSA' — módulo de las sesiones WELCOME ofrecidas
   });
 });
 

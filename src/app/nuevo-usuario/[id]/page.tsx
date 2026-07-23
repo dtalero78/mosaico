@@ -56,6 +56,8 @@ export default function NuevoUsuarioPage() {
   const [student, setStudent] = useState<StudentData | null>(null)
   const [welcomeEvents, setWelcomeEvents] = useState<WelcomeEvent[]>([])
   const [hasWelcomeBooking, setHasWelcomeBooking] = useState(false)
+  // Módulo de las sesiones WELCOME ('MOSAICO' | 'IMPULSA'); si viene, se ofrece agendar.
+  const [welcomeModule, setWelcomeModule] = useState<string | null>(null)
 
   // Form fields
   const [detallesPersonales, setDetallesPersonales] = useState('')
@@ -90,6 +92,7 @@ export default function NuevoUsuarioPage() {
       setStudent(data.student)
       setWelcomeEvents(data.welcomeEvents || [])
       setHasWelcomeBooking(data.hasWelcomeBooking)
+      setWelcomeModule(data.welcomeModule || null)
 
       if (data.student.email) setEmail(data.student.email)
       if (data.student.foto) {
@@ -170,7 +173,7 @@ export default function NuevoUsuarioPage() {
     }
 
     // If nivel is WELCOME and no event selected and events are available (skip if noWelcome)
-    if (!noWelcome && student?.nivel === 'WELCOME' && !hasWelcomeBooking && welcomeEvents.length > 0 && !selectedEvent) {
+    if (!noWelcome && !!welcomeModule && !hasWelcomeBooking && welcomeEvents.length > 0 && !selectedEvent) {
       setFormError('Por favor selecciona una fecha para tu sesión Welcome')
       return
     }
@@ -481,7 +484,7 @@ export default function NuevoUsuarioPage() {
           </div>
 
           {/* Welcome Session Dropdown */}
-          {!noWelcome && student?.nivel === 'WELCOME' && !hasWelcomeBooking && (
+          {!noWelcome && !!welcomeModule && !hasWelcomeBooking && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Agenda tu sesión Welcome
@@ -511,7 +514,7 @@ export default function NuevoUsuarioPage() {
             </div>
           )}
 
-          {!noWelcome && student?.nivel === 'WELCOME' && hasWelcomeBooking && (
+          {!noWelcome && !!welcomeModule && hasWelcomeBooking && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
               <p className="text-green-700 text-sm font-medium">
                 ✅ Ya tienes una sesión Welcome agendada
