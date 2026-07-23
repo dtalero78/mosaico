@@ -110,9 +110,17 @@ export async function enrollStudents(input: EnrollInput) {
 
   // Bloqueo de estudiantes INACTIVOS — solo SUPER_ADMIN o ADMIN pueden bypasear.
   // sessionRole viene SIEMPRE del route handler (nunca del body) — no spoofeable.
+  //
+  // Se bloquea SOLO por PEOPLE.estadoInactivo (la autoridad del contrato). En
+  // MOSAICO un beneficiario APROBADO nace con PEOPLE activa pero ACADEMICA y login
+  // inactivos hasta 1 semana antes del curso (cron activate-academica) — y su
+  // sesión WELCOME es PRE-curso, así que hay que poder agendarla en ese estado.
+  // Los bloqueos reales (contrato vencido, OnHold, retractado, toggle) apagan
+  // SIEMPRE PEOPLE también, así que ese caso sigue bloqueado. (Verificado: los
+  // PEOPLE-activa/ACADEMICA-inactiva son todos 'Aprobado' pre-curso.)
   const canBypassInactive = input.sessionRole === 'SUPER_ADMIN' || input.sessionRole === 'ADMIN';
   if (!canBypassInactive) {
-    const inactivos = students.filter((s: any) => s.peopleEstadoInactivo === true || s.academicaEstadoInactivo === true);
+    const inactivos = students.filter((s: any) => s.peopleEstadoInactivo === true);
     if (inactivos.length > 0) {
       const detalle = inactivos
         .map((s: any) => `${s.primerNombre || ''} ${s.primerApellido || ''} (${s.numeroId || s._id})`.trim())
