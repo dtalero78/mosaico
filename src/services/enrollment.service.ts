@@ -9,6 +9,7 @@ import { CalendarioRepository } from '@/repositories/calendar.repository';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
+import { eventEndDate } from '@/lib/event-duration';
 
 interface EnrollInput {
   eventId: string;
@@ -140,6 +141,30 @@ export async function enrollStudents(input: EnrollInput) {
       );
       if (dupCheck.rows.length > 0) {
         throw new ConflictError(`El estudiante ya está inscrito en este evento`);
+      }
+
+      // REGLA MOSAICO (prevalece, sin bypass): el alumno no puede quedar en dos
+      // eventos que se CRUCEN en el tiempo — también cuando lo agenda un admin.
+      // Solape real por duración (NIVELACION=30 min, resto=60).
+      const evStart = new Date(event.dia);
+      const evEnd = eventEndDate(evStart, event.tipo || event.evento || '');
+      const overlap = await client.query(
+        `SELECT b."nombreEvento", b."fechaEvento"::text AS ts
+         FROM "ACADEMICA_BOOKINGS" b
+         WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
+           AND b."cancelo" = false
+           AND b."fechaEvento" < $3::timestamptz
+           AND b."fechaEvento" + (CASE WHEN UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = 'NIVELACION'
+                                       THEN interval '30 minutes' ELSE interval '60 minutes' END) > $2::timestamptz
+         LIMIT 1`,
+        [student._id, evStart.toISOString(), evEnd.toISOString()]
+      );
+      if (overlap.rows.length > 0) {
+        const c = overlap.rows[0];
+        throw new ConflictError(
+          `${student.primerNombre} ${student.primerApellido} ya tiene una clase que se cruza con este horario` +
+          (c.nombreEvento ? ` (${c.nombreEvento})` : '')
+        );
       }
       const bookingData: Record<string, any> = {
         _id: ids.booking(),

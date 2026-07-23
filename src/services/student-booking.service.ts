@@ -27,6 +27,7 @@ import { StepOverridesRepository } from '@/repositories/niveles.repository';
 import { ValidationError, ConflictError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { queryMany, queryOne } from '@/lib/postgres';
+import { eventEndDate } from '@/lib/event-duration';
 
 // --- Helpers (mirrors progress.service.ts logic) ---
 
@@ -307,13 +308,19 @@ export async function bookEvent(
   // PRECARGADAS por la aprobación, esas reglas bloqueaban cualquier agendamiento.
   // Talleres y Olimpiadas quedan sin límite semanal; los frena solo el cupo.
 
-  // 5. Choque de horario: no agendar dos eventos en el MISMO instante
-  const eventDay = eventDiaToUTC(event.dia);
-  const sameMoment = await BookingRepository.findBookedTimestampsInRange(
-    studentId, eventDay.toISOString(), eventDay.toISOString()
+  // 5. Choque de horario (REGLA QUE PREVALECE): el alumno no puede quedar en dos
+  //    eventos que se CRUCEN en el tiempo. Solape real por duración
+  //    (NIVELACION=30 min, resto=60), no solo el mismo instante.
+  const eventStart = eventDiaToUTC(event.dia);
+  const eventEnd = eventEndDate(eventStart, eventTipo);
+  const conflicto = await BookingRepository.findScheduleConflict(
+    studentId, eventStart.toISOString(), eventEnd.toISOString()
   );
-  if (sameMoment.includes(eventDay.toISOString())) {
-    throw new ConflictError('Ya tienes una clase agendada a esa misma hora');
+  if (conflicto) {
+    throw new ConflictError(
+      `Ya tienes una clase agendada que se cruza con este horario` +
+      (conflicto.nombreEvento ? ` (${conflicto.nombreEvento})` : '')
+    );
   }
 
   // 6. Create booking

@@ -516,6 +516,35 @@ class BookingRepositoryClass extends BaseRepository {
   }
 
   /**
+   * REGLA MOSAICO (2026-07-23): un alumno NO puede estar en dos eventos que se
+   * CRUCEN en el tiempo. Devuelve el primer booking activo cuyo intervalo
+   * [fechaEvento, fechaEvento + duración) se solapa con [startISO, endISO).
+   * La duración se deriva del tipo (NIVELACION=30 min, resto=60), igual que el
+   * chequeo de solape de guías (admin-events). Cubre también solapes parciales
+   * (p.ej. sesión 17:00-18:00 vs nivelación 17:30), no solo el mismo instante.
+   */
+  async findScheduleConflict(
+    studentId: string,
+    startISO: string,
+    endISO: string
+  ): Promise<{ _id: string; nombreEvento: string | null; ts: string; tipo: string | null } | null> {
+    const row = await queryOne<{ _id: string; nombreEvento: string | null; ts: string; tipo: string | null }>(
+      `SELECT b."_id", b."nombreEvento", b."fechaEvento"::text AS ts,
+              COALESCE(b."tipo", b."tipoEvento") AS tipo
+       FROM "ACADEMICA_BOOKINGS" b
+       WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
+         AND b."cancelo" = false
+         AND b."fechaEvento" < $3::timestamptz
+         AND b."fechaEvento" + (CASE WHEN UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = 'NIVELACION'
+                                     THEN interval '30 minutes' ELSE interval '60 minutes' END) > $2::timestamptz
+       ORDER BY b."fechaEvento"
+       LIMIT 1`,
+      [studentId, startISO, endISO]
+    );
+    return row ?? null;
+  }
+
+  /**
    * Get timestamps (ISO UTC) of bookings whose event falls within the given
    * UTC range. Used by the booking flow to prevent the student from booking
    * two events at the SAME moment in time.
