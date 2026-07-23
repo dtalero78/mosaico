@@ -25,7 +25,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   // Cuando se llega desde el reporte de Nivelaciones (Aprobar) con ?agendar=NIVELACION,
   // se abre el modal de agendamiento con SOLO ese tipo habilitado.
-  const [lockEventType, setLockEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | null>(null)
+  const [lockEventType, setLockEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | null>(null)
   const [selectedClass, setSelectedClass] = useState<Class | null>(null)
   const [showClassModal, setShowClassModal] = useState(false)
   const [advisorName, setAdvisorName] = useState<string>('No asignado')
@@ -53,7 +53,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [advisorFilter, setAdvisorFilter] = useState('')
 
   // Nueva Clase modal state
-  const [selectedEventType, setSelectedEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | ''>('')
+  const [selectedEventType, setSelectedEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | ''>('')
   const [availableDays, setAvailableDays] = useState<{label: string, value: string}[]>([])
   const [selectedDay, setSelectedDay] = useState('')
   const [availableTimes, setAvailableTimes] = useState<{label: string, value: string, disabled?: boolean}[]>([])
@@ -221,7 +221,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   }
 
   // Nueva Clase functions
-  const handleEventTypeSelection = (eventType: 'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB') => {
+  const handleEventTypeSelection = (eventType: 'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA') => {
     setSelectedEventType(eventType)
     setSelectedDay('')
     setSelectedTime('')
@@ -234,7 +234,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   // para que sólo quede habilitado ese tipo (ej. NIVELACION).
   useEffect(() => {
     const agendar = (searchParams?.get('agendar') || '').toUpperCase()
-    if (['WELCOME', 'NIVELACION', 'SESSION', 'CLUB'].includes(agendar)) {
+    if (['WELCOME', 'NIVELACION', 'SESSION', 'CLUB', 'OLIMPIADA'].includes(agendar)) {
       setLockEventType(agendar as any)
       handleEventTypeSelection(agendar as any)
       setShowScheduleModal(true)
@@ -294,6 +294,10 @@ export default function StudentAcademic({ student, classes: initialClasses, view
     if (selectedEventType === 'NIVELACION') {
       return `tipoEvento=NIVELACION&curso=${encodeURIComponent(studentCourse)}`
     }
+    if (selectedEventType === 'OLIMPIADA') {
+      // Olimpiadas: por CURSO del alumno (igual que Nivelación/Taller).
+      return `tipoEvento=OLIMPIADA&curso=${encodeURIComponent(studentCourse)}`
+    }
     return `nivel=${encodeURIComponent(student.nivel || '')}&tipoEvento=${selectedEventType}`
   }
 
@@ -306,7 +310,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       console.warn('Missing student level')
       return
     }
-    if ((selectedEventType === 'WELCOME' || selectedEventType === 'NIVELACION') && !studentCourse) {
+    if ((selectedEventType === 'WELCOME' || selectedEventType === 'NIVELACION' || selectedEventType === 'OLIMPIADA') && !studentCourse) {
       console.warn('Missing student course')
       return
     }
@@ -1421,12 +1425,13 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                   {/* Step 1: Event Type Selection */}
                   <div>
                     <h4 className="text-lg font-medium text-gray-900 mb-4">1. Selecciona el tipo de evento</h4>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                       {([
                         { value: 'WELCOME',    label: 'Welcome' },
-                        { value: 'NIVELACION', label: 'Nivelación' },
                         { value: 'SESSION',    label: 'Sesión' },
                         { value: 'CLUB',       label: 'Taller' },
+                        { value: 'NIVELACION', label: 'Nivelación' },
+                        { value: 'OLIMPIADA',  label: 'Olimpiadas' },
                       ] as const).map(opt => {
                         const bloqueado = !!lockEventType && lockEventType !== opt.value
                         return (
