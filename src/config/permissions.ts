@@ -844,8 +844,8 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     code: ComercialPermission.APROBACION_AUTONOMA,
     module: Module.COMERCIAL,
     section: 'Detalle Contrato',
-    name: 'Botón "Auto-aprobar Consentimiento"',
-    description: 'Aprobar consentimiento declarativo sin OTP del cliente',
+    name: 'Botón "Acción Administrativa"',
+    description: 'Botón rojo del detalle del contrato (antes "Auto-Aprobar Consentimiento"): registra el consentimiento declarativo sin OTP del cliente, con auditoría en auditautoaprov. Sin este permiso el botón no aparece y el endpoint lo rechaza. SUPER_ADMIN/ADMIN bypassean',
   },
 
   // -- Página: Prospectos (/dashboard/comercial/prospectos) --

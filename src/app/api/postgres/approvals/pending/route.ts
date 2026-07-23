@@ -8,6 +8,7 @@ export const GET = handlerWithAuth(async () => {
     `SELECT p."_id", p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido",
             p."numeroId", p."contrato", p."celular", p."email", p."plataforma", p."tipoUsuario",
             p."aprobacion", p."hashConsentimiento", p."documentacion", p."extemporanea",
+            p."listoAprobacion",
             p."_createdDate", p."fechaCreacion",
             camp."campaign"
      FROM "PEOPLE" p

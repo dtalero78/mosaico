@@ -245,6 +245,12 @@ export default function ContratoDetailPage() {
   const [printedContract, setPrintedContract] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
 
+  // "Contrato Para Aprobación" — marca el contrato como LISTO para el Centro
+  // de Aprobación (filtro por defecto de esa consulta).
+  const [showListoModal, setShowListoModal] = useState(false)
+  const [markingListo, setMarkingListo] = useState(false)
+  const [listoLocal, setListoLocal] = useState<string | null>(null)
+
   // Documentación
   const [showDocsModal, setShowDocsModal] = useState(false)
   const [docs, setDocs] = useState<any[]>([])
@@ -406,6 +412,22 @@ export default function ContratoDetailPage() {
       setPdfStatus('error')
     } finally {
       setSendingPdf(false)
+    }
+  }
+
+  // ── Contrato Para Aprobación (marca LISTO) ──
+  const yaListo = !!(listoLocal || (titular as any)?.listoAprobacion)
+  const confirmarListoAprobacion = async () => {
+    try {
+      setMarkingListo(true)
+      await api.post(`/api/postgres/people/${titularId}/listo-aprobacion`, {})
+      toast.success('Contrato marcado como LISTO para aprobación')
+      setListoLocal(new Date().toISOString())
+      setShowListoModal(false)
+    } catch (err) {
+      handleApiError(err, 'Error marcando el contrato como listo')
+    } finally {
+      setMarkingListo(false)
     }
   }
 
@@ -692,16 +714,33 @@ export default function ContratoDetailPage() {
                   </button>
                 </>
               )}
-              {!consentStatus?.hasConsent && (
+              {yaListo ? (
+                <span className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-md text-sm font-semibold">
+                  <CheckIcon className="h-4 w-4" />
+                  Listo para aprobación
+                </span>
+              ) : (
                 <button
                   type="button"
-                  onClick={autoApproveConsent}
-                  disabled={approvingConsent}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+                  onClick={() => { setShowListoModal(true); loadDocs() }}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-400 text-gray-900 rounded-md hover:bg-yellow-500 text-sm font-medium"
                 >
-                  <ShieldCheckIcon className="h-4 w-4" />
-                  {approvingConsent ? 'Aprobando...' : 'Auto-Aprobar Consentimiento'}
+                  <CheckIcon className="h-4 w-4" />
+                  Contrato Para Aprobación
                 </button>
+              )}
+              {!consentStatus?.hasConsent && (
+                <PermissionGuard permission={ComercialPermission.APROBACION_AUTONOMA}>
+                  <button
+                    type="button"
+                    onClick={autoApproveConsent}
+                    disabled={approvingConsent}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+                  >
+                    <ShieldCheckIcon className="h-4 w-4" />
+                    {approvingConsent ? 'Aprobando...' : 'Acción Administrativa'}
+                  </button>
+                </PermissionGuard>
               )}
             </div>
           </div>
@@ -1227,7 +1266,49 @@ export default function ContratoDetailPage() {
         )}
       </PermissionGuard>
 
-      {/* ── Auto-Aprobar Consentimiento — Modal de advertencia ── */}
+      {/* ── Contrato Para Aprobación — modal de confirmación con checklist ── */}
+      {showListoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowListoModal(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Contrato Para Aprobación</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              ¿El contrato <strong>{titular?.contrato}</strong> ya está <strong>listo para ser aprobado</strong>?
+              Al confirmar quedará en estado <span className="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 font-semibold">LISTO</span> y
+              aparecerá en el Centro de Aprobación (su consulta por defecto).
+            </p>
+            <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-5 text-sm">
+              {[
+                { label: 'Consentimiento firmado', ok: !!consentStatus?.hasConsent },
+                { label: 'Enviado al titular (firma o PDF)', ok: whatsAppStatus === 'sent' || pdfStatus === 'sent' },
+                { label: 'Contrato impreso', ok: printedContract },
+                { label: `Documentos adjuntos (${docs.length})`, ok: docs.length > 0 },
+              ].map(item => (
+                <div key={item.label} className="flex items-center justify-between px-4 py-2.5">
+                  <span className="text-gray-700">{item.label}</span>
+                  {item.ok ? (
+                    <span className="text-green-600 font-medium">✓ Hecho</span>
+                  ) : (
+                    <span className="text-amber-600 font-medium">— Pendiente</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowListoModal(false)} disabled={markingListo}
+                className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmarListoAprobacion} disabled={markingListo}
+                className="px-4 py-2 text-sm rounded-md bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold disabled:opacity-50">
+                {markingListo ? 'Marcando…' : 'Sí, marcar como LISTO'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Acción Administrativa (ex Auto-Aprobar Consentimiento) — Modal de advertencia ── */}
       {showAutoApproveModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">

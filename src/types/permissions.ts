@@ -327,6 +327,7 @@ export enum ComercialPermission {
   MODIFICAR_CONTRATO = 'COMERCIAL.CONTRATO.MODIFICAR',
   ENVIAR_PDF = 'COMERCIAL.CONTRATO.ENVIAR_PDF',
   DESCARGAR = 'COMERCIAL.CONTRATO.DESCARGAR',
+  /** Botón "Acción Administrativa" (ex "Auto-Aprobar Consentimiento") en el detalle del contrato. */
   APROBACION_AUTONOMA = 'COMERCIAL.CONTRATO.APROBACION_AUTONOMA',
 
   // Prospectos

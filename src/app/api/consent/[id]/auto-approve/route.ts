@@ -1,5 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { ComercialPermission } from '@/types/permissions';
 import { autoApproveConsent } from '@/services/consent.service';
 import { generateAndArchiveContractPdf } from '@/services/contract-archive.service';
 import { query, queryOne } from '@/lib/postgres';
@@ -26,6 +28,9 @@ async function ensureAuditTable() {
 }
 
 export const POST = handlerWithAuth(async (request, { params }, session) => {
+  // "Acción Administrativa": por perfil; SUPER_ADMIN/ADMIN bypassean.
+  await requirePermission(session, ComercialPermission.APROBACION_AUTONOMA);
+
   const ip =
     request.headers.get('x-forwarded-for') ||
     request.headers.get('x-real-ip') ||

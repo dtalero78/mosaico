@@ -25,6 +25,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 // Tipos
 interface Contrato {
   _id: string
+  listoAprobacion?: string | null
   primerNombre: string
   primerApellido: string
   segundoApellido?: string
@@ -51,6 +52,7 @@ interface FilterState {
 
 const ESTADOS_APROBACION = [
   { value: '', label: 'Todos los contratos' },
+  { value: 'Listo', label: 'Listo', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'Rechazado', label: 'Rechazado', color: 'bg-red-100 text-red-800' },
   { value: 'Pendiente', label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'En revisión', label: 'En revisión', color: 'bg-blue-100 text-blue-800' },
@@ -68,9 +70,9 @@ export default function AprobacionPage() {
   const [allContratos, setAllContratos] = useState<Contrato[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState<FilterState>({
-    // Default = "Firmado sin aprobar" para que el aprobador entre directo al
-    // backlog operativo (contratos que el cliente ya firmó y esperan visto bueno).
-    estado: 'Firmado sin aprobar',
+    // Default = "Listo": contratos que el comercial marcó con el botón amarillo
+    // "Contrato Para Aprobación" (PEOPLE.listoAprobacion) y esperan visto bueno.
+    estado: 'Listo',
     campaign: '',
     fechaInicio: null,
     fechaFin: null
@@ -240,7 +242,9 @@ export default function AprobacionPage() {
 
     // Filtrar por estado
     if (filters.estado) {
-      if (filters.estado === 'Firmado sin aprobar') {
+      if (filters.estado === 'Listo') {
+        data = data.filter(c => (c as any).listoAprobacion && !c.aprobacion)
+      } else if (filters.estado === 'Firmado sin aprobar') {
         data = data.filter(c => c.hashConsentimiento && !c.aprobacion)
       } else if (filters.estado === 'Sin firmar') {
         data = data.filter(c => !c.hashConsentimiento && !c.aprobacion)
@@ -395,6 +399,7 @@ export default function AprobacionPage() {
                 { header: 'Celular', accessor: (c) => c.celular },
                 { header: 'Email', accessor: (c) => c.email },
                 { header: 'Estado', accessor: (c) => getEstadoDisplay(c).text },
+                { header: 'Listo', accessor: (c) => (c.listoAprobacion ? 'Sí' : 'No') },
                 { header: 'Fecha', accessor: (c) => new Date(c._createdDate).toLocaleDateString() },
               ], `aprobaciones-${new Date().toISOString().split('T')[0]}`)}
               disabled={getFilteredData().length === 0}
@@ -603,6 +608,9 @@ export default function AprobacionPage() {
                       Estado
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Listo
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Fecha
                     </th>
                     {canAutoaprobar && (
@@ -658,6 +666,15 @@ export default function AprobacionPage() {
                           <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${estado.color}`}>
                             {estado.text}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {contrato.listoAprobacion ? (
+                            <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                              ✓ Listo
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {new Date(contrato._createdDate).toLocaleDateString()}
