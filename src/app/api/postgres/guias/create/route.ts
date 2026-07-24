@@ -91,9 +91,12 @@ export const POST = handler(async (request: Request) => {
 
   // Also create USUARIOS_ROLES entry so the guía can log in (rol GUIA)
   const password = body.clave?.trim() || 'MOSAICO2026';
+  // perfilActualizado=NOW(): el wizard /nuevo-guia ya captura email/ID/celular/
+  // domicilio/fecha/foto/clave, así que la pantalla "Actualización de Datos"
+  // (/advisor-setup) sería redundante — el guía entra directo a su panel.
   const inserted = await queryOne<{ _id: string }>(
-    `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numberid", "_createdDate", "_updatedDate")
-     VALUES ($1, $2, $3, $4, 'GUIA', true, $5, NOW(), NOW())
+    `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numberid", "perfilActualizado", "_createdDate", "_updatedDate")
+     VALUES ($1, $2, $3, $4, 'GUIA', true, $5, NOW(), NOW(), NOW())
      ON CONFLICT ("email") DO NOTHING
      RETURNING "_id"`,
     [ids.advisor(), emailLower, password, nombreCompleto, numeroIdNorm]

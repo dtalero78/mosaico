@@ -106,9 +106,9 @@ export default function ActualizarDatosPage() {
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg overflow-hidden">
 
         {/* Header */}
-        <div className="bg-blue-600 px-6 py-5">
+        <div className="bg-gradient-to-r from-primary-700 to-accent-600 px-6 py-5">
           <h1 className="text-xl font-bold text-white">Actualización de Datos</h1>
-          <p className="text-blue-100 text-sm mt-1">
+          <p className="text-white/80 text-sm mt-1">
             Complete su perfil para continuar. Este proceso se realiza una sola vez.
           </p>
         </div>
@@ -118,14 +118,14 @@ export default function ActualizarDatosPage() {
           {/* Foto */}
           <div className="flex flex-col items-center gap-2 mb-2">
             <div
-              className="relative w-24 h-24 rounded-full overflow-hidden bg-gray-100 border-2 border-blue-200 cursor-pointer hover:opacity-90 transition"
+              className="relative w-24 h-24 rounded-full overflow-hidden bg-gray-100 border-2 border-primary-200 cursor-pointer hover:opacity-90 transition"
               onClick={() => fileRef.current?.click()}
             >
               {fotoPreview
                 ? <img src={fotoPreview} alt="Foto" className="w-full h-full object-cover" />
                 : <UserCircleIcon className="w-full h-full text-gray-300 p-2" />
               }
-              <div className="absolute bottom-0 inset-x-0 bg-blue-600 bg-opacity-80 flex items-center justify-center py-1">
+              <div className="absolute bottom-0 inset-x-0 bg-primary-600 bg-opacity-80 flex items-center justify-center py-1">
                 <CameraIcon className="h-4 w-4 text-white" />
               </div>
             </div>
@@ -137,7 +137,7 @@ export default function ActualizarDatosPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="su@email.com" />
           </div>
 
@@ -153,7 +153,7 @@ export default function ActualizarDatosPage() {
                 }
               }}
               onChange={e => setNumberId(e.target.value.replace(/[^A-Z0-9]/g, '').toUpperCase())}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="12345678K" />
           </div>
 
@@ -169,7 +169,7 @@ export default function ActualizarDatosPage() {
                 }
               }}
               onChange={e => setCelular(e.target.value.replace(/[^\d]/g, ''))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="56912345678" />
           </div>
 
@@ -177,7 +177,7 @@ export default function ActualizarDatosPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Domicilio *</label>
             <input type="text" value={domicilio} onChange={e => setDomicilio(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="Calle 123, Ciudad" />
           </div>
 
@@ -186,7 +186,7 @@ export default function ActualizarDatosPage() {
             <label htmlFor="as-fecha" className="block text-sm font-medium text-gray-700 mb-1">Fecha de Nacimiento *</label>
             <input id="as-fecha" type="date" value={fechaNacimiento}
               onChange={e => setFechaNacimiento(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
           </div>
 
           {/* Clave */}
@@ -198,7 +198,7 @@ export default function ActualizarDatosPage() {
               <input type={showPass ? 'text' : 'password'} value={password}
                 onChange={e => { if (e.target.value.length <= 10) setPassword(e.target.value) }}
                 maxLength={10}
-                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Mínimo 6 caracteres" />
               <button type="button" onClick={() => setShowPass(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -214,7 +214,7 @@ export default function ActualizarDatosPage() {
               <input type={showPass2 ? 'text' : 'password'} value={password2}
                 onChange={e => { if (e.target.value.length <= 10) setPassword2(e.target.value) }}
                 maxLength={10}
-                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Repita la clave" />
               <button type="button" onClick={() => setShowPass2(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -224,7 +224,7 @@ export default function ActualizarDatosPage() {
           </div>
 
           <button type="submit" disabled={saving}
-            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors mt-2">
+            className="w-full py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 disabled:opacity-50 transition-colors mt-2">
             {saving ? 'Guardando...' : 'Guardar y Continuar'}
           </button>
 
