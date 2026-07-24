@@ -245,7 +245,9 @@ async function validar(pool) {
     const cursos = [];
     if (c.titularEsBeneficiario) cursos.push({ who: 'titular', tipoCurso: c.titular.tipoCurso, horarioCurso: c.titular.horarioCurso, tipoCursoRaw: c.titular.tipoCurso, horarioRaw: c.titular.horarioCurso, email: c.titular.email, numeroId: c.titular.numeroId });
     c.beneficiarios.forEach(b => cursos.push({ who: `benef${b._idx}`, tipoCurso: b.tipoCurso, horarioCurso: b.horarioCurso, tipoCursoRaw: b.tipoCursoRaw, horarioRaw: b.horarioRaw, email: b.email, numeroId: b.numeroId }));
-    if (cursos.length === 0) issues.push('❌ sin beneficiarios');
+    // Sin beneficiarios NO bloquea: se crea sólo el titular + financiero (decisión
+    // del usuario 2026-07-23 para los contratos de ENERO172026 sin datos de alumno).
+    if (cursos.length === 0) issues.push('⚠ sin beneficiarios — se creará SÓLO el titular');
     for (const cu of cursos) {
       if (!cu.tipoCurso) issues.push(`❌ curso no reconocido (${cu.who}): "${cu.tipoCursoRaw}"`);
       else if (!cu.horarioCurso) issues.push(`❌ horario no reconocido (${cu.who}): "${cu.horarioRaw}"`);

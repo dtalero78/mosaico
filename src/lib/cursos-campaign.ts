@@ -33,18 +33,22 @@ const HORARIOS_MENORES = [
   'MAR-JUE 18:15-19:15',
   'MAR-JUE 19:30-20:30',
   'SÁB 09:00-11:00',
+  'SÁB 10:00-12:00', // histórico — campaña ENERO172026 y anteriores
   'SÁB 11:00-13:00',
 ];
 const HORARIOS_DANSHI = [
   'LUN-MIÉ 19:00-19:50',
   'MAR-JUE 19:00-19:50',
   'SÁB 09:00-11:00',
+  'SÁB 10:00-12:00', // histórico — campaña ENERO172026 y anteriores
   'SÁB 11:00-13:00',
 ];
 const HORARIOS_SENPAI = [
   'LUN-MIÉ 20:00-20:50',
+  'MAR-JUE 19:00-19:50', // histórico — ENERO172026 (un titular quedó en este bloque)
   'MAR-JUE 20:00-20:50',
   'SÁB 09:00-11:00',
+  'SÁB 10:00-12:00',     // histórico — campaña ENERO172026 y anteriores
   'SÁB 11:00-13:00',
 ];
 const HORARIOS_IMPULSA = ['LUN-MIÉ-VIE 20:00-21:00'];
