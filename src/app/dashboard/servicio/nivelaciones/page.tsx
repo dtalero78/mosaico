@@ -168,7 +168,18 @@ function NivelacionesContent() {
               ) : rows.map((r) => (
                 <tr key={r.academicaId} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{r.nombre || '—'}</td>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                    {r.nombre ? (
+                      <button
+                        type="button"
+                        onClick={() => window.open(`/student/${r.academicaId}`, '_blank', 'noopener,noreferrer')}
+                        className="text-primary-600 hover:text-primary-800 hover:underline"
+                        title="Ver perfil del beneficiario"
+                      >
+                        {r.nombre}
+                      </button>
+                    ) : <span className="text-gray-900">—</span>}
+                  </td>
                   <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
                   <td className="px-3 py-2 text-gray-600">
                     <span className="font-medium text-gray-800">{r.leccion || '—'}</span>
