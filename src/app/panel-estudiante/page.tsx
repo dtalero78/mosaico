@@ -101,7 +101,20 @@ function PanelEstudianteContent() {
   // La nivelación agendada (booking tipo=NIVELACION) se muestra en su propia caja;
   // el resto de eventos van en la agenda semanal.
   const nivelacionBooking = events.find((e: any) => (e.tipo || e.tipoEvento) === 'NIVELACION') || null
-  const weeklyEvents = events.filter((e: any) => (e.tipo || e.tipoEvento) !== 'NIVELACION')
+  // Fin de la SEMANA SIGUIENTE (domingo, 23:59) — la agenda muestra sólo la semana
+  // en curso + la siguiente (2 semanas lunes-domingo).
+  const finSemanaSiguiente = (() => {
+    const n = new Date()
+    const diasAlDomingo = (7 - n.getDay()) % 7 // 0=hoy es domingo
+    const fin = new Date(n)
+    fin.setDate(n.getDate() + diasAlDomingo + 7) // domingo de la semana siguiente
+    fin.setHours(23, 59, 59, 999)
+    return fin
+  })()
+  const weeklyEvents = events.filter((e: any) =>
+    (e.tipo || e.tipoEvento) !== 'NIVELACION' &&
+    e.fechaEvento && new Date(e.fechaEvento) <= finSemanaSiguiente
+  )
 
   // Fondo suave de la tarjeta de curso según el tipo de curso (clases literales para Tailwind)
   const CURSO_BG: Record<string, string> = {
