@@ -11,14 +11,22 @@ interface Leccion {
   refuerzo: boolean
   fecha: string | null
 }
+interface Evaluacion {
+  estado: Leccion['estado']
+  mensaje: string | null
+  fecha: string | null
+  disponible?: boolean
+}
 interface Modulo {
   modulo: string
   esActual: boolean
   completo: boolean
+  leccionesOk: boolean
   total: number
   aprobadas: number
   porcentaje: number
   faltan: number
+  evaluacion: Evaluacion | null
   lecciones: Leccion[]
 }
 interface Report {
@@ -182,6 +190,20 @@ export default function StudentProgress({ student }: { student: Student }) {
                       <td className="py-2 px-3 text-xs text-gray-500 italic">{l.mensaje || (l.estado === 'aprobada' ? 'Asistió y aprobó' : '')}</td>
                     </tr>
                   ))}
+                  {modSel.evaluacion && (
+                    <tr className="border-b border-gray-100 bg-purple-50/60">
+                      <td className="py-2 px-3 font-semibold text-gray-900">🎓 Evaluación del módulo</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_META[modSel.evaluacion.estado].cls}`}>
+                          {modSel.evaluacion.estado === 'aprobada' ? 'Aprobada' : modSel.evaluacion.estado === 'no_aprobada' ? 'No aprobada' : ESTADO_META[modSel.evaluacion.estado].label}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-xs text-gray-500">{fmtFecha(modSel.evaluacion.fecha)}</td>
+                      <td className="py-2 px-3 text-xs text-gray-500 italic">
+                        {modSel.evaluacion.mensaje || (modSel.evaluacion.estado === 'aprobada' ? 'Módulo completo — habilita el avance' : !modSel.leccionesOk ? 'Se habilita al completar las lecciones' : 'El guía la aprueba en la sesión')}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

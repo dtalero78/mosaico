@@ -19,24 +19,43 @@ function addDaysISO(iso: string, days: number): string {
  * registrado y el avance se "detiene" una lección tras cada repetición.
  */
 
-export interface LeccionSeq { code: string; step: string }
+export interface LeccionSeq { code: string; step: string; esEvaluacion?: boolean }
+
+/** Nombre de lección con que se marca la sesión de EVALUACIÓN de cada módulo. */
+export const EVALUACION_STEP = 'Evaluación';
 
 /** Secuencia expandida = lecciones base + repeticiones autorizadas insertadas. */
 export function expandirSecuencia(base: LeccionSeq[], repeticiones: Array<{ modulo: string; leccion: string }>): LeccionSeq[] {
   const seq = [...base];
   for (const rep of repeticiones) {
-    const idx = seq.findIndex(l => l.code === rep.modulo && l.step === rep.leccion);
+    const idx = seq.findIndex(l => !l.esEvaluacion && l.code === rep.modulo && l.step === rep.leccion);
     if (idx >= 0) seq.splice(idx + 1, 0, seq[idx]); // duplica la lección repetida
   }
   return seq;
 }
 
-/** Lecciones base del curso (ordenadas por orden). */
+/**
+ * Lecciones base del curso (ordenadas por orden), con una sesión de EVALUACIÓN
+ * insertada al FINAL de cada módulo. MOSAICO: cada módulo termina con su evaluación,
+ * que el Guía aprueba en la sesión y que habilita el avance al módulo siguiente.
+ * La evaluación es una sesión EXTRA: ocupa un slot de la secuencia (empuja las
+ * siguientes lecciones un lugar), por eso los cursos tienen sesiones de sobra.
+ */
 export async function leccionesBaseCurso(tipoCurso: string): Promise<LeccionSeq[]> {
   const rows = await queryMany<{ code: string; step: string }>(
-    `SELECT "code","step" FROM "NIVELES" WHERE "curso"=$1 ORDER BY "orden" NULLS LAST, "step"`, [tipoCurso]
+    `SELECT "code","step" FROM "NIVELES" WHERE "curso"=$1 AND "step" <> 'WELCOME' ORDER BY "orden" NULLS LAST, "step"`, [tipoCurso]
   );
-  return rows.map(r => ({ code: r.code, step: r.step }));
+  const seq: LeccionSeq[] = [];
+  let prevCode: string | null = null;
+  for (const r of rows) {
+    if (prevCode !== null && r.code !== prevCode) {
+      seq.push({ code: prevCode, step: EVALUACION_STEP, esEvaluacion: true }); // eval del módulo que cierra
+    }
+    seq.push({ code: r.code, step: r.step });
+    prevCode = r.code;
+  }
+  if (prevCode !== null) seq.push({ code: prevCode, step: EVALUACION_STEP, esEvaluacion: true }); // eval del último módulo
+  return seq;
 }
 
 /**

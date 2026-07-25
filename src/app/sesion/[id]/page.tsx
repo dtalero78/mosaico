@@ -34,6 +34,8 @@ interface CalendarioEvent {
   linkZoom?: string
   nivel?: string
   step?: string
+  sesionModulo?: string | null
+  sesionLeccion?: string | null
   // Ctrl Horas
   timeout?: string | null
   notasadvisor?: string | null
@@ -354,6 +356,12 @@ export default function SesionPage() {
                 <h1 className="text-2xl font-bold text-gray-900">
                   {evento.tituloONivel} - {evento.nombreEvento}
                 </h1>
+                {evento.sesionLeccion === 'Evaluación' && (
+                  <div className="mt-2 inline-flex items-center gap-2 rounded-lg bg-purple-50 border border-purple-200 px-3 py-1.5">
+                    <span className="text-sm font-semibold text-purple-800">🎓 Evaluación del {evento.sesionModulo || 'módulo'}</span>
+                    <span className="text-xs text-purple-600">— marca asistencia y aprueba (o "No aprobó") a cada alumno. Al aprobar la evaluación, el alumno avanza al módulo siguiente.</span>
+                  </div>
+                )}
                 <div className="mt-2 flex items-center gap-4 text-sm text-gray-600">
                   <div className="flex items-center gap-1">
                     <CalendarIcon className="h-4 w-4" />

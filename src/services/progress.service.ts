@@ -22,11 +22,13 @@
 import 'server-only';
 import { queryMany, queryOne } from '@/lib/postgres';
 import { NotFoundError } from '@/lib/errors';
+import { EVALUACION_STEP } from './repetir-clase.service';
 
 // --- Helpers ---
 const stripAccents = (s: any) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '');
 const norm = (s: any) => stripAccents(s).toLowerCase().replace(/\s+/g, ' ').trim();
 const isAttended = (b: any) => b.asistio === true || b.asistencia === true;
+const EVAL_KEY = norm(EVALUACION_STEP);
 
 interface AcademicaRow {
   _id: string; numeroId: string | null;
@@ -118,7 +120,7 @@ export async function generateReport(studentId: string) {
   const now = Date.now();
   const t = (d: any) => (d ? new Date(d).getTime() : null);
 
-  function statusLeccion(instances: any[]) {
+  function statusLeccion(instances: any[], esEval = false) {
     const refuerzo = instances.length > 1;
     const past = instances.filter((b) => { const tt = t(b.dia); return tt !== null && tt <= now; });
     const future = instances.filter((b) => { const tt = t(b.dia); return tt === null || tt > now; });
@@ -126,19 +128,20 @@ export async function generateReport(studentId: string) {
     const noAprobada = !aprobada && instances.some((b) => isAttended(b) && b.noAprobo === true);
     // fecha representativa: última pasada, si no la primera futura
     const repDate = (past.length ? past[past.length - 1] : future[0])?.dia || null;
+    const cosa = esEval ? 'la evaluación' : 'esta sesión';
 
     let estado: 'aprobada' | 'no_aprobada' | 'ausente' | 'programada' | 'pendiente';
     let mensaje: string | null = null;
     if (aprobada) { estado = 'aprobada'; }
-    else if (noAprobada) { estado = 'no_aprobada'; mensaje = 'No aprobaste esta lección. Consulta a tu guía.'; }
-    else if (past.length && past.every((b) => b.cancelo === true)) { estado = 'ausente'; mensaje = 'Cancelaste esta sesión. Consulta a tu guía para reagendar.'; }
-    else if (past.length) { estado = 'ausente'; mensaje = 'No asististe a esta sesión. Consulta a tu guía para ponerte al día.'; }
+    else if (noAprobada) { estado = 'no_aprobada'; mensaje = `No ${esEval ? 'aprobaste la evaluación' : 'aprobaste esta lección'}. Consulta a tu guía.`; }
+    else if (past.length && past.every((b) => b.cancelo === true)) { estado = 'ausente'; mensaje = `Cancelaste ${cosa}. Consulta a tu guía para reagendar.`; }
+    else if (past.length) { estado = 'ausente'; mensaje = `No asististe a ${cosa}. Consulta a tu guía para ponerte al día.`; }
     else if (future.length) { estado = 'programada'; }
     else { estado = 'pendiente'; }
     return { estado, mensaje, refuerzo, fecha: repDate };
   }
 
-  // 3. Construir módulos.
+  // 3. Construir módulos (lecciones + evaluación del módulo).
   const modulos = moduleOrder.map((code) => {
     const m = moduleMap.get(code)!;
     const lecciones = m.lessons.map((L, i) => {
@@ -148,13 +151,28 @@ export async function generateReport(studentId: string) {
     });
     const total = lecciones.length;
     const aprobadas = lecciones.filter((l) => l.estado === 'aprobada').length;
+    const leccionesOk = total > 0 && aprobadas === total;
+
+    // Evaluación del módulo (sesión con sesionLeccion='Evaluación').
+    const evalInstances = byLesson.get(`${norm(code)}||${EVAL_KEY}`) || [];
+    const evaluacion = evalInstances.length
+      ? (() => { const st = statusLeccion(evalInstances, true); return { ...st, disponible: leccionesOk }; })()
+      : null;
+    const evalAprobada = evaluacion?.estado === 'aprobada';
+    // Completo = todas las lecciones aprobadas Y (si hay evaluación) evaluación aprobada.
+    const completo = leccionesOk && (evaluacion ? evalAprobada : true);
+    // Faltan = lecciones no aprobadas + (1 si la evaluación existe y no está aprobada).
+    const faltan = Math.max(0, total - aprobadas) + (evaluacion && !evalAprobada ? 1 : 0);
+
     return {
       modulo: code,
       esActual: !!moduloActual && code === moduloActual,
       total, aprobadas,
       porcentaje: total ? Math.round((aprobadas / total) * 100) : 0,
-      faltan: Math.max(0, total - aprobadas),
-      completo: total > 0 && aprobadas === total,
+      faltan,
+      leccionesOk,
+      completo,
+      evaluacion,
       lecciones,
     };
   });

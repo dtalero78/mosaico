@@ -136,6 +136,26 @@ export default function ProgressReport({ data, isLoading }: ProgressReportProps)
               </div>
             </div>
           ))}
+
+          {/* Evaluación del módulo */}
+          {modActual?.evaluacion && (
+            <div className={`flex items-start gap-3 p-3 rounded-lg border-2 ${bgEstado(modActual.evaluacion.estado)} ${modActual.evaluacion.estado === 'aprobada' ? 'border-green-200' : 'border-primary-200'}`}>
+              <div className="flex-shrink-0 mt-0.5"><EstadoIcon estado={modActual.evaluacion.estado} /></div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-900">🎓 Evaluación del módulo</span>
+                  {modActual.evaluacion.estado === 'aprobada' && <span className="text-[10px] font-medium text-green-700">Aprobada por tu guía</span>}
+                  {modActual.evaluacion.estado === 'programada' && modActual.evaluacion.fecha && <span className="text-[10px] text-gray-400">{fmtFecha(modActual.evaluacion.fecha)}</span>}
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {modActual.evaluacion.mensaje
+                    || (modActual.evaluacion.estado === 'aprobada' ? 'Completaste el módulo. ¡Puedes avanzar!'
+                    : !modActual.leccionesOk ? 'Se habilita al completar las lecciones del módulo.'
+                    : 'La presentas con tu guía en la sesión de evaluación.')}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

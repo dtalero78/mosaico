@@ -2,6 +2,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { autoAdvanceStep } from '@/services/student.service';
+import { autoAvanceModuloMosaico } from '@/services/modulo-avance.service';
 import { query, queryOne } from '@/lib/postgres';
 import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window';
 
@@ -144,10 +145,14 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   }
 
   const advancement = await autoAdvanceStep(booking._id);
+  // MOSAICO: avanzar de módulo si quedó completo (lecciones + evaluación aprobadas).
+  let avanceModulo: any = null;
+  try { avanceModulo = await autoAvanceModuloMosaico(idEstudiante); } catch { /* best-effort */ }
 
   return successResponse({
     booking: updated,
     advancement,
+    avanceModulo,
     message: 'Evaluación guardada exitosamente',
   });
 });
