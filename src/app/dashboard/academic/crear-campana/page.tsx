@@ -49,6 +49,12 @@ function CrearCampanaContent() {
   const [editMsg, setEditMsg] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<any | null>(null)
   const [rowBusy, setRowBusy] = useState(false)
+  // Gestión: campaña seleccionada en el dropdown ('' | '__NEW__' | nombre) + modal de curso
+  const [gestionSel, setGestionSel] = useState('')
+  const [showCursoModal, setShowCursoModal] = useState(false)
+  const [cursoMode, setCursoMode] = useState<'draft' | 'existing'>('draft')
+  // Reporte: campaña cuyo detalle está desplegado (null = mostrar tarjetas)
+  const [detalleCampaign, setDetalleCampaign] = useState<string | null>(null)
   // Pestañas + filtros del Reporte (inputs = draft; se aplican con "Aplicar filtros")
   const [activeTab, setActiveTab] = useState<'gestion' | 'reporte'>('gestion')
   const [repNombre, setRepNombre] = useState('')
@@ -243,6 +249,78 @@ function CrearCampanaContent() {
     activo:    { label: 'Activo',       cls: 'bg-green-100 text-green-700' },
     cerrado:   { label: 'Cerrado',      cls: 'bg-gray-200 text-gray-700' },
   } as const
+
+  // Agregación por CAMPAÑA (para las tarjetas del Reporte y el detalle en Gestión):
+  // cursos, matriculados (Σ inscritos / Σ cupos), cierre de matrícula, cursos por tipo.
+  const campaniasAgg = useMemo(() => {
+    const map = new Map<string, any>()
+    for (const r of existing) {
+      const k = r.campaign
+      if (!k) continue
+      if (!map.has(k)) map.set(k, { campaign: k, rows: [], inscritos: 0, cupos: 0, finalCampaign: r.finalCampaign || null, porTipo: {} as Record<string, number>, maxFinalCurso: '' })
+      const g = map.get(k)
+      g.rows.push(r)
+      g.inscritos += (r.usuInscritos ?? 0)
+      g.cupos += (r.numeroUsuarios ?? 0)
+      g.porTipo[r.tipoCurso] = (g.porTipo[r.tipoCurso] || 0) + 1
+      if (!g.finalCampaign && r.finalCampaign) g.finalCampaign = r.finalCampaign
+      const fc = r.finalCurso ? String(r.finalCurso).slice(0, 10) : ''
+      if (fc > g.maxFinalCurso) g.maxFinalCurso = fc
+    }
+    return [...map.values()].sort((a, b) => {
+      const da = campaignNameToDate(a.campaign), db = campaignNameToDate(b.campaign)
+      if (da && db && da !== db) return db.localeCompare(da)
+      return b.campaign.localeCompare(a.campaign)
+    })
+  }, [existing])
+
+  // Estado agregado de una campaña (mismo criterio que Consulta de Cursos, a nivel campaña).
+  const campEstado = (g: any): 'matricula' | 'activo' | 'cerrado' => {
+    const fcamp = g.finalCampaign ? String(g.finalCampaign).slice(0, 10) : ''
+    if (fcamp && fcamp >= todayStr) return 'matricula'
+    if (g.maxFinalCurso && g.maxFinalCurso < todayStr) return 'cerrado'
+    return 'activo'
+  }
+  const cursosDeCampania = (nombre: string) => existing.filter((r: any) => r.campaign === nombre)
+
+  // Abrir el modal "Agregar/Editar curso". mode 'existing' agrega a la campaña
+  // seleccionada (POST inmediato); 'draft' arma la lista de una campaña nueva.
+  const openCursoModal = (mode: 'draft' | 'existing') => {
+    setForm(EMPTY); setEditIndex(null); setMsg(null)
+    setCursoMode(mode)
+    setShowCursoModal(true)
+  }
+  // Confirmar el curso del modal.
+  const submitCursoModal = async () => {
+    if (!canAdd) { setMsg({ type: 'err', text: 'Complete tipo de curso, horario, inicio, duración (meses) y número de usuarios.' }); return }
+    const nuevo = { ...form, finalCurso }
+    if (cursoMode === 'existing') {
+      // Agregar el curso a la campaña seleccionada (upsert), sin tocar los demás.
+      setSaving(true); setMsg(null)
+      try {
+        const g = campaniasAgg.find(x => x.campaign === gestionSel)
+        const res = await fetch('/api/postgres/campaigns', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            campaign: gestionSel,
+            inicioCampania: g?.rows?.[0]?.inicioCampania ? String(g.rows[0].inicioCampania).slice(0, 10) : null,
+            finalCampaign: g?.finalCampaign ? String(g.finalCampaign).slice(0, 10) : null,
+            cursos: [nuevo],
+          }),
+        })
+        const d = await res.json()
+        if (!res.ok) throw new Error(d.error || 'Error al agregar el curso')
+        setMsg({ type: 'ok', text: `Curso agregado a "${gestionSel}".` })
+        setShowCursoModal(false); setForm(EMPTY); loadExisting()
+      } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setSaving(false) }
+    } else {
+      // Campaña nueva: sumar/editar en la lista draft.
+      if (editIndex !== null) setCursos(cursos.map((c, i) => (i === editIndex ? nuevo : c)))
+      else setCursos([...cursos, nuevo])
+      setForm(EMPTY); setEditIndex(null); setShowCursoModal(false)
+    }
+  }
+  const editCursoDraft = (i: number) => { setForm(cursos[i]); setEditIndex(i); setCursoMode('draft'); setShowCursoModal(true) }
   const reporteRows = existing.filter((r: any) => {
     if (applied.nombre && String(r.campaign || '') !== applied.nombre) return false
     if (applied.curso && String(r.tipoCurso || '') !== applied.curso) return false
@@ -301,283 +379,214 @@ function CrearCampanaContent() {
         </div>
       )}
 
-      {activeTab === 'gestion' && (<>
+      {activeTab === 'gestion' && (
+      <div className="space-y-6">
 
-      {/* Datos de la campaña */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Datos de la campaña</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className={lblCls}>Nombre de la campaña *</label>
-            <input type="text" value={campaign} onChange={e => setCampaign(e.target.value)} className={inputCls} placeholder="Ej. VERANO2026" />
-          </div>
-          <div>
-            <label className={lblCls}>Inicio de campaña (apertura de matrícula)</label>
-            <input type="date" value={inicioCampania} onChange={e => setInicioCampania(e.target.value)} className={inputCls} />
-          </div>
-          <div>
-            <label className={lblCls}>Final campaña (cierre de matrícula)</label>
-            <input type="date" value={finalCampaign} onChange={e => setFinalCampaign(e.target.value)} className={inputCls} />
-          </div>
-        </div>
-      </div>
-
-      {/* Agregar / editar curso */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">{editing ? `Editar curso #${editIndex! + 1}` : 'Agregar curso'}</h2>
-        <div className="grid grid-cols-4 gap-4">
-          <div>
-            <label className={lblCls}>Tipo de curso *</label>
-            <select value={form.tipoCurso} onChange={e => setForm({ ...form, tipoCurso: e.target.value, horarioCurso: '' })} className={inputCls} title="Tipo de curso">
-              <option value="">Seleccionar...</option>
-              {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}{esMenores(t) ? ' (menores)' : ''}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={lblCls}>Salón</label>
-            <input type="text" value={form.salon} onChange={e => setForm({ ...form, salon: e.target.value })} className={inputCls} placeholder="Ej. Salón A / Aula 3" />
-          </div>
-          <div>
-            <label className={lblCls}>Guía</label>
-            <select value={form.guia} onChange={e => setForm({ ...form, guia: e.target.value })} className={inputCls} title="Guía del curso">
-              <option value="">Seleccionar...</option>
-              {guias.map(g => <option key={g._id} value={g._id}>{g.nombreCompleto}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={lblCls}>Horario *</label>
-            <select value={form.horarioCurso} disabled={!form.tipoCurso} onChange={e => setForm({ ...form, horarioCurso: e.target.value })} className={inputCls} title="Horario">
-              <option value="">Seleccionar...</option>
-              {horariosOpts.map(h => <option key={h} value={h}>{h}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="grid grid-cols-4 gap-4 mt-4">
-          <div>
-            <label className={lblCls}>N° de usuarios (cupos) *</label>
-            <input type="number" min={1} value={form.numeroUsuarios || ''} onChange={e => setForm({ ...form, numeroUsuarios: parseInt(e.target.value || '0', 10) || 0 })} className={inputCls} />
-          </div>
-          <div>
-            <label className={lblCls}>Inicio del curso *</label>
-            <input type="date" value={form.inicioCurso} onChange={e => setForm({ ...form, inicioCurso: e.target.value })} className={inputCls} />
-          </div>
-          <div>
-            <label className={lblCls}>Duración (meses) *</label>
-            <input type="number" min={1} value={form.duracionCurso || ''} onChange={e => setForm({ ...form, duracionCurso: parseInt(e.target.value || '0', 10) || 0 })} className={inputCls} />
-          </div>
-          <div>
-            <label className={lblCls}>Final del curso (calculado)</label>
-            <input type="text" value={finalCurso} disabled className={inputCls} placeholder="—" />
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          {editing && (
-            <button type="button" onClick={cancelEdit} className="px-3 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
-              Cancelar edición
-            </button>
-          )}
-          <button type="button" onClick={requestAdd}
-            className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
-            <PlusIcon className="h-4 w-4 mr-1" /> {editing ? 'Guardar cambios' : 'Agregar Curso'}
-          </button>
-        </div>
-      </div>
-
-      {/* Cursos agregados */}
-      {cursos.length > 0 && (
+        {/* Selector de campaña */}
         <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4">Cursos de la campaña ({cursos.length})</h2>
-          <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
-            <thead>
-              <tr className="text-left text-gray-500 border-b">
-                <th className="py-2">Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio</th><th>Duración</th><th>Final</th><th>Cupos</th><th aria-label="Acciones"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {cursos.map((c, i) => (
-                <tr key={i} className={`border-b last:border-0 ${editIndex === i ? 'bg-primary-50' : ''}`}>
-                  <td className="py-2 font-medium">{c.tipoCurso}</td>
-                  <td>{c.salon || '—'}</td>
-                  <td>{guiaNombre(c.guia)}</td>
-                  <td>{c.horarioCurso}</td>
-                  <td>{c.inicioCurso}</td>
-                  <td>{c.duracionCurso} mes(es)</td>
-                  <td>{c.finalCurso || '—'}</td>
-                  <td>{c.numeroUsuarios}</td>
-                  <td className="text-right whitespace-nowrap">
-                    <button type="button" onClick={() => editCurso(i)} className="text-primary-600 hover:text-primary-700 mr-2" title="Editar curso">
-                      <PencilSquareIcon className="h-5 w-5 inline" />
-                    </button>
-                    <button type="button" onClick={() => removeCurso(i)} className="text-red-600 hover:text-red-700" title="Quitar curso">
-                      <TrashIcon className="h-5 w-5 inline" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-4 flex justify-end">
-            <button type="button" onClick={submit} disabled={saving}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-accent-600 hover:bg-accent-700 disabled:opacity-50">
-              {saving ? 'Guardando...' : 'Crear Campaña'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Campañas existentes */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="text-lg font-semibold">Campañas existentes</h2>
-          {existing.length > 0 && (
-            <div className="flex items-center gap-2">
-              <select
-                value={gestionFiltro}
-                onChange={e => setGestionFiltro(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 min-w-[180px]"
-                title="Filtrar por campaña"
-              >
-                <option value="">Todas las campañas</option>
-                {campaniasOrdenadas.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+          <label className={lblCls}>Nombre de la campaña</label>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={gestionSel}
+              onChange={e => {
+                const v = e.target.value
+                setGestionSel(v); setMsg(null)
+                if (v === '__NEW__') { setCampaign(''); setInicioCampania(''); setFinalCampaign(''); setCursos([]); setForm(EMPTY); setEditIndex(null) }
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm min-w-[260px] focus:ring-2 focus:ring-primary-500"
+              title="Seleccionar campaña"
+            >
+              <option value="">Selecciona una campaña…</option>
+              <option value="__NEW__">➕ Crear campaña</option>
+              {campaniasOrdenadas.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {gestionSel && gestionSel !== '__NEW__' && existing.length > 0 && (
               <button type="button" onClick={handleCSV}
                 className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
                 <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-        {existing.length === 0 ? (
-          <p className="text-gray-500 text-sm">Aún no hay cursos/campañas creados.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
-              <thead>
-                <tr className="text-left text-gray-500 border-b">
-                  <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th><th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {existentesOrdenadas.map((r: any) => {
-                  const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
-                  const est = rowEstado(r)
-                  return (
-                    <tr key={r._id} className="border-b last:border-0">
-                      <td className="py-2 font-medium">{r.campaign}</td>
-                      <td>{r.tipoCurso}</td>
-                      <td>{r.salon || '—'}</td>
-                      <td>{guiaNombre(r.guia)}</td>
-                      <td>{r.horarioCurso}</td>
-                      <td>{r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : '—'}</td>
-                      <td>{r.finalCurso ? String(r.finalCurso).slice(0, 10) : '—'}</td>
-                      <td>{r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '—'}</td>
-                      <td>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${full ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                          {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_META[est].cls}`}>
-                          {ESTADO_META[est].label}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap">
-                        <button type="button" onClick={() => addCursoToCampaign(r)} className="text-accent-600 hover:text-accent-700 mr-2 text-xs font-semibold" title="Agregar curso a esta campaña">
-                          + curso
-                        </button>
-                        <button type="button" onClick={() => openEdit(r)} className="text-primary-600 hover:text-primary-700 mr-2" title="Editar curso">
+
+        {/* CREAR NUEVA CAMPAÑA */}
+        {gestionSel === '__NEW__' && (<>
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h2 className="text-lg font-semibold mb-4">Datos de la campaña</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className={lblCls}>Nombre de la campaña *</label>
+                <input type="text" value={campaign} onChange={e => setCampaign(e.target.value)} className={inputCls} placeholder="Ej. VERANO2026" />
+              </div>
+              <div>
+                <label className={lblCls}>Inicio de campaña (apertura de matrícula)</label>
+                <input type="date" value={inicioCampania} onChange={e => setInicioCampania(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Final campaña (cierre de matrícula)</label>
+                <input type="date" value={finalCampaign} onChange={e => setFinalCampaign(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Cursos de la campaña ({cursos.length})</h2>
+              <button type="button" onClick={() => openCursoModal('draft')}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                <PlusIcon className="h-4 w-4 mr-1" /> Agregar curso
+              </button>
+            </div>
+            {cursos.length === 0 ? (
+              <p className="text-gray-500 text-sm">Aún no has agregado cursos. Pulsa «Agregar curso».</p>
+            ) : (
+              <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b">
+                    <th className="py-2">Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio</th><th>Duración</th><th>Final</th><th>Cupos</th><th aria-label="Acciones"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cursos.map((c, i) => (
+                    <tr key={i} className={`border-b last:border-0 ${editIndex === i ? 'bg-primary-50' : ''}`}>
+                      <td className="py-2 font-medium">{c.tipoCurso}</td>
+                      <td>{c.salon || '—'}</td>
+                      <td>{guiaNombre(c.guia)}</td>
+                      <td>{c.horarioCurso}</td>
+                      <td>{c.inicioCurso}</td>
+                      <td>{c.duracionCurso} mes(es)</td>
+                      <td>{c.finalCurso || '—'}</td>
+                      <td>{c.numeroUsuarios}</td>
+                      <td className="text-right whitespace-nowrap">
+                        <button type="button" onClick={() => editCursoDraft(i)} className="text-primary-600 hover:text-primary-700 mr-2" title="Editar curso">
                           <PencilSquareIcon className="h-5 w-5 inline" />
                         </button>
-                        <button type="button" onClick={() => setDeleting(r)} className="text-red-600 hover:text-red-700" title="Eliminar curso">
+                        <button type="button" onClick={() => removeCurso(i)} className="text-red-600 hover:text-red-700" title="Quitar curso">
                           <TrashIcon className="h-5 w-5 inline" />
                         </button>
                       </td>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      </>)}
-
-      {activeTab === 'reporte' && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-          {/* Filtros */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-            <div>
-              <label className={lblCls}>Nombre campaña</label>
-              <select value={repNombre} onChange={e => setRepNombre(e.target.value)} className={inputCls} title="Filtrar por campaña">
-                <option value="">Todas</option>
-                {campaniasOrdenadas.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={lblCls}>Curso</label>
-              <select value={repCurso} onChange={e => setRepCurso(e.target.value)} className={inputCls} title="Filtrar por tipo de curso">
-                <option value="">Todos</option>
-                {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={lblCls}>Fecha inicial (inicio curso ≥)</label>
-              <input type="date" value={repDesde} onChange={e => setRepDesde(e.target.value)} className={inputCls} title="Inicio de curso desde" />
-            </div>
-            <div>
-              <label className={lblCls}>Fecha final (inicio curso ≤)</label>
-              <input type="date" value={repHasta} onChange={e => setRepHasta(e.target.value)} className={inputCls} title="Inicio de curso hasta" />
-            </div>
-            <div>
-              <label className={lblCls}>Estado</label>
-              <select value={repEstado} onChange={e => setRepEstado(e.target.value as any)} className={inputCls} title="Filtrar por estado">
-                <option value="todos">Todos</option>
-                <option value="matricula">En matrícula</option>
-                <option value="activo">Activo</option>
-                <option value="cerrado">Cerrado</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={aplicarFiltros}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
-                Aplicar filtros
-              </button>
-              <button type="button" onClick={limpiarFiltros}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
-                Limpiar filtros
-              </button>
-              <p className="ml-2 text-sm text-gray-500">{reporteRows.length} curso(s)</p>
-            </div>
-            {reporteRows.length > 0 && (
-              <button type="button" onClick={handleReporteCSV}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-green-200 bg-green-100 text-green-700 hover:bg-green-200">
-                <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
-              </button>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {cursos.length > 0 && (
+              <div className="mt-4 flex justify-end">
+                <button type="button" onClick={submit} disabled={saving}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-accent-600 hover:bg-accent-700 disabled:opacity-50">
+                  {saving ? 'Guardando...' : 'Crear Campaña'}
+                </button>
+              </div>
             )}
           </div>
+        </>)}
 
-          {reporteRows.length === 0 ? (
-            <p className="text-gray-500 text-sm">No hay cursos que coincidan con los filtros.</p>
-          ) : (
+        {/* CAMPAÑA EXISTENTE SELECCIONADA */}
+        {gestionSel && gestionSel !== '__NEW__' && (
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Cursos de {gestionSel} ({cursosDeCampania(gestionSel).length})</h2>
+              <button type="button" onClick={() => openCursoModal('existing')}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
+                <PlusIcon className="h-4 w-4 mr-1" /> Agregar curso
+              </button>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
                 <thead>
                   <tr className="text-left text-gray-500 border-b">
-                    <th className="py-2">Campaña</th><th>Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th>
+                    <th className="py-2">Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th><th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {reporteRows.map((r: any) => {
+                  {cursosDeCampania(gestionSel).map((r: any) => {
                     const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
                     const est = rowEstado(r)
                     return (
                       <tr key={r._id} className="border-b last:border-0">
-                        <td className="py-2 font-medium">{r.campaign}</td>
-                        <td>{r.tipoCurso}</td>
+                        <td className="py-2 font-medium">{r.tipoCurso}</td>
+                        <td>{r.salon || '—'}</td>
+                        <td>{guiaNombre(r.guia)}</td>
+                        <td>{r.horarioCurso}</td>
+                        <td>{r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : '—'}</td>
+                        <td>{r.finalCurso ? String(r.finalCurso).slice(0, 10) : '—'}</td>
+                        <td>{r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '—'}</td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${full ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                            {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_META[est].cls}`}>
+                            {ESTADO_META[est].label}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <button type="button" onClick={() => openEdit(r)} className="text-primary-600 hover:text-primary-700 mr-2" title="Editar curso">
+                            <PencilSquareIcon className="h-5 w-5 inline" />
+                          </button>
+                          <button type="button" onClick={() => setDeleting(r)} className="text-red-600 hover:text-red-700" title="Eliminar curso">
+                            <TrashIcon className="h-5 w-5 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {!gestionSel && (
+          <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-sm text-center text-gray-500 text-sm">
+            Selecciona una campaña para ver y editar sus cursos, o elige «➕ Crear campaña».
+          </div>
+        )}
+      </div>
+      )}
+
+      {activeTab === 'reporte' && (
+        detalleCampaign ? (
+          /* DETALLE de una campaña (tabla) */
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <button type="button" onClick={() => setDetalleCampaign(null)}
+                  className="text-sm text-primary-600 hover:text-primary-800 mb-1">← Volver a las tarjetas</button>
+                <h2 className="text-lg font-semibold">{detalleCampaign} · {cursosDeCampania(detalleCampaign).length} curso(s)</h2>
+              </div>
+              <button type="button" onClick={() => exportToExcel(cursosDeCampania(detalleCampaign), [
+                { header: 'Campaña', accessor: (r: any) => r.campaign },
+                { header: 'Tipo', accessor: (r: any) => r.tipoCurso },
+                { header: 'Salón', accessor: (r: any) => r.salon || '' },
+                { header: 'Guía', accessor: (r: any) => guiaNombre(r.guia) },
+                { header: 'Horario', accessor: (r: any) => r.horarioCurso },
+                { header: 'Inicio curso', accessor: (r: any) => (r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : '') },
+                { header: 'Final curso', accessor: (r: any) => (r.finalCurso ? String(r.finalCurso).slice(0, 10) : '') },
+                { header: 'Cierre matrícula', accessor: (r: any) => (r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '') },
+                { header: 'Cupos', accessor: (r: any) => r.numeroUsuarios ?? 0 },
+                { header: 'Inscritos', accessor: (r: any) => r.usuInscritos ?? 0 },
+                { header: 'Estado', accessor: (r: any) => ESTADO_META[rowEstado(r)].label },
+              ], `${detalleCampaign}`)}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-green-200 bg-green-100 text-green-700 hover:bg-green-200">
+                <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b">
+                    <th className="py-2">Tipo</th><th>Salón</th><th>Guía</th><th>Horario</th><th>Inicio curso</th><th>Final curso</th><th>Cierre matríc.</th><th>Cupos</th><th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cursosDeCampania(detalleCampaign).map((r: any) => {
+                    const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
+                    const est = rowEstado(r)
+                    return (
+                      <tr key={r._id} className="border-b last:border-0">
+                        <td className="py-2 font-medium">{r.tipoCurso}</td>
                         <td>{r.salon || '—'}</td>
                         <td>{guiaNombre(r.guia)}</td>
                         <td>{r.horarioCurso}</td>
@@ -600,7 +609,123 @@ function CrearCampanaContent() {
                 </tbody>
               </table>
             </div>
-          )}
+          </div>
+        ) : (
+          /* TARJETAS agrupadas por estado */
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-6">
+            {campaniasAgg.length === 0 ? (
+              <p className="text-gray-500 text-sm">Aún no hay campañas creadas.</p>
+            ) : (
+              ([['matricula', 'En matrícula'], ['activo', 'Activas'], ['cerrado', 'Cerradas']] as const).map(([estado, titulo]) => {
+                const grupo = campaniasAgg.filter(g => campEstado(g) === estado)
+                return (
+                  <div key={estado}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`inline-block w-2.5 h-2.5 rounded-full ${estado === 'matricula' ? 'bg-blue-500' : estado === 'activo' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                      <h3 className="text-sm font-semibold text-gray-700">{titulo} ({grupo.length})</h3>
+                    </div>
+                    {grupo.length === 0 ? (
+                      <p className="text-gray-400 text-sm ml-4">Ninguna</p>
+                    ) : (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {grupo.map(g => (
+                          <button
+                            key={g.campaign}
+                            type="button"
+                            onClick={() => setDetalleCampaign(g.campaign)}
+                            className={`text-left rounded-lg border p-4 transition-colors hover:shadow-sm ${
+                              estado === 'matricula' ? 'bg-blue-50 border-blue-100 hover:border-blue-300'
+                              : estado === 'activo' ? 'bg-green-50 border-green-100 hover:border-green-300'
+                              : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-gray-900 hover:underline">{g.campaign}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  {g.rows.length} curso(s){g.finalCampaign ? ` · cierre matrícula ${String(g.finalCampaign).slice(0, 10)}` : ''}
+                                </div>
+                              </div>
+                              <div className="text-sm font-semibold text-gray-700 whitespace-nowrap">{g.inscritos}/{g.cupos} <span className="font-normal text-gray-500">matriculados</span></div>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 mt-3">
+                              {Object.entries(g.porTipo).sort().map(([tipo, n]) => (
+                                <span key={tipo} className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/70 border border-gray-200 text-gray-700">
+                                  {tipo} <span className="ml-1 font-semibold">{n as number}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )
+      )}
+
+      {/* Modal: Agregar / Editar curso (formulario) */}
+      {showCursoModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              {editIndex !== null ? 'Editar curso' : 'Agregar curso'}
+              {cursoMode === 'existing' && <span className="text-sm font-normal text-gray-500"> — {gestionSel}</span>}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className={lblCls}>Tipo de curso *</label>
+                <select value={form.tipoCurso} onChange={e => setForm({ ...form, tipoCurso: e.target.value, horarioCurso: '' })} className={inputCls} title="Tipo de curso">
+                  <option value="">Seleccionar...</option>
+                  {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}{esMenores(t) ? ' (menores)' : ''}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lblCls}>Salón</label>
+                <input type="text" value={form.salon} onChange={e => setForm({ ...form, salon: e.target.value })} className={inputCls} placeholder="Ej. Salón A / Aula 3" />
+              </div>
+              <div>
+                <label className={lblCls}>Guía</label>
+                <select value={form.guia} onChange={e => setForm({ ...form, guia: e.target.value })} className={inputCls} title="Guía del curso">
+                  <option value="">Seleccionar...</option>
+                  {guias.map(g => <option key={g._id} value={g._id}>{g.nombreCompleto}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lblCls}>Horario *</label>
+                <select value={form.horarioCurso} disabled={!form.tipoCurso} onChange={e => setForm({ ...form, horarioCurso: e.target.value })} className={inputCls} title="Horario">
+                  <option value="">Seleccionar...</option>
+                  {horariosOpts.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lblCls}>N° de usuarios (cupos) *</label>
+                <input type="number" min={1} value={form.numeroUsuarios || ''} onChange={e => setForm({ ...form, numeroUsuarios: parseInt(e.target.value || '0', 10) || 0 })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Inicio del curso *</label>
+                <input type="date" value={form.inicioCurso} onChange={e => setForm({ ...form, inicioCurso: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Duración (meses) *</label>
+                <input type="number" min={1} value={form.duracionCurso || ''} onChange={e => setForm({ ...form, duracionCurso: parseInt(e.target.value || '0', 10) || 0 })} className={inputCls} />
+              </div>
+              <div>
+                <label className={lblCls}>Final del curso (calculado)</label>
+                <input type="text" value={finalCurso} disabled className={inputCls} placeholder="—" />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => { setShowCursoModal(false); setForm(EMPTY); setEditIndex(null) }} className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button type="button" onClick={submitCursoModal} disabled={saving || !canAdd}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
+                <PlusIcon className="h-4 w-4 mr-1" /> {saving ? 'Guardando...' : (editIndex !== null ? 'Guardar cambios' : 'Agregar curso')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
