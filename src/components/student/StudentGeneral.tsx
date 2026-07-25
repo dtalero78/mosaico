@@ -232,202 +232,150 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
         />
       </div>
 
-      {/* Personal Information */}
+      {/* Personal Information — grid compacto */}
       <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Datos Personales</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Primer Nombre</label>
-              <p className="mt-1 text-sm text-gray-900">{student.primerNombre || 'No especificado'}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Datos Personales</h3>
+          {/* Botones de WhatsApp — arriba a la derecha (gateados por ENVIAR_MENSAJE) */}
+          <PermissionGuard permission={StudentPermission.ENVIAR_MENSAJE}>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSendWhatsApp}
+                disabled={sendingWhatsApp || whatsAppSent}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${whatsAppSent ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'}`}
+              >
+                {sendingWhatsApp ? (<><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Enviando...</span></>)
+                  : whatsAppSent ? (<><Check className="w-3.5 h-3.5" /><span>Enviado</span></>)
+                  : (<><MessageCircle className="w-3.5 h-3.5" /><span>Mensaje de Bienvenida</span></>)}
+              </button>
+              <button
+                type="button"
+                onClick={handleSendProfileOnly}
+                disabled={sendingProfileOnly || profileOnlySent}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${profileOnlySent ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'}`}
+              >
+                {sendingProfileOnly ? (<><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Enviando...</span></>)
+                  : profileOnlySent ? (<><Check className="w-3.5 h-3.5" /><span>Enviado</span></>)
+                  : (<><MessageCircle className="w-3.5 h-3.5" /><span>Crear solo perfil</span></>)}
+              </button>
             </div>
-            {student.segundoNombre && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Segundo Nombre</label>
-                <p className="mt-1 text-sm text-gray-900">{student.segundoNombre}</p>
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Primer Apellido</label>
-              <p className="mt-1 text-sm text-gray-900">{student.primerApellido || 'No especificado'}</p>
-            </div>
-            {student.segundoApellido && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Segundo Apellido</label>
-                <p className="mt-1 text-sm text-gray-900">{student.segundoApellido}</p>
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Número de Documento</label>
-              <p className="mt-1 text-sm text-gray-900">{student.numeroId}</p>
-            </div>
-            {student.fechaNacimiento && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Fecha de Nacimiento</label>
-                <p className="mt-1 text-sm text-gray-900">{formatDate(student.fechaNacimiento)}</p>
-              </div>
-            )}
-            {((student as any).apoderado || (student as any).apoderadoTelefono || (student as any).apoderadoMail) && (
-              <div className="pt-3 border-t border-gray-100">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Apoderado</label>
-                <p className="text-sm text-gray-900">{(student as any).apoderado || '—'}</p>
-                <p className="text-xs text-gray-500 mt-0.5">Tel: {(student as any).apoderadoTelefono || '—'}</p>
-                <p className="text-xs text-gray-500">Correo: {(student as any).apoderadoMail || '—'}</p>
-              </div>
-            )}
-          </div>
+          </PermissionGuard>
+        </div>
 
-          <div className="space-y-4">
-            {student.celular && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-gray-700">Celular</label>
-                  <PermissionGuard permission={StudentPermission.ENVIAR_MENSAJE}>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSendWhatsApp}
-                      disabled={sendingWhatsApp || whatsAppSent}
-                      className={`
-                        inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md
-                        transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
-                        ${whatsAppSent
-                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                          : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
-                        }
-                      `}
-                    >
-                      {sendingWhatsApp ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Enviando...</span>
-                        </>
-                      ) : whatsAppSent ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Enviado</span>
-                        </>
-                      ) : (
-                        <>
-                          <MessageCircle className="w-3.5 h-3.5" />
-                          <span>Mensaje de Bienvenida</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSendProfileOnly}
-                      disabled={sendingProfileOnly || profileOnlySent}
-                      className={`
-                        inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md
-                        transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
-                        ${profileOnlySent
-                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                          : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
-                        }
-                      `}
-                    >
-                      {sendingProfileOnly ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Enviando...</span>
-                        </>
-                      ) : profileOnlySent ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Enviado</span>
-                        </>
-                      ) : (
-                        <>
-                          <MessageCircle className="w-3.5 h-3.5" />
-                          <span>Crear solo perfil</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  </PermissionGuard>
-                </div>
-                <p className="mt-1 text-sm text-gray-900">{student.celular}</p>
-              </div>
-            )}
-            {whatsAppError && (
-              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-red-700">{whatsAppError}</p>
-              </div>
-            )}
-            {student.email && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Email</label>
-                <p className="mt-1 text-sm text-gray-900">{student.email}</p>
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Tipo de Usuario</label>
-              <span className="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent-100 text-accent-800">
-                {student.tipoUsuario}
-              </span>
-            </div>
-            {student.plataforma && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Plataforma</label>
-                <span className="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                  {student.plataforma}
-                </span>
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Usuario</label>
-              <p className="mt-1 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 font-mono tracking-wide">
-                {(student as any).userLogin || '—'}
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Clave Login</label>
-              {editingPassword ? (
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Nueva clave"
-                    className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { if (newPassword.length >= 4) setShowPasswordConfirm(true); else toast.error('Mínimo 4 caracteres') }}
-                    className="px-3 py-1 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-                  >
-                    Guardar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setEditingPassword(false); setNewPassword('') }}
-                    className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              ) : (
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                    {displayPassword || '—'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => { setEditingPassword(true); setNewPassword(displayPassword) }}
-                    className="p-1 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded"
-                    title="Editar clave"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </div>
+        {whatsAppError && (
+          <div className="flex items-start gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg">
+            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700">{whatsAppError}</p>
           </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Primer Nombre</label>
+            <p className="mt-0.5 text-sm text-gray-900">{student.primerNombre || <span className="text-gray-400">—</span>}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Segundo Nombre</label>
+            <p className="mt-0.5 text-sm text-gray-900">{student.segundoNombre || <span className="text-gray-400">—</span>}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Primer Apellido</label>
+            <p className="mt-0.5 text-sm text-gray-900">{student.primerApellido || <span className="text-gray-400">—</span>}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Segundo Apellido</label>
+            <p className="mt-0.5 text-sm text-gray-900">{student.segundoApellido || <span className="text-gray-400">—</span>}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Número de Documento</label>
+            <p className="mt-0.5 text-sm text-gray-900">{student.numeroId || <span className="text-gray-400">—</span>}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Fecha de Nacimiento</label>
+            <p className="mt-0.5 text-sm text-gray-900">{student.fechaNacimiento ? formatDate(student.fechaNacimiento) : <span className="text-gray-400">—</span>}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Celular</label>
+            <p className="mt-0.5 text-sm text-gray-900">{student.celular || <span className="text-gray-400">—</span>}</p>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-gray-500">Email</label>
+            <p className="mt-0.5 text-sm text-gray-900 break-all">{student.email || <span className="text-gray-400">—</span>}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Tipo de Usuario</label>
+            <span className="mt-0.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent-100 text-accent-800">
+              {student.tipoUsuario || '—'}
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Plataforma</label>
+            <span className="mt-0.5 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+              {student.plataforma || '—'}
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Usuario</label>
+            <span className="mt-0.5 inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800 font-mono tracking-wide">
+              {(student as any).userLogin || '—'}
+            </span>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500">Clave Login</label>
+            {editingPassword ? (
+              <div className="mt-0.5 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Nueva clave"
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 w-32"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => { if (newPassword.length >= 4) setShowPasswordConfirm(true); else toast.error('Mínimo 4 caracteres') }}
+                  className="px-2.5 py-1 text-xs bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                >
+                  Guardar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditingPassword(false); setNewPassword('') }}
+                  className="px-2.5 py-1 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <div className="mt-0.5 flex items-center gap-2">
+                <span className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                  {displayPassword || '—'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setEditingPassword(true); setNewPassword(displayPassword) }}
+                  className="p-1 text-gray-400 hover:text-primary-600 hover:bg-gray-100 rounded"
+                  title="Editar clave"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+          {((student as any).apoderado || (student as any).apoderadoTelefono || (student as any).apoderadoMail) && (
+            <div className="sm:col-span-2 lg:col-span-3 pt-3 mt-1 border-t border-gray-100">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Apoderado</label>
+              <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm text-gray-900">
+                <span>{(student as any).apoderado || '—'}</span>
+                <span className="text-gray-500 text-xs self-center">Tel: {(student as any).apoderadoTelefono || '—'}</span>
+                <span className="text-gray-500 text-xs self-center">Correo: {(student as any).apoderadoMail || '—'}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
