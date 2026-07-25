@@ -1,373 +1,216 @@
 /**
- * Progress Service
+ * Progress Service — "¿Cómo voy?" de MOSAICO (Fase 1).
  *
- * Business logic for the "¿Cómo voy?" student progress report.
- * Calculates step completion, attendance stats, and class breakdown.
+ * Modelo MOSAICO: Curso → Módulos → Lecciones (1 sesión c/u, en secuencia por fecha).
+ * Cada sesión de CALENDARIO trae su lección en `sesionModulo`/`sesionLeccion`/`leccionOrden`
+ * (poblado por `mapearLeccionesSalon`). El booking del alumno apunta a esa sesión.
  *
- * Step completion rules:
- *   1. Normal Steps (1-4, 6-9, 11-14, etc.):
- *      - 2 sesiones exitosas (tipo SESSION, asistio/asistencia = true)
- *      - 1 TRAINING club exitoso (tipo CLUB, asistio/asistencia = true)
- *      - participacion solo cuenta como exitosa en JUMP steps (múltiplos de 5)
- *   2. Jump Steps (5, 10, 15, 20, 25, 30, 35, 40, 45):
- *      - 1 clase registrada en ese step
- *      - noAprobo !== true
- *   3. Overrides manuales tienen prioridad absoluta sobre toda la lógica.
+ * Reglas (Fase 1):
+ *   - Lección APROBADA  = el Guía marcó asistencia (asistio/asistencia=true) y NO marcó
+ *     "No aprobó" (noAprobo). (Reutiliza los toggles que ya existen en /sesion/[id].)
+ *   - Lección NO APROBADA = asistió pero el Guía marcó noAprobo.
+ *   - AUSENTE = la sesión ya pasó y no asistió → "consulta a tu guía para ponerte al día".
+ *   - PROGRAMADA = la sesión es futura.
+ *   - REFUERZO = la lección aparece repetida en la secuencia (repetir lección del salón).
+ *   - Módulo completo (Fase 1) = todas sus lecciones aprobadas. La EVALUACIÓN de módulo
+ *     y el gate de avance llegan en Fase 2.
+ *   - Nivelación: se expone si el alumno tiene `ACADEMICA.nivelacion=true`.
+ *
+ * NOTA: el motor de Steps/Jumps/TRAINING de LGS fue reemplazado por completo.
  */
 
 import 'server-only';
-import { queryMany } from '@/lib/postgres';
-import { PeopleRepository } from '@/repositories/people.repository';
-import { AcademicaRepository } from '@/repositories/academica.repository';
-import { StepOverridesRepository } from '@/repositories/niveles.repository';
+import { queryMany, queryOne } from '@/lib/postgres';
 import { NotFoundError } from '@/lib/errors';
 
 // --- Helpers ---
+const stripAccents = (s: any) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+const norm = (s: any) => stripAccents(s).toLowerCase().replace(/\s+/g, ' ').trim();
+const isAttended = (b: any) => b.asistio === true || b.asistencia === true;
 
-/** Extract club type prefix from a step name: "TRAINING - Step 7" → "TRAINING", "Step 7" → null */
-function extractClubName(stepStr: string): string | null {
-  const match = stepStr?.match(/^(.+?)\s*-\s*Step\s*\d+/i);
-  return match ? match[1].trim() : null;
+interface AcademicaRow {
+  _id: string; numeroId: string | null;
+  primerNombre: string | null; primerApellido: string | null;
+  curso: string | null; nivel: string | null; step: string | null;
+  campaign: string | null; salon: string | null;
+  nivelacion: boolean | null; aprobadoNivelacion: boolean | null; detalleNivelacion: any;
 }
 
-/** Extract the numeric part from a step name: "Step 7" → 7, "TRAINING - Step 7" → 7 */
-function extractStepNumber(stepName: string): number | null {
-  const match = stepName.match(/Step\s*(\d+)/i);
-  return match ? parseInt(match[1]) : null;
-}
+/** Resuelve el registro ACADEMICA desde un id (ACADEMICA._id, numeroId o PEOPLE._id). */
+async function resolveAcademica(studentId: string): Promise<{ aca: AcademicaRow | null; tipoCursoPeople: string | null; nombrePeople: string | null }> {
+  const SEL = `"_id","numeroId","primerNombre","primerApellido","curso","nivel","step","campaign","salon","nivelacion","aprobadoNivelacion","detalleNivelacion"`;
+  let aca = await queryOne<AcademicaRow>(`SELECT ${SEL} FROM "ACADEMICA" WHERE "_id"=$1 LIMIT 1`, [studentId]);
+  let tipoCursoPeople: string | null = null;
+  let nombrePeople: string | null = null;
 
-/** Jump Steps are multiples of 5: Step 5, 10, 15, 20, 25, 30, 35, 40, 45 */
-function isJumpStep(stepName: string): boolean {
-  const num = extractStepNumber(stepName);
-  return num !== null && num > 0 && num % 5 === 0;
-}
-
-/**
- * A class counts as "exitosa" (used for NORMAL step counting) if the student attended.
- * Jumps have their own stricter approval rule — see `aproboElJump`.
- */
-function isExitosa(c: any): boolean {
-  return c.asistio === true || c.asistencia === true;
-}
-
-/**
- * Strict approval rule for a Jump booking (Step 5, 10, 15, ...):
- *   asistencia=true AND participacion=true AND noAprobo!==true AND not cancelled.
- * The student stays in the jump step until ANY one booking meets all four.
- */
-function aproboElJump(c: any): boolean {
-  const asistio = c.asistio === true || c.asistencia === true;
-  return asistio
-      && c.participacion === true
-      && c.noAprobo !== true
-      && c.cancelo !== true;
-}
-
-/**
- * Determine the effective class type.
- * The `tipo` column is null in migrated Wix data, so we infer from the step name:
- *   - "Step N"            → SESSION
- *   - "TRAINING - Step N" → CLUB
- *   - Other prefixes      → OTHER (not counted toward step requirements)
- * When `tipo` is populated (e.g. events created via admin panel), use it directly.
- */
-function getClassType(c: any): 'SESSION' | 'CLUB' | 'OTHER' {
-  if (c.tipo === 'SESSION' || c.tipo === 'COMPLEMENTARIA') return 'SESSION';
-  if (c.tipo === 'CLUB') return 'CLUB';
-  if (c.tipo === 'WELCOME') return 'OTHER';
-  // Infer from step name when tipo is null
-  if (!c.tipo && c.step) {
-    if (/^TRAINING\s*-/i.test(c.step)) return 'CLUB';
-    if (/^Step\s+\d+$/i.test(c.step)) return 'SESSION';
+  if (!aca) {
+    // ¿es un PEOPLE._id o un numeroId?
+    const person = await queryOne<any>(
+      `SELECT "_id","numeroId","tipoCurso","primerNombre","primerApellido" FROM "PEOPLE" WHERE "_id"=$1 OR "numeroId"=$1
+       ORDER BY CASE WHEN "tipoUsuario"='BENEFICIARIO' THEN 0 ELSE 1 END LIMIT 1`, [studentId]);
+    if (person) {
+      tipoCursoPeople = person.tipoCurso || null;
+      nombrePeople = [person.primerNombre, person.primerApellido].filter(Boolean).join(' ') || null;
+      if (person.numeroId) {
+        aca = await queryOne<AcademicaRow>(
+          `SELECT ${SEL} FROM "ACADEMICA" WHERE "numeroId"=$1
+           ORDER BY CASE WHEN "tipoUsuario"='BENEFICIARIO' THEN 0 ELSE 1 END LIMIT 1`, [person.numeroId]);
+      }
+    }
+  } else if (aca.numeroId) {
+    const person = await queryOne<any>(`SELECT "tipoCurso" FROM "PEOPLE" WHERE "numeroId"=$1 AND "tipoCurso" IS NOT NULL LIMIT 1`, [aca.numeroId]);
+    tipoCursoPeople = person?.tipoCurso || null;
   }
-  return 'OTHER';
+  return { aca, tipoCursoPeople, nombrePeople };
 }
-
-// A TRAINING club is a CLUB whose step/event name starts with "TRAINING -"
-function isTrainingClub(c: any): boolean {
-  if (getClassType(c) !== 'CLUB') return false;
-  const name = c.step || c.nombreEvento || '';
-  return /^TRAINING\s*-/i.test(name);
-}
-
-// --- Main ---
 
 /**
- * Generate the full progress report for a student.
+ * Genera el reporte de progreso de MOSAICO para un alumno.
  */
 export async function generateReport(studentId: string) {
-  // Get student info — ACADEMICA is source of truth for nivel/step
-  let student: any = await PeopleRepository.findByIdOrNumeroId(studentId);
-  let overrideStudentId: string;
+  const { aca, tipoCursoPeople, nombrePeople } = await resolveAcademica(studentId);
+  if (!aca && !tipoCursoPeople) throw new NotFoundError('Student', studentId);
 
-  if (!student) {
-    student = await AcademicaRepository.findByAnyId(studentId);
-    if (!student) throw new NotFoundError('Student', studentId);
-    // STEP_OVERRIDES uses ACADEMICA _id
-    overrideStudentId = student._id;
-  } else {
-    // ACADEMICA is the source of truth for nivel/step (PEOPLE may be stale from Wix migration)
-    const academica = student.numeroId
-      ? await AcademicaRepository.findByAnyId(student.numeroId)
-      : null;
-    if (academica) {
-      student.nivel = academica.nivel ?? student.nivel;
-      student.step = academica.step ?? student.step;
-      student.nivelParalelo = academica.nivelParalelo ?? student.nivelParalelo;
-      student.stepParalelo = academica.stepParalelo ?? student.stepParalelo;
-      // Use ACADEMICA _id for booking queries and STEP_OVERRIDES
-      student._id = academica._id;
-    }
-    overrideStudentId = student._id;
+  const academicaId = aca?._id || studentId;
+  const nombre = [aca?.primerNombre, aca?.primerApellido].filter(Boolean).join(' ') || nombrePeople || '';
+  // El curso real: si ACADEMICA sigue en el puente WELCOME, usar el de PEOPLE.
+  const cursoAca = aca?.curso && aca.curso !== 'WELCOME' ? aca.curso : null;
+  const curso = cursoAca || tipoCursoPeople || aca?.curso || null;
+  const moduloActual = aca?.nivel || null;
+  const leccionActual = aca?.step || null;
+
+  // 1. Estructura del curso: módulos → lecciones (NIVELES por curso, ordenado).
+  const nivelesRows = curso
+    ? await queryMany<{ code: string; step: string; orden: number | null }>(
+        `SELECT "code","step","orden" FROM "NIVELES" WHERE "curso"=$1 AND "step" <> 'WELCOME'
+         ORDER BY "orden" NULLS LAST, "code","step"`, [curso])
+    : [];
+
+  const moduleOrder: string[] = [];
+  const moduleMap = new Map<string, { code: string; lessons: Array<{ step: string; orden: number | null }>; seen: Set<string> }>();
+  for (const r of nivelesRows) {
+    if (!moduleMap.has(r.code)) { moduleMap.set(r.code, { code: r.code, lessons: [], seen: new Set() }); moduleOrder.push(r.code); }
+    const m = moduleMap.get(r.code)!;
+    const key = norm(r.step);
+    if (!m.seen.has(key)) { m.seen.add(key); m.lessons.push({ step: r.step, orden: r.orden }); }
   }
 
-  const nivelPrincipal = student.nivel;
+  // 2. Bookings del alumno con la lección de su sesión (post-backfill mapearLeccionesSalon).
+  const bookings = academicaId
+    ? await queryMany<any>(
+        `SELECT c."sesionModulo" AS "sm", c."sesionLeccion" AS "sl", c."leccionOrden" AS "lo",
+                c."dia" AS "dia", c."tipo" AS "tipo",
+                b."asistio", b."asistencia", b."noAprobo", b."cancelo"
+         FROM "ACADEMICA_BOOKINGS" b
+         JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
+         WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)`, [academicaId])
+    : [];
 
-  // Get all classes for this student (exclude future sessions)
-  // JOIN with CALENDARIO to get the real step/nivel from the event
-  const allClasses = await queryMany(
-    `SELECT b."_id", b."eventoId",
-            COALESCE(c."nivel", b."nivel") AS "nivel",
-            COALESCE(c."step", b."step") AS "step",
-            b."advisor", b."fechaEvento", b."hora",
-            b."tipo", b."nombreEvento", b."asistio", b."asistencia", b."participacion",
-            b."calificacion", b."comentarios", b."noAprobo", b."cancelo"
-     FROM "ACADEMICA_BOOKINGS" b
-     LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
-     WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
-       AND (b."fechaEvento" IS NULL OR b."fechaEvento"::date <= CURRENT_DATE)
-     ORDER BY b."fechaEvento" DESC`,
-    [student._id]
-  );
+  // Índice de bookings por lección (módulo||lección normalizados). Puede haber >1 = refuerzo.
+  const byLesson = new Map<string, any[]>();
+  for (const bk of bookings) {
+    if (!bk.sl) continue;
+    const key = `${norm(bk.sm)}||${norm(bk.sl)}`;
+    if (!byLesson.has(key)) byLesson.set(key, []);
+    byLesson.get(key)!.push(bk);
+  }
 
-  // Filter classes for current nivel (exclude ESS and WELCOME from step progress)
-  const clasesNivelActual = allClasses.filter(
-    (c) => c.nivel === nivelPrincipal && c.step !== 'WELCOME' && c.nivel !== 'ESS'
-  );
+  const now = Date.now();
+  const t = (d: any) => (d ? new Date(d).getTime() : null);
 
-  // Get all steps for current nivel
-  const stepsRows = await queryMany<{ step: string }>(
-    `SELECT DISTINCT "step"
-     FROM "NIVELES"
-     WHERE "code" = $1 AND "step" != 'WELCOME'
-     ORDER BY "step"`,
-    [nivelPrincipal]
-  );
-  const allSteps = stepsRows
-    .map((r) => r.step)
-    .sort((a, b) => (extractStepNumber(a) ?? 0) - (extractStepNumber(b) ?? 0));
+  function statusLeccion(instances: any[]) {
+    const refuerzo = instances.length > 1;
+    const past = instances.filter((b) => { const tt = t(b.dia); return tt !== null && tt <= now; });
+    const future = instances.filter((b) => { const tt = t(b.dia); return tt === null || tt > now; });
+    const aprobada = instances.some((b) => isAttended(b) && b.noAprobo !== true && b.cancelo !== true);
+    const noAprobada = !aprobada && instances.some((b) => isAttended(b) && b.noAprobo === true);
+    // fecha representativa: última pasada, si no la primera futura
+    const repDate = (past.length ? past[past.length - 1] : future[0])?.dia || null;
 
-  // Get all overrides for this student at once (avoid N+1)
-  // Uses ACADEMICA _id — matches how step-override route stores them.
-  // Guardamos la fila completa para poder exponer notaoverrideHistory en el
-  // visor admin "¿Cómo voy?" (timeline auditable del override).
-  const overrides = await StepOverridesRepository.findByStudentId(overrideStudentId);
-  const overrideRowMap = new Map<string, any>(
-    overrides.map((o: any) => [o.step, o])
-  );
-  const overrideMap = new Map(
-    overrides.map((o: any) => [o.step, o.isCompleted])
-  );
-
-  // Calculate progress by step
-  const progressByStep = allSteps.map((stepName) => {
-    const stepNum = extractStepNumber(stepName);
-    const esJump = isJumpStep(stepName);
-
-    // Match classes by step number to handle both "Step 7" and "TRAINING - Step 7"
-    const clasesDelStep = clasesNivelActual.filter(
-      (c) => extractStepNumber(c.step) === stepNum
-    );
-
-    // Separate by type (infer from step name when tipo is null)
-    const sesiones = clasesDelStep.filter((c) => getClassType(c) === 'SESSION');
-    const clubs = clasesDelStep.filter((c) => getClassType(c) === 'CLUB');
-    const sesionesExitosas = sesiones.filter(isExitosa).length;
-    const clubsExitosos = clubs.filter(isExitosa).length;
-    // Only TRAINING clubs count toward step completion
-    const trainingClubsExitosos = clubs.filter((c) => isTrainingClub(c) && isExitosa(c)).length;
-    const clubNombres = clubs
-      .filter(isExitosa)
-      .map((c) => extractClubName(c.step || '') || c.nombreEvento || 'CLUB')
-      .filter(Boolean);
-    const tieneNoAprobo = clasesDelStep.some((c) => c.noAprobo === true);
-
-    // Override has absolute priority
-    const hasOverride = overrideMap.has(stepName);
-    const overrideCompletado = hasOverride ? overrideMap.get(stepName) : null;
-
-    let completado: boolean;
+    let estado: 'aprobada' | 'no_aprobada' | 'ausente' | 'programada' | 'pendiente';
     let mensaje: string | null = null;
+    if (aprobada) { estado = 'aprobada'; }
+    else if (noAprobada) { estado = 'no_aprobada'; mensaje = 'No aprobaste esta lección. Consulta a tu guía.'; }
+    else if (past.length && past.every((b) => b.cancelo === true)) { estado = 'ausente'; mensaje = 'Cancelaste esta sesión. Consulta a tu guía para reagendar.'; }
+    else if (past.length) { estado = 'ausente'; mensaje = 'No asististe a esta sesión. Consulta a tu guía para ponerte al día.'; }
+    else if (future.length) { estado = 'programada'; }
+    else { estado = 'pendiente'; }
+    return { estado, mensaje, refuerzo, fecha: repDate };
+  }
 
-    if (overrideCompletado === true) {
-      completado = true;
-    } else if (overrideCompletado === false) {
-      completado = false;
-      mensaje = 'Marcado como incompleto por administrador';
-    } else if (esJump) {
-      // Jump approves only when ANY booking satisfies the strict rule:
-      // asistencia=true AND participacion=true AND noAprobo!==true AND not cancelled.
-      // Previous failed/incomplete attempts do NOT block a later successful one.
-      const aprobado = clasesDelStep.some((c) => aproboElJump(c));
-      const clasesNoCancel = clasesDelStep.filter((c) => !c.cancelo);
-      const todasCanceladas = clasesDelStep.length > 0 && clasesNoCancel.length === 0;
-      const algunaAsistio = clasesNoCancel.some((c) => isExitosa(c));
-      const algunaConParticipacion = clasesNoCancel.some((c) => c.participacion === true);
-
-      if (aprobado) {
-        completado = true;
-      } else if (clasesDelStep.length === 0) {
-        completado = false;
-        mensaje = 'Falta la clase del jump';
-      } else if (todasCanceladas) {
-        completado = false;
-        mensaje = 'Canceló la clase del jump, debe reagendarla';
-      } else if (!algunaAsistio) {
-        completado = false;
-        mensaje = 'Falta asistir al jump';
-      } else if (!algunaConParticipacion) {
-        completado = false;
-        mensaje = 'Falta marcar participación en el jump';
-      } else {
-        // asistió + participó pero todos los intentos tienen noAprobo=true
-        completado = false;
-        mensaje = 'No aprobó el jump';
-      }
-    } else {
-      // Normal Step: 2 sesiones exitosas + 1 TRAINING club exitoso
-      // OR: 1 sesión exitosa + 1 complementaria aprobada (tipo=COMPLEMENTARIA cuenta como SESSION) + 1 TRAINING club exitoso
-      completado = sesionesExitosas >= 2 && trainingClubsExitosos >= 1;
-
-      if (!completado) {
-        if (sesionesExitosas >= 2 && trainingClubsExitosos === 0) {
-          mensaje = 'Falta el TRAINING club del step';
-        } else if (sesionesExitosas === 1 && trainingClubsExitosos === 0) {
-          mensaje = 'Falta una sesión y el TRAINING club';
-        } else if (sesionesExitosas === 1 && trainingClubsExitosos >= 1) {
-          mensaje = 'Falta una sesión para terminar';
-        } else if (sesionesExitosas === 0 && trainingClubsExitosos >= 1) {
-          mensaje = 'Faltan dos sesiones';
-        } else {
-          mensaje = 'Faltan dos sesiones y el TRAINING club';
-        }
-      }
-    }
-
-    // Eligible for complementary activity: normal step, not completed, has exactly 1 session
-    // BUT not if the student had a successful session THIS WEEK (Mon-Sun) — they can still book another regular session
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset);
-    const hadSessionThisWeek = sesiones.filter(isExitosa).some((c) => {
-      if (!c.fechaEvento) return false;
-      const fecha = new Date(c.fechaEvento);
-      return fecha >= startOfWeek;
+  // 3. Construir módulos.
+  const modulos = moduleOrder.map((code) => {
+    const m = moduleMap.get(code)!;
+    const lecciones = m.lessons.map((L, i) => {
+      const key = `${norm(code)}||${norm(L.step)}`;
+      const st = statusLeccion(byLesson.get(key) || []);
+      return { orden: L.orden ?? i + 1, leccion: L.step, ...st };
     });
-    const complementariaEligible = !esJump && !completado && sesionesExitosas === 1 && overrideCompletado !== true && !hadSessionThisWeek;
-
-    // Append complementaria hint only when eligible
-    if (complementariaEligible && mensaje) {
-      mensaje += ' Puedes realizar una actividad complementaria.';
-    }
-
-    // Si hay override (activo o histórico), exponemos su historial para que
-    // el visor admin abra un modal con la timeline (Opción C).
-    const overrideRow = overrideRowMap.get(stepName);
-    let notaOverrideHistory: any[] = [];
-    if (overrideRow?.notaoverrideHistory) {
-      try {
-        notaOverrideHistory = Array.isArray(overrideRow.notaoverrideHistory)
-          ? overrideRow.notaoverrideHistory
-          : JSON.parse(overrideRow.notaoverrideHistory);
-      } catch { notaOverrideHistory = []; }
-    }
-
+    const total = lecciones.length;
+    const aprobadas = lecciones.filter((l) => l.estado === 'aprobada').length;
     return {
-      step: stepName,
-      esJump,
-      totalClases: clasesDelStep.length,
-      sesiones: sesiones.length,
-      sesionesExitosas,
-      clubs: clubs.length,
-      clubsExitosos,
-      trainingClubsExitosos,
-      clubNombres,
-      noAprobo: tieneNoAprobo,
-      completado,
-      mensaje,
-      hasOverride,
-      overrideCompletado,
-      notaOverrideHistory,
-      complementariaEligible,
+      modulo: code,
+      esActual: !!moduloActual && code === moduloActual,
+      total, aprobadas,
+      porcentaje: total ? Math.round((aprobadas / total) * 100) : 0,
+      faltan: Math.max(0, total - aprobadas),
+      completo: total > 0 && aprobadas === total,
+      lecciones,
     };
   });
 
-  // Overall statistics (across ALL classes including ESS)
-  const totalClases = allClasses.length;
-  const totalAsistencias = allClasses.filter((c) => isExitosa(c)).length;
-  const totalAusencias = allClasses.filter((c) => c.asistio === false).length;
-  const totalPendientes = allClasses.filter((c) => c.asistio === null || c.asistio === undefined).length;
-  const porcentajeAsistencia =
-    totalClases > 0 ? Math.round((totalAsistencias / totalClases) * 100) : 0;
+  // Módulo "actual": el marcado por ACADEMICA, si no el primero incompleto, si no el último.
+  const modActual = modulos.find((m) => m.esActual)
+    || modulos.find((m) => !m.completo)
+    || modulos[modulos.length - 1] || null;
 
-  const stepsCompletados = progressByStep.filter((s) => s.completado).length;
-  const porcentajeProgreso =
-    allSteps.length > 0 ? Math.round((stepsCompletados / allSteps.length) * 100) : 0;
+  // 4. Estadísticas de asistencia (todas las clases pasadas del alumno).
+  const pastAll = bookings.filter((b) => { const tt = t(b.dia); return tt !== null && tt <= now; });
+  const totalClases = pastAll.length;
+  const totalAsistencias = pastAll.filter(isAttended).length;
+  const totalAusencias = pastAll.filter((b) => b.cancelo !== true && !isAttended(b)).length;
+  const porcentajeAsistencia = totalClases ? Math.round((totalAsistencias / totalClases) * 100) : 0;
 
-  // Group classes by tipo
-  const byTipoMap: Record<string, { tipo: string; totalClases: number; asistencias: number }> = {};
-  for (const c of allClasses) {
-    if (!c.tipo) continue;
-    if (!byTipoMap[c.tipo]) {
-      byTipoMap[c.tipo] = { tipo: c.tipo, totalClases: 0, asistencias: 0 };
-    }
-    byTipoMap[c.tipo].totalClases++;
-    if (isExitosa(c)) byTipoMap[c.tipo].asistencias++;
+  // 5. Nivelación (dato ya existente en ACADEMICA).
+  let nivelacion: any = null;
+  if (aca?.nivelacion === true) {
+    let det: any = aca.detalleNivelacion;
+    if (typeof det === 'string') { try { det = JSON.parse(det); } catch { det = null; } }
+    nivelacion = {
+      activa: true,
+      modulo: det?.modulo || null,
+      leccion: det?.leccion || null,
+      aprobada: aca.aprobadoNivelacion === true,
+    };
   }
+
+  const mapeoPendiente = curso != null && nivelesRows.length > 0 && bookings.length > 0
+    && !bookings.some((b) => b.sl);
 
   return {
     student: {
-      _id: student._id,
-      numeroId: student.numeroId,
-      nombre: `${student.primerNombre} ${student.primerApellido}`,
-      nivel: student.nivel,
-      step: student.step,
-      nivelParalelo: student.nivelParalelo,
-      stepParalelo: student.stepParalelo,
-      plataforma: student.plataforma,
-      email: student.email,
+      _id: academicaId,
+      numeroId: aca?.numeroId || null,
+      nombre,
+      curso,
+      campaign: aca?.campaign || null,
+      salon: aca?.salon || null,
+      moduloActual,
+      leccionActual,
     },
-    progress: {
-      nivelActual: nivelPrincipal,
-      totalSteps: allSteps.length,
-      stepsCompletados,
-      porcentajeProgreso,
-      progressByStep,
+    resumen: {
+      curso,
+      moduloActual: modActual?.modulo || moduloActual || null,
+      modulosCompletos: modulos.filter((m) => m.completo).length,
+      totalModulos: modulos.length,
+      leccionesAprobadasModulo: modActual?.aprobadas || 0,
+      totalLeccionesModulo: modActual?.total || 0,
+      porcentajeModulo: modActual?.porcentaje || 0,
+      faltanModulo: modActual?.faltan || 0,
+      totalClases, totalAsistencias, totalAusencias, porcentajeAsistencia,
+      mapeoPendiente,
     },
-    stats: {
-      totalClases,
-      totalAsistencias,
-      totalAusencias,
-      totalPendientes,
-      porcentajeAsistencia,
-    },
-    byTipo: Object.values(byTipoMap),
-    allClasses: allClasses.map((c) => ({
-      _id: c._id,
-      nivel: c.nivel,
-      step: c.step,
-      tipo: c.tipo,
-      nombreEvento: c.nombreEvento,
-      advisor: c.tipo === 'COMPLEMENTARIA' ? 'PLATAFORMA' : c.advisor,
-      fechaEvento: c.fechaEvento,
-      hora: c.hora,
-      asistio: c.asistio,
-      asistencia: c.asistencia,
-      participacion: c.participacion,
-      calificacion: c.calificacion,
-      comentarios: c.comentarios,
-      noAprobo: c.noAprobo,
-    })),
+    modulos,
+    nivelacion,
   };
 }
