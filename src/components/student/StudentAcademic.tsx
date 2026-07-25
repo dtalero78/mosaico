@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Student, Class } from '@/types'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { visibleEnHistorial } from '@/lib/fecha-semana'
 import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -682,6 +683,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
 
   // Filter classes based on filter states
   const filteredClasses = classes.filter(classItem => {
+    // MOSAICO: pasado completo + sólo pendientes hasta el fin de la semana siguiente.
+    if (!visibleEnHistorial((classItem as any).fechaEvento)) return false
     // Date filter
     if (startDate) {
       const classDate = new Date((classItem as any).fechaEvento)

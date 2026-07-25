@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { formatDateTime } from '@/lib/utils'
+import { visibleEnHistorial } from '@/lib/fecha-semana'
 
 interface ClassHistoryProps {
   data: any
@@ -65,6 +66,8 @@ export default function ClassHistory({ data, isLoading }: ClassHistoryProps) {
   const uniqueAdvisors = Array.from(new Set(classes.map((c: any) => c.advisor).filter(Boolean))) as string[]
 
   const filtered = classes.filter((item: any) => {
+    // MOSAICO: pasado completo + sólo pendientes hasta el fin de la semana siguiente.
+    if (!visibleEnHistorial(item.fechaEvento)) return false
     if (startDate) {
       const d = new Date(item.fechaEvento)
       if (d < new Date(startDate)) return false
