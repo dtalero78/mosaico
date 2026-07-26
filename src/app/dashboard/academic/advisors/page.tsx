@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
-import { MagnifyingGlassIcon, UserIcon, ChartBarIcon, UsersIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, UserIcon, AcademicCapIcon, UsersIcon } from '@heroicons/react/24/outline'
 import AdvisorsList from '@/components/advisors/AdvisorsList'
-import AdvisorsStatistics from '@/components/advisors/AdvisorsStatistics'
+import AdvisorsCursos from '@/components/advisors/AdvisorsCursos'
 import { PermissionGuard } from '@/components/permissions'
 import { AcademicoPermission } from '@/types/permissions'
 
@@ -19,11 +19,11 @@ interface Advisor {
   zoom?: string
 }
 
-type TabType = 'list' | 'statistics'
+type TabType = 'list' | 'cursos'
 
 const tabs = [
   { id: 'list' as TabType, name: 'Lista de Guías', icon: UsersIcon },
-  { id: 'statistics' as TabType, name: 'Estadísticas', icon: ChartBarIcon },
+  { id: 'cursos' as TabType, name: 'Cursos', icon: AcademicCapIcon },
 ]
 
 export default function AdvisorsPage() {
@@ -130,8 +130,8 @@ export default function AdvisorsPage() {
             />
           )}
 
-          {activeTab === 'statistics' && (
-            <AdvisorsStatistics advisors={advisors} />
+          {activeTab === 'cursos' && (
+            <AdvisorsCursos advisors={advisors} />
           )}
         </div>
       </PermissionGuard>
