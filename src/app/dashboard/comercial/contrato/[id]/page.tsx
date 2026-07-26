@@ -819,18 +819,23 @@ export default function ContratoDetailPage() {
               icon={PhoneIcon}
               color="bg-purple-50 text-purple-800"
             >
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-                {CAMPOS_REFERENCIAS.map((field) => (
-                  <FieldDisplay
-                    key={field.campo}
-                    field={field}
-                    value={titular[field.campo]}
-                    editing={editing}
-                    editValue={editTitular[field.campo]}
-                    onEditChange={(campo, val) => setEditTitular(prev => ({ ...prev, [campo]: val }))}
-                  />
+              {/* Ref 1 y Ref 2, cada una en su fila: nombre · parentesco · teléfono */}
+              <div className="space-y-3">
+                {[CAMPOS_REFERENCIAS.slice(0, 3), CAMPOS_REFERENCIAS.slice(3, 6)].map((grupo, gi) => (
+                  <dl key={gi} className="grid grid-cols-3 gap-x-4 gap-y-3">
+                    {grupo.map((field) => (
+                      <FieldDisplay
+                        key={field.campo}
+                        field={field}
+                        value={titular[field.campo]}
+                        editing={editing}
+                        editValue={editTitular[field.campo]}
+                        onEditChange={(campo, val) => setEditTitular(prev => ({ ...prev, [campo]: val }))}
+                      />
+                    ))}
+                  </dl>
                 ))}
-              </dl>
+              </div>
               {/* Observaciones */}
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <FieldDisplay
