@@ -14,6 +14,7 @@ import StudentWhatsApp from './StudentWhatsApp'
 import StudentComments from './StudentComments'
 import StudentProgress from './StudentProgress'
 import StudentCambioAcademico from './StudentCambioAcademico'
+import StudentMovimientoAcademico from './StudentMovimientoAcademico'
 
 interface StudentTabsProps {
   student: Student
@@ -55,6 +56,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   const [showAcademicSubmenu, setShowAcademicSubmenu] = useState(false)
   const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null)
   const [showCambioAcademicoModal, setShowCambioAcademicoModal] = useState(false)
+  const [showMovimientoModal, setShowMovimientoModal] = useState(false)
   const [welcomeModal, setWelcomeModal] = useState<{
     loading: boolean
     submitting: boolean
@@ -68,6 +70,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
   const canAccessProgress = hasPermission(StudentPermission.COMO_VOY)
   const canAgendar = hasPermission(StudentPermission.AGENDAR_CLASE)
   const canCambioAcademico = hasPermission(StudentPermission.CAMBIO_ACADEMICO)
+  const canMovimiento = hasPermission(StudentPermission.MOVIMIENTO_ACADEMICO)
   const canAprobarWelcome = hasPermission(StudentPermission.APROBAR_WELCOME)
 
   // Filtrar submenu académico basado en permisos — TODOS los ítems gateados.
@@ -81,6 +84,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     ...(canAccessProgress ? [{ id: 'progress', name: '¿Cómo voy?', icon: '📈' }] : []),
     ...(canAgendar ? [{ id: 'schedule', name: 'Agendar Sesión', icon: '📅' }] : []),
     ...(canCambioAcademico ? [{ id: 'cambio-academico', name: 'Cambio Académico', icon: '🔀' }] : []),
+    ...(canMovimiento ? [{ id: 'movimiento-academico', name: 'Movimiento Académico', icon: '↕️' }] : []),
     ...(canAprobarWelcome ? [{ id: 'aprobar-welcome', name: 'Aprobar Welcome', icon: '✅' }] : []),
   ]
 
@@ -201,6 +205,13 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
                                 if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
                                 return
                               }
+                              // Movimiento Académico: modal (cambia módulo/lección dentro del curso)
+                              if (item.id === 'movimiento-academico') {
+                                setShowMovimientoModal(true)
+                                setShowAcademicSubmenu(false)
+                                if (closeTimeout) { clearTimeout(closeTimeout); setCloseTimeout(null) }
+                                return
+                              }
                               setActiveTab('academic')
                               setAcademicView(item.id)
                               setShowAcademicSubmenu(false)
@@ -258,6 +269,20 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
           currentCurso={student.tipoCurso || student.curso}
           currentSalon={student.salon}
           onClose={() => setShowCambioAcademicoModal(false)}
+          onSuccess={() => window.location.reload()}
+        />
+      )}
+
+      {/* Modal Movimiento Académico */}
+      {showMovimientoModal && (
+        <StudentMovimientoAcademico
+          studentId={student._id}
+          studentName={`${student.primerNombre} ${student.primerApellido}`}
+          campaign={student.campaign}
+          curso={student.tipoCurso || student.curso}
+          currentModulo={student.nivel}
+          currentLeccion={student.step}
+          onClose={() => setShowMovimientoModal(false)}
           onSuccess={() => window.location.reload()}
         />
       )}

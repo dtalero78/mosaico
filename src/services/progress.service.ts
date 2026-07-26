@@ -102,7 +102,7 @@ export async function generateReport(studentId: string) {
     ? await queryMany<any>(
         `SELECT c."sesionModulo" AS "sm", c."sesionLeccion" AS "sl", c."leccionOrden" AS "lo",
                 c."dia" AS "dia", c."tipo" AS "tipo",
-                b."asistio", b."asistencia", b."noAprobo", b."cancelo"
+                b."asistio", b."asistencia", b."noAprobo", b."cancelo", b."movimientoAcademico"
          FROM "ACADEMICA_BOOKINGS" b
          JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
          WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)`, [academicaId])
@@ -126,6 +126,8 @@ export async function generateReport(studentId: string) {
     const future = instances.filter((b) => { const tt = t(b.dia); return tt === null || tt > now; });
     const aprobada = instances.some((b) => isAttended(b) && b.noAprobo !== true && b.cancelo !== true);
     const noAprobada = !aprobada && instances.some((b) => isAttended(b) && b.noAprobo === true);
+    // Aprobada por Movimiento Académico (no por asistencia real).
+    const movimiento = aprobada && instances.some((b) => isAttended(b) && b.noAprobo !== true && b.movimientoAcademico === true);
     // fecha representativa: última pasada, si no la primera futura
     const repDate = (past.length ? past[past.length - 1] : future[0])?.dia || null;
     const cosa = esEval ? 'la evaluación' : 'esta sesión';
@@ -138,7 +140,7 @@ export async function generateReport(studentId: string) {
     else if (past.length) { estado = 'ausente'; mensaje = `No asististe a ${cosa}. Consulta a tu guía para ponerte al día.`; }
     else if (future.length) { estado = 'programada'; }
     else { estado = 'pendiente'; }
-    return { estado, mensaje, refuerzo, fecha: repDate };
+    return { estado, mensaje, refuerzo, fecha: repDate, movimiento };
   }
 
   // 3. Construir módulos (lecciones + evaluación del módulo).

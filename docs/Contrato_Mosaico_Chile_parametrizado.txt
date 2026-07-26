@@ -1,0 +1,109 @@
+Número de contrato: {{contrato}}
+Fecha: {{fecha}}
+
+Entre MOSAICO CHILE SPA, empresa de giro de su denominación, rol único tributario número 77.744.966-4, para efectos del presente Contrato denominada MOSAICO y representada por la señora JENNIFER CAROLINA AVILA FIGUEROA, cédula nacional de identidad número 13.091.370-9, ambos domiciliados en Av. Príncipe de Gales 5921 of 910, La Reina en la ciudad de Santiago de Chile, y el titular identificado en el ítem N.º 1, se ha convenido el presente contrato.
+
+ITEM Nº1 DATOS COMPRADOR TITULAR
+
+TITULAR:
+Nombre Completo: {{primerNombre}} {{segundoNombre}} {{primerApellido}} {{segundoApellido}}
+Rut: {{numeroId}}
+Fecha de nacimiento: {{fechaNacimiento}}
+Domicilio: {{domicilio}}
+Ciudad: {{ciudad}}
+Teléfono casa: {{telefonoCasa}}
+Teléfono celular: {{celular}}
+Email: {{email}}
+Ingreso: ${{ingresos}}
+Nombre empresa: {{empresa}}
+Cargo: {{cargo}}
+Dirección empresa: {{direccionEmpresa}}
+Teléfono empresa: {{telefonoEmpresa}}
+
+ITEM Nº2
+CONDICIONES GENERALES: A continuación, encontrará las condiciones únicas ofrecidas a usted y debidamente escritas que componen el presente contrato denominado también Uso de Membresía para el método MOSAICO.
+
+El (los) usuario (s) del Programa para el aprendizaje del método Mosaico Soroban a través del Método denominado MOSAICO, será (n):
+
+USUARIOS:
+{{beneficiarios}}
+
+ITEM Nº3
+CLÁUSULAS LEGALES:
+El valor total del material didáctico es de ${{totalPlan}}.- Inscripción de ${{pagoInscripcion}}.- Saldo ${{saldo}}.- Pago del Saldo en {{numeroCuotas}} mensualidades de ${{valorCuota}}.- Forma de pago {{formaPago}} Valor Pagado ${{valorPagado}}.- Fecha de Pago 1ª mensualidad (30 días) {{fechaPago}}.
+
+En ningún caso será válido el pago realizado en cuentas diferentes, cuyo titular no sea la empresa.
+
+El (los) usuario(s) podrá(n) ser cambiado (s) o adicionados a solicitud del Comprador, notificando por escrito a MOSAICO en un plazo máximo de 90 días calendario a partir de la fecha de inicio del presente contrato.
+
+MOSAICO se reserva el derecho de agregar un usuario adicional de membresía previa solicitud escrita vía email, realizada por el Titular. No se considerarán validos los cambios o modificaciones verbales o cualquier tipo de acuerdo u ofrecimiento que no esté debidamente presentado ya sea por escrito, vía email y que a su vez la Empresa MOSAICO haya validado y aceptado, manifestando la resolución por los medios autorizados para tal fin.
+
+El presente contrato, permite al Usuario(s), realizar recuperaciones de inasistencia en la semana en horarios que MOSAICO disponga si se requiere por parte del área académica y a las actividades extra que proporcione MOSAICO, sin que le generen costo adicional al ya pactado durante la vigencia de la misma, la cual es de {{vigenciaMeses}} meses para programas Yoji, Kodomo u Okina y de 6 meses para los programas de Danshi y Senpai contados a partir de la firma del presente Contrato.
+
+Se podrá realizar 1 cambio de grupo, este cambio estará sujeto a evaluación por parte de la coordinación del programa, teniendo en cuenta los motivos y respaldo de la situación que presente el usuario mediante petición por correo electrónico.
+
+La inasistencia a las sesiones por un periodo de tiempo determinado por el Usuario sea cual fuere el motivo, no exime al titular del presente contrato del pago de las cuotas pactadas hasta completar la totalidad del precio aceptado en este documento. El Pago corresponde al material didáctico recibido según remisión de entrega, mas no por el Servicio que de manera adicional y de forma gratuita (sesiones de práctica, entrenamiento y talleres) -en adelante el “Servicio”-, el mismo que será ofrecido única y exclusivamente vía on-line, a través de plataforma de comunicaciones como ZOOM, o la que designe EL VENDEDOR. El tiempo de servicio gratuito por cada nivel contratado es de acuerdo con el curso adquirido, en sesiones de dos (2) horas semanales (horas pedagógicas de 50 minutos) mas una hora de Taller opcional. En el caso que EL COMPRADOR o su Beneficiario, por cualquier razón desista de tomar el Servicio gratuito otorgado.
+
+EL COMPRADOR renuncia a la posibilidad de devolución, ya que este material didáctico es reproducible y se encuentra amparado por los derechos de autor.
+
+MOSAICO se compromete a conservar y custodiar la información del titular con la debida diligencia para no ser utilizada sino únicamente para sus fines comerciales propios y los aquí acordados.
+
+El titular contratante autoriza a la empresa MOSAICO a consultar y reportar la idoneidad del comportamiento financiero del adquiriente a las centrales de riesgo.
+
+MOSAICO asignará horarios fijos para que el usuario tome sus sesiones en cualquier ciclo y se informará la disponibilidad al momento de iniciar cada uno.
+
+ITEM Nº4
+OBJETO DEL CONTRATO:
+Las Partes, han convenido celebrar el presente Contrato de Compraventa de Material Didáctico del programa MOSAICO. El VENDEDOR, pone a disposición de EL COMPRADOR para el correcto uso del Material Didáctico por parte del Beneficiario, objeto de esta venta, de manera adicional y de forma gratuita, tutorías, entrenamiento y talleres (en adelante el “Servicio”), el mismo que será ofrecido única y exclusivamente vía on-line, a través de aplicativos de páginas web como ZOOM, o la que designe EL VENDEDOR.
+
+TÉRMINO DEL CONTRATO.
+El titular del contrato podrá poner término al presente en cualquier momento, con una anticipación mínimo de 30 días, corrido a la fecha del próximo cobro del pago del mes programado, informando esta decisión por el correo oficial de la empresa o una carta a la dirección de la empresa citada al inicio de este documento. Las causales validas son por enfermedad grave, difícil situación económica u otra de fuerza mayor.
+
+PENALIDAD: el monto que deberá pagar para dar por terminado de manera anticipada el presente contrato será mínimo del 30% del saldo que adeude según el valor del plan adquirido, esto para cubrir costos de material, envió, derechos de autor y otros de infraestructura online etc. En NINGUN CASO SE HARAN DEVOLUCIONES.
+
+ITEM Nº5
+GARANTIA.
+La Empresa MOSAICO entrega una garantía de aprendizaje fundamentada en el cumplimiento por parte del Usuario en todos los requisitos necesarios para la correcta utilización del método, incluyendo en estos la preparación en casa, la asistencia mínima de dos veces a la semana a sus sesiones, la cual no puede ser interrumpida ya que el método requiere constancia y continuidad para el correcto desarrollo de las habilidades propuestas en el método Mosaico. Este periodo de garantía se asignará según el Diagnostico realizado por la Empresa.
+
+ITEM Nº6
+COMPROMISOS ADICIONALES DEL COMPRADOR TITULAR Y/O USUARIO.
+Realizar prácticas de (20) veinte minutos promedio entre sesiones dos (2) días a la semana, para que el proceso de aprendizaje de sus frutos en los plazos requeridos por el método MOSAICO.
+
+Informar a las directivas de la Empresa MOSAICO, de cualquier ofrecimiento realizado por algún miembro de la empresa, que no esté en el presente contrato, incluyendo la asignación de algún Beneficiario o Usuario para que haga parte de este Contrato en cualquiera de sus obligaciones o beneficios.
+
+El Titular del presente Contrato declara que acepta claramente todas sus obligaciones y las de La Empresa MOSAICO, garantizando así la transparencia de esta relación comercial y calificando al Ejecutivo o empleado de la misma como una persona profesional y clara en su ofrecimiento del programa MOSAICO.
+
+ITEM Nº7
+OBSERVACIONES: {{observaciones}}
+
+APODERADO
+Nombre: {{nombreApoderado}}
+Teléfono: {{telefonoApoderado}}
+
+Para envío de información, consultas o reclamos, serán por la vía email a:
+contacto@mosaicosoroban.cl
+
+REFERENCIAS:
+- Nombre: {{referenciaUno}}
+- Teléfono: {{telefonoRefUno}}
+- Parentesco: {{parentescoRefUno}}
+
+- Nombre: {{referenciaDos}}
+- Teléfono: {{telefonoRefDos}}
+- Parentesco: {{parentescoRefDos}}
+
+Declaro que he leído y conozco mis obligaciones y las de la Empresa MOSAICO, certificándolo con mi aceptación del presente documento al responderlo por correo. Esta modalidad se considera suficiente y tiene mérito equivalente a la firma en físico o electrónica.
+
+SI, ACEPTO.{{firma}}
+
+Nombre del titular: {{primerNombre}} {{segundoNombre}} {{primerApellido}} {{segundoApellido}}
+Número de Identificación: {{numeroId}}
+
+ESCALA COMERCIAL MOSAICO
+Asesor training: {{asesorTraining}}
+Full Executive: {{fullExecutive}}
+Jefe de Grupo: {{jefeGrupo}}
+Gerente: {{gerente}}
+Gerente Div: {{gerenteDiv}}
+Sales: {{sales}}
+Email: {{emailComercial}}

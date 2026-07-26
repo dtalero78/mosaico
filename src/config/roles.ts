@@ -286,7 +286,7 @@ const COORDINADOR_ACADEMICO_PERMISSIONS: Permission[] = [
   StudentPermission.ELIMINAR_EVENTO,
   StudentPermission.AGENDAR_CLASE,
   StudentPermission.MARCAR_STEP,
-  StudentPermission.ASIGNAR_STEP,
+  StudentPermission.MOVIMIENTO_ACADEMICO,
   StudentPermission.CONSULTA,
 
   // ACADEMICO - Gestión completa (16 permisos)

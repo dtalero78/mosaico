@@ -101,23 +101,6 @@ export function useExtendContract(studentId: string) {
   )
 }
 
-/** Change student step */
-export function useChangeStep(studentId: string) {
-  const qc = useQueryClient()
-  return useMutation(
-    (body: { newStep: string; nivel?: string }) =>
-      api.post(`/api/postgres/students/${encodeURIComponent(studentId)}/step`, body),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries(keys.profile(studentId))
-        qc.invalidateQueries(keys.academic(studentId))
-        toast.success('Step actualizado')
-      },
-      onError: (err) => handleApiError(err, 'Error cambiando step'),
-    }
-  )
-}
-
 /** Toggle step override */
 export function useStepOverride(studentId: string) {
   const qc = useQueryClient()

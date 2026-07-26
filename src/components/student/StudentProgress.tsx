@@ -10,6 +10,7 @@ interface Leccion {
   mensaje: string | null
   refuerzo: boolean
   fecha: string | null
+  movimiento?: boolean
 }
 interface Evaluacion {
   estado: Leccion['estado']
@@ -176,9 +177,10 @@ export default function StudentProgress({ student }: { student: Student }) {
                   {modSel.lecciones.map((l) => (
                     <tr key={`${l.orden}-${l.leccion}`} className="border-b border-gray-100">
                       <td className="py-2 px-3 font-medium text-gray-900">
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex items-center gap-1.5 flex-wrap">
                           {l.leccion}
                           {l.refuerzo && <span className="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1 py-0.5 rounded">🔁 REFUERZO</span>}
+                          {l.movimiento && <span className="text-[9px] font-bold text-sky-700 bg-sky-100 px-1 py-0.5 rounded">↕️ MOVIMIENTO</span>}
                         </span>
                       </td>
                       <td className="py-2 px-3 text-center">
@@ -187,7 +189,7 @@ export default function StudentProgress({ student }: { student: Student }) {
                         </span>
                       </td>
                       <td className="py-2 px-3 text-xs text-gray-500">{fmtFecha(l.fecha)}</td>
-                      <td className="py-2 px-3 text-xs text-gray-500 italic">{l.mensaje || (l.estado === 'aprobada' ? 'Asistió y aprobó' : '')}</td>
+                      <td className="py-2 px-3 text-xs text-gray-500 italic">{l.mensaje || (l.estado === 'aprobada' ? (l.movimiento ? 'Aprobada por Movimiento Académico' : 'Asistió y aprobó') : '')}</td>
                     </tr>
                   ))}
                   {modSel.evaluacion && (

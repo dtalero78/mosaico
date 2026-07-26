@@ -1,0 +1,3270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Puertas de comunicación — dtalero78/mosaico (MOSAICO)</title>
+<!--
+  PLANTILLA flow-storyboard — MAPA DE PUERTAS DE COMUNICACIÓN (data-driven).
+  Clona y reemplaza SOLO: la var REPO y el array DOORS (y si hace falta
+  GROUPS_IN/GROUPS_OUT). El renderer y el CSS NO se tocan.
+  Layout: app en el centro, ENTRADAS (inbound) a la izquierda en una sola
+  columna (una fila por puerta), SALIDAS (outbound) a la derecha. Clic en una
+  puerta → se abre un PANEL LATERAL a la derecha (no reemplaza el mapa; cierra
+  con × o Esc). Autocontenido (sin red). Cada puerta lleva archivo:línea real.
+  auth inbound colorea la puerta: public/none=rojo, signed/api-key=ámbar,
+  jwt=verde, soft=amarillo, internal=gris.
+-->
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#13161c; --line:#262b34; --line2:#323845;
+    --ink:#e6e9ef; --muted:#8a93a3; --faint:#5b6470; --accent:#4a7dff;
+    --red:#ff5d61; --amber:#f5a524; --green:#37c184; --yellow:#e0c14a; --gray:#6b7480;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+  .viewport{position:fixed;inset:0;overflow:hidden;cursor:grab;background-color:var(--bg);
+    background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:26px 26px}
+  .viewport.grabbing{cursor:grabbing}
+  .canvas{transform-origin:0 0;padding:96px 80px;width:max-content}
+  @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
+  .canvas>*{animation:pop .18s ease}
+  .info{position:fixed;top:18px;left:18px;z-index:10;background:rgba(19,22,28,.9);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:14px 16px;max-width:366px}
+  .info .eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .info h1{font-size:16px;margin:5px 0 7px;letter-spacing:-.01em}
+  .info p{font-size:11.8px;color:var(--muted);margin:0 0 8px;line-height:1.5}
+  .info p b{color:var(--ink);font-weight:600}
+  .legend{display:flex;flex-wrap:wrap;gap:5px 12px;font-size:10px;color:var(--muted);margin-top:6px}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle}
+  .hint{position:fixed;bottom:14px;left:18px;z-index:10;font-size:10.5px;color:var(--faint);font-family:var(--mono)}
+  .toolbar{position:fixed;top:18px;right:18px;z-index:10;display:flex;gap:6px}
+  .toolbar button{background:rgba(19,22,28,.86);border:1px solid var(--line);color:var(--muted);width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px;line-height:1}
+  .toolbar button:hover{color:var(--ink);border-color:var(--line2)}
+  .plant{display:flex;align-items:flex-start}
+  .side{display:flex;flex-direction:column;gap:16px}
+  .side.left{align-items:flex-end}
+  .side.right{align-items:flex-start}
+  .colhead{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:2px}
+  .side.left .colhead{color:#ff8a8d;text-align:right}
+  .side.right .colhead{color:#8ab4ff}
+  .grp .glabel{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:8px}
+  .side.left .glabel{text-align:right}
+  .dlist{display:flex;flex-direction:column;gap:8px}
+  .drow{display:flex;align-items:center;gap:7px}
+  .darrow{color:#39424f;font-size:14px;flex:0 0 auto}
+  .door{width:262px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:9px 11px;cursor:pointer;transition:transform .12s,border-color .12s,box-shadow .12s;position:relative}
+  .door:hover{transform:translateY(-1px);border-color:var(--line2);box-shadow:0 12px 26px -16px rgba(0,0,0,.85)}
+  .side.left .door{border-right-width:2px}
+  .side.right .door{border-left-width:2px}
+  .door .dt{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;padding-right:16px}
+  .door .de{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .door .dbadge{font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 6px;border-radius:5px;display:inline-block;margin-top:6px}
+  .door .fdot{position:absolute;top:8px;right:9px;font-size:8.5px;font-family:var(--mono)}
+  .core{margin:0 24px;width:184px;flex:0 0 auto;background:linear-gradient(180deg,#171b24,#0f1219);border:1px solid var(--line2);border-radius:16px;padding:20px 16px;text-align:center;box-shadow:0 0 0 6px rgba(74,125,255,.05),0 30px 60px -30px rgba(0,0,0,.9)}
+  .core .clogo{font-size:24px}
+  .core h2{font-size:15px;margin:7px 0 2px}
+  .core .csub{font-size:10px;color:var(--faint)}
+  .core .cmeta{font-size:10px;color:var(--muted);font-family:var(--mono);line-height:1.8;margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+  .core .cin{color:#ff8a8d;font-weight:700}.core .cout{color:#8ab4ff;font-weight:700}.core .cred{color:var(--red);font-weight:700}
+  .panel{position:fixed;top:0;right:0;height:100vh;width:384px;background:rgba(15,18,24,.97);backdrop-filter:blur(10px);border-left:1px solid var(--line2);box-shadow:-24px 0 60px -24px rgba(0,0,0,.8);transform:translateX(103%);transition:transform .22s ease;z-index:20;overflow:auto;padding:22px 22px 48px}
+  .panel.open{transform:none}
+  .pclose{position:absolute;top:14px;right:16px;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;border:1px solid var(--line);background:var(--panel);border-radius:8px;width:30px;height:30px;display:grid;place-items:center}
+  .pclose:hover{color:var(--ink);border-color:var(--line2)}
+  .detail{width:auto;max-width:none}
+  .dtitle{font-size:21px;font-weight:650;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+  .badges{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+  .bdg{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:6px;background:var(--panel);border:1px solid var(--line2);color:var(--muted)}
+  .dpurpose{font-size:13px;color:var(--ink);margin:8px 0 16px;line-height:1.55}
+  .drow2{display:flex;flex-wrap:wrap;gap:24px;margin-bottom:8px}
+  .drow2 .ml{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:6px}
+  .drow2 .mf{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.7}
+  .flags{margin-top:16px;background:rgba(19,22,28,.6);border:1px solid var(--line);border-radius:14px;padding:6px 18px}
+  .flagsh{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--red);font-weight:700;padding:12px 0 4px}
+  .flag{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line)}
+  .flag:last-child{border-bottom:none}
+  .sev{flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:5px}
+  .sev.alto{background:var(--red)}.sev.medio{background:var(--amber)}.sev.bajo{background:var(--accent)}
+  .flag .ft2{font-size:12px;color:var(--ink);line-height:1.45}
+  .flag .fr{font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-top:3px}
+  .urls{margin:4px 0 16px}
+  .url{font-family:var(--mono);font-size:11px;color:#9fb6ff;word-break:break-all;padding:4px 0;border-bottom:1px solid var(--line);display:flex;gap:7px}
+  .url:last-child{border-bottom:none}
+  .url::before{content:'↪';color:var(--faint)}
+  .url.usedin{color:var(--ink)}
+  .url.usedin::before{content:'📄'}
+  .urlnote{font-size:10px;color:var(--faint);font-style:italic;margin-top:5px}
+</style>
+</head>
+<body>
+<div class="info">
+  <div class="eyebrow">Puertas de comunicación</div>
+  <h1>dtalero78/mosaico (MOSAICO)</h1>
+  <div class="legend">
+    <span><i style="background:var(--red)"></i>Abierta a cualquiera</span>
+    <span><i style="background:var(--amber)"></i>Con clave o firma especial</span>
+    <span><i style="background:var(--green)"></i>Hay que iniciar sesión</span>
+    <span><i style="background:var(--gray)"></i>Interna (automática)</span>
+  </div>
+</div>
+<div class="toolbar"><button id="zin">+</button><button id="zout">−</button><button id="zfit">⤢</button></div>
+<div class="hint">arrastra para mover · scroll para zoom · clic = detalle</div>
+<div class="viewport" id="vp"><div class="canvas" id="cv"></div></div>
+<div class="panel" id="panel"></div>
+
+<script>
+/* ====== DATOS (REEMPLAZAR) ======
+   dir: 'in' | 'out'
+   type IN:  webhook | http-public | upload | api-in | cron | websocket | http-auth
+   type OUT: api | email | storage | db | other
+   auth IN:  public | none | signed | api-key | jwt | soft | internal
+   auth OUT: nombre de la ENV var de la credencial (no imprimir secretos)
+   icon: emoji opcional (🪝 🌐 📤 🔑 ⏱ 🔌 🔒 / 🔗 ✉️ 🗄 🛢 ⚙️)
+*/
+var REPO='dtalero78/mosaico (MOSAICO)';
+var GROUPS_IN = [
+  {type:'webhook',label:'Webhooks'},{type:'http-public',label:'Endpoints públicos'},
+  {type:'upload',label:'Uploads'},{type:'api-in',label:'API con key'},
+  {type:'cron',label:'Crons (internos)'},{type:'websocket',label:'WebSocket'},
+  {type:'http-auth',label:'Grupos autenticados'}
+];
+var GROUPS_OUT = [
+  {type:'api',label:'APIs externas'},{type:'email',label:'Email'},
+  {type:'storage',label:'Storage'},{type:'db',label:'Base de datos'},{type:'other',label:'Otros'}
+];
+var DOORS = [
+ {
+  "id": "internal-verify-credentials",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Verificar credenciales (devuelve la contraseña)",
+  "icon": "🌐",
+  "endpoint": "POST /api/internal/verify-credentials",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Se declara «interno» pero es una ruta HTTP pública: con solo un email devuelve el registro de USUARIOS_ROLES incluyendo el campo password. Lo consume src/lib/auth.ts por fetch.",
+  "files": [
+   "src/app/api/internal/verify-credentials/route.ts:11",
+   "src/app/api/internal/verify-credentials/route.ts:49"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Público (handler(), sin sesión) y el matcher del middleware excluye /api: devuelve la CONTRASEÑA almacenada de cualquier usuario en {success:true,user:{password}} → volcado de credenciales desde internet.",
+    "ref": "src/app/api/internal/verify-credentials/route.ts:49"
+   },
+   {
+    "s": "alto",
+    "t": "Permite enumerar usuarios y roles: distingue 'User not found' vs 'User inactive' vs éxito con 'rol', sin rate-limit, sin secreto compartido ni firma. Debería ser función interna, no endpoint HTTP.",
+    "ref": "src/app/api/internal/verify-credentials/route.ts:31"
+   }
+  ]
+ },
+ {
+  "id": "forgot-password-reset",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Restablecer clave (exige el ticket del OTP)",
+  "icon": "🌐",
+  "endpoint": "POST /api/auth/forgot-password/reset-password",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Paso 4: EXIGE y quema el resetToken emitido por verify-otp antes de tocar la BD. Escribe por _id de la cuenta, nunca por email.",
+  "files": [
+   "src/app/api/auth/forgot-password/reset-password/route.ts:39",
+   "src/app/api/auth/forgot-password/reset-password/route.ts:48"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Contraseña en TEXTO PLANO: password.trim() crudo a USUARIOS_ROLES.password y ACADEMICA.clave, sin hash. PENDIENTE (decisión del usuario): bcrypt choca con la pantalla del admin que MUESTRA ACADEMICA.clave («Clave Login», StudentGeneral.tsx).",
+    "ref": "src/app/api/auth/forgot-password/reset-password/route.ts:48"
+   },
+   {
+    "s": "medio",
+    "t": "Sin rate-limit: el 404 sigue siendo oráculo de enumeración (aunque ya no cambia claves sin el ticket).",
+    "ref": "src/app/api/auth/forgot-password/reset-password/route.ts:35"
+   },
+   {
+    "s": "bajo",
+    "t": "RESUELTO (32469a0): cerrada la TOMA DE CUENTAS. Antes no consultaba el OTP en ningún punto → con sólo saber un correo se cambiaba la clave de cualquiera desde internet. Ahora exige el resetToken y lo quema (en éxito y en fallo). Verificado bloqueado sin token y con token inventado.",
+    "ref": "src/app/api/auth/forgot-password/reset-password/route.ts:39"
+   },
+   {
+    "s": "bajo",
+    "t": "RESUELTO (a6ca404): el UPDATE de ACADEMICA va por _id. Antes iba WHERE LOWER(email) y les cambiaba la clave a TODOS los hermanos que compartieran el correo del apoderado (caso real en mosaico-db).",
+    "ref": "src/app/api/auth/forgot-password/reset-password/route.ts:56"
+   },
+   {
+    "s": "bajo",
+    "t": "Política de clave débil impuesta por el servidor: máximo 10 caracteres, lo que bloquea passphrases fuertes.",
+    "ref": "src/app/api/auth/forgot-password/reset-password/route.ts:31"
+   }
+  ]
+ },
+ {
+  "id": "forgot-password-identity",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Verificar identidad y enviar OTP (recuperación)",
+  "icon": "🌐",
+  "endpoint": "POST /api/auth/forgot-password/verify-identity",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Paso 2: exige el CELULAR registrado y, si coincide, envía el OTP por WhatsApp. El factor «últimos 4 del documento» se eliminó (no filtraba nada).",
+  "files": [
+   "src/app/api/auth/forgot-password/verify-identity/route.ts:49",
+   "src/app/api/auth/forgot-password/verify-identity/route.ts:19"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Dispara WhatsApp real sin auth ni throttle: permite WA-bombing a la víctima y quemar la cuota del proveedor (clave de LGS).",
+    "ref": "src/app/api/auth/forgot-password/verify-identity/route.ts:79"
+   },
+   {
+    "s": "medio",
+    "t": "Un solo factor (el celular) y sin rate-limit: quien conozca el número del alumno pasa este paso. El OTP por WhatsApp es la barrera real.",
+    "ref": "src/app/api/auth/forgot-password/verify-identity/route.ts:62"
+   },
+   {
+    "s": "bajo",
+    "t": "RESUELTO (32469a0): celularCoincide() exige el número completo (tolera sólo el indicativo de país). Antes storedPhone.endsWith(x) pasaba con UN dígito.",
+    "ref": "src/app/api/auth/forgot-password/verify-identity/route.ts:19"
+   },
+   {
+    "s": "bajo",
+    "t": "RESUELTO (32469a0): el factor documento se eliminó — slice(-4) de «-» daba «» y endsWith(«») es SIEMPRE verdadero, así que cualquier valor pasaba.",
+    "ref": "src/app/api/auth/forgot-password/verify-identity/route.ts:44"
+   }
+  ]
+ },
+ {
+  "id": "forgot-password-check-email",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Comprobar email (enumeración de cuentas)",
+  "icon": "🌐",
+  "endpoint": "POST /api/auth/forgot-password/check-email",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Paso 1: comprueba que la cuenta exista. Acepta correo O userLogin (resolveAccount). Ya NO devuelve el celular enmascarado — solo {hasPhone:true}.",
+  "files": [
+   "src/app/api/auth/forgot-password/check-email/route.ts:16",
+   "src/lib/forgot-password-account.ts:16"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Enumeración de usuarios: público y sin rate-limit; responde 404 \"Usuario not found: <valor>\" si no existe y 200 si existe → permite validar listas completas de correos/usuarios.",
+    "ref": "src/app/api/auth/forgot-password/check-email/route.ts:22"
+   },
+   {
+    "s": "bajo",
+    "t": "RESUELTO (32469a0): ya no filtra el celular enmascarado, que era exactamente el secreto que pide el paso 2.",
+    "ref": "src/app/api/auth/forgot-password/check-email/route.ts:31"
+   }
+  ]
+ },
+ {
+  "id": "forgot-password-verify-otp",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Verificar OTP (sin efecto de seguridad)",
+  "icon": "🌐",
+  "endpoint": "POST /api/auth/forgot-password/verify-otp",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Paso 3: valida el OTP y EMITE el resetToken de un solo uso que reset-password exige. Es lo único que ata el paso 4 a los anteriores.",
+  "files": [
+   "src/app/api/auth/forgot-password/verify-otp/route.ts:16",
+   "src/lib/otp-store.ts:1"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "El OTP vive en un Map en memoria: se pierde en cada deploy y NO funciona con más de una instancia (hoy la web corre 1). Editar otp-store.ts en dev también lo vacía.",
+    "ref": "src/lib/otp-store.ts:1"
+   },
+   {
+    "s": "bajo",
+    "t": "RESUELTO (32469a0/6197e77): 3 intentos y el código se borra al agotarlos; emite resetToken (randomBytes(32), TTL 10 min); crypto.randomInt en vez de Math.random; timingSafeEqual en la comparación.",
+    "ref": "src/lib/otp-store.ts:1"
+   },
+   {
+    "s": "bajo",
+    "t": "RESUELTO (a6ca404): el store se indexa por USUARIOS_ROLES._id (resolveAccount), no por email — los hermanos comparten el correo del apoderado.",
+    "ref": "src/app/api/auth/forgot-password/verify-otp/route.ts:26"
+   }
+  ]
+ },
+ {
+  "id": "crm-bridge",
+  "dir": "in",
+  "type": "api-in",
+  "title": "Puente SSO desde el CRM (emite sesión)",
+  "icon": "🔑",
+  "endpoint": "GET /api/auth/crm-bridge",
+  "protocol": "REST",
+  "auth": "CRM_BRIDGE_SECRET",
+  "purpose": "SSO desde el CRM: verifica un HMAC-SHA256 sobre `${email}:${ts}` (ventana 5 min) y emite/instala una cookie de sesión NextAuth con rol COMERCIAL, redirigiendo al dashboard.",
+  "files": [
+   "src/app/api/auth/crm-bridge/route.ts:19",
+   "src/app/api/auth/crm-bridge/route.ts:42-50"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Emite una sesión NextAuth válida (rol COMERCIAL) desde parámetros de URL, sin middleware de por medio. El usuario se forja sin consultar la BD: sub 'crm-bridge-<email>' y role se inyectan sin verificar que el email exista ni que sea COMERCIAL. Si CRM_BRIDGE_SECRET se filtra, es login como cualquier email.",
+    "ref": "src/app/api/auth/crm-bridge/route.ts:42-50"
+   },
+   {
+    "s": "alto",
+    "t": "Open redirect: ?redirect= se resuelve con new URL(redirect, BASE_URL) sin allow-list; un valor absoluto 'https://evil.com' gana sobre la base y envía al atacante con el email en query string.",
+    "ref": "src/app/api/auth/crm-bridge/route.ts:53-56"
+   },
+   {
+    "s": "medio",
+    "t": "Token reutilizable: solo se valida la ventana de 5 min, sin nonce ni registro de consumo; quien capture la URL (logs, Referer, historial) obtiene la sesión.",
+    "ref": "src/app/api/auth/crm-bridge/route.ts:32"
+   },
+   {
+    "s": "medio",
+    "t": "crypto.timingSafeEqual lanza RangeError si el token tiene longitud distinta y no hay try/catch: 500 en vez de 401 y filtra por diferencia de respuesta la longitud correcta del HMAC.",
+    "ref": "src/app/api/auth/crm-bridge/route.ts:16"
+   },
+   {
+    "s": "medio",
+    "t": "Sin rate-limit en un endpoint que concede sesiones: intentos ilimitados de forja de HMAC.",
+    "ref": "src/app/api/auth/crm-bridge/route.ts:19"
+   },
+   {
+    "s": "bajo",
+    "t": "NEXTAUTH_SECRET con fallback a cadena vacía: no falla el arranque y se pasa a encode(), firmando la sesión con secreto trivial.",
+    "ref": "src/app/api/auth/crm-bridge/route.ts:5-6"
+   }
+  ]
+ },
+ {
+  "id": "nextauth",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Login NextAuth (credenciales)",
+  "icon": "🌐",
+  "endpoint": "/api/auth/[...nextauth]",
+  "protocol": "REST",
+  "auth": "public",
+  "purpose": "Handler catch-all de NextAuth (signin/signout/session/csrf/callback) con authOptions de @/lib/auth-postgres.",
+  "files": [
+   "src/app/api/auth/[...nextauth]/route.ts:4",
+   "src/middleware.ts:22"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Login público sin rate-limit ni lockout: authorize() no lleva contador de intentos. Agravado por comparación de contraseñas en texto plano (auth-postgres.ts:87-94) y claves de máx. 10 caracteres.",
+    "ref": "src/app/api/auth/[...nextauth]/route.ts:4"
+   },
+   {
+    "s": "bajo",
+    "t": "Bypass explícito en el middleware para /api/auth además de la exclusión general de /api en el matcher: ninguna capa global lo cubre y se omiten los headers anti-caché.",
+    "ref": "src/middleware.ts:22"
+   }
+  ]
+ },
+ {
+  "id": "auth-logout",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Logout (borra cookies)",
+  "icon": "🌐",
+  "endpoint": "POST /api/auth/logout",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Borra manualmente todas las cookies de NextAuth (session-token, csrf, callback-url).",
+  "files": [
+   "src/app/api/auth/logout/route.ts:4"
+  ],
+  "flags": [
+   {
+    "s": "bajo",
+    "t": "Público sin sesión, pero solo borra cookies del propio llamante: impacto limitado a CSRF de logout. Volca los nombres de cookies del usuario a los logs.",
+    "ref": "src/app/api/auth/logout/route.ts:11"
+   }
+  ]
+ },
+ {
+  "id": "students-profile-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Ficha del estudiante (pública, con clave de login)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/students/[id]",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Perfil completo del estudiante (ACADEMICA con JOIN a PEOPLE, fallback a PEOPLE) enriquecido con la clave de login.",
+  "files": [
+   "src/app/api/postgres/students/[id]/route.ts:10",
+   "src/services/student.service.ts:59-61",
+   "src/repositories/people.repository.ts:36"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Público sin sesión y devuelve credenciales: enrichWithLoginPassword adjunta profile.claveLogin EN CLARO si USUARIOS_ROLES.password no es bcrypt. Además el repo selecciona COALESCE(a.\"clave\", p.\"clave\") AS \"clave\" — un SEGUNDO campo de credencial.",
+    "ref": "src/services/student.service.ts:59-61"
+   },
+   {
+    "s": "alto",
+    "t": "Expone PII completa sin verificar sesión: handler() no llama getServerSession y el matcher del middleware excluye /api. El SELECT trae email, celular, teléfono, domicilio, ciudad, fechaNacimiento, género, contrato, empresa, cargo, ingresos, referencias y apoderado.",
+    "ref": "src/app/api/postgres/students/[id]/route.ts:10"
+   },
+   {
+    "s": "alto",
+    "t": "Permite enumerar por cédula: findByIdOrNumeroId hace WHERE \"_id\" = $1 OR \"numeroId\" = $1 con SELECT *, aceptando un identificador adivinable. Iterando cédulas se vuelca el padrón.",
+    "ref": "src/repositories/people.repository.ts:36"
+   },
+   {
+    "s": "medio",
+    "t": "Sin rate-limit ni throttling: handler() solo contiene try/catch, así que el volcado masivo por enumeración es trivial.",
+    "ref": "src/lib/api-helpers.ts:75"
+   }
+  ]
+ },
+ {
+  "id": "students-academic-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Historial académico del estudiante (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/students/[id]/academic",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Registro ACADEMICA del estudiante + historial completo de clases/bookings.",
+  "files": [
+   "src/app/api/postgres/students/[id]/academic/route.ts:10",
+   "src/services/student.service.ts:207-213"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Público sin sesión (handler()) y el middleware excluye /api: devuelve academicRecord completo (nombres, fechaNacimiento, celular, teléfono, email, contrato) más todo el historial de clases.",
+    "ref": "src/app/api/postgres/students/[id]/academic/route.ts:10"
+   },
+   {
+    "s": "alto",
+    "t": "Permite enumerar por cédula: findByAnyId matchea _id OR studentId OR peopleId OR numeroId, y el fallback findByIdOrNumeroId acepta la cédula.",
+    "ref": "src/services/student.service.ts:207-213"
+   },
+   {
+    "s": "medio",
+    "t": "?limit se pasa vía parseInt() sin validar rango ni NaN: ?limit=99999999 vuelca todo el historial en una llamada; ?limit=abc produce NaN → 500.",
+    "ref": "src/app/api/postgres/students/[id]/academic/route.ts:14"
+   },
+   {
+    "s": "medio",
+    "t": "Sin rate-limit en un endpoint que ejecuta 2 consultas con 2 LEFT JOIN (CALENDARIO, GUIAS) por petición.",
+    "ref": "src/app/api/postgres/students/[id]/academic/route.ts:10"
+   }
+  ]
+ },
+ {
+  "id": "students-academic-audit-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Auditoría académica (pública, ejecuta DDL)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/students/[id]/academic-audit",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Devuelve los 3 campos JSONB de auditoría de ACADEMICA (cambioStepHistory, inicianivel, clrhistoric) y crea las columnas si no existen.",
+  "files": [
+   "src/app/api/postgres/students/[id]/academic-audit/route.ts:13",
+   "src/app/api/postgres/students/[id]/academic-audit/route.ts:20-22"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Endpoint público que ejecuta DDL en cada petición: tres ALTER TABLE \"ACADEMICA\" ADD COLUMN IF NOT EXISTS. Cada ALTER toma ACCESS EXCLUSIVE LOCK sobre la tabla principal, así que un bucle anónimo puede bloquearla. Implica además privilegios DDL alcanzables desde internet.",
+    "ref": "src/app/api/postgres/students/[id]/academic-audit/route.ts:20-22"
+   },
+   {
+    "s": "medio",
+    "t": "Expone sin sesión el historial interno de auditoría del estudiante: quién cambió qué y cuándo.",
+    "ref": "src/app/api/postgres/students/[id]/academic-audit/route.ts:29-33"
+   },
+   {
+    "s": "medio",
+    "t": "Permite enumerar y sin rate-limit: params.id va directo al WHERE sin verificación de pertenencia.",
+    "ref": "src/app/api/postgres/students/[id]/academic-audit/route.ts:17"
+   },
+   {
+    "s": "bajo",
+    "t": "Los errores de DDL se silencian con .catch(() => null), ocultando fallos de esquema y dificultando detectar abuso.",
+    "ref": "src/app/api/postgres/students/[id]/academic-audit/route.ts:20"
+   }
+  ]
+ },
+ {
+  "id": "students-ultimos-agendamientos-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Últimos agendamientos del estudiante (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/students/[id]/ultimos-agendamientos",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Última sesión asistida, último jump aprobado y último club asistido del estudiante.",
+  "files": [
+   "src/app/api/postgres/students/[id]/ultimos-agendamientos/route.ts:25",
+   "src/app/api/postgres/students/[id]/ultimos-agendamientos/route.ts:12"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Público sin sesión (handler()) y el middleware no cubre /api: expone actividad académica del estudiante y el nombre completo del guía (JOIN a GUIAS), filtrando datos personales de empleados a cualquier anónimo.",
+    "ref": "src/app/api/postgres/students/[id]/ultimos-agendamientos/route.ts:12"
+   },
+   {
+    "s": "medio",
+    "t": "Permite enumerar sin rate-limit: el WHERE acepta idEstudiante O studentId sin comprobar propiedad.",
+    "ref": "src/app/api/postgres/students/[id]/ultimos-agendamientos/route.ts:19"
+   },
+   {
+    "s": "medio",
+    "t": "Ejecuta 3 consultas en paralelo con JOINs, REGEXP_REPLACE y CAST sobre ACADEMICA_BOOKINGS por cada petición anónima; coste alto sin throttling.",
+    "ref": "src/app/api/postgres/students/[id]/ultimos-agendamientos/route.ts:31"
+   }
+  ]
+ },
+ {
+  "id": "people-detail-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Ficha de persona (pública, con clave de login y familia)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/people/[id]",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Fila PEOPLE completa, datos financieros del contrato, beneficiarios/titular relacionados y la clave de login.",
+  "files": [
+   "src/app/api/postgres/people/[id]/route.ts:13",
+   "src/app/api/postgres/people/[id]/route.ts:55-68",
+   "src/app/api/postgres/people/[id]/route.ts:73-119"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Fuga de credenciales: consulta USUARIOS_ROLES.password por email y, si no es bcrypt, devuelve la contraseña EN CLARO en person.claveLogin — sin sesión.",
+    "ref": "src/app/api/postgres/people/[id]/route.ts:55-68"
+   },
+   {
+    "s": "alto",
+    "t": "Público (handler(), a diferencia de PATCH/DELETE que usan handlerWithAuth) y el matcher excluye /api: SELECT * FROM \"PEOPLE\" expone numeroId, email, celular, fechaNacimiento, domicilio, apoderado, observaciones y documentacion.",
+    "ref": "src/app/api/postgres/people/[id]/route.ts:21-24"
+   },
+   {
+    "s": "alto",
+    "t": "Amplificación sin auth: devuelve además FINANCIEROS del contrato y TODOS los beneficiarios del mismo contrato (o el titular). Un solo _id destapa la familia completa y sus datos financieros.",
+    "ref": "src/app/api/postgres/people/[id]/route.ts:73-119"
+   },
+   {
+    "s": "medio",
+    "t": "Oráculo de enumeración (404 vs 200) sin rate-limit; los _id se generan con ids.person() = prs_${Date.now()}_${Math.random()...}, no criptográfico y con prefijo temporal, lo que reduce el espacio de búsqueda.",
+    "ref": "src/app/api/postgres/people/[id]/route.ts:26"
+   }
+  ]
+ },
+ {
+  "id": "contracts-detail-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Expediente del contrato (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/contracts/[id]",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Devuelve titular, beneficiarios, datos financieros e info del asesor de un contrato.",
+  "files": [
+   "src/app/api/postgres/contracts/[id]/route.ts:61",
+   "src/app/api/postgres/contracts/[id]/route.ts:80"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "PÚBLICO sin sesión: usa handler() (el PUT del mismo archivo sí usa handlerWithAuth) y el matcher excluye /api. SELECT * FROM PEOPLE + SELECT * FROM FINANCIEROS: numeroId, fechaNacimiento, domicilio, celular, email, ingresos, empresa, referencias, totalPlan, saldo, cuotas, medioPago.",
+    "ref": "src/app/api/postgres/contracts/[id]/route.ts:61"
+   },
+   {
+    "s": "alto",
+    "t": "Fuga en cascada: con un _id de titular devuelve las filas completas de TODOS los beneficiarios del mismo contrato.",
+    "ref": "src/app/api/postgres/contracts/[id]/route.ts:80"
+   },
+   {
+    "s": "medio",
+    "t": "Sin rate-limit ni control de propiedad: permite raspar expedientes probando _id. El PUT sí valida pertenencia, lo que sugiere que el GET abierto es un descuido.",
+    "ref": "src/app/api/postgres/contracts/[id]/route.ts:68"
+   }
+  ]
+ },
+ {
+  "id": "contracts-next-number-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Siguiente número de contrato (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/contracts/next-number",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Calcula y devuelve el siguiente número de contrato consecutivo por país+segmento+año.",
+  "files": [
+   "src/app/api/postgres/contracts/next-number/route.ts:28",
+   "src/app/api/postgres/contracts/next-number/route.ts:52"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Público (handler(), fuera del matcher): con BASE_CONSECUTIVO=9000 y siguiente=max+1, el valor revela el volumen de contratos por país y segmento. Con 4 países × 2 segmentos, 8 peticiones anónimas reconstruyen toda la serie comercial.",
+    "ref": "src/app/api/postgres/contracts/next-number/route.ts:52"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin rate-limit: cada llamada anónima dispara una query agregada sobre PEOPLE con un regex no indexable (SPLIT_PART ~ '^[0-9]+$').",
+    "ref": "src/app/api/postgres/contracts/next-number/route.ts:47"
+   }
+  ]
+ },
+ {
+  "id": "contracts-template-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Plantilla de contrato por país (pública)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/contracts/template",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Devuelve el HTML/texto de la plantilla de contrato para una plataforma (país).",
+  "files": [
+   "src/app/api/postgres/contracts/template/route.ts:11",
+   "src/app/api/postgres/contracts/template/route.ts:27"
+  ],
+  "flags": [
+   {
+    "s": "bajo",
+    "t": "Público (handler(), el middleware excluye /api): expone el texto legal íntegro sin sesión. Impacto limitado, pero sin rate-limit y con fallback case-insensitive + oráculo 200/404 que permite enumerar plataformas configuradas.",
+    "ref": "src/app/api/postgres/contracts/template/route.ts:27"
+   }
+  ]
+ },
+ {
+  "id": "consent-contract-data",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Datos del contrato para firmar (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/consent/[id]/contract-data",
+  "protocol": "REST",
+  "auth": "public",
+  "purpose": "Alimenta la página pública /contrato/[id]: titular, beneficiarios, datos financieros, plantilla y datos del asesor.",
+  "files": [
+   "src/app/api/consent/[id]/contract-data/route.ts:7",
+   "src/app/api/consent/[id]/contract-data/route.ts:11-50"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Público sin sesión: expone PII completa del titular (numeroId, celular, email, domicilio, fechaNacimiento, ingresos, empresa, cargo, apoderado, referencias) y de TODOS los beneficiarios, más financieros (totalPlan, valorCuota, saldo, medioPago).",
+    "ref": "src/app/api/consent/[id]/contract-data/route.ts:11-50"
+   },
+   {
+    "s": "alto",
+    "t": "Devuelve consentimientoDeclarativo y hashConsentimiento sin verificación: numeroDocumento, ipAddress, userAgent, celularValidado y codigoOTPUtilizado.",
+    "ref": "src/app/api/consent/[id]/contract-data/route.ts:18"
+   },
+   {
+    "s": "alto",
+    "t": "El único 'secreto' es params.id, que NO es aleatorio: ids.person() = prs_${Date.now()}_${Math.random()...} (Date.now conocible, Math.random no CSPRNG). Sin rate-limit ni token firmado, y el 404-vs-200 da oráculo de validez → raspado de PEOPLE a escala.",
+    "ref": "src/app/api/consent/[id]/contract-data/route.ts:7"
+   }
+  ]
+ },
+ {
+  "id": "consent-send-otp",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Enviar OTP de consentimiento (público)",
+  "icon": "🌐",
+  "endpoint": "POST /api/consent/[id]/send-otp",
+  "protocol": "REST",
+  "auth": "public",
+  "purpose": "Valida el número de documento del titular y envía un OTP por WhatsApp a su celular registrado.",
+  "files": [
+   "src/app/api/consent/[id]/send-otp/route.ts:6",
+   "src/services/consent.service.ts:52-54"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Público (handler(), matcher excluye /api) y sin rate-limit: permite bombardear por WhatsApp al titular y quemar coste del proveedor.",
+    "ref": "src/app/api/consent/[id]/send-otp/route.ts:6"
+   },
+   {
+    "s": "alto",
+    "t": "Oráculo de documento: responde 'El numero de documento no coincide' vs éxito, permitiendo fuerza bruta del numeroId sin autenticación.",
+    "ref": "src/services/consent.service.ts:52-54"
+   },
+   {
+    "s": "medio",
+    "t": "Devuelve el celular enmascarado (3 primeros + 4 últimos), filtrando 7 de ~10 dígitos a quien acierte el documento.",
+    "ref": "src/services/consent.service.ts:73-77"
+   },
+   {
+    "s": "medio",
+    "t": "Cada llamada sobrescribe el OTP anterior sin límite, y los errores distinguen 'ya tiene consentimiento' / 'no tiene celular', enumerando el estado del contrato.",
+    "ref": "src/services/consent.service.ts:48-60"
+   }
+  ]
+ },
+ {
+  "id": "consent-verify",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Firmar consentimiento con OTP (público)",
+  "icon": "🌐",
+  "endpoint": "POST /api/consent/[id]/verify",
+  "protocol": "REST",
+  "auth": "public",
+  "purpose": "Verifica el OTP de 6 dígitos y persiste el consentimiento declarativo con hash SHA-256.",
+  "files": [
+   "src/app/api/consent/[id]/verify/route.ts:6",
+   "src/lib/otp-store.ts:38-55"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Escritura legal (firma) sin sesión ni permiso: handler(), no handlerWithAuth, y el matcher excluye /api. Mitigación parcial: rechaza refirmar si ya existe hashConsentimiento.",
+    "ref": "src/app/api/consent/[id]/verify/route.ts:6"
+   },
+   {
+    "s": "alto",
+    "t": "Sin límite de intentos ni rate-limit: verifyOtp no cuenta fallos ni borra el código al errar, así que 10^6 códigos son fuerza-brutables en la ventana de 10 min tras un envío legítimo.",
+    "ref": "src/lib/otp-store.ts:38-55"
+   },
+   {
+    "s": "medio",
+    "t": "OTP generado con Math.random() (no crypto.randomInt): PRNG no criptográfico, predecible.",
+    "ref": "src/lib/otp-store.ts:24"
+   },
+   {
+    "s": "medio",
+    "t": "Comparación de OTP con !== (no time-safe) y almacenamiento en Map en memoria: se pierde en cada deploy y no funciona con más de una instancia.",
+    "ref": "src/lib/otp-store.ts:18"
+   }
+  ]
+ },
+ {
+  "id": "consent-status",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Estado del consentimiento (público, expone el OTP usado)",
+  "icon": "🌐",
+  "endpoint": "GET /api/consent/[id]/status",
+  "protocol": "REST",
+  "auth": "public",
+  "purpose": "Devuelve si un titular ya firmó el consentimiento, junto con el objeto de consentimiento y su hash.",
+  "files": [
+   "src/app/api/consent/[id]/status/route.ts:5",
+   "src/services/consent.service.ts:169-183"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Público (handler(), fuera del matcher): devuelve el ConsentData completo sin filtrar — numeroDocumento, ipAddress, userAgent, celularValidado y codigoOTPUtilizado; el userAgent embebe además '[Admin: nombre <email>]'.",
+    "ref": "src/services/consent.service.ts:169-183"
+   },
+   {
+    "s": "medio",
+    "t": "Sin rate-limit: NotFoundError('Titular', id) → 404 con el id probado en el mensaje vs 200, oráculo para enumerar _id de PEOPLE.",
+    "ref": "src/app/api/consent/[id]/status/route.ts:5"
+   }
+  ]
+ },
+ {
+  "id": "contracts-send-pdf",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Generar y enviar el PDF del contrato por WhatsApp",
+  "icon": "🌐",
+  "endpoint": "POST /api/contracts/[id]/send-pdf",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Genera el PDF del contrato (API2PDF), lo sube a Drive vía bsl-utilidades y lo envía por WhatsApp al celular del titular.",
+  "files": [
+   "src/app/api/contracts/[id]/send-pdf/route.ts:13",
+   "src/app/api/contracts/[id]/send-pdf/route.ts:10",
+   "src/app/api/contracts/[id]/send-pdf/route.ts:9"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Token de WhatsApp (Whapi) hardcodeado en el código fuente, sin fallback a env, usado como Bearer: permite a cualquiera con acceso al repo enviar mensajes desde la cuenta.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:10"
+   },
+   {
+    "s": "alto",
+    "t": "Clave de API2PDF hardcodeada como fallback del env (process.env.API2PDF_KEY || '<literal>').",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:9"
+   },
+   {
+    "s": "alto",
+    "t": "Endpoint público: usa handler() (sin getServerSession) y el matcher excluye 'api'. Devuelve pdfUrl del contrato completo con datos personales y financieros; basta adivinar el _id.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:13"
+   },
+   {
+    "s": "alto",
+    "t": "Público y sin rate-limit: permite disparar envíos de WhatsApp ilimitados a titulares (spam y consumo de cuota de API2PDF/Whapi) por terceros no autenticados.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:132"
+   },
+   {
+    "s": "medio",
+    "t": "Devuelve el teléfono del titular (sentTo) sin autenticación.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:160"
+   }
+  ]
+ },
+ {
+  "id": "contracts-documents",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Documentos del contrato (leer/adjuntar/borrar, público)",
+  "icon": "🌐",
+  "endpoint": "GET|POST|DELETE /api/contracts/[id]/documents",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Lista, añade y elimina documentos del array PEOPLE.documentacion del titular; el DELETE borra además el objeto en DigitalOcean Spaces.",
+  "files": [
+   "src/app/api/contracts/[id]/documents/route.ts:9",
+   "src/app/api/contracts/[id]/documents/route.ts:33",
+   "src/app/api/contracts/[id]/documents/route.ts:63"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Escritura en BD sin sesión ni RBAC (handler(), matcher excluye /api): cualquiera puede inyectar documentos/URLs arbitrarias en el expediente de cualquier persona.",
+    "ref": "src/app/api/contracts/[id]/documents/route.ts:20"
+   },
+   {
+    "s": "alto",
+    "t": "Borrado destructivo sin autenticación: cualquiera puede eliminar documentos del expediente de cualquier titular; solo se verifica que el titular exista, nunca la pertenencia.",
+    "ref": "src/app/api/contracts/[id]/documents/route.ts:47"
+   },
+   {
+    "s": "alto",
+    "t": "El Key de borrado en Spaces se deriva del `url` del cliente sin validar prefijo: new URL(url).pathname va tal cual a DeleteObjectCommand y, con forcePathStyle:false, el pathname ES la key → se puede borrar cualquier objeto del bucket. El filtro no exige que la URL exista en documentacion y el catch oculta los fallos.",
+    "ref": "src/app/api/contracts/[id]/documents/route.ts:54"
+   },
+   {
+    "s": "alto",
+    "t": "GET público: expone las URLs de documentos personales (cédulas, PDFs) de cualquier persona con solo su _id.",
+    "ref": "src/app/api/contracts/[id]/documents/route.ts:63"
+   },
+   {
+    "s": "medio",
+    "t": "No valida que `url` apunte al bucket propio: permite almacenar enlaces externos maliciosos (incl. javascript:) que luego se muestran al usuario.",
+    "ref": "src/app/api/contracts/[id]/documents/route.ts:13"
+   },
+   {
+    "s": "medio",
+    "t": "Permite enumerar (404 'Titular not found: <id>' vs 200) y sin rate-limit; el array documentacion crece sin tope (append-only jsonb).",
+    "ref": "src/app/api/contracts/[id]/documents/route.ts:66"
+   }
+  ]
+ },
+ {
+  "id": "contracts-upload-url",
+  "dir": "in",
+  "type": "upload",
+  "title": "Subida de documentos del contrato (pública, public-read)",
+  "icon": "📤",
+  "endpoint": "POST /api/contracts/[id]/upload-url",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Recibe un archivo multipart y lo sube a DigitalOcean Spaces bajo contratos/[id]/ con ACL public-read.",
+  "files": [
+   "src/app/api/contracts/[id]/upload-url/route.ts:14",
+   "src/app/api/contracts/[id]/upload-url/route.ts:37"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Upload público sin sesión (handler(); el matcher excluye /api): cualquiera puede subir archivos de hasta 20MB al bucket de la empresa, sin límite de cantidad ni rate-limit.",
+    "ref": "src/app/api/contracts/[id]/upload-url/route.ts:14"
+   },
+   {
+    "s": "alto",
+    "t": "Los objetos se guardan con ACL 'public-read' y se devuelve la URL de CDN: todo documento de identidad subido queda accesible sin autenticación.",
+    "ref": "src/app/api/contracts/[id]/upload-url/route.ts:37"
+   },
+   {
+    "s": "medio",
+    "t": "titularId se usa directo para construir el prefijo `contratos/${titularId}/...` sin consultar PEOPLE ni validar formato: se pueden crear prefijos arbitrarios en el bucket.",
+    "ref": "src/app/api/contracts/[id]/upload-url/route.ts:28"
+   },
+   {
+    "s": "bajo",
+    "t": "El tipo se confía de file.type declarado por el cliente (sin magic-number) y ese valor se propaga a ContentType: permite subir contenido arbitrario etiquetado como image/png.",
+    "ref": "src/app/api/contracts/[id]/upload-url/route.ts:20"
+   }
+  ]
+ },
+ {
+  "id": "guias-listado-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Directorio de guías (público, GET y POST)",
+  "icon": "🌐",
+  "endpoint": "GET|POST /api/postgres/guias",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Lista completa de guías (o uno puntual con ?advisorId=) desde la tabla GUIAS; el POST es un alias de compatibilidad con el mismo volcado.",
+  "files": [
+   "src/app/api/postgres/guias/route.ts:13",
+   "src/app/api/postgres/guias/route.ts:31-37",
+   "src/repositories/advisor.repository.ts:57-63"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "PÚBLICO sin sesión (handler(), no handlerWithAuth; el matcher excluye 'api'): devuelve el directorio COMPLETO de guías con PII — email, telefono, domicilioadvisor, fechaNacimiento, pais, fotoAdvisor, usuarioRolId.",
+    "ref": "src/app/api/postgres/guias/route.ts:13"
+   },
+   {
+    "s": "alto",
+    "t": "?advisorId= acepta _id O email (findByIdOrEmail con LOWER(TRIM())) → permite enumerar/verificar existencia de guías por correo sin autenticación.",
+    "ref": "src/app/api/postgres/guias/route.ts:17-20"
+   },
+   {
+    "s": "alto",
+    "t": "El POST también usa handler() y devuelve el MISMO dump vía body {includeInactive}; con includeInactive:true expone también los dados de baja. Cerrar solo el GET no elimina la fuga.",
+    "ref": "src/app/api/postgres/guias/route.ts:31-37"
+   },
+   {
+    "s": "medio",
+    "t": "Sin rate-limit ni paginación: findAll no tiene LIMIT/OFFSET; dump íntegro de GUIAS en cada request.",
+    "ref": "src/app/api/postgres/guias/route.ts:23"
+   }
+  ]
+ },
+ {
+  "id": "guias-create-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Alta pública de guía (crea login)",
+  "icon": "🌐",
+  "endpoint": "POST /api/postgres/guias/create",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Crea un guía en GUIAS y su cuenta de login en USUARIOS_ROLES con rol GUIA (usado por la página pública /nuevo-guia).",
+  "files": [
+   "src/app/api/postgres/guias/create/route.ts:13",
+   "src/app/api/postgres/guias/create/route.ts:94-100"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "PÚBLICO (handler()) y ESCRIBE sin permiso: el middleware ni siquiera corre sobre /api y /nuevo-guia está en el bypass. Cualquiera puede insertar en USUARIOS_ROLES rol='GUIA', activo=true con password elegido → auto-registro de cuentas con acceso al sistema.",
+    "ref": "src/app/api/postgres/guias/create/route.ts:94-100"
+   },
+   {
+    "s": "alto",
+    "t": "Password por defecto hardcodeado ('MOSAICO2026') e insertado en TEXTO PLANO; el login acepta comparación en texto plano, así que la cuenta es usable con esa clave adivinable.",
+    "ref": "src/app/api/postgres/guias/create/route.ts:93"
+   },
+   {
+    "s": "medio",
+    "t": "Los ConflictError filtran rol y nombre del dueño de un email o numberid (y el nombre del guía dueño de un link de Zoom) sin auth → oráculo de enumeración.",
+    "ref": "src/app/api/postgres/guias/create/route.ts:40-57"
+   },
+   {
+    "s": "medio",
+    "t": "Sin rate-limit ni CAPTCHA: permite inundar GUIAS/USUARIOS_ROLES con cuentas GUIA masivas.",
+    "ref": "src/app/api/postgres/guias/create/route.ts:13"
+   }
+  ]
+ },
+ {
+  "id": "guias-photo-presign-public",
+  "dir": "in",
+  "type": "upload",
+  "title": "Presign público de foto de guía",
+  "icon": "📤",
+  "endpoint": "POST /api/postgres/guias/photo-presign-public",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Devuelve una URL presignada PUT a DO Spaces para subir la foto durante el registro público /nuevo-guia.",
+  "files": [
+   "src/app/api/postgres/guias/photo-presign-public/route.ts:18",
+   "src/app/api/postgres/guias/photo-presign-public/route.ts:21-28"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "PÚBLICO (handler(); el matcher excluye /api): emite credenciales de escritura al bucket a cualquier anónimo. La única validación es key.startsWith('fotoGuia/'); la key pasa literal a Key sin validar extensión, tamaño ni unicidad → se puede sobrescribir cualquier objeto bajo fotoGuia/ o subir contenido arbitrario.",
+    "ref": "src/app/api/postgres/guias/photo-presign-public/route.ts:21-28"
+   },
+   {
+    "s": "medio",
+    "t": "contentType llega del cliente sin lista blanca y no hay rate-limit → abuso de almacenamiento/costes en DO Spaces con URLs de 10 min.",
+    "ref": "src/app/api/postgres/guias/photo-presign-public/route.ts:26-30"
+   }
+  ]
+ },
+ {
+  "id": "nuevo-usuario-registro",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Registro público del estudiante (crea credenciales)",
+  "icon": "🌐",
+  "endpoint": "GET|POST /api/nuevo-usuario/[id]",
+  "protocol": "REST",
+  "auth": "public",
+  "purpose": "Backend del onboarding por link de WhatsApp: carga datos del beneficiario y crea/actualiza su login (ACADEMICA, PEOPLE, USUARIOS_ROLES), con agendamiento WELCOME opcional.",
+  "files": [
+   "src/app/api/nuevo-usuario/[id]/route.ts:30",
+   "src/app/api/nuevo-usuario/[id]/route.ts:139",
+   "src/app/api/nuevo-usuario/[id]/route.ts:235"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Escribe credenciales sin verificación de identidad ni permiso: el UPSERT hace ON CONFLICT (\"email\") DO UPDATE SET \"password\" = $3 con el email del body → enviando el email de un ADMIN existente con cualquier academicId válido se sobrescribe su contraseña (toma de cuenta y escalada de privilegios).",
+    "ref": "src/app/api/nuevo-usuario/[id]/route.ts:235"
+   },
+   {
+    "s": "alto",
+    "t": "La contraseña se guarda en texto plano: clave.trim() va directo a ACADEMICA.clave y USUARIOS_ROLES.password, sin bcrypt.",
+    "ref": "src/app/api/nuevo-usuario/[id]/route.ts:244"
+   },
+   {
+    "s": "alto",
+    "t": "El GET expone sin sesión nombres, email, celular, foto, nivel y userLogin del estudiante conociendo solo el ACADEMICA._id.",
+    "ref": "src/app/api/nuevo-usuario/[id]/route.ts:39"
+   },
+   {
+    "s": "medio",
+    "t": "Sobrescribe PII de PEOPLE por numeroId (email, domicilio, ciudad, fechaNacimiento, edad) sin validar que el solicitante sea el titular, sin token de un solo uso ni rate-limit; el UPDATE no lleva LIMIT y afecta a TODAS las filas con ese numeroId.",
+    "ref": "src/app/api/nuevo-usuario/[id]/route.ts:206"
+   },
+   {
+    "s": "medio",
+    "t": "Ejecuta DDL (ALTER TABLE ADD COLUMN IF NOT EXISTS) disparado por petición anónima; el guard es por proceso y sólo se marca tras éxito, así que un fallo re-dispara el DDL en cada request.",
+    "ref": "src/app/api/nuevo-usuario/[id]/route.ts:12"
+   },
+   {
+    "s": "bajo",
+    "t": "Crea bookings e incrementa CALENDARIO.inscritos sin autenticación, aunque respeta limiteUsuarios y evita duplicados por (studentId, eventoId).",
+    "ref": "src/app/api/nuevo-usuario/[id]/route.ts:327"
+   }
+  ]
+ },
+ {
+  "id": "nuevo-usuario-photo-presign",
+  "dir": "in",
+  "type": "upload",
+  "title": "Presign público de foto del estudiante",
+  "icon": "📤",
+  "endpoint": "POST /api/nuevo-usuario/photo-presign",
+  "protocol": "REST",
+  "auth": "public",
+  "purpose": "Genera una URL prefirmada PUT (ACL public-read) para subir la foto del estudiante a DO Spaces durante el registro.",
+  "files": [
+   "src/app/api/nuevo-usuario/photo-presign/route.ts:17",
+   "src/app/api/nuevo-usuario/photo-presign/route.ts:25"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Sin sesión (handler(), matcher excluye /api) y sin comprobar que academicaId exista: firma un PUT con ACL public-read de 10 min. Además academicaId se interpola crudo en la key, por lo que un valor con ../ permite escapar del prefijo fotos/ y controlar la key completa.",
+    "ref": "src/app/api/nuevo-usuario/photo-presign/route.ts:25"
+   },
+   {
+    "s": "medio",
+    "t": "El contentType lo elige el cliente y la extensión se deriva de él sin lista blanca: un contentType text/html produce un .html public-read en el dominio de Spaces de la organización. Sin rate-limit.",
+    "ref": "src/app/api/nuevo-usuario/photo-presign/route.ts:22"
+   }
+  ]
+ },
+ {
+  "id": "nuevo-usuario-upload-photo",
+  "dir": "in",
+  "type": "upload",
+  "title": "Subida directa de foto del estudiante",
+  "icon": "📤",
+  "endpoint": "POST /api/nuevo-usuario/[id]/upload-photo",
+  "protocol": "REST",
+  "auth": "public",
+  "purpose": "Sube la foto del estudiante (multipart) a DO Spaces y devuelve la URL pública.",
+  "files": [
+   "src/app/api/nuevo-usuario/[id]/upload-photo/route.ts:17",
+   "src/app/api/nuevo-usuario/[id]/upload-photo/route.ts:38"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Upload anónimo (handler(), sin sesión ni RBAC; matcher excluye /api) de hasta 10MB por petición sin rate-limit; solo valida que exista el ACADEMICA._id → abuso de coste/almacenamiento.",
+    "ref": "src/app/api/nuevo-usuario/[id]/upload-photo/route.ts:38"
+   },
+   {
+    "s": "medio",
+    "t": "La extensión sale de file.name sin sanear y se guarda con ACL public-read: se pueden crear objetos con extensión arbitraria e incluso influir en la ruta si el filename contiene '/'. El ContentType sí está limitado a image/* por whitelist.",
+    "ref": "src/app/api/nuevo-usuario/[id]/upload-photo/route.ts:47"
+   }
+  ]
+ },
+ {
+  "id": "postgres-search-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Buscador global de personas (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/search",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Búsqueda unificada sobre PEOPLE y ACADEMICA por nombre, numeroId o contrato.",
+  "files": [
+   "src/app/api/postgres/search/route.ts:10",
+   "src/repositories/people.repository.ts:79-86"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Buscador público sin sesión (handler(); el matcher excluye /api): con ?q= devuelve PII real — numeroId, nombres, email, contrato, nivel/step, vigencia y finalContrato. Único filtro: longitud >= 2 caracteres.",
+    "ref": "src/app/api/postgres/search/route.ts:14"
+   },
+   {
+    "s": "alto",
+    "t": "Permite enumerar el padrón: LIKE '%term%' por SUBSTRING sobre nombre/apellido/numeroId/contrato. Hay un tope duro de LIMIT 100 por tabla, pero sin rate-limit el raspado por iteración de fragmentos sigue siendo viable.",
+    "ref": "src/app/api/postgres/search/route.ts:18"
+   }
+  ]
+ },
+ {
+  "id": "postgres-permissions-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Matriz de permisos RBAC (pública)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/permissions",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Devuelve el mapa de permisos de un rol (?rol=) o de todos los roles activos; lo consume el middleware por self-fetch.",
+  "files": [
+   "src/app/api/postgres/permissions/route.ts:8",
+   "src/app/api/postgres/permissions/route.ts:19"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Público (handler(); el matcher excluye /api): expone el modelo RBAC completo — roles, descripciones y todos sus permisos — a cualquier anónimo, dando el mapa de qué rol atacar. Contrasta con /api/permissions, que sí usa handlerWithAuth.",
+    "ref": "src/app/api/postgres/permissions/route.ts:19"
+   }
+  ]
+ },
+ {
+  "id": "calendar-events-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Calendario de eventos (público, con linkZoom)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/calendar/events",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Lista eventos de calendario con filtros (mes, rango, tipo, advisor, nivel).",
+  "files": [
+   "src/app/api/postgres/calendar/events/route.ts:9",
+   "src/app/api/postgres/calendar/events/route.ts:33"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Sin sesión: expone la agenda operativa (advisor, tipo, nivel, observaciones y linkZoom, seleccionado explícitamente en findEvents) y permite enumerar advisors vía ?advisor=; limit lo fija el cliente sin tope y omitirlo devuelve toda la tabla CALENDARIO.",
+    "ref": "src/app/api/postgres/calendar/events/route.ts:33"
+   }
+  ]
+ },
+ {
+  "id": "calendar-event-bookings-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Inscritos de un evento (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/calendar/[eventId]",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Lista las inscripciones (bookings) de un evento con los datos de los estudiantes.",
+  "files": [
+   "src/app/api/postgres/calendar/[eventId]/route.ts:10",
+   "src/repositories/booking.repository.ts:20-39"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Público (handler(), sin getServerSession; el matcher excluye /api): devuelve bookings con JOIN a PEOPLE (email, celular, numeroId, nombres completos) para cualquier eventId → fuga masiva de datos de asistentes.",
+    "ref": "src/app/api/postgres/calendar/[eventId]/route.ts:16"
+   },
+   {
+    "s": "medio",
+    "t": "limit se toma de searchParams sin tope ni validación y va directo a LIMIT $2; sin rate-limit → ?limit=999999 permite volcar/enumerar inscripciones evento por evento.",
+    "ref": "src/app/api/postgres/calendar/[eventId]/route.ts:14"
+   }
+  ]
+ },
+ {
+  "id": "niveles-catalogo-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Catálogo de niveles/currículo (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/niveles",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Lista todo el catálogo NIVELES (módulos, lecciones, clubs), opcionalmente filtrado por ?curso=, y el detalle por código.",
+  "files": [
+   "src/app/api/postgres/niveles/route.ts:12",
+   "src/app/api/postgres/niveles/[codigo]/route.ts:8",
+   "src/repositories/niveles.repository.ts:23-31"
+  ],
+  "urls": [
+   "/api/postgres/niveles",
+   "/api/postgres/niveles/[codigo]"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Público de facto: handler() sin sesión y el matcher excluye 'api'. Cualquiera puede volcar la ESTRUCTURA curricular completa (cursos/módulos/lecciones/clubs). La respuesta no emite description/videoUrl/contenido, así que la fuga es de estructura, no del contenido de las lecciones.",
+    "ref": "src/app/api/postgres/niveles/route.ts:12"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin rate-limit ni paginación: findAll() no tiene LIMIT/OFFSET y lee la tabla NIVELES entera en cada request; el filtro ?curso se aplica en memoria después. Peticiones anónimas repetidas = DoS barato sobre Postgres.",
+    "ref": "src/app/api/postgres/niveles/route.ts:14"
+   },
+   {
+    "s": "bajo",
+    "t": "El detalle por código permite enumerar: 404 si no existe vs 200 con datos, sin coste ni rate-limit.",
+    "ref": "src/app/api/postgres/niveles/[codigo]/route.ts:13"
+   }
+  ]
+ },
+ {
+  "id": "cursos-campaign-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Catálogo de campañas/cursos (público)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/cursos-campaign",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Catálogo de campañas/cursos/horarios activos para los dropdowns de Crear Contrato.",
+  "files": [
+   "src/app/api/postgres/cursos-campaign/route.ts:14"
+  ],
+  "flags": [
+   {
+    "s": "bajo",
+    "t": "Público sin sesión (handler(); el matcher excluye /api): filtra activa=true y solo expone catálogo comercial (campaña, curso, horario, salón, guía, fechas y cupos), sin PII de estudiantes. Riesgo bajo, pero es superficie no autenticada (el campo 'guia' puede ser nombre de personal).",
+    "ref": "src/app/api/postgres/cursos-campaign/route.ts:15"
+   }
+  ]
+ },
+ {
+  "id": "config-banner-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Banner del login (lectura pública)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/config/banner",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Devuelve la imagen base64 del banner, su estado activo y quién/cuándo lo actualizó; público porque lo consume el login sin sesión (el POST sí exige SUPER_ADMIN).",
+  "files": [
+   "src/app/api/postgres/config/banner/route.ts:16",
+   "src/app/api/postgres/config/banner/route.ts:25"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Público sin sesión (handler(), no handlerWithAuth): expone el email del administrador que actualizó el banner (updatedBy) a cualquiera en internet.",
+    "ref": "src/app/api/postgres/config/banner/route.ts:25"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin rate-limit: cada GET anónimo ejecuta dos consultas a APP_CONFIG y devuelve la imagen completa en base64 (hasta 10 MB) sin caché, amplificando carga de BD y ancho de banda.",
+    "ref": "src/app/api/postgres/config/banner/route.ts:16"
+   }
+  ]
+ },
+ {
+  "id": "reports-asistencia-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Informes de asistencia (8 rutas públicas)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/reports/asistencia/*",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Informes de asistencia (usuario, sesiones, jumps, training, clubes, welcome, complementarias, x-país): agregados por plataforma/nivel y, en el de usuario, historial nominal por documento.",
+  "files": [
+   "src/app/api/postgres/reports/asistencia/usuario/route.ts:13",
+   "src/app/api/postgres/reports/asistencia/sesiones/route.ts:24",
+   "src/app/api/postgres/reports/asistencia/jumps/route.ts:22",
+   "src/app/api/postgres/reports/asistencia/training/route.ts:22",
+   "src/app/api/postgres/reports/asistencia/clubes/route.ts:9",
+   "src/app/api/postgres/reports/asistencia/welcome/route.ts:9",
+   "src/app/api/postgres/reports/asistencia/complementarias/route.ts:9",
+   "src/app/api/postgres/reports/asistencia/x-pais/route.ts:36"
+  ],
+  "urls": [
+   "/api/postgres/reports/asistencia/usuario",
+   "/api/postgres/reports/asistencia/sesiones",
+   "/api/postgres/reports/asistencia/jumps",
+   "/api/postgres/reports/asistencia/training",
+   "/api/postgres/reports/asistencia/clubes",
+   "/api/postgres/reports/asistencia/welcome",
+   "/api/postgres/reports/asistencia/complementarias",
+   "/api/postgres/reports/asistencia/x-pais"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "/asistencia/usuario es PÚBLICO con datos personales: con solo el número de documento devuelve nombre completo, nivel y el historial completo de sesiones/advisors del estudiante.",
+    "ref": "src/app/api/postgres/reports/asistencia/usuario/route.ts:83-91"
+   },
+   {
+    "s": "alto",
+    "t": "Permite enumerar: numeroId es el único parámetro y no hay rate-limit; iterando cédulas se mapea toda la base (404 vs 200 = oráculo de existencia).",
+    "ref": "src/app/api/postgres/reports/asistencia/usuario/route.ts:20-30"
+   },
+   {
+    "s": "medio",
+    "t": "Los 8 informes usan handler() sin sesión ni RBAC (el matcher excluye 'api'), a diferencia de reports/academica|academico|contratos|servicio, que sí exigen handlerWithAuth + requirePermission.",
+    "ref": "src/app/api/postgres/reports/asistencia/sesiones/route.ts:24"
+   },
+   {
+    "s": "medio",
+    "t": "/asistencia/clubes devuelve además catálogos internos completos (tipos de club, plataformas, niveles), útiles para reconocimiento; startDate/endDate son libres con defaults 2020-2030, así que un anónimo extrae todo el histórico agregado.",
+    "ref": "src/app/api/postgres/reports/asistencia/clubes/route.ts:110-116"
+   }
+  ]
+ },
+ {
+  "id": "reports-estadisticas-public",
+  "dir": "in",
+  "type": "http-public",
+  "title": "Informes de estadísticas (públicos)",
+  "icon": "🌐",
+  "endpoint": "GET /api/postgres/reports/estadisticas/*",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Estadísticas de agendamiento por nivel/día/tipo de club y por hora/día en la zona horaria del cliente.",
+  "files": [
+   "src/app/api/postgres/reports/estadisticas/niveles/route.ts:26",
+   "src/app/api/postgres/reports/estadisticas/horarios/route.ts:20"
+  ],
+  "urls": [
+   "/api/postgres/reports/estadisticas/niveles",
+   "/api/postgres/reports/estadisticas/horarios"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "PÚBLICO sin sesión (handler(); el matcher excluye /api): expone métricas internas de negocio y patrones de operación sin autenticación ni rate-limit.",
+    "ref": "src/app/api/postgres/reports/estadisticas/niveles/route.ts:26"
+   },
+   {
+    "s": "bajo",
+    "t": "El filtro `nivel` se interpola en el SQL con escape manual de comillas en vez de parámetro ($n); correcto bajo standard_conforming_strings=on, así que es defecto de higiene, no inyección activa.",
+    "ref": "src/app/api/postgres/reports/estadisticas/niveles/route.ts:34"
+   },
+   {
+    "s": "bajo",
+    "t": "El parámetro `tz` se interpola en el SQL (AT TIME ZONE '${tz}') protegido solo por una regex allowlist; hoy no explotable, pero queda inyección directa si la regex se relaja.",
+    "ref": "src/app/api/postgres/reports/estadisticas/horarios/route.ts:38"
+   }
+  ]
+ },
+ {
+  "id": "cron-triggers",
+  "dir": "in",
+  "type": "cron",
+  "title": "Disparadores de cron (fail-open si falta CRON_SECRET)",
+  "icon": "⏱",
+  "endpoint": "GET|POST /api/cron/{expire-contracts,reactivate-onhold,activate-academica,reconcile-pegados}",
+  "protocol": "REST",
+  "auth": "CRON_SECRET",
+  "purpose": "Jobs nocturnos invocados por el worker de Digital Ocean: expirar contratos, reactivar OnHold, activar ACADEMICA+login una semana antes del curso y reconciliar usuarios pegados.",
+  "files": [
+   "src/app/api/cron/expire-contracts/route.ts:21",
+   "src/app/api/cron/reactivate-onhold/route.ts:26",
+   "src/app/api/cron/activate-academica/route.ts:29",
+   "src/app/api/cron/reconcile-pegados/route.ts:30"
+  ],
+  "urls": [
+   "/api/cron/expire-contracts",
+   "/api/cron/reactivate-onhold",
+   "/api/cron/activate-academica",
+   "/api/cron/reconcile-pegados"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Fail-open en las 4 rutas: el guard es `if (CRON_SECRET && provided !== CRON_SECRET)`. Si la env var no está definida en el entorno del web, la condición es falsa y el endpoint queda ABIERTO a internet (el matcher del middleware excluye /api, así que el secret es la única puerta).",
+    "ref": "src/app/api/cron/expire-contracts/route.ts:21"
+   },
+   {
+    "s": "alto",
+    "t": "activate-academica es el de mayor impacto: HABILITA LOGINS (USUARIOS_ROLES.activo=true) sin sesión ni RBAC, y su UPDATE usa `WHERE numberid = $1 OR (LOWER(email) = LOWER($2))` sin LIMIT: activa todas las filas que empaten.",
+    "ref": "src/app/api/cron/activate-academica/route.ts:62-67"
+   },
+   {
+    "s": "alto",
+    "t": "PII en la respuesta: los 3 crons devuelven results[] con studentId/academicId y nombre completo (y finalContrato) de cada persona procesada — enumeración directa si el secret falta o se filtra.",
+    "ref": "src/app/api/cron/expire-contracts/route.ts:96-101"
+   },
+   {
+    "s": "medio",
+    "t": "Comparación del secret con !== (no time-safe) y parseo débil del Bearer: replace('Bearer ','') solo reemplaza la primera ocurrencia y no ancla el prefijo, así que un header con el token crudo también pasa.",
+    "ref": "src/app/api/cron/expire-contracts/route.ts:19-21"
+   },
+   {
+    "s": "medio",
+    "t": "POST espejea GET y no hay rate-limit en ninguna ruta: escrituras masivas sobre PEOPLE/ACADEMICA/USUARIOS_ROLES invocables repetidamente.",
+    "ref": "src/app/api/cron/expire-contracts/route.ts:150-152"
+   },
+   {
+    "s": "medio",
+    "t": "reconcile-pegados escribe con actor falsificado fijo ('cron@lgs-plataforma.com') sin validar permiso, y findPegados({force:true}) salta el caché de 30 min en cada llamada (DoS por repetición).",
+    "ref": "src/app/api/cron/reconcile-pegados/route.ts:64-69"
+   },
+   {
+    "s": "bajo",
+    "t": "Los catch devuelven error.message crudo al cliente, filtrando errores internos de Postgres.",
+    "ref": "src/app/api/cron/expire-contracts/route.ts:143"
+   },
+   {
+    "s": "bajo",
+    "t": "reactivate-onhold no es seguro ante concurrencia (extensionCount+1, append a extensionHistory, finalContrato += días) sin lock ni transacción, aunque la re-ejecución secuencial no infla la vigencia.",
+    "ref": "src/app/api/cron/reactivate-onhold/route.ts:79-101"
+   }
+  ]
+ },
+ {
+  "id": "cron-health-check",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Health-check de crons",
+  "icon": "🔒",
+  "endpoint": "GET /api/cron/health-check",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Reporta última corrida, status, stale (>26h) y pendientes de los crons leyendo CRON_RUNS, para detectar worker caído o secret mal configurado.",
+  "files": [
+   "src/app/api/cron/health-check/route.ts:26",
+   "src/app/api/cron/health-check/route.ts:28-30"
+  ],
+  "flags": [
+   {
+    "s": "bajo",
+    "t": "Usa handlerWithAuth() + chequeo manual de rol SUPER_ADMIN/ADMIN en vez de requirePermission(); el gate por string de rol no pasa por el RBAC de ROL_PERMISOS, pero es restrictivo y no filtra PII. Es la única ruta de /api/cron que no usa CRON_SECRET.",
+    "ref": "src/app/api/cron/health-check/route.ts:28-30"
+   }
+  ]
+ },
+ {
+  "id": "wix-endpoints",
+  "dir": "in",
+  "type": "api-in",
+  "title": "Endpoints Wix (WhatsApp y CRUD de beneficiarios)",
+  "icon": "🔑",
+  "endpoint": "POST /api/wix/*",
+  "protocol": "REST",
+  "auth": "WIX_SECRET",
+  "purpose": "Puente legacy con Wix: enviar WhatsApp libre y de bienvenida, y crear/actualizar/aprobar/inactivar/borrar beneficiarios y cambiar el estado del titular. Auth dual in-route: header x-wix-secret O cualquier sesión NextAuth.",
+  "files": [
+   "src/app/api/wix/sendWhatsApp/route.ts:46",
+   "src/app/api/wix/sendWelcomeWhatsApp/route.ts:51",
+   "src/app/api/wix/deleteBeneficiario/route.ts:13",
+   "src/app/api/wix/createNewBeneficiario/route.ts:13",
+   "src/app/api/wix/updateBeneficiario/route.ts:13",
+   "src/app/api/wix/approveBeneficiario/route.ts:13",
+   "src/app/api/wix/updateTitularEstado/route.ts:13",
+   "src/app/api/wix/inactivateBeneficiario/route.ts:13"
+  ],
+  "urls": [
+   "/api/wix/sendWhatsApp",
+   "/api/wix/sendWelcomeWhatsApp",
+   "/api/wix/deleteBeneficiario",
+   "/api/wix/createNewBeneficiario",
+   "/api/wix/updateBeneficiario",
+   "/api/wix/approveBeneficiario",
+   "/api/wix/updateTitularEstado",
+   "/api/wix/inactivateBeneficiario"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Token de Whapi.cloud HARDCODEADO como Bearer literal en sendWhatsApp, sin env var: quien lea el repo puede enviar WhatsApps desde la línea de MOSAICO. sendWelcomeWhatsApp tiene un SEGUNDO token distinto hardcodeado como fallback.",
+    "ref": "src/app/api/wix/sendWhatsApp/route.ts:50"
+   },
+   {
+    "s": "alto",
+    "t": "Relay abierto de mensajería: isAuthorized() devuelve true con CUALQUIER sesión NextAuth (`return !!session`), sin rol ni requirePermission → texto libre a cualquier número con identidad de MOSAICO. El matcher del middleware excluye /api, así que el check in-route es la única puerta.",
+    "ref": "src/app/api/wix/sendWhatsApp/route.ts:5-15"
+   },
+   {
+    "s": "alto",
+    "t": "sendWelcomeWhatsApp: celular y beneficiarioId se toman crudos del body y NUNCA se cruzan contra la BD → el link de registro /nuevo-usuario/{id} (ruta pública) se puede desviar a un teléfono propio y tomar la cuenta.",
+    "ref": "src/app/api/wix/sendWelcomeWhatsApp/route.ts:19-46"
+   },
+   {
+    "s": "alto",
+    "t": "deleteBeneficiario: borrado destructivo en cascada (ACADEMICA_BOOKINGS + ACADEMICA + PEOPLE) sin requirePermission — cualquier sesión mínima elimina a cualquier persona por _id.",
+    "ref": "src/app/api/wix/deleteBeneficiario/route.ts:6-16"
+   },
+   {
+    "s": "alto",
+    "t": "approveBeneficiario y updateTitularEstado: decisiones privilegiadas sin permiso ni verificación de propiedad; nuevoEstado no se valida contra lista permitida y se escribe cualquier string en la columna aprobacion.",
+    "ref": "src/app/api/wix/updateTitularEstado/route.ts:6-38"
+   },
+   {
+    "s": "alto",
+    "t": "createNewBeneficiario/updateBeneficiario: escriben datos personales de cualquier _id sin comprobación de pertenencia (cambiar email/celular ajeno = vector de secuestro) y sin validar formato de email/celular/fechaNacimiento.",
+    "ref": "src/app/api/wix/updateBeneficiario/route.ts:6-30,63-69"
+   },
+   {
+    "s": "medio",
+    "t": "RETURNING * en create/update/approve/inactivate/updateTitularEstado devuelve la fila PEOPLE completa (PII) al llamante, y el contraste 404 vs 200 permite enumerar _id y numeroId.",
+    "ref": "src/app/api/wix/createNewBeneficiario/route.ts:108-113"
+   },
+   {
+    "s": "medio",
+    "t": "Si WIX_SECRET no está definido, la rama de api-key se salta silenciosamente y solo queda la sesión, sin log ni error de configuración. Sin rate-limit en ninguna ruta del grupo.",
+    "ref": "src/app/api/wix/updateBeneficiario/route.ts:7-8"
+   },
+   {
+    "s": "bajo",
+    "t": "_id generado con Date.now()+Math.random() (no criptográfico), predecible; los catch filtran error.message crudo de PostgreSQL.",
+    "ref": "src/app/api/wix/createNewBeneficiario/route.ts:45"
+   }
+  ]
+ },
+ {
+  "id": "rbac-escalada",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "RBAC: cambiar rol y permisos (escalada)",
+  "icon": "🔒",
+  "endpoint": "PUT /api/postgres/users/[email]/role · PUT /api/postgres/roles/[rol]/permissions · POST /api/postgres/roles",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Cambiar el rol asignado a un usuario, reescribir la lista de permisos de un rol y crear roles nuevos en ROL_PERMISOS.",
+  "files": [
+   "src/app/api/postgres/users/[email]/role/route.ts:26",
+   "src/app/api/postgres/roles/[rol]/permissions/route.ts:23",
+   "src/app/api/postgres/roles/route.ts:21"
+  ],
+  "urls": [
+   "/api/postgres/users/[email]/role",
+   "/api/postgres/roles/[rol]/permissions",
+   "/api/postgres/roles"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Escalada de privilegios: PUT users/[email]/role solo exige sesión (handlerWithAuth), sin requirePermission ni chequeo de ADMIN ni de que el email sea el propio. Cualquier usuario autenticado puede PUT {rol:'SUPER_ADMIN'} sobre su email — o el de otro — y obtener bypass total.",
+    "ref": "src/app/api/postgres/users/[email]/role/route.ts:26"
+   },
+   {
+    "s": "alto",
+    "t": "PUT roles/[rol]/permissions escribe ROL_PERMISOS sin validar permiso ni rol (a diferencia de /api/permissions/update, que exige SUPER_ADMIN/ADMIN): cualquier sesión puede darle todos los permisos a su propio rol.",
+    "ref": "src/app/api/postgres/roles/[rol]/permissions/route.ts:23"
+   },
+   {
+    "s": "medio",
+    "t": "Los permisos del body solo se validan como array; no se contrastan contra VALID_PERMISSIONS como sí hace /api/permissions/update.",
+    "ref": "src/app/api/postgres/roles/[rol]/permissions/route.ts:29"
+   },
+   {
+    "s": "medio",
+    "t": "POST /api/postgres/roles crea roles con permisos arbitrarios solo con tener sesión, mientras /api/roles/create sí exige SUPER_ADMIN/ADMIN para la misma operación.",
+    "ref": "src/app/api/postgres/roles/route.ts:21"
+   }
+  ]
+ },
+ {
+  "id": "admin-bloqueo-migracion",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Mantenimiento /api/admin sin RBAC (bloqueo y migración de contratos)",
+  "icon": "🔒",
+  "endpoint": "POST /api/admin/bloqueo-contrato/{lookup,execute} · POST /api/admin/migrar-contrato",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Consultar y bloquear titular+beneficiarios de un contrato (PEOPLE + ACADEMICA + USUARIOS_ROLES) y crear un contrato completo con número digitado manualmente.",
+  "files": [
+   "src/app/api/admin/bloqueo-contrato/execute/route.ts:13",
+   "src/app/api/admin/bloqueo-contrato/lookup/route.ts:12",
+   "src/app/api/admin/migrar-contrato/route.ts:16"
+  ],
+  "urls": [
+   "/api/admin/bloqueo-contrato/lookup",
+   "/api/admin/bloqueo-contrato/execute",
+   "/api/admin/migrar-contrato"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "execute: handlerWithAuth() sin requirePermission ni rol (el handler ni recibe session). Cualquier usuario logueado puede bloquear contratos y cuentas de terceros; executeBloqueo NO re-valida el vencimiento, así que se pueden enviar _id arbitrarios sin lookup previo.",
+    "ref": "src/app/api/admin/bloqueo-contrato/execute/route.ts:13"
+   },
+   {
+    "s": "alto",
+    "t": "lookup: sin requirePermission ni rol — cualquier sesión obtiene nombre + numeroId + finalContrato del titular y de todos los beneficiarios de cualquier contrato ajeno. El segmento /admin no aporta RBAC porque el middleware no cubre /api.",
+    "ref": "src/app/api/admin/bloqueo-contrato/lookup/route.ts:12"
+   },
+   {
+    "s": "alto",
+    "t": "migrar-contrato recibe `session` pero solo la usa para createdBy: cualquier usuario autenticado (incluso ESTUDIANTE) puede crear contratos y filas en PEOPLE/ACADEMICA/USUARIOS_ROLES/EQUIPO_COMERCIAL/FINANCIEROS/PAGOS, a diferencia de /api/admin/crear-estudiante que sí exige CREAR_ROL. Los logins nacen con activo=false.",
+    "ref": "src/app/api/admin/migrar-contrato/route.ts:16"
+   },
+   {
+    "s": "medio",
+    "t": "Escritura masiva sin rate-limit ni límite de tamaño de personIds: un array grande ejecuta bloqueos en lote.",
+    "ref": "src/app/api/admin/bloqueo-contrato/execute/route.ts:17-24"
+   },
+   {
+    "s": "medio",
+    "t": "lookup permite enumerar contratos: solo pide `contrato` como string y el 404 vs 200 distingue contratos existentes, sin rate-limit.",
+    "ref": "src/app/api/admin/bloqueo-contrato/lookup/route.ts:16-20"
+   }
+  ]
+ },
+ {
+  "id": "admin-gated",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Mantenimiento /api/admin (correctamente gateado)",
+  "icon": "🔒",
+  "endpoint": "/api/admin/*",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Operaciones de mantenimiento y ABM protegidas con rol SUPER_ADMIN/ADMIN o requirePermission: clear-historic, sync-field/sync-steps, regenerar eventos festivos, invalidar caché de permisos, feature flags, scripts, filiales, roles y usuarios administrativos, crear estudiante, equipo comercial, libros interactivos (+presign), videos e imágenes, CORS de Spaces, plantillas, envío de mensajes y contratos de prueba.",
+  "files": [
+   "src/app/api/admin/clear-historic/route.ts:6-8",
+   "src/app/api/admin/scripts/usuarios-pegados/route.ts:14-17",
+   "src/app/api/admin/filiales/route.ts:17-18",
+   "src/app/api/admin/libros-interactivos/[codigo]/audios/route.ts:27-28",
+   "src/app/api/admin/envio-mensajes/send/route.ts:47-48",
+   "src/app/api/admin/videos/instructivos/route.ts:35-41",
+   "src/app/api/admin/spaces-cors/route.ts:14-38",
+   "src/app/api/admin/sync-plataforma-bookings/route.ts:10"
+  ],
+  "urls": [
+   "/api/admin/clear-historic",
+   "/api/admin/clear-historic/student",
+   "/api/admin/clear-historic/lookup",
+   "/api/admin/regenerar-eventos-festivos",
+   "/api/admin/sync-field",
+   "/api/admin/sync-steps",
+   "/api/admin/invalidate-permissions-cache",
+   "/api/admin/feature-flags/performance-eval",
+   "/api/admin/scripts/catalog",
+   "/api/admin/scripts/usuarios-pegados",
+   "/api/admin/scripts/usuarios-pegados/aplicar",
+   "/api/admin/filiales",
+   "/api/admin/filiales/[id]",
+   "/api/admin/roles-administrativos",
+   "/api/admin/usuarios-administrativos",
+   "/api/admin/crear-estudiante",
+   "/api/admin/equipo-comercial",
+   "/api/admin/libros-interactivos",
+   "/api/admin/libros-interactivos/feature-flag",
+   "/api/admin/libros-interactivos/[codigo]/binding",
+   "/api/admin/libros-interactivos/[codigo]/audios",
+   "/api/admin/libros-interactivos/[codigo]/audios/presign",
+   "/api/admin/videos/instructivos",
+   "/api/admin/videos/migrate-static",
+   "/api/admin/videos/check-niveles",
+   "/api/admin/spaces-cors",
+   "/api/admin/plantillas",
+   "/api/admin/plantillas/[id]",
+   "/api/admin/envio-mensajes/lookup",
+   "/api/admin/envio-mensajes/send",
+   "/api/admin/envio-mensajes/update-celular",
+   "/api/admin/contratos-prueba/list",
+   "/api/admin/contratos-prueba/purge",
+   "/api/admin/sync-plataforma-bookings"
+  ],
+  "flags": [
+   {
+    "s": "bajo",
+    "t": "GET /api/admin/videos/instructivos solo exige sesión (sin requireAdmin, a diferencia de POST/DELETE/PATCH del mismo archivo): cualquier usuario logueado lee la config admin. Bajo impacto (sin datos personales).",
+    "ref": "src/app/api/admin/videos/instructivos/route.ts:81-82"
+   },
+   {
+    "s": "bajo",
+    "t": "sync-plataforma-bookings no declara auth propia: hereda la de sync-field reenviando headers. Es seguro hoy, pero la protección es implícita y se rompería si sync-field cambia.",
+    "ref": "src/app/api/admin/sync-plataforma-bookings/route.ts:11"
+   },
+   {
+    "s": "bajo",
+    "t": "/api/admin/spaces-cors reescribe la política CORS del bucket (PutBucketCors) permitiendo localhost:3000/3001/3002 junto a los dominios de producción; usa getServerSession manual en vez de handlerWithAuth.",
+    "ref": "src/app/api/admin/spaces-cors/route.ts:14-38"
+   }
+  ]
+ },
+ {
+  "id": "students-escrituras",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Gestión del estudiante (escrituras sin RBAC)",
+  "icon": "🔒",
+  "endpoint": "/api/postgres/students/*",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Edición de campos, avance/override de step, alta-baja, prórroga, progreso, nivelación, cambio de step auditado, cambio académico, promoción WELCOME, contrato y on-hold del estudiante.",
+  "files": [
+   "src/app/api/postgres/students/[id]/change-password/route.ts:12",
+   "src/app/api/postgres/students/[id]/update/route.ts:9",
+   "src/services/student.service.ts:247-251",
+   "src/app/api/postgres/students/[id]/cambio-academico/route.ts:15"
+  ],
+  "urls": [
+   "/api/postgres/students/[id]/change-password",
+   "/api/postgres/students/[id]/update",
+   "/api/postgres/students/[id]/step",
+   "/api/postgres/students/[id]/step-override",
+   "/api/postgres/students/[id]/toggle-status",
+   "/api/postgres/students/[id]/extend",
+   "/api/postgres/students/[id]/progress",
+   "/api/postgres/students/[id]/nivelacion",
+   "/api/postgres/students/[id]/cambio-step-auditado",
+   "/api/postgres/students/[id]/cambio-academico",
+   "/api/postgres/students/[id]/promote-welcome",
+   "/api/postgres/students/contract",
+   "/api/postgres/students/onhold"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "change-password: handlerWithAuth sin requirePermission y sin comprobar que la sesión sea dueña del [id] (ni destructura session). CUALQUIER usuario con sesión puede fijar la contraseña de CUALQUIER estudiante → toma de cuentas. Contrasta con cambio-academico y promote-welcome, que sí exigen permiso.",
+    "ref": "src/app/api/postgres/students/[id]/change-password/route.ts:12"
+   },
+   {
+    "s": "alto",
+    "t": "change-password guarda la clave en claro (sin bcrypt) en ACADEMICA.clave y USUARIOS_ROLES.password, y ese texto plano se filtra por el GET público /api/postgres/students/[id] (claveLogin) → primitiva completa escribir-y-leer.",
+    "ref": "src/app/api/postgres/students/[id]/change-password/route.ts:21-27"
+   },
+   {
+    "s": "medio",
+    "t": "RBAC inconsistente y sin gate global (el matcher excluye /api): solo cambio-academico y promote-welcome llaman requirePermission. Las otras 9 escrituras solo exigen sesión y session.user se usa únicamente para cadenas de auditoría, así que cualquier rol puede modificar el expediente de cualquier estudiante.",
+    "ref": "src/app/api/postgres/students/[id]/update/route.ts:9"
+   },
+   {
+    "s": "medio",
+    "t": "Política de contraseñas débil (mínimo 4 caracteres) y sin rate-limit en las escrituras.",
+    "ref": "src/app/api/postgres/students/[id]/change-password/route.ts:14"
+   }
+  ]
+ },
+ {
+  "id": "panel-estudiante-update-profile",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Actualizar perfil del estudiante (clave en claro)",
+  "icon": "🔒",
+  "endpoint": "POST /api/postgres/panel-estudiante/update-profile",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Actualiza el perfil del estudiante (email, password, celular, domicilio, foto) en USUARIOS_ROLES + PEOPLE + ACADEMICA.",
+  "files": [
+   "src/app/api/postgres/panel-estudiante/update-profile/route.ts:18",
+   "src/app/api/postgres/panel-estudiante/update-profile/route.ts:63-66"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Escribe la contraseña en TEXTO PLANO en USUARIOS_ROLES.password y ACADEMICA.clave (sin bcrypt). El login acepta plano como fallback, así que actualizar el perfil DEGRADA una contraseña hasheada a texto plano recuperable si se filtra la BD.",
+    "ref": "src/app/api/postgres/panel-estudiante/update-profile/route.ts:63-66"
+   },
+   {
+    "s": "alto",
+    "t": "Permite cambiar el email de login a cualquier valor con solo validación regex, sin verificar propiedad ni unicidad previa: si otro USUARIOS_ROLES ya usa ese email y no hay constraint único, se crean credenciales colisionantes / potencial takeover.",
+    "ref": "src/app/api/postgres/panel-estudiante/update-profile/route.ts:25-30"
+   },
+   {
+    "s": "medio",
+    "t": "No valida fortaleza mínima de contraseña (la única regla es prohibir espacios) y no hay rate-limit.",
+    "ref": "src/app/api/postgres/panel-estudiante/update-profile/route.ts:31-32"
+   },
+   {
+    "s": "bajo",
+    "t": "fotoUrl se escribe directo en ACADEMICA.foto sin validar dominio ni esquema (permite javascript:, data: o host arbitrario).",
+    "ref": "src/app/api/postgres/panel-estudiante/update-profile/route.ts:99"
+   },
+   {
+    "s": "bajo",
+    "t": "El gate no es el middleware (su matcher excluye /api) sino handlerWithAuth; sin requirePermission, cualquier rol autenticado puede invocarlo, aunque solo escribe sobre su propio email de sesión.",
+    "ref": "src/app/api/postgres/panel-estudiante/update-profile/route.ts:18"
+   }
+  ]
+ },
+ {
+  "id": "panel-estudiante",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Panel del estudiante (lecturas, reservas, quiz y jump-tutor)",
+  "icon": "🔒",
+  "endpoint": "/api/postgres/panel-estudiante/*",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Perfil, progreso, eventos, materiales, historial, comentarios, reserva/cancelación de clases, evaluaciones, actividades complementarias (quiz IA) y sesión de jump-tutor (OpenAI Realtime). La identidad sale de resolveStudentFromSession, no de parámetros.",
+  "files": [
+   "src/app/api/postgres/panel-estudiante/me/route.ts:7",
+   "src/app/api/postgres/panel-estudiante/book/route.ts:8",
+   "src/app/api/postgres/panel-estudiante/cancel/route.ts:7",
+   "src/app/api/postgres/panel-estudiante/evaluar/route.ts:23",
+   "src/app/api/postgres/panel-estudiante/complementaria/generate/route.ts:6",
+   "src/app/api/postgres/panel-estudiante/jump-tutor/session/route.ts:7",
+   "src/app/api/postgres/panel-estudiante/jump-tutor/report/route.ts:9",
+   "src/services/jump-tutor.service.ts:334-347"
+  ],
+  "urls": [
+   "/api/postgres/panel-estudiante/me",
+   "/api/postgres/panel-estudiante/stats",
+   "/api/postgres/panel-estudiante/history",
+   "/api/postgres/panel-estudiante/progress",
+   "/api/postgres/panel-estudiante/comments",
+   "/api/postgres/panel-estudiante/events",
+   "/api/postgres/panel-estudiante/available-events",
+   "/api/postgres/panel-estudiante/materials",
+   "/api/postgres/panel-estudiante/actividades",
+   "/api/postgres/panel-estudiante/evaluaciones-pendientes",
+   "/api/postgres/panel-estudiante/evaluar",
+   "/api/postgres/panel-estudiante/book",
+   "/api/postgres/panel-estudiante/cancel",
+   "/api/postgres/panel-estudiante/complementaria/eligibility",
+   "/api/postgres/panel-estudiante/complementaria/generate",
+   "/api/postgres/panel-estudiante/complementaria/grade",
+   "/api/postgres/panel-estudiante/complementaria/attempts",
+   "/api/postgres/panel-estudiante/jump-tutor/eligibility",
+   "/api/postgres/panel-estudiante/jump-tutor/session",
+   "/api/postgres/panel-estudiante/jump-tutor/report"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "jump-tutor/report: el score y la recomendación los envía el CLIENTE; el service solo valida propiedad y clampea 0-100 (la unión TS se borra en runtime), así que el estudiante puede POSTear su propia nota APROBAR=100 sin hablar con el tutor. Mitigación: queda PENDIENTE y el avance solo ocurre tras revisión humana, pero contamina la cola con evidencia fabricada.",
+    "ref": "src/services/jump-tutor.service.ts:334-347"
+   },
+   {
+    "s": "bajo",
+    "t": "jump-tutor/session: sin rate-limit y con el tope de intentos eludible — la evaluación se inserta IN_PROGRESS antes de acuñar el client secret de OpenAI, pero el contador solo cuenta filas COMPLETED, así que quien nunca completa puede acuñar secrets en bucle (abuso de coste). Alcance limitado por el allowlist de pruebas.",
+    "ref": "src/services/jump-tutor.service.ts:269-288"
+   },
+   {
+    "s": "bajo",
+    "t": "Ningún endpoint del grupo llama requirePermission: el RBAC se omite porque '/panel-estudiante' está en alwaysAllowedRoutes del middleware; el alcance queda acotado solo porque el studentId sale de la sesión.",
+    "ref": "src/middleware.ts:78-82"
+   },
+   {
+    "s": "bajo",
+    "t": "evaluar confía en x-forwarded-for/x-real-ip para el registro de auditoría (IP falsificable si el borde no normaliza la cabecera).",
+    "ref": "src/app/api/postgres/panel-estudiante/evaluar/route.ts:38-39"
+   }
+  ]
+ },
+ {
+  "id": "events-crud",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Calendario: crear, editar, borrar e inscribir (sin RBAC)",
+  "icon": "🔒",
+  "endpoint": "/api/postgres/events/*",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "CRUD de eventos del calendario (incluidos grupos compartidos), inscripción/desinscripción de estudiantes, listado de bookings, welcome, sessions, filtrados y conteos batch.",
+  "files": [
+   "src/app/api/postgres/events/route.ts:10",
+   "src/app/api/postgres/events/[id]/route.ts:26",
+   "src/app/api/postgres/events/[id]/route.ts:52",
+   "src/app/api/postgres/events/[id]/enroll/route.ts:17",
+   "src/app/api/postgres/events/[id]/enroll/[bookingId]/route.ts:10",
+   "src/services/enrollment.service.ts:212",
+   "src/repositories/booking.repository.ts:378"
+  ],
+  "urls": [
+   "/api/postgres/events",
+   "/api/postgres/events/[id]",
+   "/api/postgres/events/[id]/enroll",
+   "/api/postgres/events/[id]/enroll/[bookingId]",
+   "/api/postgres/events/[id]/bookings",
+   "/api/postgres/events/[id]/group",
+   "/api/postgres/events/welcome",
+   "/api/postgres/events/sessions",
+   "/api/postgres/events/filtered",
+   "/api/postgres/events/batch-counts"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "DELETE de evento sin requirePermission: cualquier sesión puede borrar cualquier evento por id, y con ?deleteGroup=true&deleteBookings=true arrastra hermanos del grupo e inscripciones en una sola llamada.",
+    "ref": "src/app/api/postgres/events/[id]/route.ts:52"
+   },
+   {
+    "s": "medio",
+    "t": "PUT y POST sin requirePermission (el matcher excluye /api, así que no hay gate RBAC): cualquier usuario con sesión puede crear y modificar eventos del calendario global sin ser su advisor.",
+    "ref": "src/app/api/postgres/events/[id]/route.ts:26"
+   },
+   {
+    "s": "medio",
+    "t": "El body controla _skipLog:true (y ?skipLog=true en DELETE): suprime la entrada en ADVISOR_EVENT_LOG y bypassa el límite MAX_ADVISOR_REASSIGNMENTS — un campo del cliente anula auditoría y tope, sin restricción de rol.",
+    "ref": "src/app/api/postgres/events/[id]/route.ts:29"
+   },
+   {
+    "s": "medio",
+    "t": "enroll: agendadoPorRol se toma del body y se usa como decisión de autorización (skipCapacity), así que enviar 'SUPER_ADMIN' bypassea el límite de capacidad; studentIds no se atan al llamante, así que se inscribe a cualquiera.",
+    "ref": "src/app/api/postgres/events/[id]/enroll/route.ts:20"
+   },
+   {
+    "s": "medio",
+    "t": "DELETE de inscripción sin requirePermission ni verificación de propiedad: DELETE FROM ACADEMICA_BOOKINGS WHERE _id = $1 sin scope. Cualquier sesión desinscribe a otros estudiantes.",
+    "ref": "src/app/api/postgres/events/[id]/enroll/[bookingId]/route.ts:10"
+   },
+   {
+    "s": "medio",
+    "t": "eventId nunca se valida contra el booking: deleteEnrollment lo ignora y luego decrementInscritos(eventId) decrementa el contador del evento que indique el llamante → corrupción de contadores.",
+    "ref": "src/services/enrollment.service.ts:212"
+   },
+   {
+    "s": "medio",
+    "t": "Volcados masivos sin RBAC ni paginación: /events/sessions y /events/welcome sin fechas devuelven TODOS los bookings con nombre, celular, numeroId y plataforma; /events/[id]/bookings?includeStudent=true expande datos personales de cualquier evento enumerable.",
+    "ref": "src/repositories/booking.repository.ts:378"
+   },
+   {
+    "s": "bajo",
+    "t": "batch-counts acepta eventIds sin límite de tamaño; /events/filtered sin parámetros lista el calendario completo.",
+    "ref": "src/app/api/postgres/events/batch-counts/route.ts:14"
+   }
+  ]
+ },
+ {
+  "id": "people-escrituras",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Personas: editar, borrar, aprobar e importar (sin RBAC)",
+  "icon": "🔒",
+  "endpoint": "/api/postgres/people/*",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "PATCH/DELETE de la ficha, aprobación de titular/beneficiario, alta de personas, importación masiva CSV, comentarios y acciones gateadas (agregar beneficiario, cambio de cartera, marca opcional).",
+  "files": [
+   "src/app/api/postgres/people/[id]/route.ts:258",
+   "src/app/api/postgres/people/[id]/route.ts:446-466",
+   "src/app/api/postgres/people/[id]/approve/route.ts:225",
+   "src/app/api/postgres/people/bulk-import/route.ts:19-30",
+   "src/app/api/postgres/people/[id]/comments/route.ts:34",
+   "src/app/api/postgres/people/[id]/beneficiario/route.ts:28"
+  ],
+  "urls": [
+   "/api/postgres/people",
+   "/api/postgres/people/[id]",
+   "/api/postgres/people/[id]/approve",
+   "/api/postgres/people/[id]/comments",
+   "/api/postgres/people/[id]/beneficiario",
+   "/api/postgres/people/[id]/cambio-cartera",
+   "/api/postgres/people/[id]/marca-opcional",
+   "/api/postgres/people/bulk-import",
+   "/api/postgres/people/beneficiarios-sin-registro"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "PATCH sin requirePermission (a diferencia de beneficiario/cambio-cartera/marca-opcional): cualquier sesión, de cualquier rol, edita la ficha de CUALQUIER persona por _id — cambiar el email se propaga a USUARIOS_ROLES (altera la identidad de login) y aprobacion='Aprobado' auto-mapea a estado='ACTIVA'.",
+    "ref": "src/app/api/postgres/people/[id]/route.ts:258"
+   },
+   {
+    "s": "medio",
+    "t": "DELETE físico (no lógico) sin requirePermission: basta cualquier sesión para eliminar de forma irreversible a cualquier beneficiario y su historial académico. La única validación es tipoUsuario==='BENEFICIARIO'.",
+    "ref": "src/app/api/postgres/people/[id]/route.ts:446-466"
+   },
+   {
+    "s": "medio",
+    "t": "approve sin requirePermission: cualquier sesión aprueba cualquier contrato y sobre un titular cascadea a TODOS sus beneficiarios pendientes (crea ACADEMICA, bookings y envía WhatsApp con el link público de auto-registro) — amplificador de mensajería sin rate-limit.",
+    "ref": "src/app/api/postgres/people/[id]/approve/route.ts:248-255"
+   },
+   {
+    "s": "medio",
+    "t": "bulk-import sin requirePermission: cualquier sesión inserta o SOBRESCRIBE hasta 5000 filas de PEOPLE por llamada (pisa email, celular, contrato, nivel por numeroId+tipoUsuario). El bucle secuencial de round-trips mantiene ocupadas conexiones del pool de max 8 durante minutos.",
+    "ref": "src/app/api/postgres/people/bulk-import/route.ts:19-30"
+   },
+   {
+    "s": "bajo",
+    "t": "beneficiarios-sin-registro hace SELECT p.* sin requirePermission, paginación ni límite: volcado masivo de PII con una sola llamada autenticada.",
+    "ref": "src/app/api/postgres/people/beneficiarios-sin-registro/route.ts:21-28"
+   },
+   {
+    "s": "bajo",
+    "t": "El campo `usuario` del comentario se toma del body y solo cae a session.user.email si falta: permite suplantar el autor de un comentario interno auditado.",
+    "ref": "src/app/api/postgres/people/[id]/comments/route.ts:34"
+   }
+  ]
+ },
+ {
+  "id": "contracts-escrituras",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Contratos: crear, editar y buscar (sin RBAC)",
+  "icon": "🔒",
+  "endpoint": "POST /api/postgres/contracts · PUT /api/postgres/contracts/[id] · GET /api/postgres/contracts/search",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Crear contrato completo (titular + beneficiarios + financiero), actualizar titular/beneficiarios/financiero y buscar contratos por patrón de número.",
+  "files": [
+   "src/app/api/postgres/contracts/route.ts:41",
+   "src/app/api/postgres/contracts/[id]/route.ts:118",
+   "src/app/api/postgres/contracts/search/route.ts:16"
+  ],
+  "urls": [
+   "/api/postgres/contracts",
+   "/api/postgres/contracts/[id]",
+   "/api/postgres/contracts/search"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "PUT: escritura financiera sin permiso RBAC ni comprobación de propiedad — cualquier usuario autenticado puede modificar CUALQUIER contrato por _id, incluidos totalPlan, saldo, numeroCuotas y valorCuota (fraude directo: ponerse saldo 0).",
+    "ref": "src/app/api/postgres/contracts/[id]/route.ts:118"
+   },
+   {
+    "s": "medio",
+    "t": "IDOR: el PUT solo comprueba que el titular exista; la sesión se recibe pero nunca acota la consulta. Los beneficiarios sí validan pertenencia, pero titular y financiero no.",
+    "ref": "src/app/api/postgres/contracts/[id]/route.ts:127"
+   },
+   {
+    "s": "medio",
+    "t": "POST sin requirePermission: cualquier sesión (incluso estudiante) crea contratos reales y consume la serie consecutiva, insertando en 6 tablas (PEOPLE, ACADEMICA, USUARIOS_ROLES, EQUIPO_COMERCIAL, FINANCIEROS, PAGOS_TITULARES).",
+    "ref": "src/app/api/postgres/contracts/route.ts:41"
+   },
+   {
+    "s": "medio",
+    "t": "search sin requirePermission y por prefijo (LIKE '${pattern}%'): un pattern corto como '02' devuelve SELECT * de todos los contratos del país con PII de titulares y beneficiarios, sin LIMIT ni paginación ni rate-limit.",
+    "ref": "src/app/api/postgres/contracts/search/route.ts:16"
+   },
+   {
+    "s": "bajo",
+    "t": "esContratoPrueba viene del body sin validar rol y, marcándolo, salta la validación obligatoria de 'plataforma'.",
+    "ref": "src/app/api/postgres/contracts/route.ts:42"
+   }
+  ]
+ },
+ {
+  "id": "materials-storage",
+  "dir": "in",
+  "type": "upload",
+  "title": "Material y archivos de niveles (subir/borrar/presign)",
+  "icon": "📤",
+  "endpoint": "/api/postgres/materials/* · /api/postgres/niveles/{video,material}",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Gestión y consumo de material curricular: inventario por nivel, subida/borrado en DO Spaces, presigned URLs y proxy de streaming de vídeos y PDFs.",
+  "files": [
+   "src/app/api/postgres/materials/manage/route.ts:79",
+   "src/app/api/postgres/materials/manage/route.ts:108",
+   "src/app/api/postgres/materials/manage/route.ts:171",
+   "src/app/api/postgres/materials/presigned/route.ts:19",
+   "src/app/api/postgres/niveles/video/route.ts:29",
+   "src/app/api/postgres/niveles/material/route.ts:23",
+   "src/app/api/postgres/niveles/bulk-import/route.ts:120"
+  ],
+  "urls": [
+   "/api/postgres/materials/manage",
+   "/api/postgres/materials/presigned",
+   "/api/postgres/materials/books",
+   "/api/postgres/materials/nivel",
+   "/api/postgres/materials/usuario",
+   "/api/postgres/niveles/video",
+   "/api/postgres/niveles/material",
+   "/api/postgres/niveles/bulk-import"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "POST materials/manage: solo exige sesión (getServerSession, sin requirePermission ni rol) — cualquier usuario autenticado puede subir archivos a Spaces y sobrescribir el material curricular de cualquier nivel pasando stepId arbitrario.",
+    "ref": "src/app/api/postgres/materials/manage/route.ts:108"
+   },
+   {
+    "s": "alto",
+    "t": "DELETE materials/manage: borrado destructivo con solo sesión — cualquier usuario autenticado borra material de cualquier stepId/fileKey en NIVELES y el objeto real en Spaces. Irreversible y el fallo de Spaces se traga en un catch vacío.",
+    "ref": "src/app/api/postgres/materials/manage/route.ts:171"
+   },
+   {
+    "s": "medio",
+    "t": "materials/presigned: la whitelist incluye 'fotosAdvisors/', 'fotoGuia/' y 'fotos/' además de 'materials/', con solo key.startsWith(): cualquier sesión obtiene una URL firmada a la foto personal de cualquier advisor/guía/estudiante enumerando keys.",
+    "ref": "src/app/api/postgres/materials/presigned/route.ts:19"
+   },
+   {
+    "s": "medio",
+    "t": "niveles/video en modo 'key directa' solo valida key.startsWith('videos/') sin comprobar pertenencia ni RBAC: cualquier usuario logueado puede pedir (y con ?download=1 exfiltrar) cualquier objeto bajo videos/, incluidos instructivos internos.",
+    "ref": "src/app/api/postgres/niveles/video/route.ts:29"
+   },
+   {
+    "s": "medio",
+    "t": "niveles/material solo valida key.startsWith('materials/'): cualquier sesión válida descarga cualquier PDF del prefijo enumerando keys.",
+    "ref": "src/app/api/postgres/niveles/material/route.ts:23"
+   },
+   {
+    "s": "medio",
+    "t": "Upload sin validación de tipo ni tamaño: acepta cualquier File y usa file.type del cliente como ContentType, sin whitelist ni límite de bytes (mitigado por ACL 'private' y sanitización del nombre).",
+    "ref": "src/app/api/postgres/materials/manage/route.ts:134"
+   },
+   {
+    "s": "medio",
+    "t": "GET materials/manage solo comprueba sesión, sin requirePermission: cualquier logueado enumera el inventario completo de materiales variando ?nivel&curso, sin rate-limit.",
+    "ref": "src/app/api/postgres/materials/manage/route.ts:79"
+   },
+   {
+    "s": "medio",
+    "t": "niveles/bulk-import está bien gateado (requirePermission ACTUALIZAR_MATERIAL) pero hace DDL en caliente (ALTER TABLE, CREATE UNIQUE INDEX) y un DELETE de todas las filas del curso por request, sin cota de tamaño de rows[] ni rate-limit.",
+    "ref": "src/app/api/postgres/niveles/bulk-import/route.ts:120"
+   }
+  ]
+ },
+ {
+  "id": "guias-gestion",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Gestión de guías (perfil, panel y presign)",
+  "icon": "🔒",
+  "endpoint": "/api/postgres/guias/*",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Detalle y edición del guía, auto-actualización de perfil, presign de foto y lecturas del Panel Guía (agenda, eventos admin, estadísticas, control de horas, cursos asignados, lookup por email).",
+  "files": [
+   "src/app/api/postgres/guias/[id]/route.ts:28",
+   "src/app/api/postgres/guias/[id]/route.ts:96",
+   "src/app/api/postgres/guias/update-profile/route.ts:39-60",
+   "src/app/api/postgres/guias/by-email/[email]/route.ts:15",
+   "src/app/api/postgres/guias/photo-presign/route.ts:18"
+  ],
+  "urls": [
+   "/api/postgres/guias/[id]",
+   "/api/postgres/guias/update-profile",
+   "/api/postgres/guias/photo-presign",
+   "/api/postgres/guias/by-email/[email]",
+   "/api/postgres/guias/[id]/events",
+   "/api/postgres/guias/[id]/admin-events",
+   "/api/postgres/guias/[id]/stats",
+   "/api/postgres/guias/[id]/control-horas",
+   "/api/postgres/guias/[id]/cursos-asignados",
+   "/api/postgres/guias/[id]/name"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "GET /guias/[id] devuelve la contraseña en TEXTO PLANO (COALESCE(u.password, g.clave)) a cualquier sesión con permiso GUIA_EDITAR; las claves se almacenan sin hash.",
+    "ref": "src/app/api/postgres/guias/[id]/route.ts:28"
+   },
+   {
+    "s": "medio",
+    "t": "PATCH /guias/[id] escribe la nueva clave sin hashear en USUARIOS_ROLES.password y GUIAS.clave (valor crudo del body).",
+    "ref": "src/app/api/postgres/guias/[id]/route.ts:96"
+   },
+   {
+    "s": "medio",
+    "t": "update-profile guarda la contraseña en texto plano de forma explícita (la variable se llama 'hashedPassword' pero es cleanPass) y limita la clave a 6-10 caracteres.",
+    "ref": "src/app/api/postgres/guias/update-profile/route.ts:39-60"
+   },
+   {
+    "s": "bajo",
+    "t": "update-profile permite cambiar el email de login a cualquier valor sin verificar unicidad ni propiedad (las búsquedas usan sessionEmail pero el UPDATE usa el email nuevo) → puede colisionar/secuestrar el login de otra cuenta.",
+    "ref": "src/app/api/postgres/guias/update-profile/route.ts:63-93"
+   },
+   {
+    "s": "bajo",
+    "t": "Las lecturas del Panel Guía exigen sesión pero no requirePermission ni comprueban que el [id]/[email] sea el propio: cualquier autenticado (incluido un GUIA auto-registrado) lee agenda, horas y datos de otro guía.",
+    "ref": "src/app/api/postgres/guias/by-email/[email]/route.ts:15"
+   }
+  ]
+ },
+ {
+  "id": "academic-crud",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "CRUD académico y suspensión de sesiones",
+  "icon": "🔒",
+  "endpoint": "/api/postgres/academic/*",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Registro académico por id, actividades, asistencia, evaluación, usuario-curso y suspensión/reactivación de sesiones de curso (estas últimas sí con RBAC).",
+  "files": [
+   "src/app/api/postgres/academic/[id]/route.ts:16",
+   "src/app/api/postgres/academic/[id]/route.ts:44",
+   "src/app/api/postgres/academic/suspender-sesiones/route.ts:21",
+   "src/app/api/postgres/academic/suspender-sesiones/aplicar/route.ts:17"
+  ],
+  "urls": [
+   "/api/postgres/academic/[id]",
+   "/api/postgres/academic/activity",
+   "/api/postgres/academic/attendance",
+   "/api/postgres/academic/evaluation",
+   "/api/postgres/academic/suspender-sesiones",
+   "/api/postgres/academic/suspender-sesiones/aplicar"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Las escrituras/borrados (PUT/DELETE del registro, POST de actividad/asistencia/evaluación/usuario) solo exigen sesión, sin requirePermission: cualquier usuario logueado de cualquier rol puede modificar o eliminar datos académicos. Contrasta con suspender-sesiones, que sí exige permiso.",
+    "ref": "src/app/api/postgres/academic/[id]/route.ts:44"
+   },
+   {
+    "s": "bajo",
+    "t": "GET /academic/[id] pasa params.id directo al repositorio sin validar pertenencia (el handler ni recibe session): permite enumerar registros académicos con sesión de bajo privilegio.",
+    "ref": "src/app/api/postgres/academic/[id]/route.ts:16"
+   },
+   {
+    "s": "bajo",
+    "t": "El middleware NO protege estas rutas: el matcher excluye todo /api, así que la única barrera es handlerWithAuth.",
+    "ref": "src/middleware.ts:122"
+   }
+  ]
+ },
+ {
+  "id": "reports-auth",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Informes autenticados (académica, programación, contratos, servicio)",
+  "icon": "🔒",
+  "endpoint": "/api/postgres/reports/*",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Informes académicos, de programación de advisors, de contratos y de servicio; la mayoría con requirePermission, algunos solo con sesión.",
+  "files": [
+   "src/app/api/postgres/reports/academica/x-niveles/route.ts:47",
+   "src/app/api/postgres/reports/programacion/advisors/route.ts:101",
+   "src/app/api/postgres/reports/programacion/advisors/resumen/route.ts:64",
+   "src/app/api/postgres/reports/attendance/route.ts:10",
+   "src/app/api/postgres/reports/academic-user/route.ts:17"
+  ],
+  "urls": [
+   "/api/postgres/reports/academica/*",
+   "/api/postgres/reports/academico/*",
+   "/api/postgres/reports/contratos/matriculas",
+   "/api/postgres/reports/servicio/nivelaciones",
+   "/api/postgres/reports/programacion/advisors",
+   "/api/postgres/reports/programacion/advisors/resumen",
+   "/api/postgres/reports/programacion/advisors/sesion-detalle",
+   "/api/postgres/reports/programacion/eventos-informe",
+   "/api/postgres/reports/attendance",
+   "/api/postgres/reports/academic-user"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Los 4 informes de programación usan handlerWithAuth con `_session` sin usar y ninguno llama requirePermission (el matcher excluye /api): cualquier usuario autenticado (p.ej. un estudiante) lee la programación, rankings y el detalle de sesiones de todos los advisors.",
+    "ref": "src/app/api/postgres/reports/programacion/advisors/resumen/route.ts:64"
+   },
+   {
+    "s": "bajo",
+    "t": "/reports/attendance y /reports/academic-user exigen sesión pero no requirePermission: cualquier rol lee el informe completo de asistencia y los datos académicos por usuario.",
+    "ref": "src/app/api/postgres/reports/attendance/route.ts:10"
+   }
+  ]
+ },
+ {
+  "id": "dbmosaico",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Visor/editor directo de la base de datos",
+  "icon": "🔒",
+  "endpoint": "GET|POST|PATCH|DELETE /api/postgres/dbmosaico/[table]",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "CRUD genérico de administración sobre cualquier tabla del esquema public: lectura paginada, insert, update de celda y borrado masivo.",
+  "files": [
+   "src/app/api/postgres/dbmosaico/[table]/route.ts:93",
+   "src/middleware.ts:122"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Superficie muy amplia (lectura/escritura/borrado sobre tablas arbitrarias, incluida USUARIOS_ROLES cuyo SELECT ur.* devuelve la columna password) protegida solo por assertAdmin(session) sobre el rol del JWT, sin requirePermission ni auditoría. No hay inyección SQL: tabla y columnas se validan contra information_schema y los valores van parametrizados; el riesgo es de autorización/alcance.",
+    "ref": "src/app/api/postgres/dbmosaico/[table]/route.ts:93"
+   },
+   {
+    "s": "medio",
+    "t": "El gate global no cubre la ruta (el matcher excluye /api): cualquier regresión que cambie handlerWithAuth por handler dejaría el CRUD sobre tablas arbitrarias totalmente abierto sin que el middleware lo detecte.",
+    "ref": "src/middleware.ts:122"
+   }
+  ]
+ },
+ {
+  "id": "misc-auth",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Resto de API autenticada (dashboard, pagos, campañas, aprobaciones)",
+  "icon": "🔒",
+  "endpoint": "/api/{dashboard,permissions,roles/create,user/permissions,informes,postgres/*}",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Superficie correctamente autenticada con handlerWithAuth (+requirePermission donde aplica): dashboard y gráficas, permisos, informes de beneficiarios, aprobaciones, campañas y cursos (imágenes/vídeos/contenido), calendario del advisor, jump-evaluaciones, libros interactivos, recaudos, pagos de titulares, eventos administrativos, exportaciones, financiero y academic-record.",
+  "files": [
+   "src/lib/api-helpers.ts:101",
+   "src/app/api/postgres/pagos-titulares/route.ts:14",
+   "src/app/api/postgres/admin-events/route.ts:15",
+   "src/app/api/postgres/admin-events/[id]/registrar/route.ts:16",
+   "src/app/api/postgres/config/ticker/route.ts:28"
+  ],
+  "urls": [
+   "/api/dashboard/stats",
+   "/api/dashboard/top-students",
+   "/api/permissions",
+   "/api/permissions/update",
+   "/api/roles/create",
+   "/api/user/permissions",
+   "/api/informes/beneficiarios",
+   "/api/postgres/approvals/*",
+   "/api/postgres/calendario/[eventoId]/*",
+   "/api/postgres/campaigns",
+   "/api/postgres/campaigns/[id]",
+   "/api/postgres/cursos-imagenes",
+   "/api/postgres/cursos-imagenes/presign",
+   "/api/postgres/cursos-videos",
+   "/api/postgres/cursos-videos/presign",
+   "/api/postgres/cursos-contenido",
+   "/api/postgres/dashboard/*",
+   "/api/postgres/export/*",
+   "/api/postgres/financial",
+   "/api/postgres/jump-evaluaciones/*",
+   "/api/postgres/libros-interactivos/*",
+   "/api/postgres/recaudos/*",
+   "/api/postgres/pagos-titulares",
+   "/api/postgres/pagos-titulares/[id]",
+   "/api/postgres/pagos-titulares/[id]/validar",
+   "/api/postgres/pagos-titulares/[id]/recibo",
+   "/api/postgres/admin-events",
+   "/api/postgres/admin-events/[id]",
+   "/api/postgres/admin-events/[id]/registrar",
+   "/api/postgres/admin-events/check-conflict",
+   "/api/postgres/admin-events/group/[groupId]",
+   "/api/postgres/config/ticker",
+   "/api/postgres/config/instructivos",
+   "/api/postgres/config/sesion-requiere-registro",
+   "/api/postgres/users/by-role",
+   "/api/postgres/roles",
+   "/api/postgres/academic-record"
+  ],
+  "flags": []
+ },
+ {
+  "id": "contracts-regenerate-drive",
+  "dir": "in",
+  "type": "http-auth",
+  "title": "Regenerar PDF del contrato en Drive",
+  "icon": "🔒",
+  "endpoint": "POST /api/contracts/[id]/regenerate-drive",
+  "protocol": "REST",
+  "auth": "jwt",
+  "purpose": "Regenera el PDF del contrato con Chromium propio y lo sube a Drive (propio de MOSAICO o puente temporal BSL); requiere sesión + permiso GENERAR_CONTRATO.",
+  "files": [
+   "src/app/api/contracts/[id]/regenerate-drive/route.ts:45"
+  ],
+  "flags": []
+ },
+ {
+  "id": "postgres-db",
+  "dir": "out",
+  "type": "db",
+  "title": "PostgreSQL (DigitalOcean, cluster mosaico-db)",
+  "icon": "🛢",
+  "endpoint": "*.db.ondigitalocean.com:25060 (resuelto en runtime desde DATABASE_URL)",
+  "protocol": "TCP",
+  "auth": "DATABASE_URL",
+  "purpose": "Base de datos principal de toda la app. Pool `pg` compartido (max 8) usado por ~168 archivos: repositorios, servicios y casi todas las rutas API.",
+  "files": [
+   "src/lib/postgres.ts:12",
+   "src/lib/postgres.ts:59",
+   "src/lib/postgres.ts:101",
+   "src/lib/postgres.ts:149",
+   "package.json:50"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "TLS sin verificar (rejectUnauthorized:false) en las TRES ramas de configuración, y se elimina deliberadamente `sslmode` de la URL para que pg no pueda sobrescribirlo: anula la validación del certificado del cluster y abre la puerta a MITM.",
+    "ref": "src/lib/postgres.ts:20"
+   },
+   {
+    "s": "alto",
+    "t": "Servicio/identidad de OTRA empresa (LGS) como fallback: sin DATABASE_URL el pool cae a la base `lgs_admin` en localhost:5432, en vez de fallar, pese a que MOSAICO debe usar el cluster dedicado mosaico-db.",
+    "ref": "src/lib/postgres.ts:48"
+   },
+   {
+    "s": "alto",
+    "t": "Secreto en la URL: usuario:password viajan dentro de DATABASE_URL, que se manipula con string replace y se parsea para logging; no hay redacción explícita del password.",
+    "ref": "src/lib/postgres.ts:20"
+   },
+   {
+    "s": "alto",
+    "t": "process.exit(-1) en el handler de errores del pool: un error transitorio (failover del cluster, corte de red) mata el proceso Next.js completo en producción.",
+    "ref": "src/lib/postgres.ts:83-86"
+   },
+   {
+    "s": "medio",
+    "t": "Sin retry: ni query() ni transaction()/withTransaction() reintentan ante errores transitorios; el error se re-lanza al caller.",
+    "ref": "src/lib/postgres.ts:115-121"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout de consulta (no hay statement_timeout ni query_timeout): una consulta lenta retiene uno de los solo 8 slots del pool; con varias, bloquea toda la app.",
+    "ref": "src/lib/postgres.ts:26-28"
+   },
+   {
+    "s": "bajo",
+    "t": "Fuga en logs: cada query loguea los primeros 80 caracteres del SQL y el conteo de filas (también en producción), y hasta 100 caracteres en errores.",
+    "ref": "src/lib/postgres.ts:111"
+   }
+  ]
+ },
+ {
+  "id": "whapi",
+  "dir": "out",
+  "type": "api",
+  "title": "WHAPI (pasarela de WhatsApp)",
+  "icon": "✉️",
+  "endpoint": "gate.whapi.cloud (/messages/text, /messages/document)",
+  "protocol": "REST",
+  "auth": "WHAPI_TOKEN",
+  "purpose": "Envío saliente de WhatsApp: OTP de consentimiento y de recuperación, aviso de aprobación, campañas masivas, mensajes de bienvenida y envío del PDF del contrato como documento.",
+  "files": [
+   "src/lib/whatsapp.ts:11",
+   "src/lib/whatsapp.ts:32",
+   "src/app/api/contracts/[id]/send-pdf/route.ts:10",
+   "src/app/api/contracts/[id]/send-pdf/route.ts:132",
+   "src/app/api/wix/sendWhatsApp/route.ts:50",
+   "src/app/api/wix/sendWelcomeWhatsApp/route.ts:55",
+   "src/services/consent.service.ts:70",
+   "src/app/api/admin/envio-mensajes/send/route.ts:91"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Token WHAPI hardcodeado como fallback: `process.env.WHAPI_TOKEN || '<literal>'`. Si la ENV falta, la app sigue enviando con una credencial commiteada en el repo en vez de fallar.",
+    "ref": "src/lib/whatsapp.ts:11"
+   },
+   {
+    "s": "alto",
+    "t": "Token WHAPI totalmente hardcodeado, sin leer process.env, en send-pdf: no se puede rotar sin redeploy de código.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:10"
+   },
+   {
+    "s": "alto",
+    "t": "Bearer token literal embebido en el header de /api/wix/sendWhatsApp, sin variable de entorno.",
+    "ref": "src/app/api/wix/sendWhatsApp/route.ts:50"
+   },
+   {
+    "s": "alto",
+    "t": "Segundo token WHAPI distinto hardcodeado como fallback en sendWelcomeWhatsApp: dos credenciales en el código, rotación inconsistente.",
+    "ref": "src/app/api/wix/sendWelcomeWhatsApp/route.ts:55"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout: el fetch a gate.whapi.cloud no usa AbortSignal; una respuesta lenta cuelga el request de OTP/consentimiento.",
+    "ref": "src/lib/whatsapp.ts:32"
+   },
+   {
+    "s": "medio",
+    "t": "Sin retry: cualquier fallo transitorio (5xx/red) lanza excepción y el OTP nunca llega; no hay backoff en la utilidad compartida ni en el envío masivo.",
+    "ref": "src/lib/whatsapp.ts:55"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout ni retry en el envío del PDF de contrato a /messages/document.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:132"
+   },
+   {
+    "s": "bajo",
+    "t": "Código duplicado: las rutas wix llaman a WHAPI con fetch propio en vez de usar sendWhatsAppMessage(), multiplicando los sitios donde vive el token.",
+    "ref": "src/app/api/wix/sendWhatsApp/route.ts:46"
+   }
+  ]
+ },
+ {
+  "id": "bsl-utilidades",
+  "dir": "out",
+  "type": "storage",
+  "title": "bsl-utilidades (servicio de LGS) — archivo de contratos en Drive",
+  "icon": "🗄",
+  "endpoint": "https://bsl-utilidades-yp78a.ondigitalocean.app (/subir-pdf-directo, /descargar-pdf-drive/{id})",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Puente temporal para archivar los PDF de contrato en el Google Drive de LGS y descargarlos desde la UI (send-pdf, auto-approve, regenerate-drive), con empresa='LGS' porque MOSAICO no está dado de alta.",
+  "files": [
+   "src/app/api/contracts/[id]/send-pdf/route.ts:11",
+   "src/app/api/contracts/[id]/send-pdf/route.ts:108",
+   "src/app/api/contracts/[id]/regenerate-drive/route.ts:136",
+   "src/app/api/consent/[id]/auto-approve/route.ts:141",
+   "src/components/person/PersonGeneral.tsx:30",
+   "src/app/dashboard/aprobacion/page.tsx:250"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Servicio de OTRA empresa: los contratos de MOSAICO se suben con empresa:'LGS' y quedan archivados en el Drive de LGS. Puente temporal declarado en el código, pendiente de mover a la carpeta CONTRATOS MOS.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:120"
+   },
+   {
+    "s": "alto",
+    "t": "Endpoint externo SIN autenticación: las tres llamadas envían solo Content-Type, sin token ni firma. Quien conozca la URL puede subir o sobrescribir un contrato en el Drive de LGS (usa `documento` como clave).",
+    "ref": "src/app/api/contracts/[id]/regenerate-drive/route.ts:136"
+   },
+   {
+    "s": "alto",
+    "t": "Descarga de contratos sin auth y con el identificador en la URL: la UI abre /descargar-pdf-drive/{id}?empresa=LGS con window.open, sin sesión ni credencial; el enlace es reproducible fuera de MOSAICO y expone documentos personales.",
+    "ref": "src/components/person/PersonGeneral.tsx:30"
+   },
+   {
+    "s": "medio",
+    "t": "Host hardcodeado como literal en tres archivos (nunca process.env): cambiar de dominio o proveedor obliga a editar y desplegar código en 5 sitios.",
+    "ref": "src/app/api/consent/[id]/auto-approve/route.ts:11"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout: ningún fetch usa AbortSignal; si el servicio se cuelga, la route de Next se bloquea.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:108"
+   },
+   {
+    "s": "medio",
+    "t": "Sin retry y el fallo se traga con .catch(): un error de red deja el contrato SIN archivar en Drive y el flujo continúa como si nada.",
+    "ref": "src/app/api/consent/[id]/auto-approve/route.ts:152"
+   },
+   {
+    "s": "medio",
+    "t": "Secreto en la URL entregado a un tercero: regenerate-drive pasa una URL prefirmada de 10 min que da acceso directo al contrato sin auth mientras viva.",
+    "ref": "src/app/api/contracts/[id]/regenerate-drive/route.ts:134"
+   },
+   {
+    "s": "medio",
+    "t": "La route de subida más pesada está expuesta sin sesión: send-pdf usa handler(), así que un POST anónimo puede disparar la escritura en el Drive de LGS.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:13"
+   }
+  ]
+ },
+ {
+  "id": "api2pdf",
+  "dir": "out",
+  "type": "api",
+  "title": "API2PDF (generación de PDF de contratos y recibos)",
+  "icon": "🔗",
+  "endpoint": "https://v2018.api2pdf.com/chrome/html",
+  "protocol": "REST",
+  "auth": "API2PDF_KEY",
+  "purpose": "Renderiza HTML a PDF vía Chrome de terceros y devuelve una URL temporal en S3: PDF de contrato enviado por WhatsApp, PDF subido a Drive al auto-aprobar el consentimiento y recibos de pago de titulares.",
+  "files": [
+   "src/app/api/contracts/[id]/send-pdf/route.ts:83",
+   "src/app/api/consent/[id]/auto-approve/route.ts:123",
+   "src/services/pagos-titulares.service.ts:548",
+   "src/app/api/contracts/[id]/send-pdf/route.ts:9",
+   "src/services/pagos-titulares.service.ts:21"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Clave API2PDF HARDCODEADA como fallback (`process.env.API2PDF_KEY || '<literal>'`), repetida en 3 archivos: si falta la env var la app usa igual la clave literal versionada en git.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:9"
+   },
+   {
+    "s": "alto",
+    "t": "Mismo secreto literal duplicado en el endpoint de auto-approve y en el service de pagos de titulares.",
+    "ref": "src/services/pagos-titulares.service.ts:21"
+   },
+   {
+    "s": "alto",
+    "t": "Servicio de OTRA empresa: la clave API2PDF es reusada de LGS, no propia de MOSAICO, y el PDF resultante se sube a bsl-utilidades con empresa:'LGS'.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:120"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout: los tres fetch a api2pdf.com no pasan AbortSignal; una API2PDF lenta cuelga el handler indefinidamente.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:83"
+   },
+   {
+    "s": "medio",
+    "t": "Sin retry: cualquier 5xx/red transitoria hace throw directo y pierde el envío.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:97"
+   },
+   {
+    "s": "medio",
+    "t": "El PDF vuelve como URL temporal pública de S3 y esa URL se manda tal cual por WhatsApp y a bsl-utilidades: el contrato con datos personales queda accesible sin auth en un enlace de un tercero.",
+    "ref": "src/app/api/contracts/[id]/send-pdf/route.ts:105"
+   }
+  ]
+ },
+ {
+  "id": "puppeteer",
+  "dir": "out",
+  "type": "other",
+  "title": "Chromium propio (puppeteer-core) para PDF",
+  "icon": "⚙️",
+  "endpoint": "/usr/bin/chromium-browser (proceso local del contenedor)",
+  "protocol": "CLI",
+  "auth": "PUPPETEER_EXECUTABLE_PATH",
+  "purpose": "Renderiza el HTML del contrato a PDF con Chromium propio, sustituyendo la llamada a API2PDF; único consumidor real: la regeneración del contrato que luego se sube a Google Drive.",
+  "files": [
+   "src/lib/pdf.ts:3",
+   "src/lib/pdf.ts:88-101",
+   "src/lib/pdf.ts:106",
+   "src/app/api/contracts/[id]/regenerate-drive/route.ts:106",
+   "Dockerfile:52-53"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "--no-sandbox / --disable-setuid-sandbox: Chromium renderiza el HTML del contrato sin sandbox. El HTML se construye desde datos de BD; si algún campo llega sin escapar, se ejecutaría en un Chromium sin aislamiento dentro del contenedor.",
+    "ref": "src/lib/pdf.ts:92"
+   },
+   {
+    "s": "medio",
+    "t": "Sin retry: launch/setContent/page.pdf se ejecutan una sola vez; cualquier fallo (OOM en el contenedor de 1 GB) devuelve error sin reintento.",
+    "ref": "src/lib/pdf.ts:88"
+   },
+   {
+    "s": "medio",
+    "t": "Timeout parcial: solo page.setContent lleva timeout (30s); launch y page.pdf usan el default, y la cola serializa sin límite ni espera máxima.",
+    "ref": "src/lib/pdf.ts:106"
+   },
+   {
+    "s": "bajo",
+    "t": "Fallback literal: sin PUPPETEER_EXECUTABLE_PATH se recorre una lista hardcodeada de rutas y se usa el primer binario existente; en un host inesperado se lanzaría un navegador distinto en vez de fallar.",
+    "ref": "src/lib/pdf.ts:38-42"
+   }
+  ]
+ },
+ {
+  "id": "google-drive",
+  "dir": "out",
+  "type": "storage",
+  "title": "Google Drive (archivo de contratos)",
+  "icon": "🗄",
+  "endpoint": "www.googleapis.com/drive/v3 (scope drive.file)",
+  "protocol": "SDK",
+  "auth": "GOOGLE_OAUTH_REFRESH_TOKEN",
+  "purpose": "Sube (o sobrescribe por nombre) los PDFs de contrato generados con Chromium propio a la carpeta CONTRATOS MOS, vía googleapis. Destino definitivo que reemplaza a bsl-utilidades.",
+  "files": [
+   "src/lib/gdrive.ts:3",
+   "src/lib/gdrive.ts:77-84",
+   "src/lib/gdrive.ts:117-118",
+   "src/lib/gdrive.ts:124-155",
+   "src/app/api/contracts/[id]/regenerate-drive/route.ts:112",
+   "package.json:37"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Fallback a servicio de OTRA empresa: si isDriveConfigured() es false, el endpoint cae al puente bsl-utilidades, que deja los contratos en la carpeta de LGS con empresa:'LGS'.",
+    "ref": "src/app/api/contracts/[id]/regenerate-drive/route.ts:126-144"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin timeout: files.list/update/create no fijan timeout ni AbortSignal; una respuesta lenta de Google bloquea el request.",
+    "ref": "src/lib/gdrive.ts:124-155"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin retry: no hay reintento ni backoff ante 429/5xx de la API de Drive; un fallo transitorio aborta la regeneración.",
+    "ref": "src/lib/gdrive.ts:124-155"
+   },
+   {
+    "s": "bajo",
+    "t": "Escapado incompleto en la query de Drive: safeName solo escapa comillas simples, no la barra invertida; un nombre derivado de datos del titular terminado en `\\` puede alterar la query de files.list.",
+    "ref": "src/lib/gdrive.ts:122"
+   }
+  ]
+ },
+ {
+  "id": "openai",
+  "dir": "out",
+  "type": "api",
+  "title": "OpenAI (moderación, Realtime y gpt-4o-mini)",
+  "icon": "🔗",
+  "endpoint": "api.openai.com",
+  "protocol": "SDK",
+  "auth": "OPENAI_API_KEY",
+  "purpose": "Moderación de comentarios (falla abierto al blacklist local), client_secrets efímeros de Realtime para el jump-tutor (la API key nunca llega al navegador), y generación/calificación de quizzes y actividades con gpt-4o-mini.",
+  "files": [
+   "src/lib/openai-moderation.ts:19",
+   "src/lib/realtime-session.ts:33",
+   "src/services/evaluations.service.ts:141",
+   "src/services/jump-tutor.service.ts:288",
+   "src/services/complementaria.service.ts:271",
+   "src/app/api/postgres/academic/activity/route.ts:60",
+   "package.json:49"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Sin timeout: el fetch a /v1/realtime/client_secrets no usa AbortController (a diferencia de openai-moderation.ts, que sí aplica 1500ms). Una red lenta cuelga el request del estudiante.",
+    "ref": "src/lib/realtime-session.ts:33"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout explícito: los new OpenAI({apiKey}) no pasan timeout ni maxRetries, quedando en el default del SDK (~10 min); una llamada colgada bloquea la generación/calificación del quiz.",
+    "ref": "src/services/complementaria.service.ts:271"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin retry: llamada única a /v1/moderations; un 429/5xx transitorio degrada silenciosamente al blacklist local.",
+    "ref": "src/lib/openai-moderation.ts:54"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin retry ni timeout en el handshake SDP desde el navegador; si falla, la llamada del jump-tutor muere y el client_secret se quema.",
+    "ref": "src/components/panel-estudiante/JumpTutorCall.tsx:217"
+   }
+  ]
+ },
+ {
+  "id": "do-spaces",
+  "dir": "out",
+  "type": "storage",
+  "title": "DigitalOcean Spaces (S3)",
+  "icon": "🗄",
+  "endpoint": "https://sfo3.digitaloceanspaces.com",
+  "protocol": "SDK",
+  "auth": "DO_SPACES_KEY",
+  "purpose": "Almacenamiento de objetos: fotos de usuarios y guías, vídeos de cursos e instructivos, imágenes de cursos, audios de libros interactivos, materiales y PDFs de contratos. Subidas y lecturas por URLs presignadas, más borrado y configuración CORS del bucket.",
+  "files": [
+   "src/lib/spaces.ts:20",
+   "src/lib/spaces.ts:39-45",
+   "src/lib/spaces.ts:48-60",
+   "src/lib/spaces.ts:63-65",
+   "src/app/api/postgres/guias/photo-presign-public/route.ts:18-32",
+   "src/app/api/nuevo-usuario/photo-presign/route.ts:26-35",
+   "src/app/api/contracts/[id]/upload-url/route.ts:32-40",
+   "src/app/api/admin/spaces-cors/route.ts:20-21",
+   "package.json:17-18"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "TLS sin verificar: el cliente S3 desactiva la verificación de certificado (rejectUnauthorized:false) siempre que NODE_ENV !== 'production', y también en producción con DO_SPACES_INSECURE_TLS=1. Un despliegue sin NODE_ENV=production expone DO_SPACES_KEY/SECRET a MITM.",
+    "ref": "src/lib/spaces.ts:10-18"
+   },
+   {
+    "s": "alto",
+    "t": "Endpoint público que emite URL presignada de escritura: /api/postgres/guias/photo-presign-public usa handler() (sin sesión) y solo valida el prefijo 'fotoGuia/'.",
+    "ref": "src/app/api/postgres/guias/photo-presign-public/route.ts:18-32"
+   },
+   {
+    "s": "medio",
+    "t": "Servicio/identidad de OTRA empresa: el bucket por defecto es 'lgs-bucket' y package.json declara name 'lgs-admin-panel'; MOSAICO hereda el almacenamiento de otra marca.",
+    "ref": "src/lib/spaces.ts:31"
+   },
+   {
+    "s": "medio",
+    "t": "Valores hardcodeados como fallback (endpoint 'https://sfo3.digitaloceanspaces.com', region 'sfo3', bucket 'lgs-bucket'): fijan silenciosamente un destino externo si falta la configuración.",
+    "ref": "src/lib/spaces.ts:21-22"
+   },
+   {
+    "s": "medio",
+    "t": "Credenciales vacías si faltan las env: accessKeyId/secretAccessKey caen a '' en vez de fallar al arranque; el error aparece tarde como 403 de firma.",
+    "ref": "src/lib/spaces.ts:24-25"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout: el S3Client no define connectionTimeout ni requestTimeout, y con TLS laxo el NodeHttpHandler se construye solo con httpsAgent; subidas grandes pueden colgar el handler.",
+    "ref": "src/lib/spaces.ts:14-18"
+   },
+   {
+    "s": "medio",
+    "t": "Secreto en la URL: las presigned llevan la firma en la query string y se devuelven en JSON (hasta 7200s de vida en /panel-estudiante/me), quedando expuestas a logs, Referer e historial.",
+    "ref": "src/lib/spaces.ts:41-44"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin retry explícito y errores silenciados: se confía en el retry por defecto del SDK sin maxAttempts, y varios call sites tragan el fallo con .catch(() => null), ocultando indisponibilidad de Spaces.",
+    "ref": "src/app/api/postgres/cursos-videos/route.ts:49"
+   }
+  ]
+ },
+ {
+  "id": "nextauth-jwt",
+  "dir": "out",
+  "type": "other",
+  "title": "NextAuth (emisión y validación del JWT de sesión)",
+  "icon": "⚙️",
+  "endpoint": "in-process (NEXTAUTH_URL como base del issuer/redirect)",
+  "protocol": "SDK",
+  "auth": "NEXTAUTH_SECRET",
+  "purpose": "Emitir y validar el JWT de sesión: CredentialsProvider valida contra PostgreSQL, firma el token y lo pone en cookie; el middleware lo valida con getToken y el puente CRM lo forja con encode().",
+  "files": [
+   "src/lib/auth-postgres.ts:189",
+   "src/lib/auth.ts:201",
+   "src/lib/auth.ts:19",
+   "src/lib/permissions.ts:7",
+   "src/middleware.ts:42-45",
+   "src/app/api/auth/crm-bridge/route.ts:42-50",
+   "package.json:46"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Credenciales HARDCODEADAS como fallback: `process.env.ADMIN_EMAIL || 'admin@lgs.com'` y `ADMIN_PASSWORD || 'Admin123!'`; además 9 usuarios de prueba con password literal 'Test123!' que se aceptan cuando PostgreSQL falla — un fallo de BD degrada a login con contraseñas públicas.",
+    "ref": "src/lib/auth.ts:201"
+   },
+   {
+    "s": "alto",
+    "t": "NEXTAUTH_SECRET con fallback a cadena vacía en el puente CRM: si falta la env var, encode() firma con secreto vacío en vez de fallar.",
+    "ref": "src/app/api/auth/crm-bridge/route.ts:6"
+   },
+   {
+    "s": "alto",
+    "t": "Dos authOptions divergentes en uso simultáneo: NextAuth y api-helpers usan el de auth-postgres.ts (seguro), pero src/lib/permissions.ts importa el de src/lib/auth.ts (con los fallbacks hardcodeados).",
+    "ref": "src/lib/permissions.ts:7"
+   },
+   {
+    "s": "medio",
+    "t": "Contraseñas en texto plano aceptadas: si el hash no empieza por $2a$/$2b$/$2y$ se compara literal, y se loguea la longitud de la contraseña introducida y la de BD.",
+    "ref": "src/lib/auth-postgres.ts:94"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout ni retry: src/lib/auth.ts hace fetch a /api/internal/verify-credentials sin AbortSignal ni reintento; si cuelga, el login se bloquea y luego cae al fallback de usuarios de prueba.",
+    "ref": "src/lib/auth.ts:19"
+   },
+   {
+    "s": "medio",
+    "t": "Token de sesión completo volcado a logs: el middleware imprime JSON.stringify(token) (email, rol, sub) en cada request protegido.",
+    "ref": "src/middleware.ts:52"
+   },
+   {
+    "s": "medio",
+    "t": "Servicio/identidad de OTRA empresa dentro de MOSAICO: el fallback del host es 'https://lgs-plataforma.com' y todos los usuarios de prueba usan @lgs.com; el puente inyecta sesiones con rol COMERCIAL desde un CRM externo.",
+    "ref": "src/app/api/auth/crm-bridge/route.ts:7"
+   },
+   {
+    "s": "bajo",
+    "t": "Sesión JWT sin maxAge explícito (30 días por defecto) mientras la cookie del puente CRM caduca a 30 min: el JWT firmado sigue siendo válido 30 días si se reutiliza.",
+    "ref": "src/lib/auth-postgres.ts:227"
+   },
+   {
+    "s": "bajo",
+    "t": "El callback jwt solo fija el rol en el login y no se revalida contra BD: un cambio de rol o un bloqueo (activo=false) no surte efecto hasta que expire el token.",
+    "ref": "src/lib/auth-postgres.ts:230"
+   },
+   {
+    "s": "bajo",
+    "t": "auth-postgres.ts mantiene el array testUsers con contraseñas literales aunque authorize() ya no lo usa: código muerto que invita a re-cablear el fallback inseguro.",
+    "ref": "src/lib/auth-postgres.ts:123"
+   }
+  ]
+ },
+ {
+  "id": "middleware-permissions-selffetch",
+  "dir": "out",
+  "type": "api",
+  "title": "Permisos RBAC por rol (self-fetch desde el middleware)",
+  "icon": "🔗",
+  "endpoint": "$NEXTAUTH_URL/api/postgres/permissions?rol=<rol>",
+  "protocol": "REST",
+  "auth": "NEXTAUTH_URL",
+  "purpose": "El middleware (Edge Runtime, sin driver pg) carga por HTTP los permisos del rol del token para decidir acceso a rutas, con caché en memoria de 5 min. El nombre getPermissionsForRoleFromWix es legado: no hay ningún host de Wix.",
+  "files": [
+   "src/lib/middleware-permissions.ts:20",
+   "src/lib/middleware-permissions.ts:35",
+   "src/lib/middleware-permissions.ts:36-43",
+   "src/lib/middleware-permissions.ts:67-74",
+   "src/middleware.ts:89"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Fail-open de permisos: si el fetch falla o devuelve !ok, el catch NO deniega — importa @/config/roles y devuelve una tabla de permisos hardcodeada en el bundle, sustituyendo silenciosamente el RBAC de BD (posible sobre-otorgamiento).",
+    "ref": "src/lib/middleware-permissions.ts:67-74"
+   },
+   {
+    "s": "medio",
+    "t": "Host de fallback hardcodeado (`NEXTAUTH_URL || 'http://localhost:3001'`): sin la env var en un entorno desplegado, el middleware pega a localhost, falla y cae al fallback anterior.",
+    "ref": "src/lib/middleware-permissions.ts:35"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout: fetch sin AbortSignal en la ruta crítica de CADA navegación de todo rol no-ADMIN; una API lenta bloquea la petición del usuario.",
+    "ref": "src/lib/middleware-permissions.ts:36-43"
+   },
+   {
+    "s": "medio",
+    "t": "El endpoint de origen es público (handler(), sin requirePermission): sin `rol` devuelve la matriz RBAC completa de todos los roles a cualquiera. El fetch no manda credencial precisamente porque no hace falta.",
+    "ref": "src/app/api/postgres/permissions/route.ts:8"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin retry: un fallo transitorio salta directo al fallback hardcodeado y ese resultado no se cachea, así que cada request re-golpea la API mientras dura la falla.",
+    "ref": "src/lib/middleware-permissions.ts:36-43"
+   }
+  ]
+ },
+ {
+  "id": "self-callback",
+  "dir": "out",
+  "type": "api",
+  "title": "Auto-llamadas HTTP de la app (cron-worker, auth, recibos)",
+  "icon": "🔗",
+  "endpoint": "$NEXTAUTH_URL (fallback https://lgs-plataforma.com / http://localhost:3001)",
+  "protocol": "REST",
+  "auth": "CRON_SECRET",
+  "purpose": "La app sale por HTTP contra su propia URL: el worker de cron dispara los 4 jobs nocturnos, NextAuth verifica credenciales vía /api/internal/verify-credentials, el middleware carga permisos y el recibo PDF incrusta el logo como URL absoluta.",
+  "files": [
+   "scripts/cron-worker.js:17",
+   "scripts/cron-worker.js:45",
+   "src/services/pagos-titulares.service.ts:462",
+   "src/lib/auth.ts:18",
+   "src/lib/middleware-permissions.ts:35",
+   "src/config/roles.ts:393",
+   "src/app/api/wix/sendWelcomeWhatsApp/route.ts:43",
+   "src/app/api/postgres/people/[id]/approve/route.ts:183"
+  ],
+  "flags": [
+   {
+    "s": "alto",
+    "t": "Auth de cron desactivable: el guard es `if (CRON_SECRET && provided !== CRON_SECRET)`. Si la env var no está seteada en el App (aunque sí en el worker), el endpoint de cron queda abierto a internet sin autenticación.",
+    "ref": "src/app/api/cron/reconcile-pegados/route.ts:30"
+   },
+   {
+    "s": "alto",
+    "t": "Dominio de OTRA empresa hardcodeado como fallback en el repo MOSAICO (`NEXTAUTH_URL || 'https://lgs-plataforma.com'`): el worker dispararía los crons contra la plataforma LGS y el recibo traería el logo del dominio de LGS. Mismo default en el puente CRM y en los links de WhatsApp de bienvenida/aprobación.",
+    "ref": "scripts/cron-worker.js:17"
+   },
+   {
+    "s": "medio",
+    "t": "Fallback a http://localhost:3001 (HTTP plano) en la ruta de login: sin NEXTAUTH_URL en producción, NextAuth manda el email en POST a un localhost inexistente y el login cae silenciosamente (el catch devuelve null).",
+    "ref": "src/lib/auth.ts:18"
+   },
+   {
+    "s": "medio",
+    "t": "El endpoint de auth interno no exige sesión (handler()) y es alcanzable desde fuera, no solo desde el propio proceso.",
+    "ref": "src/app/api/internal/verify-credentials/route.ts:11"
+   },
+   {
+    "s": "medio",
+    "t": "Sin timeout ni retry: los 4 fetch del cron-worker no pasan AbortSignal ni reintentan; un cuelgue de la app deja el job colgado y el error solo se loguea (solo roles.ts usa AbortSignal.timeout(3000)).",
+    "ref": "scripts/cron-worker.js:45"
+   },
+   {
+    "s": "bajo",
+    "t": "Self-call de permisos RBAC sin credencial alguna, exponiendo la matriz de permisos por rol a cualquiera que llame el endpoint.",
+    "ref": "src/lib/middleware-permissions.ts:36"
+   }
+  ]
+ },
+ {
+  "id": "anthropic",
+  "dir": "out",
+  "type": "api",
+  "title": "Anthropic Claude (gráficas del dashboard)",
+  "icon": "🔗",
+  "endpoint": "https://api.anthropic.com/v1/messages",
+  "protocol": "REST",
+  "auth": "ANTHROPIC_API_KEY",
+  "purpose": "Genera con claude-sonnet-4 un documento HTML+SVG interactivo (gráfica «Sesiones vs. Asistencia») a partir de datos agregados de ACADEMICA_BOOKINGS, cacheado 30 min en memoria y renderizado en el dashboard.",
+  "files": [
+   "src/app/api/postgres/dashboard/charts/route.ts:72",
+   "src/app/api/postgres/dashboard/charts/route.ts:53",
+   "src/app/api/postgres/dashboard/charts/route.ts:128"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Sin timeout: el fetch (max_tokens 8000) no usa AbortSignal; una respuesta lenta bloquea el request del dashboard indefinidamente.",
+    "ref": "src/app/api/postgres/dashboard/charts/route.ts:72"
+   },
+   {
+    "s": "medio",
+    "t": "Sin retry ni backoff: cualquier 429/5xx lanza excepción directa y rompe la generación de la gráfica.",
+    "ref": "src/app/api/postgres/dashboard/charts/route.ts:87"
+   },
+   {
+    "s": "bajo",
+    "t": "HTML+JS generado por LLM a partir de datos de BD y renderizado en el dashboard (riesgo XSS); dependencia no declarada en package.json (REST crudo) y modelo hardcodeado, no configurable por ENV.",
+    "ref": "src/app/api/postgres/dashboard/charts/route.ts:80"
+   },
+   {
+    "s": "bajo",
+    "t": "Sin clave hardcodeada: si falta ANTHROPIC_API_KEY se lanza error (comportamiento correcto).",
+    "ref": "src/app/api/postgres/dashboard/charts/route.ts:53"
+   }
+  ]
+ },
+ {
+  "id": "wix-advisors-script",
+  "dir": "out",
+  "type": "api",
+  "title": "Wix — API de advisors del sitio LGS (script de migración)",
+  "icon": "🔗",
+  "endpoint": "https://www.lgsplataforma.com/_functions/advisors",
+  "protocol": "REST",
+  "auth": "none",
+  "purpose": "Consumo del endpoint Wix del sitio LGS para migrar advisors a MOSAICO (script fuera del runtime de la app).",
+  "files": [
+   "scripts/migrate-advisors.js:20"
+  ],
+  "flags": [
+   {
+    "s": "medio",
+    "t": "Salida a infraestructura de otra empresa (sitio legacy LGS) sin autenticación, desde un script fuera de la app.",
+    "ref": "scripts/migrate-advisors.js:20"
+   }
+  ]
+ }
+];
+
+/* DÓNDE SE USA cada entrada: páginas/archivos del front que LLAMAN al endpoint
+   (encuéntralos con grep del path en public/ y src/, excluyendo src/routes).
+   Puedes ponerlo aquí por id, o como campo `usedIn:[...]` en cada puerta. */
+var USEDIN={
+ "reports-asistencia-public": [
+  "dashboard/informes/usuarios/page.tsx",
+  "dashboard/informes/asistencia/sesiones-clubes/page.tsx",
+  "dashboard/informes/asistencia/clubes/page.tsx",
+  "dashboard/informes/asistencia/welcome-session/page.tsx",
+  "dashboard/informes/asistencia/complementarias/page.tsx",
+  "dashboard/informes/asistencia/x-pais/page.tsx"
+ ],
+ "reports-estadisticas-public": [
+  "dashboard/informes/estadisticas/page.tsx",
+  "dashboard/informes/estadisticas/horarios/page.tsx"
+ ],
+ "students-profile-public": [
+  "hooks/use-student.ts",
+  "components/student/StudentComments.tsx",
+  "app/admin/diagnostico/page.tsx"
+ ],
+ "students-academic-public": [
+  "hooks/use-student.ts",
+  "components/student/StudentAcademic.tsx"
+ ],
+ "students-academic-audit-public": [
+  "components/student/StudentContract.tsx"
+ ],
+ "students-ultimos-agendamientos-public": [
+  "components/student/StudentContract.tsx"
+ ],
+ "guias-listado-public": [
+  "hooks/use-advisors.ts",
+  "components/advisor/AdvisorCalendar.tsx",
+  "components/advisor/AdvisorStats.tsx",
+  "components/advisors/AdvisorsStatistics.tsx",
+  "components/student/StudentAcademic.tsx",
+  "panel-advisor/page.tsx",
+  "dashboard/comercial/consulta-cursos/page.tsx",
+  "dashboard/academic/control-horas/page.tsx",
+  "dashboard/academic/agenda-sesiones/page.tsx",
+  "dashboard/academic/sesiones-sin-gestion/page.tsx",
+  "dashboard/academic/agenda-academica/page.tsx",
+  "dashboard/academic/advisors/page.tsx",
+  "dashboard/academic/eventos-administrativos/page.tsx",
+  "dashboard/academic/crear-campana/page.tsx",
+  "admin/diagnostico/page.tsx"
+ ],
+ "guias-create-public": [
+  "nuevo-guia/page.tsx"
+ ],
+ "guias-photo-presign-public": [
+  "nuevo-guia/page.tsx",
+  "components/advisor/GuiaEditForm.tsx"
+ ],
+ "people-detail-public": [
+  "components/student/StudentContract.tsx",
+  "components/person/PersonAdmin.tsx",
+  "components/person/PersonComments.tsx",
+  "components/person/PersonFinancial.tsx",
+  "components/student/StudentComments.tsx",
+  "person/[id]/page.tsx",
+  "dashboard/academic/lista-usuarios/page.tsx",
+  "admin/diagnostico/page.tsx"
+ ],
+ "forgot-password-reset": [
+  "components/auth/ForgotPasswordModal.tsx"
+ ],
+ "forgot-password-identity": [
+  "components/auth/ForgotPasswordModal.tsx"
+ ],
+ "forgot-password-check-email": [
+  "components/auth/ForgotPasswordModal.tsx"
+ ],
+ "forgot-password-verify-otp": [
+  "components/auth/ForgotPasswordModal.tsx"
+ ],
+ "crm-bridge": [
+  "CRM externo (servicio que firma el HMAC)"
+ ],
+ "nextauth": [
+  "login/page.tsx"
+ ],
+ "auth-logout": [
+  "components/layout/DashboardLayout.tsx"
+ ],
+ "niveles-catalogo-public": [
+  "components/academic/MaterialManagePage.tsx",
+  "components/calendar/EventModal.tsx",
+  "components/student/StudentCambioStepAuditado.tsx",
+  "components/student/StudentChangeStep.tsx",
+  "components/session/SessionStudentsTab.tsx",
+  "dashboard/academic/actualizar-material/videos/page.tsx",
+  "dashboard/academic/actualizar-material/contenido/page.tsx",
+  "admin/diagnostico/page.tsx"
+ ],
+ "consent-contract-data": [
+  "contrato/[id]/page.tsx"
+ ],
+ "consent-verify": [
+  "contrato/[id]/page.tsx"
+ ],
+ "consent-send-otp": [
+  "contrato/[id]/page.tsx"
+ ],
+ "consent-status": [
+  "contrato/[id]/page.tsx",
+  "components/person/PersonContractViewer.tsx",
+  "dashboard/comercial/contrato/[id]/page.tsx"
+ ],
+ "contracts-detail-public": [
+  "components/person/PersonContractViewer.tsx",
+  "dashboard/comercial/contrato/[id]/page.tsx"
+ ],
+ "contracts-next-number-public": [
+  "dashboard/comercial/crear-contrato/page.tsx"
+ ],
+ "contracts-template-public": [
+  "components/person/PersonContractViewer.tsx",
+  "dashboard/comercial/contrato/[id]/page.tsx"
+ ],
+ "contracts-send-pdf": [
+  "dashboard/comercial/contrato/[id]/page.tsx"
+ ],
+ "contracts-documents": [
+  "components/student/UploadDocButton.tsx",
+  "components/student/StudentGeneral.tsx",
+  "components/person/PersonGeneral.tsx",
+  "dashboard/comercial/contrato/[id]/page.tsx"
+ ],
+ "contracts-upload-url": [
+  "components/student/UploadDocButton.tsx",
+  "components/student/StudentGeneral.tsx",
+  "components/person/PersonGeneral.tsx",
+  "components/person/PagoTitularWizard.tsx",
+  "dashboard/comercial/contrato/[id]/page.tsx"
+ ],
+ "config-banner-public": [
+  "admin/banner/page.tsx",
+  "login/page.tsx"
+ ],
+ "internal-verify-credentials": [
+  "src/lib/auth.ts"
+ ],
+ "nuevo-usuario-registro": [
+  "nuevo-usuario/[id]/page.tsx"
+ ],
+ "postgres-search-public": [
+  "hooks/use-search.ts",
+  "admin/diagnostico/page.tsx"
+ ],
+ "nuevo-usuario-photo-presign": [
+  "student-setup/page.tsx",
+  "nuevo-usuario/[id]/page.tsx"
+ ],
+ "postgres-permissions-public": [
+  "src/lib/middleware-permissions.ts (middleware)"
+ ],
+ "calendar-events-public": [
+  "hooks/use-calendar.ts",
+  "components/advisor/AdvisorStats.tsx",
+  "components/advisor/AdvisorCalendar.tsx",
+  "panel-advisor/page.tsx",
+  "dashboard/academic/agenda-sesiones/page.tsx",
+  "dashboard/academic/agenda-academica/page.tsx"
+ ],
+ "cursos-campaign-public": [
+  "components/student/StudentCambioAcademico.tsx",
+  "components/calendar/EventModal.tsx",
+  "components/person/PersonAdmin.tsx",
+  "admin/migrar-contrato/page.tsx",
+  "admin/roles/create/estudiante/page.tsx",
+  "dashboard/comercial/consulta-cursos/page.tsx",
+  "dashboard/comercial/crear-contrato/page.tsx"
+ ],
+ "cron-triggers": [
+  "Programador interno (cron-worker)"
+ ],
+ "cron-health-check": [
+  "Consulta manual/bookmark de administración"
+ ],
+ "middleware-permissions-selffetch": [
+  "src/middleware.ts"
+ ],
+ "self-callback": [
+  "Programador interno (cron-worker)",
+  "src/lib/auth.ts",
+  "src/services/pagos-titulares.service.ts"
+ ]
+};
+
+/* ====== RENDERER (FIJO — no tocar) ====== */
+var cv=document.getElementById('cv'), vp=document.getElementById('vp');
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function door(id){for(var i=0;i<DOORS.length;i++)if(DOORS[i].id===id)return DOORS[i];return null;}
+var BASE='https://mosaicosorobanplataforma.com'; /* ← dominio base de producción (para componer las URLs inbound) */
+function urlsFor(d){
+  if(d.urls&&d.urls.length)return d.urls;
+  var e=(d.endpoint||'').trim();
+  if(d.dir==='in'){
+    if(d.type==='cron'||d.type==='websocket')return [];
+    var p=e.replace(/^(GET|POST|PUT|PATCH|DELETE|multipart)\s+/,'').replace(/\s+stream$/,'').trim();
+    return p.charAt(0)==='/'?[BASE+p]:[];
+  }
+  var tok=e.split(/\s/)[0];
+  if(/^https?:\/\//.test(tok))return [tok];
+  if(/^[a-z0-9.-]+\.[a-z]{2,}/i.test(tok))return ['https://'+tok];
+  return [];
+}
+function authMeta(a){var m={public:['var(--red)','Abierta'],none:['var(--red)','Sin llave'],soft:['var(--yellow)','Semi-abierta'],jwt:['var(--green)','Con sesión'],'api-key':['var(--amber)','Con clave'],signed:['var(--amber)','Con firma'],internal:['var(--gray)','Interna']};return m[a]||['var(--accent)',a];}
+function protoPlain(p){if(/\//.test(p))return 'Consulta y envío';var m={GET:'Consulta (lee)',POST:'Envío (recibe datos)','GET stream':'En vivo',multipart:'Sube archivo',cron:'Automático',ws:'Tiempo real',SDK:'Conexión',REST:'Conexión',SMTP:'Correo',TCP:'Conexión',URL:'Enlace',CLI:'Programa local',DevTools:'Programa local'};if(m[p])return m[p];if(/SDK|REST|TCP|DevTools|HTTP/i.test(p))return 'Conexión';if(/SMTP|mail/i.test(p))return 'Correo';if(/CLI/i.test(p))return 'Programa local';if(/cron/i.test(p))return 'Automático';return p;}
+function flagDot(f){if(!f||!f.length)return '';var hi=f.some(function(x){return x.s==='alto';}),md=f.some(function(x){return x.s==='medio';});var c=hi?'var(--red)':(md?'var(--amber)':'var(--accent)');return '<span class="fdot" style="color:'+c+'">🚩'+f.length+'</span>';}
+function doorCard(d){var inbound=d.dir==='in';var col=inbound?authMeta(d.auth)[0]:'var(--accent)';var badge=inbound?'<span class="dbadge" style="background:'+authMeta(d.auth)[0]+'22;color:'+authMeta(d.auth)[0]+'">'+authMeta(d.auth)[1]+'</span>':'<span class="dbadge" style="background:rgba(74,125,255,.13);color:#8ab4ff">'+esc(protoPlain(d.protocol))+'</span>';var side=inbound?'border-right-color:':'border-left-color:';return '<div class="door" data-door="'+d.id+'" style="'+side+col+'">'+flagDot(d.flags)+'<div class="dt">'+(d.icon||'')+' '+esc(d.title)+'</div><div class="de">'+esc(d.endpoint)+'</div>'+badge+'</div>';}
+function buildSide(dir,groups){var h='';for(var g=0;g<groups.length;g++){var grp=groups[g],ds=DOORS.filter(function(d){return d.dir===dir&&d.type===grp.type;});if(!ds.length)continue;h+='<div class="grp"><div class="glabel">'+esc(grp.label)+' · '+ds.length+'</div><div class="dlist">';for(var i=0;i<ds.length;i++){h+=dir==='in'?'<div class="drow"><div>'+doorCard(ds[i])+'</div><span class="darrow">▸</span></div>':'<div class="drow"><span class="darrow">▸</span><div>'+doorCard(ds[i])+'</div></div>';}h+='</div></div>';}return h;}
+function globalHTML(){var nin=DOORS.filter(function(d){return d.dir==='in';}).length,nout=DOORS.filter(function(d){return d.dir==='out';}).length,nopen=DOORS.filter(function(d){return d.dir==='in'&&(d.auth==='public'||d.auth==='none');}).length;return '<div class="plant"><div class="side left"><div class="colhead">▸ Entradas — lo que llega a la app</div>'+buildSide('in',GROUPS_IN)+'</div><div class="core"><div class="clogo">🏢</div><h2>'+esc(REPO)+'</h2><div class="csub">la aplicación</div><div class="cmeta"><span class="cin">'+nin+'</span> puertas de entrada<br><span class="cout">'+nout+'</span> puertas de salida<br><span class="cred">'+nopen+'</span> abiertas a cualquiera</div></div><div class="side right"><div class="colhead">Salidas — lo que la app envía ▸</div>'+buildSide('out',GROUPS_OUT)+'</div></div>';}
+function detailHTML(id){var d=door(id);if(!d)return '';var inbound=d.dir==='in',am=authMeta(d.auth);var h='<div class="detail"><span class="pclose" data-close="1">×</span><div class="dtitle">'+(d.icon||'')+' '+esc(d.title)+'</div><div class="badges"><span class="bdg" style="color:'+(inbound?'#ff8a8d':'#8ab4ff')+'">'+(inbound?'Entrada':'Salida')+'</span><span class="bdg">'+esc(protoPlain(d.protocol))+'</span>'+(inbound?'<span class="bdg" style="color:'+am[0]+'">'+am[1]+'</span>':'<span class="bdg">🔑 '+esc(d.auth)+'</span>')+'</div><div class="dpurpose">'+esc(d.purpose)+'</div>';var ui=d.usedIn||USEDIN[d.id]||[];if(ui.length){h+='<div class="ml">'+(inbound?'Se usa en':'Se activa desde')+'</div><div class="urls">';for(var k=0;k<ui.length;k++){h+='<div class="url usedin">'+esc(ui[k])+'</div>';}h+='</div>';}var us=urlsFor(d);if(us.length){h+='<div class="ml">'+(inbound?'Dirección del endpoint':'A dónde se conecta')+'</div><div class="urls">';for(var u=0;u<us.length;u++){h+='<div class="url">'+esc(us[u])+'</div>';}h+='</div>';if(inbound&&d.type!=='cron')h+='<div class="urlnote">También funciona en la dirección web de cada cliente de la plataforma.</div>';}h+='<div class="drow2">'+(inbound?'':'<div><div class="ml">Llave que usa</div><div class="mf">'+esc(d.auth)+'</div></div>')+'<div><div class="ml">En el código (para devs)</div><div class="mf">'+d.files.map(esc).join('<br>')+'</div></div></div>';if(d.flags&&d.flags.length){h+='<div class="flags"><div class="flagsh">🚩 A revisar</div>';for(var g=0;g<d.flags.length;g++){var fl=d.flags[g];h+='<div class="flag"><span class="sev '+fl.s+'"></span><div><div class="ft2">'+esc(fl.t)+'</div><div class="fr">'+esc(fl.ref)+'</div></div></div>';}h+='</div>';}h+='</div>';return h;}
+var panel=document.getElementById('panel'), shifted=false;
+function showGlobal(){cv.innerHTML=globalHTML();fit();}
+function showDoor(id){panel.innerHTML=detailHTML(id);panel.classList.add('open');if(!shifted){x-=200;shifted=true;apply();}}
+function closePanel(){panel.classList.remove('open');if(shifted){x+=200;shifted=false;apply();}}
+var s=1,x=0,y=0,drag=false,px,py,moved=false;
+function apply(){cv.style.transform='translate('+x+'px,'+y+'px) scale('+s+')';}
+function fit(){cv.style.transform='none';var w=cv.offsetWidth;s=Math.min(1,(window.innerWidth-80)/w);x=(window.innerWidth-w*s)/2;y=40;shifted=false;apply();}
+vp.addEventListener('mousedown',function(e){drag=true;moved=false;px=e.clientX-x;py=e.clientY-y;vp.classList.add('grabbing');});
+window.addEventListener('mouseup',function(){drag=false;vp.classList.remove('grabbing');});
+window.addEventListener('mousemove',function(e){if(!drag)return;var nx=e.clientX-px,ny=e.clientY-py;if(Math.abs(nx-x)+Math.abs(ny-y)>4)moved=true;x=nx;y=ny;apply();});
+vp.addEventListener('wheel',function(e){e.preventDefault();var dd=Math.exp(-e.deltaY*0.0015),ns=Math.min(2.2,Math.max(0.18,s*dd));var rx=e.clientX-x,ry=e.clientY-y;x=e.clientX-rx*(ns/s);y=e.clientY-ry*(ns/s);s=ns;apply();},{passive:false});
+function zb(f){var cx=window.innerWidth/2,cy=window.innerHeight/2,rx=cx-x,ry=cy-y,ns=Math.min(2.2,Math.max(0.18,s*f));x=cx-rx*(ns/s);y=cy-ry*(ns/s);s=ns;apply();}
+document.getElementById('zin').onclick=function(){zb(1.2);};
+document.getElementById('zout').onclick=function(){zb(1/1.2);};
+document.getElementById('zfit').onclick=function(){closePanel();fit();};
+cv.addEventListener('click',function(e){if(moved)return;var c=e.target.closest('[data-door]');if(c){showDoor(c.getAttribute('data-door'));}});
+panel.addEventListener('click',function(e){if(e.target.closest('[data-close]'))closePanel();});
+window.addEventListener('keydown',function(e){if(e.key==='Escape')closePanel();});
+showGlobal();
+</script>
+</body>
+</html>

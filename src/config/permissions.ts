@@ -258,6 +258,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Mover al beneficiario de campaña/curso/salón: actualiza curso, cupos, reagenda los bookings futuros al curso nuevo y lo ubica en la lección actual del curso destino. Requiere motivo y confirmación.',
   },
   {
+    code: StudentPermission.MOVIMIENTO_ACADEMICO,
+    module: Module.STUDENT,
+    section: 'Tab Académica',
+    name: 'Ítem "Movimiento Académico"',
+    description: 'Cambiar el Módulo/Lección del beneficiario dentro de su curso. Hacia adelante aprueba las lecciones y evaluaciones anteriores (nota "Movimiento Académico"); hacia atrás las des-aprueba (con respaldo en auditoría). Requiere confirmación.',
+  },
+  {
     code: StudentPermission.COMO_VOY,
     module: Module.STUDENT,
     section: 'Tab Académica > Progreso',
@@ -305,13 +312,6 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     section: 'Tab Académica > Gestión Steps',
     name: 'Toggles "Marcar Step"',
     description: 'Marcar/desmarcar un step como completado (override manual)',
-  },
-  {
-    code: StudentPermission.ASIGNAR_STEP,
-    module: Module.STUDENT,
-    section: 'Tab Académica > Gestión Steps',
-    name: 'Botón "Cambiar Step"',
-    description: 'Modal para asignar nuevo step/nivel al estudiante',
   },
   {
     code: StudentPermission.APROBAR_WELCOME,
