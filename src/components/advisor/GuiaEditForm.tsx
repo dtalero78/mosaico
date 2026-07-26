@@ -13,6 +13,14 @@ const PAISES = [
   'Puerto Rico', 'Espana', 'Estados Unidos', 'Brasil', 'Otro'
 ]
 
+// Indicativo telefónico por país (se muestra junto al número; el número se captura SIN él).
+const INDICATIVO: Record<string, string> = {
+  Colombia: '+57', Mexico: '+52', Argentina: '+54', Chile: '+56', Peru: '+51', Ecuador: '+593',
+  Venezuela: '+58', Bolivia: '+591', Paraguay: '+595', Uruguay: '+598', 'Costa Rica': '+506',
+  Panama: '+507', Guatemala: '+502', Honduras: '+504', 'El Salvador': '+503', Nicaragua: '+505',
+  'Republica Dominicana': '+1', Cuba: '+53', 'Puerto Rico': '+1', Espana: '+34', 'Estados Unidos': '+1', Brasil: '+55', Otro: '',
+}
+
 interface Form {
   primerNombre: string; primerApellido: string; numeroId: string; domicilio: string;
   email: string; clave: string; telefono: string; pais: string; zoom: string; fechaNacimiento: string;
@@ -187,8 +195,25 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
           <div className="grid grid-cols-2 gap-4">
             <Field label="Nombres *" value={form.primerNombre} onChange={v => set('primerNombre', v)} error={errors.primerNombre} cls={inputCls} />
             <Field label="Apellidos *" value={form.primerApellido} onChange={v => set('primerApellido', v)} error={errors.primerApellido} cls={inputCls} />
-            <Field label="Número de Identificación" value={form.numeroId} onChange={v => set('numeroId', v.replace(/[^A-Z0-9]/gi, '').toUpperCase())} cls={inputCls} />
-            <Field label="Teléfono" value={form.telefono} onChange={v => set('telefono', v.replace(/[^\d]/g, ''))} cls={inputCls} />
+            {/* País — reubicado a la izquierda de Teléfono (antes iba más abajo) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
+              <select value={form.pais} onChange={e => set('pais', e.target.value)} title="País del guía" className={inputCls()}>
+                <option value="">Seleccionar país</option>
+                {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            {/* Teléfono: el indicativo (según país) va delante; el número se captura SIN indicativo */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+              <div className="flex">
+                <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-sm text-gray-600 whitespace-nowrap min-w-[3.5rem] justify-center">
+                  {INDICATIVO[form.pais] || '—'}
+                </span>
+                <input type="tel" value={form.telefono} onChange={e => set('telefono', e.target.value.replace(/[^\d]/g, ''))}
+                  placeholder="Número sin indicativo" className={inputCls() + ' rounded-l-none'} />
+              </div>
+            </div>
             <Field label="Email *" value={form.email} onChange={v => set('email', v)} error={errors.email} type="email" cls={inputCls} />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña <span className="text-gray-400 font-normal">(👁 para ver · edítala para cambiarla)</span></label>
@@ -201,13 +226,8 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
               </div>
               {errors.clave && <p className="text-red-500 text-xs mt-1">{errors.clave}</p>}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
-              <select value={form.pais} onChange={e => set('pais', e.target.value)} title="País del guía" className={inputCls()}>
-                <option value="">Seleccionar país</option>
-                {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
+            {/* Número de Identificación — reubicado (antes iba junto al teléfono) */}
+            <Field label="Número de Identificación" value={form.numeroId} onChange={v => set('numeroId', v.replace(/[^A-Z0-9]/gi, '').toUpperCase())} cls={inputCls} />
             <Field label="Fecha de Nacimiento" value={form.fechaNacimiento} onChange={v => set('fechaNacimiento', v)} type="date" cls={inputCls} />
             <div className="col-span-2">
               <Field label="Domicilio" value={form.domicilio} onChange={v => set('domicilio', v)} cls={inputCls} />
