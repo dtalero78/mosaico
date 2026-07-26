@@ -813,9 +813,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
               <th className="table-header-cell" style={{width: '150px'}}>Fecha</th>
               <th className="table-header-cell" style={{width: '100px'}}>Tipo</th>
               <th className="table-header-cell" style={{width: '120px'}}>Guía</th>
-              <th className="table-header-cell" style={{width: '80px'}}>Nivel</th>
-              <th className="table-header-cell" style={{width: '80px'}}>Step</th>
-              <th className="table-header-cell" style={{width: '100px'}}>Zoom</th>
+              <th className="table-header-cell" style={{width: '90px'}}>Módulo</th>
+              <th className="table-header-cell" style={{width: '90px'}}>Lección</th>
               <th className="table-header-cell" style={{width: '80px'}}>Asistió</th>
               <th className="table-header-cell" style={{width: '80px'}}>Participó</th>
               <th className="table-header-cell" style={{width: '80px'}}>Canceló</th>
@@ -858,29 +857,12 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                     </div>
                   </td>
                   <td className="table-cell">
-                    <div className="text-sm text-gray-900">{classItem.nivel}</div>
+                    <div className="text-sm text-gray-900">{(classItem as any).sesionModulo || <span className="text-gray-400">—</span>}</div>
                   </td>
                   <td className="table-cell">
                     <div className="text-sm text-gray-900">
-                      {(classItem as any).tipo === 'CLUB' && (classItem as any).nombreEvento
-                        ? (classItem as any).nombreEvento
-                        : classItem.step}
+                      {(classItem as any).sesionLeccion || <span className="text-gray-400">—</span>}
                     </div>
-                  </td>
-                  <td className="table-cell">
-                    {(classItem as any).linkZoom ? (
-                      <a
-                        href={(classItem as any).linkZoom}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 text-sm hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        🔗 Zoom
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 text-sm">-</span>
-                    )}
                   </td>
                   <td className="table-cell">
                     <span className={`badge ${classItem.asistencia ? 'badge-success' : 'badge-danger'}`}>
@@ -910,7 +892,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
               ))
             ) : (
               <tr>
-                <td colSpan={10} className="table-cell text-center py-8">
+                <td colSpan={9} className="table-cell text-center py-8">
                   <div className="text-gray-500">
                     {classes.length === 0 ? (
                       <>

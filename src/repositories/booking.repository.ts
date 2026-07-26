@@ -119,6 +119,7 @@ class BookingRepositoryClass extends BaseRepository {
               CASE WHEN b."step" ~ '^[A-Z]+ - Step' THEN b."step"
                    ELSE COALESCE(c."step", b."step")
               END AS "step",
+              c."sesionModulo", c."sesionLeccion",
               b."asistencia", b."asistio", b."participacion", b."noAprobo",
               b."cancelo", b."calificacion", b."anotaciones", b."comentarios", b."advisorAnotaciones",
               b."actividadPropuesta", b."linkZoom", b."asignadoPor", b."origen",
