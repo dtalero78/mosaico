@@ -162,8 +162,8 @@ export default function ClassHistory({ data, isLoading }: ClassHistoryProps) {
               <th className="table-header-cell">Fecha</th>
               <th className="table-header-cell">Tipo</th>
               <th className="table-header-cell">Guía</th>
-              <th className="table-header-cell">Nivel</th>
-              <th className="table-header-cell">Step</th>
+              <th className="table-header-cell">Módulo</th>
+              <th className="table-header-cell">Lección</th>
               <th className="table-header-cell">Asistió</th>
               <th className="table-header-cell">Canceló</th>
               <th className="table-header-cell">No Aprobó</th>
@@ -189,11 +189,11 @@ export default function ClassHistory({ data, isLoading }: ClassHistoryProps) {
                     </div>
                   </td>
                   <td className="table-cell">
-                    <div className="text-sm text-gray-900">{item.nivel}</div>
+                    <div className="text-sm text-gray-900">{item.sesionModulo || <span className="text-gray-400">—</span>}</div>
                   </td>
                   <td className="table-cell">
                     <div className="text-sm text-gray-900">
-                      {item.step}
+                      {item.sesionLeccion || <span className="text-gray-400">—</span>}
                     </div>
                   </td>
                   <td className="table-cell">
