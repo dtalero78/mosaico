@@ -217,11 +217,29 @@ export async function getAcademicHistory(id: string, limit: number = 100) {
   // Get class history using the student's _id
   const rawClasses = await BookingRepository.findByStudentId(academicRecord._id, limit);
 
+  // Target de la nivelación (las sesiones NIVELACION no traen sesionModulo/Leccion;
+  // su módulo/lección reforzada vive en ACADEMICA.detalleNivelacion).
+  let niv: any = null;
+  try {
+    const dn = await queryOne<{ detalleNivelacion: any }>(
+      `SELECT "detalleNivelacion" FROM "ACADEMICA" WHERE "_id"=$1`, [academicRecord._id]
+    );
+    niv = dn?.detalleNivelacion;
+    if (typeof niv === 'string') { try { niv = JSON.parse(niv); } catch { niv = null; } }
+  } catch { niv = null; }
+  const nivOk = niv && (niv.modulo || niv.leccion) ? niv : null;
+
   // Normalize: asistio is the source of truth (asistencia column has stale/inverted data from migration)
-  const classes = rawClasses.map((c: any) => ({
-    ...c,
-    asistencia: c.asistio != null ? c.asistio : c.asistencia,
-  }));
+  const classes = rawClasses.map((c: any) => {
+    const esNiv = c.tipo === 'NIVELACION';
+    return {
+      ...c,
+      asistencia: c.asistio != null ? c.asistio : c.asistencia,
+      sesionModulo: (esNiv && !c.sesionLeccion && nivOk?.modulo) ? nivOk.modulo : c.sesionModulo,
+      sesionLeccion: (esNiv && !c.sesionLeccion && nivOk?.leccion) ? nivOk.leccion : c.sesionLeccion,
+      esNivelacion: esNiv,
+    };
+  });
 
   return {
     academicRecord,

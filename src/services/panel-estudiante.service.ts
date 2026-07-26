@@ -13,7 +13,7 @@
 
 import 'server-only';
 import { Session } from 'next-auth';
-import { query } from '@/lib/postgres';
+import { query, queryOne } from '@/lib/postgres';
 import { PeopleRepository } from '@/repositories/people.repository';
 import { AcademicaRepository } from '@/repositories/academica.repository';
 import { BookingRepository } from '@/repositories/booking.repository';
@@ -402,10 +402,32 @@ export async function getStudentProgress(academicaId: string) {
  */
 export async function getStudentHistory(academicaId: string) {
   const bookings = await BookingRepository.findByStudentId(academicaId, 500);
-  return bookings.map((b: any) => ({
-    ...b,
-    advisor: b.tipo === 'COMPLEMENTARIA' ? 'PLATAFORMA' : b.advisor,
-  }));
+  // Las sesiones de NIVELACIÓN no están mapeadas a una lección (sesionModulo/Leccion
+  // = null); su target vive en ACADEMICA.detalleNivelacion. Se rellena para que la
+  // tabla muestre el módulo/lección que se está reforzando.
+  const niv = await getDetalleNivelacion(academicaId);
+  return bookings.map((b: any) => {
+    const esNiv = b.tipo === 'NIVELACION';
+    return {
+      ...b,
+      advisor: b.tipo === 'COMPLEMENTARIA' ? 'PLATAFORMA' : b.advisor,
+      sesionModulo: (esNiv && !b.sesionLeccion && niv?.modulo) ? niv.modulo : b.sesionModulo,
+      sesionLeccion: (esNiv && !b.sesionLeccion && niv?.leccion) ? niv.leccion : b.sesionLeccion,
+      esNivelacion: esNiv,
+    };
+  });
+}
+
+/** Lee y parsea ACADEMICA.detalleNivelacion (target de la nivelación actual). */
+async function getDetalleNivelacion(academicaId: string): Promise<{ modulo?: string; leccion?: string } | null> {
+  try {
+    const r = await queryOne<{ detalleNivelacion: any }>(
+      `SELECT "detalleNivelacion" FROM "ACADEMICA" WHERE "_id"=$1`, [academicaId]
+    );
+    let d: any = r?.detalleNivelacion;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch { d = null; } }
+    return d && (d.modulo || d.leccion) ? d : null;
+  } catch { return null; }
 }
 
 /**
