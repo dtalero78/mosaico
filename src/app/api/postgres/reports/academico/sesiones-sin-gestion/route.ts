@@ -74,6 +74,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        c."dia"                                                  AS "fechaEvento",
        c."tipo",
        c."nivel", c."step",
+       cc."campaign", cc."tipoCurso" AS "curso", cc."salon",
        COALESCE(c."tituloONivel", c."titulo", c."nombreEvento") AS "tituloEvento",
        c."nombreEvento",
        c."advisor"                                              AS "advisorId",
@@ -83,6 +84,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        COALESCE(agg."asistioMarcados", 0)                       AS "asistioMarcados"
      FROM "CALENDARIO" c
      LEFT JOIN "GUIAS" adv ON adv."_id" = c."advisor"
+     LEFT JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
      LEFT JOIN LATERAL (
        SELECT
          COUNT(*) FILTER (WHERE b."cancelo" IS NOT TRUE) AS "inscritos",
@@ -102,6 +104,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     tipo: r.tipo,
     nivel: r.nivel,
     step: r.step,
+    campaign: r.campaign,
+    curso: r.curso,
+    salon: r.salon,
     tituloEvento: r.tituloEvento,
     nombreEvento: r.nombreEvento,
     advisorId: r.advisorId,

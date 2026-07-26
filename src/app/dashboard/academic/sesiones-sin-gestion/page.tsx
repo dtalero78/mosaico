@@ -30,6 +30,9 @@ interface Item {
   tipo: 'SESSION' | 'CLUB' | string
   nivel: string | null
   step: string | null
+  campaign: string | null
+  curso: string | null
+  salon: string | null
   tituloEvento: string | null
   nombreEvento: string | null
   advisorId: string | null
@@ -371,7 +374,7 @@ export default function SesionesSinGestionPage() {
                   <tr className="text-xs text-gray-500 uppercase">
                     <th className="text-left font-medium px-3 py-2">Guía</th>
                     <th className="text-left font-medium px-3 py-2 w-24">Tipo</th>
-                    <th className="text-left font-medium px-3 py-2">Nivel · Step</th>
+                    <th className="text-left font-medium px-3 py-2">Campaña · Curso · Salón</th>
                     <th className="text-left font-medium px-3 py-2 w-32">Fecha · Hora</th>
                     <th className="text-center font-medium px-3 py-2 w-36">Inscritos / Asistencia</th>
                     <th className="text-left font-medium px-3 py-2 w-28">Hace</th>
@@ -402,8 +405,12 @@ export default function SesionesSinGestionPage() {
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          <div className="text-sm text-gray-900">{it.nivel || '—'} · {it.step || '—'}</div>
-                          {it.nombreEvento && it.nombreEvento !== it.step && (
+                          <div className="text-sm text-gray-900">
+                            {it.curso
+                              ? `${it.campaign ? it.campaign + ' · ' : ''}${it.curso}${it.salon ? ' · Salón ' + it.salon : ''}`
+                              : (it.nivel || '—')}
+                          </div>
+                          {it.nombreEvento && (
                             <div className="text-[11px] text-gray-500 truncate max-w-xs">{it.nombreEvento}</div>
                           )}
                         </td>
