@@ -101,6 +101,8 @@ export default function SessionStudentsTab({
   const [showNivelComentario, setShowNivelComentario] = useState(false)
   const [nivelComentarioText, setNivelComentarioText] = useState('')
   const [showNivelReminder, setShowNivelReminder] = useState(false)
+  // Aviso al guardar sin marcar nada (evento normal).
+  const [showEmptyWarn, setShowEmptyWarn] = useState(false)
   const [savingNivelClose, setSavingNivelClose] = useState(false)
 
   // Cargar lecciones del curso del evento (evento.nivel = tipoCurso en MOSAICO)
@@ -281,6 +283,11 @@ export default function SessionStudentsTab({
       setShowNivelReminder(true)
       return
     }
+    // Evento normal: si no se marcó NADA, avisar antes de guardar.
+    const vacio = !asistencia && !participacion && !noAprobo
+      && !calificacion.trim() && !comentarios.trim()
+      && !advisorAnotaciones.trim() && !actividadPropuesta.trim()
+    if (vacio) { setShowEmptyWarn(true); return }
     await doSaveClassRecord()
   }
 
@@ -635,6 +642,30 @@ export default function SessionStudentsTab({
               <button type="button" onClick={() => setShowNivelReminder(false)}
                 className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700">
                 Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso: guardar sin marcar nada */}
+      {showEmptyWarn && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">⚠️ No marcaste nada</h3>
+            <p className="text-sm text-gray-700 mb-5">
+              No marcaste asistencia ni ninguna evaluación para este estudiante.
+              ¿Deseas volver para marcarla, o salir a la lista de estudiantes sin guardar?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowEmptyWarn(false)}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded hover:bg-gray-200">
+                Cancelar (volver a marcar)
+              </button>
+              <button type="button"
+                onClick={() => { setShowEmptyWarn(false); onStudentSelect(null) }}
+                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700">
+                Aceptar (volver a estudiantes)
               </button>
             </div>
           </div>
