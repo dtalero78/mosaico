@@ -165,3 +165,39 @@ export async function uploadPdfToDrive(
     updated: false,
   };
 }
+
+/**
+ * Descarga los bytes de un PDF de la carpeta de contratos, buscándolo por NOMBRE
+ * (ej. `MOS_01-M5-2765-26.pdf`). Devuelve null si no existe (para caer a un fallback).
+ */
+export async function downloadPdfFromDrive(
+  filename: string,
+  folderId?: string,
+): Promise<{ buffer: Buffer; name: string; webViewLink: string | null } | null> {
+  const drive = driveClient();
+  const parent = folderId || process.env.GDRIVE_CONTRATOS_FOLDER_ID;
+  if (!parent) return null;
+
+  const name = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+  const safeName = name.replace(/'/g, "\\'");
+
+  const list = await drive.files.list({
+    q: `name = '${safeName}' and '${parent}' in parents and trashed = false`,
+    fields: 'files(id, name, webViewLink)',
+    pageSize: 1,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  const file = list.data.files?.[0];
+  if (!file?.id) return null;
+
+  const res = await drive.files.get(
+    { fileId: file.id, alt: 'media', supportsAllDrives: true },
+    { responseType: 'arraybuffer' },
+  );
+  return {
+    buffer: Buffer.from(res.data as ArrayBuffer),
+    name: file.name || name,
+    webViewLink: file.webViewLink || null,
+  };
+}

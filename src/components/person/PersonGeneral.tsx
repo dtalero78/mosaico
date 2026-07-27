@@ -27,7 +27,9 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
       alert('No se puede descargar el contrato: ID no disponible')
       return
     }
-    const downloadUrl = `https://bsl-utilidades-yp78a.ondigitalocean.app/descargar-pdf-drive/${person._id}?empresa=LGS`
+    // Descarga desde el Drive propio de MOSAICO (MOS_<contrato>.pdf); el endpoint
+    // cae al Drive de LGS (bsl-utilidades) como respaldo para contratos viejos.
+    const downloadUrl = `/api/contracts/${person._id}/download`
     window.open(downloadUrl, '_blank')
   }
 
