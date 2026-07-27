@@ -8,7 +8,8 @@
 import 'server-only';
 
 const WHAPI_URL = 'https://gate.whapi.cloud/messages/text';
-const WHAPI_TOKEN = process.env.WHAPI_TOKEN || 'VSyDX4j7ooAJ7UGOhz8lGplUVDDs2EYj';
+// Línea propia de MOSAICO (+56 9 7981 9760). El env var manda si está seteado.
+const WHAPI_TOKEN = process.env.WHAPI_TOKEN || 'h2vjBWeG8csEl45GIuKgOr5pvGwCVTbu';
 
 /**
  * Format a phone number for WhatsApp: strip non-digits and validate length.

@@ -8,7 +8,8 @@ import { getAsesorInfo } from '@/lib/asesor';
 import { archiveContractPdfFromUrl } from '@/services/contract-archive.service';
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
-const WHAPI_TOKEN = 'VSyDX4j7ooAJ7UGOhz8lGplUVDDs2EYj';
+// Línea propia de MOSAICO (+56 9 7981 9760). El env var manda si está seteado.
+const WHAPI_TOKEN = process.env.WHAPI_TOKEN || 'h2vjBWeG8csEl45GIuKgOr5pvGwCVTbu';
 
 export const POST = handler(async (_request, { params }) => {
   const titularId = params.id;
