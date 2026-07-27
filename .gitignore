@@ -81,3 +81,13 @@ jsconfig.json
 # Scripts de diagnóstico one-off (con numeroId / _id específicos de un usuario).
 # Los reutilizables (verify-*, inspect-*) sí se commitean — los uso-único no.
 /scripts/diag-*.js
+
+# Artefactos locales no versionados (binarios/documentos de trabajo)
+.flow-storyboards/
+Contratos MOSAICO2026/
+Plataforma 2026.pptx
+_dups.js
+docs/*.docx
+docs/Contenidos/
+docs/Imagenes Curso/
+docs/Contrato_Mosaico_Chile_parametrizado.txt
