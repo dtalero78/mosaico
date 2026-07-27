@@ -660,17 +660,16 @@ export default function ContratoDetailPage() {
       <PermissionGuard permission={ComercialPermission.MODIFICAR_CONTRATO}>
         <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <DocumentTextIcon className="h-7 w-7 text-primary-600" />
-                Contrato {titular.contrato || '—'}
-              </h1>
-              <p className="text-gray-500 mt-1">
+          <div className="mb-6 space-y-3">
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <DocumentTextIcon className="h-7 w-7 text-primary-600" />
+              <span className="whitespace-nowrap">Contrato {titular.contrato || '—'}</span>
+            </h1>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <p className="text-gray-500">
                 Titular: {fullName(titular)} &middot; {titular.numeroId}
               </p>
-            </div>
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={openContractPreview}
                 disabled={loadingTemplate}
@@ -742,6 +741,7 @@ export default function ContratoDetailPage() {
                   </button>
                 </PermissionGuard>
               )}
+              </div>
             </div>
           </div>
 

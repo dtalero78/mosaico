@@ -103,9 +103,16 @@ export function fillContractTemplate(
     ? String(titular.asesorMail).trim()
     : (looksLikeEmail(ejecutivoComercial?.email) ? String(ejecutivoComercial!.email).trim() : '');
 
+  // Campaña del contrato: el TITULAR no la tiene (campaign=null) — sale de los
+  // beneficiarios (comparten la misma campaña). Fallback a la del titular por si acaso.
+  const campanaValue =
+    (Array.isArray(beneficiarios) ? (beneficiarios.find((b: any) => b?.campaign)?.campaign) : '') ||
+    titular?.campaign || '';
+
   // Build data map
   const data: Record<string, string> = {
     contrato: titular?.contrato || '',
+    campana: campanaValue,
     fecha: fmtDate(titular?._createdDate),
     primerNombre: titular?.primerNombre || '',
     segundoNombre: titular?.segundoNombre || '',
