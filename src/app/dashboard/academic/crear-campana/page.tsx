@@ -55,6 +55,10 @@ function CrearCampanaContent() {
   const [cursoMode, setCursoMode] = useState<'draft' | 'existing'>('draft')
   // Reporte: campaña cuyo detalle está desplegado (null = mostrar tarjetas)
   const [detalleCampaign, setDetalleCampaign] = useState<string | null>(null)
+  // Modal de inscritos (al hacer click en el badge de Cupos)
+  const [inscritosCurso, setInscritosCurso] = useState<any>(null)
+  const [inscritosList, setInscritosList] = useState<any[] | null>(null)
+  const [inscritosLoading, setInscritosLoading] = useState(false)
   // Pestañas + filtros del Reporte (inputs = draft; se aplican con "Aplicar filtros")
   const [activeTab, setActiveTab] = useState<'gestion' | 'reporte'>('gestion')
   const [repNombre, setRepNombre] = useState('')
@@ -62,6 +66,18 @@ function CrearCampanaContent() {
   const [repDesde, setRepDesde] = useState('')
   const [repHasta, setRepHasta] = useState('')
   const [repEstado, setRepEstado] = useState<'todos' | 'matricula' | 'activo' | 'cerrado'>('todos')
+
+  // Abre el modal con los inscritos (nombre + id) de un curso/salón
+  const openInscritos = async (r: any) => {
+    setInscritosCurso({ campaign: r.campaign, tipoCurso: r.tipoCurso, salon: r.salon, horarioCurso: r.horarioCurso, inscritos: r.usuInscritos, total: r.numeroUsuarios })
+    setInscritosList(null); setInscritosLoading(true)
+    try {
+      const res = await fetch(`/api/postgres/campaigns/${r._id}/inscritos`, { cache: 'no-store' })
+      const d = await res.json()
+      setInscritosList((d.data || d).items || [])
+    } catch { setInscritosList([]) }
+    finally { setInscritosLoading(false) }
+  }
   const [applied, setApplied] = useState<{ nombre: string; curso: string; desde: string; hasta: string; estado: 'todos' | 'matricula' | 'activo' | 'cerrado' }>({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' })
   const aplicarFiltros = () => setApplied({ nombre: repNombre, curso: repCurso, desde: repDesde, hasta: repHasta, estado: repEstado })
   const limpiarFiltros = () => { setRepNombre(''); setRepCurso(''); setRepDesde(''); setRepHasta(''); setRepEstado('todos'); setApplied({ nombre: '', curso: '', desde: '', hasta: '', estado: 'todos' }) }
@@ -512,9 +528,10 @@ function CrearCampanaContent() {
                         <td>{r.finalCurso ? String(r.finalCurso).slice(0, 10) : '—'}</td>
                         <td>{r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '—'}</td>
                         <td>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${full ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                          <button type="button" onClick={() => openInscritos(r)} title="Ver inscritos (nombre e ID)"
+                            className={`px-2 py-0.5 rounded-full text-xs font-semibold cursor-pointer hover:ring-2 hover:ring-offset-1 transition ${full ? 'bg-yellow-100 text-yellow-700 hover:ring-yellow-300' : 'bg-green-100 text-green-700 hover:ring-green-300'}`}>
                             {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}
-                          </span>
+                          </button>
                         </td>
                         <td>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_META[est].cls}`}>
@@ -594,9 +611,10 @@ function CrearCampanaContent() {
                         <td>{r.finalCurso ? String(r.finalCurso).slice(0, 10) : '—'}</td>
                         <td>{r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '—'}</td>
                         <td>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${full ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                          <button type="button" onClick={() => openInscritos(r)} title="Ver inscritos (nombre e ID)"
+                            className={`px-2 py-0.5 rounded-full text-xs font-semibold cursor-pointer hover:ring-2 hover:ring-offset-1 transition ${full ? 'bg-yellow-100 text-yellow-700 hover:ring-yellow-300' : 'bg-green-100 text-green-700 hover:ring-green-300'}`}>
                             {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}
-                          </span>
+                          </button>
                         </td>
                         <td>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_META[est].cls}`}>
@@ -841,6 +859,65 @@ function CrearCampanaContent() {
               <button type="button" onClick={doDelete} disabled={rowBusy} className="px-4 py-2 text-sm rounded-md text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
                 {rowBusy ? 'Eliminando...' : 'Eliminar'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: inscritos de un curso/salón (click en el badge de Cupos) */}
+      {inscritosCurso && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setInscritosCurso(null)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">
+                  Inscritos · {inscritosCurso.tipoCurso} · Salón {inscritosCurso.salon || '—'}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {inscritosCurso.campaign} · {inscritosCurso.horarioCurso} · {inscritosCurso.inscritos ?? 0}/{inscritosCurso.total ?? 0} cupos
+                </p>
+              </div>
+              <button type="button" onClick={() => setInscritosCurso(null)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+            </div>
+            <div className="overflow-y-auto">
+              {inscritosLoading ? (
+                <p className="p-5 text-sm text-gray-500">Cargando…</p>
+              ) : !inscritosList || inscritosList.length === 0 ? (
+                <p className="p-5 text-sm text-gray-500">Sin beneficiarios inscritos en este salón.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0 text-xs text-gray-500 uppercase">
+                    <tr>
+                      <th className="text-left px-4 py-2 w-8">#</th>
+                      <th className="text-left px-4 py-2">Nombre</th>
+                      <th className="text-left px-4 py-2">ID</th>
+                      <th className="text-left px-4 py-2">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inscritosList.map((b: any, i: number) => (
+                      <tr key={b.peopleId} className="border-b last:border-0">
+                        <td className="px-4 py-2 text-gray-400">{i + 1}</td>
+                        <td className="px-4 py-2 text-gray-900">
+                          {b.academicaId
+                            ? <a href={`/student/${b.academicaId}`} target="_blank" rel="noopener noreferrer" className="text-primary-700 hover:underline">{b.nombre}</a>
+                            : b.nombre}
+                        </td>
+                        <td className="px-4 py-2 font-mono text-xs text-gray-700">{b.numeroId}</td>
+                        <td className="px-4 py-2">
+                          {b.inactivo
+                            ? <span className="text-xs text-red-600">Inactivo</span>
+                            : <span className="text-xs text-emerald-600">{b.aprobacion || 'Activo'}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
+              <button type="button" onClick={() => setInscritosCurso(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cerrar</button>
             </div>
           </div>
         </div>
