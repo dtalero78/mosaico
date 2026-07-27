@@ -93,8 +93,11 @@ export async function htmlToPdfBuffer(html: string, opts: PdfOptions = {}): Prom
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',   // /dev/shm de 64MB en contenedores
           '--disable-gpu',
-          '--single-process',          // clave para 1 GB
-          '--no-zygote',
+          // NO usar --single-process / --no-zygote: con --single-process el "main frame"
+          // de Chromium NO se crea hasta navegar, y page.setContent() casca con
+          // "Requesting main frame too early!" (bug reproducido en prod). Como el
+          // servicio está en 1 GB, las generaciones van serializadas (queue) y el
+          // browser se cierra tras cada PDF, un Chromium multiproceso normal cabe.
           '--disable-extensions',
           '--font-render-hinting=none',
         ],

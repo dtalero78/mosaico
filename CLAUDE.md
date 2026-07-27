@@ -575,9 +575,14 @@ actualizar/trash pero NO borrar** (es Colaborador, `canDelete=false`) — la app
 - **puppeteer-core, NO puppeteer**: el Chromium que descarga `puppeteer` está compilado
   contra glibc y **no corre en Alpine** (musl). El Dockerfile instala el de Alpine.
 - **Memoria**: la web corre en **1 GB** (`apps-s-1vcpu-1gb-fixed`); 512 MB no alcanzan
-  para Next + Chromium. `htmlToPdfBuffer` usa `--single-process`, `--no-zygote`,
-  `--disable-dev-shm-usage`, cierra el browser en `finally` y **serializa** las
-  generaciones (dos Chromium a la vez no caben). El `cron-worker` sigue en 512 MB.
+  para Next + Chromium. `htmlToPdfBuffer` usa `--disable-dev-shm-usage` (/dev/shm 64MB),
+  `--disable-gpu`, cierra el browser en `finally` y **serializa** las generaciones (cola;
+  dos Chromium a la vez no caben). El `cron-worker` sigue en 512 MB.
+  **⚠ NO usar `--single-process`/`--no-zygote`**: con `--single-process` el "main frame" de
+  Chromium no se crea hasta navegar y `page.setContent()` casca con *"Requesting main frame
+  too early!"* (bug reproducido en prod jul-2026, visto como "Database error" en la UI — es el
+  catch genérico de api-helpers). Se quitaron; el multiproceso normal cabe en 1 GB porque las
+  generaciones van serializadas y el browser se cierra tras cada PDF.
 
 ### TypeScript Build Configuration
 - Target: `es2017`
