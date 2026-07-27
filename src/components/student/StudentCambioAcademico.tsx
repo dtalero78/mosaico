@@ -35,10 +35,6 @@ export default function StudentCambioAcademico({ studentId, studentName, current
   const [step, setStep] = useState<'form' | 'confirm'>('form')
   const [confirmChk, setConfirmChk] = useState(false)
   const [saving, setSaving] = useState(false)
-  // Barrido de salones: recomendaciones (mismo curso, misma lección).
-  const [recos, setRecos] = useState<any[] | null>(null)
-  const [recoStudent, setRecoStudent] = useState<any>(null)
-  const [showRecos, setShowRecos] = useState(true)
 
   useEffect(() => {
     fetch('/api/postgres/cursos-campaign', { cache: 'no-store' })
@@ -47,25 +43,6 @@ export default function StudentCambioAcademico({ studentId, studentName, current
       .catch(() => toast.error('No se pudieron cargar los cursos'))
       .finally(() => setLoading(false))
   }, [])
-
-  useEffect(() => {
-    fetch(`/api/postgres/students/${studentId}/recomendar-salones`, { cache: 'no-store' })
-      .then(r => r.json())
-      .then(d => { const x = d.data || d; setRecos(x.candidatos || []); setRecoStudent(x.student || null) })
-      .catch(() => setRecos([]))
-  }, [studentId])
-
-  const aplicarReco = (c: any) => {
-    setCampaign(c.campaign)
-    setTipoCurso(recoStudent?.curso || currentCurso || '')
-    setRowKey(`${c.horarioCurso}||${c.salon || ''}`)
-    setShowRecos(false)
-  }
-  const gapLabel = (g: number | null) =>
-    g == null ? '—' : g === 0 ? '✅ Misma lección' : g > 0 ? `⏭ ${g} adelante` : `⏮ ${Math.abs(g)} atrás`
-  const gapCls = (g: number | null) =>
-    g === 0 ? 'bg-green-100 text-green-800' : g == null ? 'bg-gray-100 text-gray-500'
-    : Math.abs(g) <= 2 ? 'bg-sky-100 text-sky-800' : 'bg-amber-100 text-amber-800'
 
   const campanias = useMemo(() => Array.from(new Set(rows.map(r => r.campaign))).sort().reverse(), [rows])
   const cursos = useMemo(() => {
@@ -123,40 +100,8 @@ export default function StudentCambioAcademico({ studentId, studentName, current
               <p className="text-base font-semibold text-gray-900">{studentName}</p>
               <p className="text-xs text-gray-500">
                 Actual: {currentCampaign || '—'} · {currentCurso || '—'} · Salón {currentSalon || '—'}
-                {recoStudent?.leccion ? ` · ${recoStudent.modulo} / ${recoStudent.leccion}` : ''}
               </p>
             </div>
-
-            {/* Barrido de salones — recomendaciones por lección */}
-            {recos && recos.length > 0 && (
-              <div className="border border-primary-100 bg-primary-50/40 rounded-lg">
-                <button type="button" onClick={() => setShowRecos(v => !v)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-primary-800">
-                  <span>🎯 Salones recomendados (misma lección) · {recos.length}</span>
-                  <span className="text-xs text-primary-500">{showRecos ? 'ocultar' : 'ver'}</span>
-                </button>
-                {showRecos && (
-                  <div className="px-3 pb-3 space-y-1.5 max-h-56 overflow-y-auto">
-                    <p className="text-[11px] text-gray-500">Ordenados por cercanía a la lección del alumno. Clic para prellenar el destino.</p>
-                    {recos.slice(0, 8).map((c) => (
-                      <button key={c.cursoCampaignId} type="button" onClick={() => aplicarReco(c)}
-                        className="w-full text-left bg-white border border-gray-200 rounded-md px-2.5 py-1.5 hover:border-primary-300 hover:shadow-sm transition">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-gray-900">{c.campaign} · Salón {c.salon || '—'}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${gapCls(c.gap)}`}>{gapLabel(c.gap)}</span>
-                        </div>
-                        <div className="text-[11px] text-gray-500 flex items-center gap-2 flex-wrap">
-                          <span>{c.horarioCurso}</span>
-                          <span>· va en {c.moduloActual} / {c.leccionActual}</span>
-                          <span className={c.lleno ? 'text-red-600 font-medium' : ''}>· {c.cupos.inscritos}/{c.cupos.total}{c.lleno ? ' LLENO' : ''}</span>
-                          {c.guia && <span>· {c.guia}</span>}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
             {loading ? (
               <div className="py-6 text-center text-sm text-gray-500">Cargando cursos…</div>

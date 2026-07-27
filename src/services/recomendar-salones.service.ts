@@ -17,7 +17,10 @@ import { EVALUACION_STEP } from './repetir-clase.service';
 const norm = (s: any) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const EVAL_NORM = norm(EVALUACION_STEP);
 
-export async function recomendarSalones(academicaId: string) {
+export async function recomendarSalones(
+  academicaId: string,
+  target?: { modulo?: string | null; leccion?: string | null }
+) {
   const aca = await queryOne<{ curso: string | null; nivel: string | null; step: string | null; numeroId: string | null }>(
     `SELECT "curso","nivel","step","numeroId" FROM "ACADEMICA" WHERE "_id"=$1`, [academicaId]
   );
@@ -60,7 +63,11 @@ export async function recomendarSalones(academicaId: string) {
     return o == null ? null : o;
   };
 
-  const ordenStudent = ordenDe(aca.nivel, aca.step);
+  // Lección de referencia: la ELEGIDA (target) si se pasa, si no la actual del alumno.
+  // El gap de cada salón se mide contra esta referencia → gap=0 = salón en esa lección.
+  const refModulo = target?.leccion ? (target.modulo ?? null) : aca.nivel;
+  const refLeccion = target?.leccion ? target.leccion : aca.step;
+  const ordenStudent = ordenDe(refModulo, refLeccion);
 
   // Salones candidatos: mismo tipoCurso, activos, distinto del actual.
   const cursos = await queryMany<any>(
@@ -116,7 +123,11 @@ export async function recomendarSalones(academicaId: string) {
 
   return {
     bloqueadoWelcome: false,
-    student: { curso, modulo: aca.nivel, leccion: aca.step, orden: ordenStudent, campaign: people?.campaign || null, salon: people?.salon || null },
+    student: {
+      curso, modulo: aca.nivel, leccion: aca.step, orden: ordenDe(aca.nivel, aca.step),
+      referencia: { modulo: refModulo, leccion: refLeccion, orden: ordenStudent },
+      campaign: people?.campaign || null, salon: people?.salon || null,
+    },
     candidatos,
   };
 }

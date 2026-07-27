@@ -84,7 +84,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     ...(canAccessProgress ? [{ id: 'progress', name: '¿Cómo voy?', icon: '📈' }] : []),
     ...(canAgendar ? [{ id: 'schedule', name: 'Agendar Sesión', icon: '📅' }] : []),
     ...(canCambioAcademico ? [{ id: 'cambio-academico', name: 'Cambio Académico', icon: '🔀' }] : []),
-    ...(canMovimiento ? [{ id: 'movimiento-academico', name: 'Movimiento Académico', icon: '↕️' }] : []),
+    ...(canMovimiento ? [{ id: 'movimiento-academico', name: 'Ajuste Lecciones', icon: '↕️' }] : []),
     ...(canAprobarWelcome ? [{ id: 'aprobar-welcome', name: 'Aprobar Welcome', icon: '✅' }] : []),
   ]
 
