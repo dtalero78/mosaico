@@ -368,6 +368,14 @@ export const PATCH = handlerWithAuth(async (
     if (mapped) body.estado = mapped;
   }
 
+  // Columnas NOT NULL de PEOPLE: nunca escribir null (violaría la constraint). Un
+  // nombre/apellido vacío ES válido (hay usuarios sin apellido cargado, con el nombre
+  // completo en los campos de nombre) → se guarda como '' en vez de null. Algunas
+  // vistas de edición mandan '' → null para "limpiar", lo que rompía estas columnas.
+  for (const f of ['primerNombre', 'primerApellido']) {
+    if (body[f] === null) body[f] = '';
+  }
+
   const built = buildDynamicUpdate('PEOPLE', body, PEOPLE_UPDATE_FIELDS);
   if (!built) throw new ValidationError('No valid fields to update');
 

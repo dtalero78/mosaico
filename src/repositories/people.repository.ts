@@ -142,6 +142,11 @@ class PeopleRepositoryClass extends BaseRepository {
    * Dynamic update using field whitelist
    */
   async updateFields(id: string, body: Record<string, any>, allowedFields: string[]) {
+    // Columnas NOT NULL de PEOPLE: nunca escribir null (rompería la constraint). Un
+    // nombre/apellido vacío es válido → se guarda como '' (algunas vistas mandan '' → null).
+    for (const f of ['primerNombre', 'primerApellido']) {
+      if (body[f] === null) body[f] = '';
+    }
     const built = buildDynamicUpdate('PEOPLE', body, allowedFields);
     if (!built) return null;
     built.values.push(id);
