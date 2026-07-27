@@ -48,6 +48,18 @@ interface LookupItem {
   plataforma?: string | null
   contrato?: string | null
   estadoInactivo?: boolean | null
+  // Modos "apoderados": el destino (celular) es el teléfono del apoderado; estos campos son del beneficiario.
+  apoderado?: string | null
+  campaign?: string | null
+  curso?: string | null
+  salon?: string | null
+  esApoderado?: boolean
+}
+
+interface CursoRow {
+  campaign: string
+  tipoCurso: string
+  salon: string | null
 }
 
 interface SendResult {
@@ -61,7 +73,27 @@ interface SendResult {
 
 const MAX_RECIPIENTS = 300
 
-type Mode = 'individual' | 'masivo'
+type Mode = 'individual' | 'masivo' | 'apoderados-csv' | 'apoderados-filtro'
+
+/** Parsea un CSV de apoderados: columnas contrato + numeroId (con aliases). El teléfono se ignora. */
+function parseCsvApoderados(text: string): { contrato: string; numeroId: string }[] {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  if (lines.length === 0) return []
+  const sep = lines[0].includes(';') ? ';' : ','
+  const header = lines[0].split(sep).map(c => c.trim().toLowerCase())
+  const idAliases = ['numeroid', 'documento', 'id', 'cedula', 'cédula', 'idusuario', 'idbeneficiario']
+  const contratoAliases = ['contrato', 'nocontrato', 'numerocontrato', 'ncontrato']
+  const idxId = header.findIndex(h => idAliases.includes(h))
+  const idxContrato = header.findIndex(h => contratoAliases.includes(h))
+  if (idxId === -1) return []
+  return lines.slice(1).map(l => {
+    const cols = l.split(sep)
+    return {
+      contrato: idxContrato >= 0 ? (cols[idxContrato] || '').trim() : '',
+      numeroId: (cols[idxId] || '').trim(),
+    }
+  }).filter(r => r.numeroId)
+}
 
 /** Parsea un CSV simple: encabezado en la primera línea + datos. Acepta `,` o `;`. */
 function parseCsvNumeroIds(text: string): string[] {
@@ -98,6 +130,13 @@ export default function EnvioMensajesPage() {
   const [csvText, setCsvText] = useState('')
   const [fileName, setFileName] = useState('')
 
+  // Apoderados por filtro (campaña → curso → salón)
+  const [cursoRows, setCursoRows] = useState<CursoRow[]>([])
+  const [filtroCampaign, setFiltroCampaign] = useState('')
+  const [filtroCurso, setFiltroCurso] = useState('')
+  const [filtroSalon, setFiltroSalon] = useState('')
+  const [filtroExcede, setFiltroExcede] = useState<number | null>(null)
+
   // Lookup results
   const [lookupItems, setLookupItems] = useState<LookupItem[]>([])
   const [lookupLoading, setLookupLoading] = useState(false)
@@ -125,10 +164,32 @@ export default function EnvioMensajesPage() {
       .finally(() => setTemplatesLoading(false))
   }, [])
 
+  // Cargar cursos (para el filtro campaña/curso/salón) al entrar al modo filtro
+  useEffect(() => {
+    if (mode !== 'apoderados-filtro' || cursoRows.length > 0) return
+    fetch('/api/postgres/cursos-campaign', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setCursoRows((d.rows || []) as CursoRow[]))
+      .catch(() => toast.error('No se pudieron cargar los cursos'))
+  }, [mode, cursoRows.length])
+
   const selectedTemplate = useMemo(
     () => templates.find(t => t._id === selectedTemplateId) || null,
     [templates, selectedTemplateId],
   )
+
+  // Opciones en cascada del filtro (derivadas de cursos-campaign)
+  const filtroCampanias = useMemo(
+    () => Array.from(new Set(cursoRows.map(r => r.campaign))).sort().reverse(),
+    [cursoRows])
+  const filtroCursos = useMemo(
+    () => Array.from(new Set(cursoRows.filter(r => r.campaign === filtroCampaign).map(r => r.tipoCurso))).sort(),
+    [cursoRows, filtroCampaign])
+  const filtroSalones = useMemo(
+    () => Array.from(new Set(cursoRows
+      .filter(r => r.campaign === filtroCampaign && r.tipoCurso === filtroCurso)
+      .map(r => r.salon || ''))).filter(Boolean).sort(),
+    [cursoRows, filtroCampaign, filtroCurso])
 
   // Preview del mensaje (usa el primer destinatario válido seleccionado)
   const previewMessage = useMemo(() => {
@@ -204,6 +265,51 @@ export default function EnvioMensajesPage() {
       return
     }
     handleLookup(ids)
+  }
+
+  // ── Apoderados por CSV (contrato + numeroId) → envía al teléfono del apoderado (BD) ──
+  const handleApoderadosCsv = async () => {
+    if (!csvText.trim()) { toast.error('Carga primero un archivo CSV'); return }
+    const rows = parseCsvApoderados(csvText)
+    if (rows.length === 0) {
+      toast.error('El CSV no tiene columna de ID reconocible (numeroId/documento/id). Se recomienda además la columna contrato.')
+      return
+    }
+    if (rows.length > MAX_RECIPIENTS) { toast.error(`Máximo ${MAX_RECIPIENTS} filas. Recibidas: ${rows.length}`); return }
+    setLookupLoading(true); setResults(null); setFiltroExcede(null)
+    try {
+      const r = await fetch('/api/admin/envio-mensajes/lookup-apoderados', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows }),
+      })
+      const j = await r.json()
+      if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
+      setLookupItems(j.items as LookupItem[])
+      setSelectedNumeroIds(new Set((j.items as LookupItem[]).filter(i => i.valido).map(i => i.numeroId)))
+    } catch (e: any) { toast.error(e?.message || 'Error en lookup') }
+    finally { setLookupLoading(false) }
+  }
+
+  // ── Apoderados por filtro campaña/curso/salón → envía a los apoderados del alcance ──
+  const handleApoderadosFiltro = async () => {
+    setLookupLoading(true); setResults(null); setFiltroExcede(null)
+    try {
+      const r = await fetch('/api/admin/envio-mensajes/lookup-apoderados', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filtro: { campaign: filtroCampaign, tipoCurso: filtroCurso, salon: filtroSalon } }),
+      })
+      const j = await r.json()
+      if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
+      if (j.excedeLimite) {
+        setFiltroExcede(j.total); setLookupItems([])
+        toast.error(`El alcance tiene ${j.total} apoderados (máx ${MAX_RECIPIENTS}). Acota el filtro.`)
+        return
+      }
+      setLookupItems(j.items as LookupItem[])
+      setSelectedNumeroIds(new Set((j.items as LookupItem[]).filter((i: LookupItem) => i.valido).map((i: LookupItem) => i.numeroId)))
+      if ((j.items || []).length === 0) toast('Sin beneficiarios en ese alcance.')
+    } catch (e: any) { toast.error(e?.message || 'Error en lookup') }
+    finally { setLookupLoading(false) }
   }
 
   // ─────────────────────── Edición celular ───────────────────────
@@ -291,6 +397,7 @@ export default function EnvioMensajesPage() {
     setLookupItems([])
     setSelectedNumeroIds(new Set())
     setResults(null)
+    setFiltroCampaign(''); setFiltroCurso(''); setFiltroSalon(''); setFiltroExcede(null)
   }
 
   const itemsToShow = useMemo(
@@ -375,7 +482,25 @@ export default function EnvioMensajesPage() {
                 >
                   <UsersIcon className="h-8 w-8 text-indigo-600 mb-2" />
                   <h3 className="font-semibold text-gray-900 mb-1">Masivo</h3>
-                  <p className="text-sm text-gray-500">Sube un CSV con la lista de IDs. Máx {MAX_RECIPIENTS} por operación.</p>
+                  <p className="text-sm text-gray-500">Sube un CSV con la lista de IDs (al estudiante). Máx {MAX_RECIPIENTS} por operación.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('apoderados-csv')}
+                  className="text-left p-5 border-2 border-gray-200 rounded-2xl hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                >
+                  <UsersIcon className="h-8 w-8 text-purple-600 mb-2" />
+                  <h3 className="font-semibold text-gray-900 mb-1">Apoderados (CSV)</h3>
+                  <p className="text-sm text-gray-500">Sube un CSV con contrato + id. Envía al teléfono del apoderado de cada beneficiario.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('apoderados-filtro')}
+                  className="text-left p-5 border-2 border-gray-200 rounded-2xl hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                >
+                  <UsersIcon className="h-8 w-8 text-purple-600 mb-2" />
+                  <h3 className="font-semibold text-gray-900 mb-1">Apoderados por campaña/curso/salón</h3>
+                  <p className="text-sm text-gray-500">Elige campaña, curso y salón (o "todos"). Envía a los apoderados del alcance.</p>
                 </button>
               </div>
             </div>
@@ -486,6 +611,106 @@ export default function EnvioMensajesPage() {
             </div>
           )}
 
+          {/* Paso 3c: Apoderados por CSV (contrato + id) */}
+          {mode === 'apoderados-csv' && lookupItems.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <label htmlFor="csv-apo" className="block text-sm font-medium text-gray-700 mb-2">
+                Archivo CSV con contrato + id del usuario
+              </label>
+              <input
+                id="csv-apo"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleFileChange}
+                className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+              />
+              {fileName && (
+                <p className="text-xs text-gray-500 mt-2">📄 {fileName} · {csvText.split(/\r?\n/).filter(Boolean).length} línea(s)</p>
+              )}
+              <div className="mt-3 bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-900">
+                <strong>Formato:</strong> columnas <code className="bg-white px-1 rounded">contrato</code> y{' '}
+                <code className="bg-white px-1 rounded">numeroId</code> (aliases: <code>documento</code>, <code>id</code>).
+                Se valida que el <strong>beneficiario</strong> (contrato + id) exista en la plataforma; el mensaje se envía al{' '}
+                <strong>teléfono del apoderado</strong> guardado en la BD (el teléfono del CSV se ignora). Nunca se envía al estudiante.
+              </div>
+              {csvText && (
+                <button
+                  type="button"
+                  onClick={handleApoderadosCsv}
+                  disabled={lookupLoading}
+                  className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-semibold"
+                >
+                  <MagnifyingGlassIcon className="h-4 w-4" />
+                  {lookupLoading ? 'Procesando…' : 'Procesar CSV'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Paso 3d: Apoderados por campaña/curso/salón */}
+          {mode === 'apoderados-filtro' && lookupItems.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Alcance — apoderados de beneficiarios</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Campaña → curso → salón. Deja en "Todas/Todos" para ampliar el alcance. El mensaje se envía a los teléfonos de los apoderados.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Campaña</label>
+                  <select
+                    value={filtroCampaign}
+                    onChange={e => { setFiltroCampaign(e.target.value); setFiltroCurso(''); setFiltroSalon(''); setFiltroExcede(null) }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">Todas las campañas</option>
+                    {filtroCampanias.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
+                  <select
+                    value={filtroCurso}
+                    onChange={e => { setFiltroCurso(e.target.value); setFiltroSalon(''); setFiltroExcede(null) }}
+                    disabled={!filtroCampaign}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50"
+                  >
+                    <option value="">Todos los cursos</option>
+                    {filtroCursos.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Salón</label>
+                  <select
+                    value={filtroSalon}
+                    onChange={e => { setFiltroSalon(e.target.value); setFiltroExcede(null) }}
+                    disabled={!filtroCurso}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50"
+                  >
+                    <option value="">Todos los salones</option>
+                    {filtroSalones.map(s => <option key={s} value={s}>Salón {s}</option>)}
+                  </select>
+                </div>
+              </div>
+              {filtroExcede != null && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+                  El alcance seleccionado tiene <strong>{filtroExcede}</strong> apoderados y supera el máximo de {MAX_RECIPIENTS} por operación.
+                  Acota el filtro (elige un curso o un salón).
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleApoderadosFiltro}
+                disabled={lookupLoading}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-semibold"
+              >
+                <MagnifyingGlassIcon className="h-4 w-4" />
+                {lookupLoading ? 'Buscando…' : 'Buscar destinatarios'}
+              </button>
+            </div>
+          )}
+
           {/* Paso 4: Lista de destinatarios */}
           {lookupItems.length > 0 && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -553,8 +778,18 @@ export default function EnvioMensajesPage() {
                               <div className="text-[10px] text-gray-400">(de: {it.numeroIdOriginal})</div>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-gray-900">{fullName}</td>
-                          <td className="px-3 py-2 font-mono text-xs text-gray-700">{it.celular || <em className="text-red-600">—</em>}</td>
+                          <td className="px-3 py-2 text-gray-900">
+                            {fullName}
+                            {it.esApoderado && (it.campaign || it.curso || it.salon) && (
+                              <div className="text-[10px] text-gray-400">{[it.campaign, it.curso, it.salon && `Salón ${it.salon}`].filter(Boolean).join(' · ')}</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-gray-700">
+                            {it.celular || <em className="text-red-600">—</em>}
+                            {it.esApoderado && it.apoderado && (
+                              <div className="text-[10px] text-gray-400 font-sans">apod: {it.apoderado}</div>
+                            )}
+                          </td>
                           <td className="px-3 py-2 text-xs text-gray-700">{it.plataforma || '—'}</td>
                           <td className="px-3 py-2">
                             {it.valido ? (
