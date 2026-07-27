@@ -103,7 +103,24 @@ export async function htmlToPdfBuffer(html: string, opts: PdfOptions = {}): Prom
       const page = await browser.newPage();
       // El HTML del contrato es autocontenido (sin recursos externos), así que
       // 'load' basta; 'networkidle0' sólo añadiría segundos de espera.
-      await page.setContent(html, { waitUntil: 'load', timeout: 30_000 });
+      //
+      // Con `--single-process` el "main frame" de Chromium no está listo justo
+      // tras newPage() → setContent puede lanzar "Requesting main frame too early!".
+      // El frame se inicializa de forma asíncrona a los pocos ms, así que se
+      // reintenta con un pequeño delay (sólo ante ESE error; cualquier otro re-lanza).
+      let mainFrameErr: any = null;
+      for (let intento = 0; intento < 8; intento++) {
+        try {
+          await page.setContent(html, { waitUntil: 'load', timeout: 30_000 });
+          mainFrameErr = null;
+          break;
+        } catch (e: any) {
+          if (!/main frame too early/i.test(e?.message || '')) throw e;
+          mainFrameErr = e;
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
+      if (mainFrameErr) throw mainFrameErr;
       if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
 
       const pdf = await page.pdf({
