@@ -3,20 +3,20 @@
 const CONTACTS = [
   {
     label: 'Soporte Usuario',
-    phone: '56957208697',
+    phone: '56979819760',
     message: 'Hola, soy estudiante de MOSAICO y necesito ayuda.',
     color: 'bg-blue-100 text-blue-600',
   },
   {
     label: 'Soporte Academico',
-    phone: '56932631038',
+    phone: '56975482609',
     message: 'Hola, tengo una consulta academica.',
     color: 'bg-green-100 text-green-600',
   },
   {
-    label: 'Chile Recaudos',
-    phone: '56964077877',
-    message: 'Hola, tengo una consulta sobre recaudos Chile.',
+    label: 'Finanzas',
+    phone: '56982419141',
+    message: 'Hola, tengo una consulta de Finanzas.',
     color: 'bg-red-100 text-red-600',
   },
 ]
