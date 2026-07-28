@@ -91,7 +91,7 @@ export const POST = handler(async (_request, { params }) => {
     },
     body: JSON.stringify({
       html: htmlContent,
-      options: buildContractPdfOptions(titular.contrato),
+      options: buildContractPdfOptions(titular.contrato, titular.esCursoImpulsa === true),
     }),
   });
 

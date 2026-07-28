@@ -105,7 +105,7 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
   const htmlContent = buildContractHtml(contractText, titular.contrato);
 
   // 1. Generar el PDF con Chromium propio (sin API2PDF)
-  const pdf = await htmlToPdfBuffer(htmlContent, buildContractPdfOptions(titular.contrato));
+  const pdf = await htmlToPdfBuffer(htmlContent, buildContractPdfOptions(titular.contrato, titular.esCursoImpulsa === true));
 
   // Nombre del archivo en Drive (compartido con send-pdf y auto-approve).
   const baseName = buildContractFileBase(titular.contrato, titularId);

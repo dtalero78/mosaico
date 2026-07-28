@@ -58,20 +58,52 @@ function getLogoDataUri(): string | null {
   return logoCache;
 }
 
+// Logo de IMPULSA (313×168, ~5.5 KB): sólo se usa en el membrete de los contratos
+// IMPULSA, a la derecha, junto al logo de MOSAICO. Los contratos MOSAICO normales
+// NO lo cargan. Cacheado e incrustado como data URI igual que el de MOSAICO.
+let impulsaLogoCache: string | null | undefined;
+
+function getImpulsaLogoDataUri(): string | null {
+  if (impulsaLogoCache !== undefined) return impulsaLogoCache;
+  try {
+    const file = path.join(process.cwd(), 'public', 'logo-impulsa.png');
+    impulsaLogoCache = `data:image/png;base64,${fs.readFileSync(file).toString('base64')}`;
+  } catch (err: any) {
+    console.warn('[contract-pdf] no se pudo leer el logo de Impulsa:', err?.message || err);
+    impulsaLogoCache = null;
+  }
+  return impulsaLogoCache;
+}
+
 /** Escapa texto para incrustarlo en el HTML del membrete. */
 function esc(s: string): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Membrete: logo a la izquierda, Nº de contrato a la derecha. En cada página. */
-export function buildHeaderTemplate(contrato?: string | null): string {
+/**
+ * Membrete (en cada página).
+ * - Contrato MOSAICO normal: logo MOSAICO a la izquierda, Nº de contrato a la derecha.
+ * - Contrato IMPULSA (`isImpulsa`): logo MOSAICO a la izquierda, Nº de contrato al
+ *   centro y logo de IMPULSA a la derecha. NO afecta a los contratos MOSAICO.
+ */
+export function buildHeaderTemplate(contrato?: string | null, isImpulsa = false): string {
   const logo = getLogoDataUri();
   const img = logo
     ? `<img src="${logo}" style="height:9mm;width:auto;display:block" />`
     : `<span style="font-weight:bold;color:#3b1d8a">MOSAICO</span>`;
   const num = contrato ? `<span>Contrato ${esc(contrato)}</span>` : '<span></span>';
-  // -webkit-print-color-adjust:exact → sin esto Chrome puede lavar los colores.
-  return `<div style="width:100%;padding:4mm 15mm 0 20mm;display:flex;align-items:center;justify-content:space-between;font-family:Georgia,'Times New Roman',serif;font-size:8pt;color:#666;-webkit-print-color-adjust:exact">${img}${num}</div>`;
+  const wrap = (inner: string) =>
+    // -webkit-print-color-adjust:exact → sin esto Chrome puede lavar los colores.
+    `<div style="width:100%;padding:4mm 15mm 0 20mm;display:flex;align-items:center;justify-content:space-between;font-family:Georgia,'Times New Roman',serif;font-size:8pt;color:#666;-webkit-print-color-adjust:exact">${inner}</div>`;
+
+  if (isImpulsa) {
+    const impulsa = getImpulsaLogoDataUri();
+    const impulsaImg = impulsa
+      ? `<img src="${impulsa}" style="height:9mm;width:auto;display:block" />`
+      : `<span style="font-weight:bold;color:#c026d3">IMPULSA</span>`;
+    return wrap(`${img}${num}${impulsaImg}`);
+  }
+  return wrap(`${img}${num}`);
 }
 
 /** Pie: "Página X de Y" centrado. pageNumber/totalPages los rellena Chrome. */
@@ -80,11 +112,11 @@ export function buildFooterTemplate(): string {
 }
 
 /** Opciones de PDF comunes a los dos motores (puppeteer y API2PDF). */
-export function buildContractPdfOptions(contrato?: string | null) {
+export function buildContractPdfOptions(contrato?: string | null, isImpulsa = false) {
   return {
     printBackground: true,
     displayHeaderFooter: true,
-    headerTemplate: buildHeaderTemplate(contrato),
+    headerTemplate: buildHeaderTemplate(contrato, isImpulsa),
     footerTemplate: buildFooterTemplate(),
     // Los DOS motores esperan el margen en formato distinto y cada uno LEE el suyo
     // (ignora el otro), así que van ambos:

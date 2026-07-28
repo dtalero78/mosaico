@@ -67,7 +67,7 @@ export interface ContractArchiveResult {
 export async function buildContractHtmlForTitular(
   titularId: string,
   consent?: ConsentBlock | null
-): Promise<{ html: string; contrato: string } | { html: null; reason: string }> {
+): Promise<{ html: string; contrato: string; isImpulsa: boolean } | { html: null; reason: string }> {
   const titular = await queryOne(`SELECT * FROM "PEOPLE" WHERE "_id" = $1`, [titularId]);
   if (!titular) return { html: null, reason: 'titular no encontrado' };
   if (!titular.plataforma || !titular.contrato) {
@@ -119,7 +119,11 @@ export async function buildContractHtmlForTitular(
     asesorInfo,
   );
 
-  return { html: buildContractHtml(contractText, titular.contrato), contrato: titular.contrato };
+  return {
+    html: buildContractHtml(contractText, titular.contrato),
+    contrato: titular.contrato,
+    isImpulsa: titular.esCursoImpulsa === true,
+  };
 }
 
 /**
@@ -139,7 +143,7 @@ export async function generateAndArchiveContractPdf(
   const pdfRes = await fetch('https://v2018.api2pdf.com/chrome/html', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': API2PDF_KEY },
-    body: JSON.stringify({ html: built.html, options: buildContractPdfOptions(built.contrato) }),
+    body: JSON.stringify({ html: built.html, options: buildContractPdfOptions(built.contrato, built.isImpulsa) }),
   });
   if (!pdfRes.ok) return { ok: false, reason: `API2PDF ${pdfRes.status}`, pdfUrl: null, driveUpload: null };
 
