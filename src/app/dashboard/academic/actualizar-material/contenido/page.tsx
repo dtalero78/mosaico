@@ -15,6 +15,8 @@ interface Leccion {
   contenido: string
   actividadKahoot?: string
   actividadWordwall?: string
+  actividadKahootNombre?: string
+  actividadWordwallNombre?: string
   evaluacionModo?: string
   preguntasManual?: ManualQuestion[]
 }
@@ -26,6 +28,8 @@ function LeccionEditor({
   const [contenido, setContenido] = useState(leccion.contenido)
   const [kahoot, setKahoot] = useState(leccion.actividadKahoot || '')
   const [wordwall, setWordwall] = useState(leccion.actividadWordwall || '')
+  const [kahootNombre, setKahootNombre] = useState(leccion.actividadKahootNombre || '')
+  const [wordwallNombre, setWordwallNombre] = useState(leccion.actividadWordwallNombre || '')
   const [busy, setBusy] = useState(false)
   const [eqOpen, setEqOpen] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -38,6 +42,7 @@ function LeccionEditor({
   useEffect(() => {
     setDescription(leccion.description); setContenido(leccion.contenido)
     setKahoot(leccion.actividadKahoot || ''); setWordwall(leccion.actividadWordwall || '')
+    setKahootNombre(leccion.actividadKahootNombre || ''); setWordwallNombre(leccion.actividadWordwallNombre || '')
     setModo((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
     setPreguntas(leccion.preguntasManual || [])
   }, [leccion])
@@ -81,6 +86,7 @@ function LeccionEditor({
 
   const dirty = description !== leccion.description || contenido !== leccion.contenido
     || kahoot !== (leccion.actividadKahoot || '') || wordwall !== (leccion.actividadWordwall || '')
+    || kahootNombre !== (leccion.actividadKahootNombre || '') || wordwallNombre !== (leccion.actividadWordwallNombre || '')
 
   const save = async () => {
     setBusy(true)
@@ -92,6 +98,8 @@ function LeccionEditor({
           curso, code, step: leccion.step, description, contenido,
           actividadKahoot: kahoot.trim() || null,
           actividadWordwall: wordwall.trim() || null,
+          actividadKahootNombre: kahootNombre.trim() || null,
+          actividadWordwallNombre: wordwallNombre.trim() || null,
         }),
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
@@ -136,16 +144,22 @@ function LeccionEditor({
       )}
       <InsertEquationModal open={eqOpen} onClose={() => setEqOpen(false)} onInsert={insertSnippet} />
 
-      {/* Actividades externas (Kahoot / WordWall) */}
+      {/* Actividades externas (Kahoot / WordWall) — nombre visible + URL */}
       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Actividad Kahoot (URL)</label>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-gray-500">Actividad Kahoot</label>
+          <input value={kahootNombre} onChange={(e) => setKahootNombre(e.target.value)} type="text"
+            placeholder="Nombre visible (ej. Kahoot Lección 2)"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           <input value={kahoot} onChange={(e) => setKahoot(e.target.value)} type="url"
             placeholder="https://kahoot.it/…"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Actividad WordWall (URL)</label>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-gray-500">Actividad WordWall</label>
+          <input value={wordwallNombre} onChange={(e) => setWordwallNombre(e.target.value)} type="text"
+            placeholder="Nombre visible (ej. WordWall Lección 2)"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           <input value={wordwall} onChange={(e) => setWordwall(e.target.value)} type="url"
             placeholder="https://wordwall.net/…"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
@@ -206,6 +220,7 @@ export default function ContenidoCursoPage() {
   const [code, setCode] = useState('')
   const [descripcionModulo, setDescripcionModulo] = useState('')
   const [descripcionModuloOrig, setDescripcionModuloOrig] = useState('')
+  const [recursos, setRecursos] = useState<{ nombre: string; link: string }[]>([])
   const [lecciones, setLecciones] = useState<Leccion[]>([])
   const [loadingMod, setLoadingMod] = useState(false)
   const [loadingLec, setLoadingLec] = useState(false)
@@ -231,6 +246,7 @@ export default function ContenidoCursoPage() {
         setLecciones(d.lecciones || [])
         setDescripcionModulo(d.descripcionModulo || '')
         setDescripcionModuloOrig(d.descripcionModulo || '')
+        setRecursos(Array.isArray(d.recursos) ? d.recursos : [])
       })
       .catch(() => toast.error('Error al cargar contenido'))
       .finally(() => setLoadingLec(false))
@@ -244,11 +260,14 @@ export default function ContenidoCursoPage() {
       const r = await fetch('/api/postgres/cursos-contenido', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ curso, code, descripcionModulo }),
+        body: JSON.stringify({
+          curso, code, descripcionModulo,
+          recursos: recursos.map(x => ({ nombre: (x.nombre || '').trim(), link: (x.link || '').trim() })).filter(x => x.nombre || x.link),
+        }),
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
       setDescripcionModuloOrig(descripcionModulo)
-      toast.success('Descripción del módulo guardada')
+      toast.success('Módulo guardado (descripción + recursos)')
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar')
     } finally {
@@ -293,7 +312,7 @@ export default function ContenidoCursoPage() {
             <div className="border border-gray-200 rounded-xl p-4 bg-fuchsia-50/40">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="font-semibold text-gray-900">Descripción del módulo — {code}</h2>
-                <button type="button" onClick={saveModulo} disabled={savingMod || descripcionModulo === descripcionModuloOrig}
+                <button type="button" onClick={saveModulo} disabled={savingMod}
                   className="px-3 py-1.5 bg-accent text-white text-sm rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
                   {savingMod ? 'Guardando…' : 'Guardar módulo'}
                 </button>
@@ -301,6 +320,38 @@ export default function ContenidoCursoPage() {
               <p className="text-xs text-gray-500 mb-2">Se aplica a todas las lecciones del módulo.</p>
               <textarea value={descripcionModulo} onChange={(e) => setDescripcionModulo(e.target.value)} rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y" />
+
+              {/* Recursos del módulo (nombre + link) → pestaña "Recursos" del estudiante */}
+              <div className="mt-4 pt-3 border-t border-fuchsia-100">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm font-medium text-gray-700">Recursos del módulo</label>
+                  <button type="button" onClick={() => setRecursos((r) => [...r, { nombre: '', link: '' }])}
+                    className="text-xs px-2 py-1 rounded-md border border-fuchsia-200 text-fuchsia-700 bg-white hover:bg-fuchsia-50">
+                    + Agregar recurso
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">Links que el estudiante verá en la pestaña <strong>Recursos</strong> (aplican a todo el módulo).</p>
+                {recursos.length === 0 ? (
+                  <p className="text-xs text-gray-400">Sin recursos. Agrega uno con nombre y link.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recursos.map((rec, idx) => (
+                      <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_1.6fr_auto] gap-2 items-center">
+                        <input value={rec.nombre}
+                          onChange={(e) => setRecursos((r) => r.map((x, i) => i === idx ? { ...x, nombre: e.target.value } : x))}
+                          placeholder="Nombre (ej. Guía en PDF)"
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                        <input value={rec.link} type="url"
+                          onChange={(e) => setRecursos((r) => r.map((x, i) => i === idx ? { ...x, link: e.target.value } : x))}
+                          placeholder="https://…"
+                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                        <button type="button" onClick={() => setRecursos((r) => r.filter((_, i) => i !== idx))}
+                          className="text-sm px-2 py-2 rounded-md text-red-600 hover:bg-red-50" title="Quitar recurso">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Lecciones */}

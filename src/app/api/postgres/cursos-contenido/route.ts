@@ -12,10 +12,20 @@ interface Row {
   contenido: string | null;
   actividadKahoot: string | null;
   actividadWordwall: string | null;
+  actividadKahootNombre: string | null;
+  actividadWordwallNombre: string | null;
   descripcionModulo: string | null;
+  recursos: any;
   orden: number | null;
   evaluacionModo: string | null;
   preguntasManual: any;
+}
+
+function parseRecursos(raw: any): { nombre: string; link: string }[] {
+  const arr = Array.isArray(raw) ? raw : (typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return []; } })() : []);
+  return (Array.isArray(arr) ? arr : [])
+    .map((r: any) => ({ nombre: String(r?.nombre || '').trim(), link: String(r?.link || '').trim() }))
+    .filter((r) => r.nombre || r.link);
 }
 
 function parsePreguntas(raw: any): any[] {
@@ -40,7 +50,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (!curso || !code) throw new ValidationError('curso y code son requeridos');
 
   const r = await query<Row>(
-    `SELECT "step","description","contenido","actividadKahoot","actividadWordwall","descripcionModulo","orden","evaluacionModo","preguntasManual"
+    `SELECT "step","description","contenido","actividadKahoot","actividadWordwall",
+            "actividadKahootNombre","actividadWordwallNombre","descripcionModulo","recursos",
+            "orden","evaluacionModo","preguntasManual"
      FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
     [curso, code]
@@ -50,12 +62,16 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     curso,
     code,
     descripcionModulo: r.rows[0]?.descripcionModulo ?? '',
+    // Recursos son a nivel MÓDULO (uniformes en todas las lecciones); tomo el 1º con datos.
+    recursos: parseRecursos(r.rows.find((x) => parseRecursos(x.recursos).length)?.recursos ?? r.rows[0]?.recursos),
     lecciones: r.rows.map((x) => ({
       step: x.step,
       description: x.description ?? '',
       contenido: x.contenido ?? '',
       actividadKahoot: x.actividadKahoot ?? '',
       actividadWordwall: x.actividadWordwall ?? '',
+      actividadKahootNombre: x.actividadKahootNombre ?? '',
+      actividadWordwallNombre: x.actividadWordwallNombre ?? '',
       evaluacionModo: (x.evaluacionModo || 'IA').toUpperCase(),
       preguntasManual: parsePreguntas(x.preguntasManual),
     })),
@@ -82,25 +98,34 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
   let auditStep = step || '-';
 
   if (!step) {
-    // Modo módulo: descripcionModulo a todas las lecciones
-    if (!Object.prototype.hasOwnProperty.call(body, 'descripcionModulo')) {
-      throw new ValidationError('descripcionModulo requerido en modo módulo');
+    // Modo módulo: descripcionModulo y/o recursos → a TODAS las lecciones del módulo.
+    const hasDescMod = Object.prototype.hasOwnProperty.call(body, 'descripcionModulo');
+    const hasRecursos = Object.prototype.hasOwnProperty.call(body, 'recursos');
+    if (!hasDescMod && !hasRecursos) {
+      throw new ValidationError('descripcionModulo o recursos requerido en modo módulo');
     }
+    const sets: string[] = [];
+    const params: any[] = [curso, code];
+    let i = 3;
+    if (hasDescMod) { sets.push(`"descripcionModulo" = $${i++}`); params.push(body.descripcionModulo || null); }
+    if (hasRecursos) { sets.push(`"recursos" = $${i++}::jsonb`); params.push(JSON.stringify(parseRecursos(body.recursos))); }
+    sets.push(`"_updatedDate" = NOW()`);
     await query(
-      `UPDATE "NIVELES" SET "descripcionModulo" = $3, "_updatedDate" = NOW()
-       WHERE "curso" = $1 AND "code" = $2`,
-      [curso, code, body.descripcionModulo || null]
+      `UPDATE "NIVELES" SET ${sets.join(', ')} WHERE "curso" = $1 AND "code" = $2`,
+      params
     );
-    accion = 'DESCRIPCION_MODULO';
+    accion = hasRecursos ? (hasDescMod ? 'MODULO' : 'RECURSOS_MODULO') : 'DESCRIPCION_MODULO';
   } else {
     // Modo lección: description, contenido, evaluacionModo y/o preguntasManual
     const hasDesc = Object.prototype.hasOwnProperty.call(body, 'description');
     const hasCont = Object.prototype.hasOwnProperty.call(body, 'contenido');
     const hasKahoot = Object.prototype.hasOwnProperty.call(body, 'actividadKahoot');
     const hasWordwall = Object.prototype.hasOwnProperty.call(body, 'actividadWordwall');
+    const hasKahootN = Object.prototype.hasOwnProperty.call(body, 'actividadKahootNombre');
+    const hasWordwallN = Object.prototype.hasOwnProperty.call(body, 'actividadWordwallNombre');
     const hasModo = Object.prototype.hasOwnProperty.call(body, 'evaluacionModo');
     const hasPreg = Object.prototype.hasOwnProperty.call(body, 'preguntasManual');
-    if (!hasDesc && !hasCont && !hasKahoot && !hasWordwall && !hasModo && !hasPreg) throw new ValidationError('nada que actualizar');
+    if (!hasDesc && !hasCont && !hasKahoot && !hasWordwall && !hasKahootN && !hasWordwallN && !hasModo && !hasPreg) throw new ValidationError('nada que actualizar');
 
     const sets: string[] = [];
     const params: any[] = [curso, code, step];
@@ -109,6 +134,8 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
     if (hasCont) { sets.push(`"contenido" = $${i++}`); params.push(body.contenido ?? ''); }
     if (hasKahoot) { sets.push(`"actividadKahoot" = $${i++}`); params.push(body.actividadKahoot || null); }
     if (hasWordwall) { sets.push(`"actividadWordwall" = $${i++}`); params.push(body.actividadWordwall || null); }
+    if (hasKahootN) { sets.push(`"actividadKahootNombre" = $${i++}`); params.push(body.actividadKahootNombre || null); }
+    if (hasWordwallN) { sets.push(`"actividadWordwallNombre" = $${i++}`); params.push(body.actividadWordwallNombre || null); }
     if (hasModo) {
       const modo = String(body.evaluacionModo || 'IA').toUpperCase();
       if (modo !== 'IA' && modo !== 'MANUAL') throw new ValidationError('evaluacionModo inválido (IA | MANUAL)');

@@ -10,6 +10,7 @@ import {
   UserCircleIcon,
   SparklesIcon,
   ChevronDownIcon,
+  LinkIcon,
 } from '@heroicons/react/24/outline'
 import { useQuery } from 'react-query'
 import {
@@ -55,6 +56,7 @@ function PanelEstudianteContent() {
   const [showInstructivos, setShowInstructivos] = useState(false)
   const [showPerfil, setShowPerfil] = useState(false)
   const [showActividades, setShowActividades] = useState(false)
+  const [showRecursos, setShowRecursos] = useState(false)
 
   // Instructivos from API
   const instructivosQuery = useQuery(
@@ -232,18 +234,50 @@ function PanelEstudianteContent() {
                     <a href={actividadesQuery.data.kahoot} target="_blank" rel="noopener noreferrer"
                       onClick={() => setShowActividades(false)}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                      <span className="inline-block w-2 h-2 rounded-full bg-purple-500" /> Kahoot
+                      <span className="inline-block w-2 h-2 rounded-full bg-purple-500" /> {actividadesQuery.data.kahootNombre || 'Kahoot'}
                     </a>
                   )}
                   {actividadesQuery.data?.wordwall && (
                     <a href={actividadesQuery.data.wordwall} target="_blank" rel="noopener noreferrer"
                       onClick={() => setShowActividades(false)}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                      <span className="inline-block w-2 h-2 rounded-full bg-pink-500" /> WordWall
+                      <span className="inline-block w-2 h-2 rounded-full bg-pink-500" /> {actividadesQuery.data.wordwallNombre || 'WordWall'}
                     </a>
                   )}
                   {!actividadesQuery.data?.kahoot && !actividadesQuery.data?.wordwall && (
                     <p className="px-3 py-2 text-xs text-gray-400">Sin actividades para tu lección actual</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Grupo desplegable Recursos (links del módulo) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowRecursos(v => !v)}
+              className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <LinkIcon className="h-4 w-4" />
+              Recursos
+              <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${showRecursos ? 'rotate-180' : ''}`} />
+            </button>
+            {showRecursos && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowRecursos(false)} />
+                <div className="absolute right-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 max-h-72 overflow-y-auto">
+                  {(actividadesQuery.data?.recursos || []).length > 0 ? (
+                    actividadesQuery.data.recursos.map((rec: { nombre: string; link: string }, i: number) => (
+                      <a key={i} href={rec.link} target="_blank" rel="noopener noreferrer"
+                        onClick={() => setShowRecursos(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                        <span className="inline-block w-2 h-2 rounded-full bg-fuchsia-500 flex-shrink-0" />
+                        <span className="truncate">{rec.nombre || rec.link}</span>
+                      </a>
+                    ))
+                  ) : (
+                    <p className="px-3 py-2 text-xs text-gray-400">Sin recursos para tu módulo</p>
                   )}
                 </div>
               </>
