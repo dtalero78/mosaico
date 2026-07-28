@@ -4,6 +4,7 @@ import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { getAsesorInfo } from '@/lib/asesor';
 import { isDriveConfigured, uploadPdfToDrive } from '@/lib/gdrive';
+import { templatePlataformaFor } from '@/lib/contract-template';
 
 /**
  * Genera el PDF del contrato y lo archiva. Extraído de
@@ -84,14 +85,15 @@ export async function buildContractHtmlForTitular(
     [titular.contrato]
   );
 
+  const templatePlat = templatePlataformaFor(titular);
   let templateRow = await queryOne(
     `SELECT "template" FROM "ContractTemplates" WHERE "plataforma" = $1`,
-    [titular.plataforma]
+    [templatePlat]
   );
   if (!templateRow) {
     templateRow = await queryOne(
       `SELECT "template" FROM "ContractTemplates" WHERE LOWER("plataforma") = LOWER($1)`,
-      [titular.plataforma]
+      [templatePlat]
     );
   }
   if (!templateRow?.template) return { html: null, reason: 'sin plantilla para la plataforma' };

@@ -3,6 +3,7 @@ import { handler, successResponse } from '@/lib/api-helpers';
 import { NotFoundError } from '@/lib/errors';
 import { queryOne, queryMany } from '@/lib/postgres';
 import { getAsesorInfo } from '@/lib/asesor';
+import { templatePlataformaFor } from '@/lib/contract-template';
 
 export const GET = handler(async (_request, { params }) => {
   const titularId = params.id;
@@ -16,7 +17,7 @@ export const GET = handler(async (_request, { params }) => {
             "referenciaUno", "parentezcoRefUno", "telefonoRefUno",
             "referenciaDos", "parentezcoRefDos", "telefonoRefDos",
             "observacionesContrato", "consentimientoDeclarativo", "hashConsentimiento",
-            "medioPago", "ingresos", "empresa", "cargo"
+            "medioPago", "ingresos", "empresa", "cargo", "esCursoImpulsa"
      FROM "PEOPLE" WHERE "_id" = $1`,
     [titularId]
   );
@@ -49,17 +50,18 @@ export const GET = handler(async (_request, { params }) => {
     );
   }
 
-  // Load contract template
+  // Load contract template (IMPULSA usa plantilla propia; si no, la de su plataforma)
   let template: string | null = null;
-  if (titular.plataforma) {
+  const templatePlat = templatePlataformaFor(titular);
+  if (templatePlat) {
     let tplRow = await queryOne(
       `SELECT "template" FROM "ContractTemplates" WHERE "plataforma" = $1`,
-      [titular.plataforma]
+      [templatePlat]
     );
     if (!tplRow) {
       tplRow = await queryOne(
         `SELECT "template" FROM "ContractTemplates" WHERE LOWER("plataforma") = LOWER($1)`,
-        [titular.plataforma]
+        [templatePlat]
       );
     }
     template = tplRow?.template || null;

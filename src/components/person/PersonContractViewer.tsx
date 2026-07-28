@@ -5,6 +5,7 @@ import { EyeIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { api } from '@/hooks/use-api'
 import { fillContractTemplate, type ConsentDisplay } from '@/lib/contract-template-filler'
+import { templatePlataformaFor } from '@/lib/contract-template'
 
 interface PersonForViewer {
   _id: string
@@ -14,6 +15,7 @@ interface PersonForViewer {
   plataforma?: string
   tipoUsuario?: string
   titularId?: string | null
+  esCursoImpulsa?: boolean
 }
 
 interface Props {
@@ -58,7 +60,7 @@ export default function PersonContractViewer({ person }: Props) {
       const [contractData, templateRes, consentStatus] = await Promise.all([
         api.get(`/api/postgres/contracts/${titularId}`),
         api.get(
-          `/api/postgres/contracts/template?plataforma=${encodeURIComponent(person.plataforma || '')}`
+          `/api/postgres/contracts/template?plataforma=${encodeURIComponent(templatePlataformaFor(person))}`
         ),
         api.get(`/api/consent/${titularId}/status`).catch(() => null as ConsentDisplay | null),
       ])

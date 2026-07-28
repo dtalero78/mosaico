@@ -10,6 +10,7 @@ import { htmlToPdfBuffer } from '@/lib/pdf';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { uploadPdfToDrive, isDriveConfigured } from '@/lib/gdrive';
 import { putBuffer, deleteObject, getPresignedGetUrl } from '@/lib/spaces';
+import { templatePlataformaFor } from '@/lib/contract-template';
 
 const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
 
@@ -68,18 +69,19 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
       )
     : null;
 
-  // Template del contrato por plataforma (con fallback case-insensitive)
+  // Template del contrato (IMPULSA usa plantilla propia; si no, la de su plataforma)
+  const templatePlat = templatePlataformaFor(titular);
   let templateRow = await queryOne<{ template: string }>(
     `SELECT "template" FROM "ContractTemplates" WHERE "plataforma" = $1`,
-    [titular.plataforma]
+    [templatePlat]
   );
   if (!templateRow) {
     templateRow = await queryOne<{ template: string }>(
       `SELECT "template" FROM "ContractTemplates" WHERE LOWER("plataforma") = LOWER($1)`,
-      [titular.plataforma]
+      [templatePlat]
     );
   }
-  if (!templateRow?.template) throw new NotFoundError('ContractTemplate', titular.plataforma);
+  if (!templateRow?.template) throw new NotFoundError('ContractTemplate', templatePlat);
 
   // Datos de consentimiento (si existen)
   const consentRaw = titular.consentimientoDeclarativo;

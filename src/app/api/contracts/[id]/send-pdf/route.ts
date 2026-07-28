@@ -6,6 +6,7 @@ import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { getAsesorInfo } from '@/lib/asesor';
 import { archiveContractPdfFromUrl } from '@/services/contract-archive.service';
+import { templatePlataformaFor } from '@/lib/contract-template';
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
 // Línea propia de MOSAICO (+56 9 7981 9760). El env var manda si está seteado.
@@ -41,18 +42,19 @@ export const POST = handler(async (_request, { params }) => {
       )
     : null;
 
-  // 2. Fetch contract template for this platform
+  // 2. Fetch contract template (IMPULSA usa plantilla propia; si no, la de su plataforma)
+  const templatePlat = templatePlataformaFor(titular);
   let templateRow = await queryOne(
     `SELECT "template" FROM "ContractTemplates" WHERE "plataforma" = $1`,
-    [titular.plataforma]
+    [templatePlat]
   );
   if (!templateRow) {
     templateRow = await queryOne(
       `SELECT "template" FROM "ContractTemplates" WHERE LOWER("plataforma") = LOWER($1)`,
-      [titular.plataforma]
+      [templatePlat]
     );
   }
-  if (!templateRow?.template) throw new NotFoundError('ContractTemplate', titular.plataforma);
+  if (!templateRow?.template) throw new NotFoundError('ContractTemplate', templatePlat);
 
   // 3. Build consent data if available
   const consentRaw = titular.consentimientoDeclarativo;

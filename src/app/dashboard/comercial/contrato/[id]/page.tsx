@@ -26,6 +26,7 @@ import {
   PaperClipIcon,
 } from '@heroicons/react/24/outline'
 import { fillContractTemplate, type ConsentDisplay } from '@/lib/contract-template-filler'
+import { templatePlataformaFor } from '@/lib/contract-template'
 
 // ── Field definitions ──
 
@@ -343,7 +344,7 @@ export default function ContratoDetailPage() {
       setLoadingTemplate(true)
       setShowContractModal(true)
       const data = await api.get(
-        `/api/postgres/contracts/template?plataforma=${encodeURIComponent(titular.plataforma)}`
+        `/api/postgres/contracts/template?plataforma=${encodeURIComponent(templatePlataformaFor(titular))}`
       )
       templateCacheRef.current = data.template
       const filled = fillContractTemplate(data.template, titular, beneficiarios, financial, consentStatus || undefined, asesorInfo)
