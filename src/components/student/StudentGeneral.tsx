@@ -428,6 +428,10 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
               {student.step || '—'}
             </span>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Horario</label>
+            <p className="mt-1 text-sm text-gray-900">{(student as any).horarioCurso || '—'}</p>
+          </div>
           {student.asesor && (
             <div>
               <label className="block text-sm font-medium text-gray-700">Asesor</label>
