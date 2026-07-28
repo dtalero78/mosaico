@@ -313,7 +313,7 @@ export default function ContenidoCursoPage() {
               <div className="flex items-center justify-between mb-2">
                 <h2 className="font-semibold text-gray-900">Descripción del módulo — {code}</h2>
                 <button type="button" onClick={saveModulo} disabled={savingMod}
-                  className="px-3 py-1.5 bg-accent text-white text-sm rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
+                  className="px-4 py-1.5 bg-accent-600 text-white text-sm font-medium rounded-lg disabled:opacity-40 hover:bg-accent-700 transition-colors">
                   {savingMod ? 'Guardando…' : 'Guardar módulo'}
                 </button>
               </div>
