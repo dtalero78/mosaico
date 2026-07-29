@@ -254,13 +254,13 @@ export default function MaterialInteractivoPage() {
           <ChevronLeftIcon className="h-6 w-6" />
         </button>
 
-        <div className="flex-1 max-w-3xl bg-white rounded-lg shadow-xl overflow-hidden flex items-center justify-center" style={{ minHeight: 400 }}>
+        <div className="flex-1 max-w-5xl bg-white rounded-lg shadow-xl overflow-hidden flex items-center justify-center" style={{ minHeight: 400 }}>
           {currentUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={currentUrl}
               alt={`Página ${page}`}
-              className="max-h-[78vh] w-auto"
+              className="max-h-[78vh] max-w-full w-auto object-contain"
               draggable={false}
             />
           ) : (

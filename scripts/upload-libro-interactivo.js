@@ -11,10 +11,18 @@
  *     --pdf=./Beginner.pdf \
  *     [--titulo="Beginner — Let's Go Speak 2024"] \
  *     [--dpi=150] \
+ *     [--rotar=7:cw,9:cw,10:ccw] \
  *     [--apply]
  *
  * Dry-run por defecto (solo cuenta páginas + reporta). Con --apply convierte,
  * sube a Spaces y actualiza BD.
+ *
+ * --rotar: páginas apaisadas que en el PDF quedaron giradas (contenido de lado).
+ *   Se rotan tras convertir y antes de subir, para que queden derechas de forma
+ *   PERMANENTE aunque se re-suba el PDF. Formato N:cw|ccw|180 (cw=90° horario,
+ *   ccw=90° antihorario). Ej. YOJI 2026: `--rotar=7:cw,9:cw,10:ccw`.
+ *   Usa Chrome (puppeteer-core) porque el entorno no tiene ImageMagick/sharp;
+ *   requiere PUPPETEER_EXECUTABLE_PATH o Chrome instalado en ruta conocida.
  *
  * Requisitos:
  *   - Variable de entorno DATABASE_URL + DO_SPACES_* en .env.local
@@ -52,9 +60,27 @@ const PDF_PATH = args.pdf ? path.resolve(String(args.pdf)) : null;
 const TITULO_FLAG = args.titulo ? String(args.titulo) : null;
 const DPI = Number(args.dpi) || 150;
 const APPLY = !!args.apply;
+// --rotar=7:cw,9:cw,10:ccw  → páginas apaisadas que en el PDF quedaron giradas.
+// Se rotan tras convertir y antes de subir, para que queden derechas de forma
+// PERMANENTE (sobrevive a re-subir el PDF). cw=90°, ccw=-90°, 180=180°.
+const ROTAR = parseRotar(String(args.rotar || ''));
+
+function parseRotar(spec) {
+  const map = { cw: 90, horario: 90, ccw: -90, antihorario: -90, '180': 180 };
+  return spec.split(',').map(s => s.trim()).filter(Boolean).map(tok => {
+    const [pg, dir] = tok.split(':');
+    const n = parseInt(pg, 10);
+    const raw = String(dir || 'cw').toLowerCase();
+    const deg = raw in map ? map[raw] : parseInt(raw, 10);
+    if (!Number.isInteger(n) || ![90, -90, 180].includes(deg)) {
+      throw new Error(`--rotar inválido en "${tok}" (usa N:cw|ccw|180)`);
+    }
+    return { n, deg };
+  });
+}
 
 if (!CODIGO || !PDF_PATH) {
-  console.error('Uso: node scripts/upload-libro-interactivo.js --codigo=BEGINNER --pdf=./libro.pdf [--titulo="..."] [--dpi=150] [--apply]');
+  console.error('Uso: node scripts/upload-libro-interactivo.js --codigo=BEGINNER --pdf=./libro.pdf [--titulo="..."] [--dpi=150] [--rotar=7:cw,10:ccw] [--apply]');
   process.exit(1);
 }
 if (!fs.existsSync(PDF_PATH)) {
@@ -86,6 +112,52 @@ function run(cmd, args) {
       else reject(new Error(`${cmd} exit ${code}: ${stderr.slice(0, 200)}`));
     });
   });
+}
+
+/** Resuelve el ejecutable de Chrome/Chromium (env var o rutas conocidas). */
+function resolveChrome() {
+  const cands = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    'C:/Program Files/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+    '/usr/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/google-chrome',
+  ].filter(Boolean);
+  const found = cands.find(p => { try { return fs.existsSync(p); } catch { return false; } });
+  if (!found) throw new Error('No se encontró Chrome. Define PUPPETEER_EXECUTABLE_PATH.');
+  return found;
+}
+
+/**
+ * Rota en su sitio las páginas apaisadas (page-NNN.jpg del tmpDir) con Chrome
+ * (canvas). No hay ImageMagick/sharp en el entorno; puppeteer-core sí está.
+ */
+async function rotatePagesInPlace(rotar, tmpDir, totalPaginas) {
+  const puppeteer = require('puppeteer-core');
+  const browser = await puppeteer.launch({
+    executablePath: resolveChrome(), headless: 'new', args: ['--no-sandbox'],
+  });
+  try {
+    const pg = await browser.newPage();
+    for (const { n, deg } of rotar) {
+      if (n < 1 || n > totalPaginas) { console.log(`   ⚠ pág ${n} fuera de rango, se omite`); continue; }
+      const file = path.join(tmpDir, `page-${String(n).padStart(3, '0')}.jpg`);
+      const dataUri = 'data:image/jpeg;base64,' + fs.readFileSync(file).toString('base64');
+      const out = await pg.evaluate(async (uri, d) => {
+        const img = new Image(); img.src = uri; await img.decode();
+        const c = document.createElement('canvas'); const ctx = c.getContext('2d');
+        if (Math.abs(d) === 90) { c.width = img.height; c.height = img.width; }
+        else { c.width = img.width; c.height = img.height; }
+        ctx.translate(c.width / 2, c.height / 2);
+        ctx.rotate(d * Math.PI / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        return c.toDataURL('image/jpeg', 0.92);
+      }, dataUri, deg);
+      fs.writeFileSync(file, Buffer.from(out.split(',')[1], 'base64'));
+      console.log(`   ✅ pág ${n} rotada ${deg}°`);
+    }
+  } finally {
+    await browser.close();
+  }
 }
 
 async function checkPdftoppm() {
@@ -151,12 +223,24 @@ async function checkPdftoppm() {
       throw new Error('pdftoppm no generó ninguna imagen');
     }
 
+    if (ROTAR.length) {
+      console.log(`   Páginas a rotar: ${ROTAR.map(r => `${r.n}(${r.deg}°)`).join(', ')}`);
+    }
+
     if (!APPLY) {
       console.log('🟡 DRY-RUN: no se subió a Spaces ni se tocó BD.');
       console.log(`   En modo --apply se subirá ${totalPaginas} JPGs a:`);
       console.log(`   materials/interactive/${CODIGO}/page-001.jpg ... page-${String(totalPaginas).padStart(3, '0')}.jpg`);
+      if (ROTAR.length) console.log(`   (rotando ${ROTAR.length} página(s) apaisada(s) antes de subir)`);
       console.log(`   Y se hará UPSERT en LIBROS_INTERACTIVOS con totalPaginas=${totalPaginas}.\n`);
       return;
+    }
+
+    // 1b) Rotar páginas apaisadas (--rotar). Usa Chrome (canvas) porque el entorno
+    //     no tiene ImageMagick/sharp; re-encodea el JPG derecho, en su sitio.
+    if (ROTAR.length) {
+      console.log(`\n1b) Rotando ${ROTAR.length} página(s) apaisada(s)…`);
+      await rotatePagesInPlace(ROTAR, tmpDir, totalPaginas);
     }
 
     // 2) S3 client
