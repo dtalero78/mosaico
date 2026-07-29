@@ -118,6 +118,25 @@ export default function MigrarContratoPage() {
   const [cursosCampaign, setCursosCampaign] = useState<CursoRow[]>([])
   const cursosVisibles = useMemo(() => cursosVisiblesContrato(cursosCampaign, false), [cursosCampaign])
 
+  // Salón del curso a partir de (campaña, curso, horario) — el beneficiario guarda
+  // campaign/tipoCurso/horarioCurso pero no el salón, que vive en el catálogo.
+  const salonFor = (campaign?: string, tipoCurso?: string, horarioCurso?: string): string => {
+    const r = cursosCampaign.find(
+      x => x.campaign === campaign && x.tipoCurso === tipoCurso && x.horarioCurso === horarioCurso
+    )
+    return (r?.salon || '').toString()
+  }
+  // Resumen "Campaña · Curso · Salón N · Horario" de un curso (para las tarjetas).
+  const cursoResumen = (campaign?: string, tipoCurso?: string, horarioCurso?: string): string => {
+    const salon = salonFor(campaign, tipoCurso, horarioCurso)
+    return [
+      campaign || '—',
+      tipoCurso || '—',
+      salon ? `Salón ${salon}` : null,
+      horarioCurso || null,
+    ].filter(Boolean).join(' · ')
+  }
+
   // Step 6 – Financiero
   const [financial, setFinancial] = useState({
     totalPlan: 0, pagoInscripcion: 0, saldo: 0,
@@ -755,7 +774,10 @@ export default function MigrarContratoPage() {
                   )}
                   {beneficiarios.map((b, i) => (
                     <div key={i} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm">
-                      <span className="font-medium">{b.primerNombre} {b.primerApellido} — ID: {b.numeroId}</span>
+                      <span>
+                        <span className="font-medium">{b.primerNombre} {b.primerApellido} — ID: {b.numeroId}</span>
+                        <span className="block text-xs text-gray-500">{cursoResumen(b.campaign, b.tipoCurso, b.horarioCurso)}</span>
+                      </span>
                       <button
                         type="button"
                         onClick={() => setBeneficiarios(prev => prev.filter((_, idx) => idx !== i))}
@@ -964,10 +986,16 @@ export default function MigrarContratoPage() {
                 <div className="bg-gray-50 rounded-lg p-4 space-y-1">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Beneficiarios ({totalBenef})</p>
                   {titularEsBeneficiario && (
-                    <p className="text-sm text-gray-700">• {titular.primerNombre} {titular.primerApellido} <span className="text-blue-600 text-xs">(Titular)</span></p>
+                    <div className="text-sm text-gray-700">
+                      <p>• {titular.primerNombre} {titular.primerApellido} <span className="text-blue-600 text-xs">(Titular)</span></p>
+                      <p className="text-xs text-gray-500 ml-3">{cursoResumen(titular.campaign, titular.tipoCurso, titular.horarioCurso)}</p>
+                    </div>
                   )}
                   {beneficiarios.map((b, i) => (
-                    <p key={i} className="text-sm text-gray-700">• {b.primerNombre} {b.primerApellido} — ID: {b.numeroId}</p>
+                    <div key={i} className="text-sm text-gray-700">
+                      <p>• {b.primerNombre} {b.primerApellido} — ID: {b.numeroId}</p>
+                      <p className="text-xs text-gray-500 ml-3">{cursoResumen(b.campaign, b.tipoCurso, b.horarioCurso)}</p>
+                    </div>
                   ))}
                   {totalBenef === 0 && <p className="text-sm text-gray-500 italic">Sin beneficiarios</p>}
                 </div>
