@@ -100,8 +100,22 @@ class LibrosInteractivosServiceClass {
   private async resolveNivelLibro(nivelCode: string): Promise<NivelLibroResolved | null> {
     const cached = getNivelCached(nivelCode);
     if (cached !== undefined) return cached;
+
+    let value: NivelLibroResolved | null = null;
+    // 1) Binding por rangos en NIVELES (modelo LGS: BN1..F3 → BEGINNER con rango).
     const row = await NivelLibroBindingRepository.findNivelWithLibro(nivelCode);
-    const value = row ?? null;
+    if (row && row.libro) {
+      value = row;
+    } else {
+      // 2) MOSAICO: un libro por CURSO, sin binding de rangos. El código recibido
+      //    es el curso (YOJI, OKINA, …) y coincide con LIBROS_INTERACTIVOS.codigo
+      //    → se sirve el libro completo (rango 1..totalPaginas).
+      const libro = await LibrosInteractivosRepository.findByCodigo(nivelCode);
+      if (libro) {
+        value = { nivelCode, libroPaginaInicio: null, libroPaginaFin: null, libro };
+      }
+    }
+
     setNivelCached(nivelCode, value);
     return value;
   }

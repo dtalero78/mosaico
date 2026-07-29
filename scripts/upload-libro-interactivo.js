@@ -215,9 +215,8 @@ async function checkPdftoppm() {
     }
 
     console.log('🎉 Listo. Próximos pasos:');
-    console.log('   1. Configura los rangos por nivel en /admin/actualizar-material/interactivo');
-    console.log('   2. Sube los audios desde la misma página (drop MP3 con número de página)');
-    console.log('   3. Activa el feature flag desde el admin para que aparezca el botón en el panel estudiante\n');
+    console.log('   1. (Opcional) Sube los audios por página desde /dashboard/academic/actualizar-material/interactivo');
+    console.log('   2. El libro aparece en el panel del estudiante del curso en cuanto tiene páginas (ya no hay feature flag).\n');
 
   } catch (err) {
     console.error('\n❌ Error:', err.message);
