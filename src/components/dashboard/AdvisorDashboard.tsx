@@ -296,8 +296,8 @@ export default function AdvisorDashboard() {
         <KpiCard label="Talleres"     value={kpis.clubs}     color="bg-green-50   border-green-300   text-green-700" />
         <KpiCard label="Welcome"   value={kpis.welcome}   color="bg-purple-50  border-purple-300  text-purple-700" />
         <KpiCard label="Conducted" value={kpis.conducted} color="bg-sky-50     border-sky-300     text-sky-700" />
-        <KpiCard label="Canceled"  value={kpis.canceled}  color="bg-red-50     border-red-300     text-red-700" />
-        <KpiCard label="Suspended" value={kpis.suspended} color="bg-yellow-50  border-yellow-300  text-yellow-800" />
+        <KpiCard label="Canceladas"  value={kpis.canceled}  color="bg-red-50     border-red-300     text-red-700" />
+        <KpiCard label="Suspendidas" value={kpis.suspended} color="bg-yellow-50  border-yellow-300  text-yellow-800" />
       </div>
 
       {/* Heatmaps Día × Hora del mes — Conducted (azul) | Canceladas (rojo o mensaje) */}
@@ -338,8 +338,8 @@ export default function AdvisorDashboard() {
           total={totalEstados}
           segments={[
             { label: 'Conducted', value: kpis.conducted, color: '#0ea5e9' },
-            { label: 'Canceled',  value: kpis.canceled,  color: '#ef4444' },
-            { label: 'Suspended', value: kpis.suspended, color: '#eab308' },
+            { label: 'Canceladas',  value: kpis.canceled,  color: '#ef4444' },
+            { label: 'Suspendidas', value: kpis.suspended, color: '#eab308' },
           ]}
         />
       </div>

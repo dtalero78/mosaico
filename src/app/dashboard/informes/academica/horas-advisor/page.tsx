@@ -54,6 +54,13 @@ const STATE_COLORS: Record<string, string> = {
   cancelled: '#ef4444',
 }
 
+// Etiquetas visibles en español (la data del API sigue en inglés: conducted/…).
+const STATE_LABELS: Record<string, string> = {
+  conducted: 'Conducted',
+  suspended: 'Suspendidas',
+  cancelled: 'Canceladas',
+}
+
 const TYPE_COLORS: Record<string, string> = {
   sesiones:  '#3b82f6',
   jumps:     '#ef4444',
@@ -107,7 +114,7 @@ function DonutChart({ data }: { data: { name: string; value: number }[] }) {
           <div key={i} className="flex items-center gap-2 text-xs">
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
               style={{ backgroundColor: STATE_COLORS[seg.name.toLowerCase()] ?? '#9ca3af' }} />
-            <span className="text-gray-600 w-20">{seg.name}</span>
+            <span className="text-gray-600 w-20">{STATE_LABELS[seg.name.toLowerCase()] ?? seg.name}</span>
             <span className="font-semibold text-gray-900 w-10 text-right">{seg.value.toLocaleString()}</span>
             <span className="text-gray-400">{((seg.value / total) * 100).toFixed(1)}%</span>
           </div>
@@ -182,8 +189,8 @@ export default function HorasAdvisorPage() {
         { header: 'Essential',  accessor: r => r.essential },
         { header: 'Otros',      accessor: r => r.otros },
         { header: 'Conducted',  accessor: r => r.conducted },
-        { header: 'Suspended',  accessor: r => r.suspended },
-        { header: 'Cancelled',  accessor: r => r.cancelled },
+        { header: 'Suspendidas',  accessor: r => r.suspended },
+        { header: 'Canceladas',  accessor: r => r.cancelled },
         { header: 'Total Booking', accessor: r => r.total },
       ],
       `horas-advisor_${fechaInicio}_${fechaFin}`
@@ -281,8 +288,8 @@ export default function HorasAdvisorPage() {
           <KpiCard label="Advisors Activos" value={(totals?.advisorsActivos ?? 0).toLocaleString()} color="#6366f1" />
           <KpiCard label="Total Sesiones" value={(totals?.total ?? 0).toLocaleString()} color="#3b82f6" />
           <KpiCard label="Conducted" value={(totals?.conducted ?? 0).toLocaleString()} color={STATE_COLORS.conducted} />
-          <KpiCard label="Suspended" value={(totals?.suspended ?? 0).toLocaleString()} color={STATE_COLORS.suspended} />
-          <KpiCard label="Cancelled" value={(totals?.cancelled ?? 0).toLocaleString()} color={STATE_COLORS.cancelled} />
+          <KpiCard label="Suspendidas" value={(totals?.suspended ?? 0).toLocaleString()} color={STATE_COLORS.suspended} />
+          <KpiCard label="Canceladas" value={(totals?.cancelled ?? 0).toLocaleString()} color={STATE_COLORS.cancelled} />
         </div>
 
         {/* Fila 1: barras horizontales por advisor (izq) + dona por estado (der) */}
@@ -309,8 +316,8 @@ export default function HorasAdvisorPage() {
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="conducted" name="Conducted" fill={STATE_COLORS.conducted} stackId="a" />
-                  <Bar dataKey="suspended" name="Suspended" fill={STATE_COLORS.suspended} stackId="a" />
-                  <Bar dataKey="cancelled" name="Cancelled" fill={STATE_COLORS.cancelled} stackId="a" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="suspended" name="Suspendidas" fill={STATE_COLORS.suspended} stackId="a" />
+                  <Bar dataKey="cancelled" name="Canceladas" fill={STATE_COLORS.cancelled} stackId="a" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -387,7 +394,7 @@ export default function HorasAdvisorPage() {
               <table className="w-full text-sm whitespace-nowrap">
                 <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                   <tr>
-                    {['#', 'Advisor', 'NumeroId', 'Sesiones', 'Jumps', 'Training', 'Talleres', 'Welcome', 'Essential', 'Otros', 'Conducted', 'Suspended', 'Cancelled', 'Total'].map(h => (
+                    {['#', 'Advisor', 'NumeroId', 'Sesiones', 'Jumps', 'Training', 'Talleres', 'Welcome', 'Essential', 'Otros', 'Conducted', 'Suspendidas', 'Canceladas', 'Total'].map(h => (
                       <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>

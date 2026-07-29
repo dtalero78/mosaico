@@ -453,8 +453,8 @@ export function ControlHorasContent({
           <LegendDot color="bg-blue-500"   label="SESSION" />
           <LegendDot color="bg-green-500"  label="CLUB" />
           <LegendDot color="bg-purple-500" label="WELCOME" />
-          <LegendDot color="bg-yellow-500" label="Suspended" />
-          <LegendDot color="bg-red-500"    label="Canceled" />
+          <LegendDot color="bg-yellow-500" label="Suspendidas" />
+          <LegendDot color="bg-red-500"    label="Canceladas" />
         </div>
       </div>
 
@@ -474,8 +474,8 @@ export function ControlHorasContent({
           <TotalCard label="Talleres"     value={totales.clubs}     color="bg-green-50 border-green-300 text-green-700" />
           <TotalCard label="Welcome"   value={totales.welcome}   color="bg-purple-50 border-purple-300 text-purple-700" />
           <TotalCard label="Conducted" value={totales.conducted} color="bg-sky-50   border-sky-300   text-sky-700" />
-          <TotalCard label="Canceled"  value={totales.canceled}  color="bg-red-50   border-red-300   text-red-700" />
-          <TotalCard label="Suspended" value={totales.suspended} color="bg-yellow-50 border-yellow-300 text-yellow-800" />
+          <TotalCard label="Canceladas"  value={totales.canceled}  color="bg-red-50   border-red-300   text-red-700" />
+          <TotalCard label="Suspendidas" value={totales.suspended} color="bg-yellow-50 border-yellow-300 text-yellow-800" />
         </div>
       )}
 
@@ -626,7 +626,11 @@ function colorClass(c: EventCard): string {
 }
 
 function stateLabel(c: EventCard): string {
-  if (c.kind === 'historico') return c.estado
+  if (c.kind === 'historico') {
+    return c.estado === 'Canceled' ? 'Cancelada'
+      : c.estado === 'Suspended' ? 'Suspendida'
+      : c.estado
+  }
   return c.sesionCerrada ? 'Cerrada' : 'Conducted'
 }
 
