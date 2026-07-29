@@ -33,8 +33,6 @@ interface AudioInfo {
 
 interface Metadata {
   available: boolean
-  featureActive?: boolean
-  previewMode?: boolean
   libroCodigo?: string
   libroTitulo?: string
   totalPaginas?: number
@@ -83,7 +81,7 @@ export default function MaterialInteractivoPage() {
           const json: Metadata = await r.json()
           if (cancelled) return
           if (!json?.available) {
-            setMeta({ available: false, featureActive: json?.featureActive })
+            setMeta({ available: false })
           } else {
             setMeta(json)
           }
@@ -206,9 +204,7 @@ export default function MaterialInteractivoPage() {
             Material interactivo no disponible
           </h2>
           <p className="text-sm text-gray-600 mb-4">
-            {meta.featureActive === false
-              ? 'La nueva versión todavía no está habilitada para tu nivel. Usa "Material Interactivo (clásico)" desde el panel.'
-              : 'Tu nivel aún no tiene un libro interactivo configurado. Avisa al equipo académico.'}
+            Tu curso aún no tiene un libro interactivo cargado. Avisa al equipo académico.
           </p>
           <button type="button" onClick={() => router.push('/panel-estudiante')} className="text-sm text-indigo-600 hover:underline">
             ← Volver al panel
@@ -228,13 +224,6 @@ export default function MaterialInteractivoPage() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* Banner Preview (solo admin que entró con ?preview=1) */}
-      {meta.previewMode && (
-        <div className="bg-amber-100 border-b border-amber-300 text-amber-900 text-xs text-center py-1.5 px-3">
-          🧪 <strong>Modo PREVIEW</strong> — el feature flag está OFF; estás viendo el visor como admin. Los estudiantes todavía no lo ven.
-        </div>
-      )}
-
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between shadow-sm">
         <button

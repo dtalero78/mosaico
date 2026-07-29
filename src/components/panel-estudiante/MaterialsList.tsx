@@ -4,28 +4,11 @@ import { useQuery } from 'react-query'
 import {
   ArrowDownTrayIcon,
   BookOpenIcon,
-  GlobeAltIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
 
-const INTERACTIVE_MATERIAL_URLS: Record<string, string> = {
-  'BN1': 'https://www.lgsplataforma.com/material-bn1',
-  'BN2': 'https://www.lgsplataforma.com/material-bn2',
-  'BN3': 'https://www.lgsplataforma.com/material-bn3',
-  'P1':  'https://www.lgsplataforma.com/material-p1',
-  'P2':  'https://www.lgsplataforma.com/material-p2',
-  'P3':  'https://www.lgsplataforma.com/material-p3',
-  'F1':  'https://www.lgsplataforma.com/material-f1',
-  'F2':  'https://www.lgsplataforma.com/material-f2',
-  'F3':  'https://www.lgsplataforma.com/material-f3',
-}
-
 function normalizeNivelCode(nivel: string): string {
   return (nivel || '').replace(/\s*JUMP\s*/i, '').trim().toUpperCase()
-}
-
-function getInteractiveMaterialUrl(nivel: string): string | null {
-  return INTERACTIVE_MATERIAL_URLS[normalizeNivelCode(nivel)] || null
 }
 
 interface MaterialsListProps {
@@ -38,10 +21,9 @@ export default function MaterialsList({ data, isLoading }: MaterialsListProps) {
   const nivel = data?.nivel || ''
   const nivelNormalizado = normalizeNivelCode(nivel)
 
-  // Feature flag check: ¿está disponible el visor v2 (LGS) para este nivel?
-  // React Query con staleTime 5 min — evita queries innecesarias en navegacion
-  // interna y re-renders del componente. Solo refetch al cabo de 5 min o al
-  // hacer un hard refresh del navegador.
+  // ¿El curso tiene material interactivo (libro con páginas) cargado?
+  // React Query con staleTime 5 min — evita queries innecesarias en navegación
+  // interna y re-renders del componente.
   const { data: libroData } = useQuery(
     ['libros-interactivos-availability', nivelNormalizado],
     () =>
@@ -54,7 +36,7 @@ export default function MaterialsList({ data, isLoading }: MaterialsListProps) {
       refetchOnWindowFocus: false,
     }
   )
-  const v2Available: boolean = Boolean(libroData?.available)
+  const interactivoDisponible: boolean = Boolean(libroData?.available)
 
   if (isLoading) {
     return (
@@ -89,16 +71,14 @@ export default function MaterialsList({ data, isLoading }: MaterialsListProps) {
     }
   }
 
-  const classicUrl = getInteractiveMaterialUrl(nivel)
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
       <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
         Material - {nivel}
       </h3>
 
-      {/* v2 (LGS) — solo si el flag global está ON y el nivel tiene libro configurado */}
-      {v2Available && (
+      {/* Material interactivo del curso — si el libro tiene páginas cargadas */}
+      {interactivoDisponible && (
         <a
           href={`/panel-estudiante/material-interactivo/${encodeURIComponent(nivelNormalizado)}`}
           className="flex items-center gap-3 p-3 mb-3 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors group border border-emerald-200"
@@ -108,27 +88,7 @@ export default function MaterialsList({ data, isLoading }: MaterialsListProps) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-emerald-900">Material Interactivo</p>
-            <p className="text-xs text-emerald-600">{nivelNormalizado} — nueva versión</p>
-          </div>
-        </a>
-      )}
-
-      {/* Wix (clásico) — sigue mientras dure la coexistencia */}
-      {classicUrl && (
-        <a
-          href={classicUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 p-3 mb-3 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors group border border-indigo-200"
-        >
-          <div className="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200">
-            <GlobeAltIcon className="h-5 w-5 text-indigo-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-indigo-900">
-              {v2Available ? 'Material Interactivo (clásico)' : 'Material Interactivo'}
-            </p>
-            <p className="text-xs text-indigo-500">{nivel}</p>
+            <p className="text-xs text-emerald-600">{nivelNormalizado}</p>
           </div>
         </a>
       )}

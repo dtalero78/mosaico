@@ -11,8 +11,10 @@
  *  - Ver/editar los rangos de páginas por nivel (BN1=1..100, etc.).
  *  - Subir audios MP3 por página (presigned PUT) y asociarlos a la BD.
  *  - Eliminar un audio asignado.
- *  - Activar/desactivar el feature flag global (con la consigna de hacer
- *    la prueba con direcciones internas antes de habilitarlo).
+ *
+ * En MOSAICO hay UN material interactivo por curso (sin feature flag ni
+ * coexistencia con Wix): el libro se ve en el panel del estudiante en cuanto
+ * tiene páginas cargadas.
  *
  * NO incluye conversión PDF → imágenes — eso lo hace el script local
  * `scripts/upload-libro-interactivo.js`. Esta página muestra una nota con
@@ -27,12 +29,8 @@ import { PermissionGuard } from '@/components/permissions'
 import { AcademicoPermission } from '@/types/permissions'
 import {
   BookOpenIcon,
-  SpeakerWaveIcon,
   TrashIcon,
-  PlusIcon,
   ArrowUpTrayIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
   PencilSquareIcon,
 } from '@heroicons/react/24/outline'
 
@@ -114,11 +112,9 @@ export default function ActualizarMaterialInteractivoPage() {
 
 function Content() {
   const [libros, setLibros] = useState<LibroAdmin[]>([])
-  const [featureActive, setFeatureActive] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedCodigo, setExpandedCodigo] = useState<string | null>(null)
-  const [savingFlag, setSavingFlag] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -126,7 +122,6 @@ function Content() {
     try {
       const j = await jsonFetchRetry('/api/admin/libros-interactivos')
       setLibros(j.libros || [])
-      setFeatureActive(Boolean(j.featureActive))
     } catch (e: any) {
       setError(e?.message || 'Error')
     } finally {
@@ -135,22 +130,6 @@ function Content() {
   }
 
   useEffect(() => { load() }, [])
-
-  const toggleFlag = async () => {
-    setSavingFlag(true)
-    try {
-      const j = await jsonFetchRetry('/api/admin/libros-interactivos/feature-flag', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: !featureActive }),
-      })
-      setFeatureActive(j.active)
-    } catch (e: any) {
-      alert(e?.message || 'Error')
-    } finally {
-      setSavingFlag(false)
-    }
-  }
 
   return (
     <div className="max-w-6xl mx-auto py-6 px-4">
@@ -161,32 +140,6 @@ function Content() {
       <p className="text-sm text-gray-500 mb-6">
         Gestión de los libros que verá el estudiante en el panel. En MOSAICO hay <strong>un libro por curso</strong> (YOJI, OKINA, KODOMO, DANSHI, SENPAI, IMPULSA); cada libro se sube una vez con el script de carga.
       </p>
-
-      {/* Feature flag */}
-      <div className={`rounded-xl border-l-4 p-4 mb-6 ${featureActive ? 'bg-emerald-50 border-emerald-500' : 'bg-amber-50 border-amber-500'}`}>
-        <div className="flex items-start gap-3">
-          {featureActive
-            ? <CheckCircleIcon className="h-6 w-6 text-emerald-600 flex-shrink-0" />
-            : <ExclamationTriangleIcon className="h-6 w-6 text-amber-600 flex-shrink-0" />}
-          <div className="flex-1">
-            <p className={`text-sm font-semibold ${featureActive ? 'text-emerald-900' : 'text-amber-900'}`}>
-              {featureActive
-                ? 'Feature ACTIVO — los estudiantes ven el botón nuevo (LGS) además del clásico (Wix).'
-                : 'Feature INACTIVO — los estudiantes solo ven el botón clásico (Wix).'}
-            </p>
-            <p className="text-xs text-gray-700 mt-0.5">
-              Recomendación: primero <strong>prueba las direcciones</strong> internas del visor (`/panel-estudiante/material-interactivo/[nivel]`) con tu cuenta, después actívalo para todos.
-            </p>
-          </div>
-          <button
-            onClick={toggleFlag}
-            disabled={savingFlag}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold shrink-0 ${featureActive ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} disabled:opacity-50`}
-          >
-            {savingFlag ? '...' : featureActive ? 'Desactivar' : 'Activar'}
-          </button>
-        </div>
-      </div>
 
       {/* Instructivo subida PDF */}
       <details className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-6 text-sm">

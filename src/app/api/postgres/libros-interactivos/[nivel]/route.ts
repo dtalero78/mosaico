@@ -1,49 +1,31 @@
 /**
- * GET /api/postgres/libros-interactivos/[nivel]?preview=1
+ * GET /api/postgres/libros-interactivos/[nivel]
  *
- * Metadata del libro asociado al nivel:
+ * Metadata del libro asociado al nivel (curso) del estudiante:
  *   - libroCodigo, libroTitulo
  *   - totalPaginas   (las que ve el estudiante: dentro del rango)
  *   - paginasConAudio (lista de páginas locales con audio)
- *   - featureActive  (flag global)
  *
- * Si el flag está OFF o el nivel no tiene libro asignado, devuelve
- * `available: false` (sin error) para que la UI muestre el botón clásico (Wix).
- *
- * `?preview=1` + rol SUPER_ADMIN/ADMIN: bypass del flag global. Permite a un
- * admin validar el visor antes de activar la feature para todos los
- * estudiantes. Si el rol no es admin el preview se ignora silenciosamente.
+ * En MOSAICO hay un solo material interactivo por curso (sin coexistencia con
+ * Wix ni feature flag): `available: true` cuando el curso tiene un libro con
+ * páginas cargadas, `available: false` (sin error) cuando aún no se ha subido.
  */
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { LibrosInteractivosService } from '@/services/libros-interactivos.service';
-import { NotFoundError } from '@/lib/errors';
+import { NotFoundError, ValidationError } from '@/lib/errors';
 
-export const GET = handlerWithAuth(async (req, ctx, session) => {
+export const GET = handlerWithAuth(async (_req, ctx) => {
   const nivel = decodeURIComponent(ctx.params.nivel || '').toUpperCase().trim();
   if (!nivel) return successResponse({ available: false });
 
-  const role = (session.user as any)?.role;
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN';
-  const preview = new URL(req.url).searchParams.get('preview') === '1' && isAdmin;
-
-  const featureActive = await LibrosInteractivosService.isFeatureActive();
-  if (!featureActive && !preview) {
-    return successResponse({ available: false, featureActive: false });
-  }
-
   try {
     const metadata = await LibrosInteractivosService.getMetadataForNivel(nivel);
-    return successResponse({
-      available: true,
-      featureActive,
-      previewMode: preview && !featureActive,
-      ...metadata,
-    });
+    return successResponse({ available: true, ...metadata });
   } catch (err: any) {
-    // Si el libro no existe o no tiene páginas, no es un error de aplicación:
-    // simplemente la feature no está disponible para ese nivel todavía.
-    if (err instanceof NotFoundError) {
-      return successResponse({ available: false, featureActive });
+    // Sin libro asignado o sin páginas cargadas todavía → la feature simplemente
+    // no está disponible para ese curso (no es un error de aplicación).
+    if (err instanceof NotFoundError || err instanceof ValidationError) {
+      return successResponse({ available: false });
     }
     throw err;
   }
