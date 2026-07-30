@@ -55,6 +55,8 @@ function CrearCampanaContent() {
   const [cursoMode, setCursoMode] = useState<'draft' | 'existing'>('draft')
   // Reporte: campaña cuyo detalle está desplegado (null = mostrar tarjetas)
   const [detalleCampaign, setDetalleCampaign] = useState<string | null>(null)
+  // Filtro por tipo de curso dentro del detalle del reporte ('' = todos)
+  const [detalleCurso, setDetalleCurso] = useState('')
   // Modal de inscritos (al hacer click en el badge de Cupos)
   const [inscritosCurso, setInscritosCurso] = useState<any>(null)
   const [inscritosList, setInscritosList] = useState<any[] | null>(null)
@@ -298,6 +300,17 @@ function CrearCampanaContent() {
     return 'activo'
   }
   const cursosDeCampania = (nombre: string) => existing.filter((r: any) => r.campaign === nombre)
+  // Tipos de curso presentes en la campaña (para el dropdown del detalle del reporte)
+  const tiposDeCampania = (nombre: string) =>
+    Array.from(new Set(cursosDeCampania(nombre).map((r: any) => String(r.tipoCurso || '')).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b)) as string[]
+  // Filas del detalle acotadas por el filtro de tipo de curso ('' = todos)
+  const cursosDetalle = (nombre: string) => {
+    const rows = cursosDeCampania(nombre)
+    return detalleCurso ? rows.filter((r: any) => String(r.tipoCurso || '') === detalleCurso) : rows
+  }
+  // Al cambiar de campaña (o volver a las tarjetas) se limpia el filtro de curso
+  useEffect(() => { setDetalleCurso('') }, [detalleCampaign])
 
   // Abrir el modal "Agregar/Editar curso". mode 'existing' agrega a la campaña
   // seleccionada (POST inmediato); 'draft' arma la lista de una campaña nueva.
@@ -571,9 +584,16 @@ function CrearCampanaContent() {
               <div>
                 <button type="button" onClick={() => setDetalleCampaign(null)}
                   className="text-sm text-primary-600 hover:text-primary-800 mb-1">← Volver a las tarjetas</button>
-                <h2 className="text-lg font-semibold">{detalleCampaign} · {cursosDeCampania(detalleCampaign).length} curso(s)</h2>
+                <h2 className="text-lg font-semibold">{detalleCampaign} · {cursosDetalle(detalleCampaign).length} curso(s)</h2>
               </div>
-              <button type="button" onClick={() => exportToExcel(cursosDeCampania(detalleCampaign), [
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-500">Curso</label>
+                <select value={detalleCurso} onChange={e => setDetalleCurso(e.target.value)}
+                  className="border border-gray-300 rounded-md px-2 py-2 text-sm">
+                  <option value="">Todos</option>
+                  {tiposDeCampania(detalleCampaign).map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button type="button" onClick={() => exportToExcel(cursosDetalle(detalleCampaign), [
                 { header: 'Campaña', accessor: (r: any) => r.campaign },
                 { header: 'Tipo', accessor: (r: any) => r.tipoCurso },
                 { header: 'Salón', accessor: (r: any) => r.salon || '' },
@@ -588,7 +608,8 @@ function CrearCampanaContent() {
               ], `${detalleCampaign}`)}
                 className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-green-200 bg-green-100 text-green-700 hover:bg-green-200">
                 <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
-              </button>
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:font-medium">
@@ -598,7 +619,7 @@ function CrearCampanaContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {cursosDeCampania(detalleCampaign).map((r: any) => {
+                  {cursosDetalle(detalleCampaign).map((r: any) => {
                     const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
                     const est = rowEstado(r)
                     return (
