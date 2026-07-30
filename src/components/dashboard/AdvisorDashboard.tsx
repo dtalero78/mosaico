@@ -270,19 +270,19 @@ export default function AdvisorDashboard() {
           eventos administrativos (Training/Support/...). */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <KpiCard
-          label="Effective Hours"
+          label="Horas Efectivas"
           value={kpis.effective}
           color="bg-emerald-50  border-emerald-400  text-emerald-700"
           big
         />
         <KpiCard
-          label="Hours without recording"
+          label="Horas Sin Registrar"
           value={kpis.sinRegistrar}
           color="bg-amber-50    border-amber-400    text-amber-700"
           big
         />
         <KpiCard
-          label="Administrative Hours"
+          label="Horas Administrativas"
           value={kpis.administrative}
           color="bg-violet-50   border-violet-400   text-violet-700"
           big
@@ -291,11 +291,11 @@ export default function AdvisorDashboard() {
 
       {/* KPIs detalle */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
-        <KpiCard label="Sessions"  value={kpis.sessions}  color="bg-blue-50    border-blue-300    text-blue-700" />
-        <KpiCard label="Training"  value={kpis.training}  color="bg-orange-50  border-orange-300  text-orange-700" />
+        <KpiCard label="Sesiones"  value={kpis.sessions}  color="bg-blue-50    border-blue-300    text-blue-700" />
+        <KpiCard label="Entrenamiento"  value={kpis.training}  color="bg-orange-50  border-orange-300  text-orange-700" />
         <KpiCard label="Talleres"     value={kpis.clubs}     color="bg-green-50   border-green-300   text-green-700" />
-        <KpiCard label="Welcome"   value={kpis.welcome}   color="bg-purple-50  border-purple-300  text-purple-700" />
-        <KpiCard label="Conducted" value={kpis.conducted} color="bg-sky-50     border-sky-300     text-sky-700" />
+        <KpiCard label="Bienvenida"   value={kpis.welcome}   color="bg-purple-50  border-purple-300  text-purple-700" />
+        <KpiCard label="Realizadas" value={kpis.conducted} color="bg-sky-50     border-sky-300     text-sky-700" />
         <KpiCard label="Canceladas"  value={kpis.canceled}  color="bg-red-50     border-red-300     text-red-700" />
         <KpiCard label="Suspendidas" value={kpis.suspended} color="bg-yellow-50  border-yellow-300  text-yellow-800" />
       </div>
@@ -303,7 +303,7 @@ export default function AdvisorDashboard() {
       {/* Heatmaps Día × Hora del mes — Conducted (azul) | Canceladas (rojo o mensaje) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <DayHourHeatmap
-          title="Conducted — Día vs Hora"
+          title="Realizadas — Día vs Hora"
           subtitle={mesLabel}
           matrix={monthly.conducted}
           max={monthlyConductedMax}
@@ -327,17 +327,17 @@ export default function AdvisorDashboard() {
           title="Composición por tipo"
           total={totalTipos}
           segments={[
-            { label: 'Sessions', value: kpis.sessions, color: '#3b82f6' },
-            { label: 'Training', value: kpis.training, color: '#f97316' },
+            { label: 'Sesiones', value: kpis.sessions, color: '#3b82f6' },
+            { label: 'Entrenamiento', value: kpis.training, color: '#f97316' },
             { label: 'Talleres',    value: kpis.clubs,    color: '#22c55e' },
-            { label: 'Welcome',  value: kpis.welcome,  color: '#a855f7' },
+            { label: 'Bienvenida',  value: kpis.welcome,  color: '#a855f7' },
           ]}
         />
         <DonutCard
           title="Composición por estado"
           total={totalEstados}
           segments={[
-            { label: 'Conducted', value: kpis.conducted, color: '#0ea5e9' },
+            { label: 'Realizadas', value: kpis.conducted, color: '#0ea5e9' },
             { label: 'Canceladas',  value: kpis.canceled,  color: '#ef4444' },
             { label: 'Suspendidas', value: kpis.suspended, color: '#eab308' },
           ]}
