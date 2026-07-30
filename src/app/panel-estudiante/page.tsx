@@ -28,6 +28,7 @@ import {
 import StudentHeader from '@/components/panel-estudiante/StudentHeader'
 import MyEventsSection from '@/components/panel-estudiante/MyEventsSection'
 import NivelacionProgramadaCard from '@/components/panel-estudiante/NivelacionProgramadaCard'
+import EvaluacionCard from '@/components/panel-estudiante/EvaluacionCard'
 import { formatDate } from '@/lib/utils'
 import AttendanceStats from '@/components/panel-estudiante/AttendanceStats'
 import BookingFlow from '@/components/panel-estudiante/BookingFlow'
@@ -496,13 +497,18 @@ function PanelEstudianteContent() {
               ) : null}
             </div>
 
-            {/* Nivelación Programada — visible siempre; se habilita cuando el
-                admin aprueba la nivelación y la agenda (booking tipo=NIVELACION) */}
-            <NivelacionProgramadaCard
-              booking={nivelacionBooking}
-              onCancel={handleCancel}
-              isCancelling={cancelMutation.isLoading}
-            />
+            {/* Nivelación (izq) + Evaluación (der) — 2 columnas */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+              {/* Nivelación Programada — visible siempre; se habilita cuando el
+                  admin aprueba la nivelación y la agenda (booking tipo=NIVELACION) */}
+              <NivelacionProgramadaCard
+                booking={nivelacionBooking}
+                onCancel={handleCancel}
+                isCancelling={cancelMutation.isLoading}
+              />
+              {/* Evaluación — siguiente evaluación / acceso al llegar a la lección */}
+              <EvaluacionCard />
+            </div>
 
             {/* EVENTOS PROGRAMADOS — eventos de la semana (sesiones, talleres, otros) */}
             <MyEventsSection
