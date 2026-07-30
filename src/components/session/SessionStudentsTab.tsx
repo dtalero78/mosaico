@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ComponentType } from 'react'
 import toast from 'react-hot-toast'
 import {
   CheckCircleIcon,
@@ -8,6 +8,13 @@ import {
   ChatBubbleLeftRightIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
+  ClockIcon,
+  ClipboardDocumentCheckIcon,
+  AcademicCapIcon,
+  HandRaisedIcon,
+  TrophyIcon,
+  BoltIcon,
+  VideoCameraIcon,
 } from '@heroicons/react/24/outline'
 
 interface CalendarioEvent {
@@ -74,6 +81,29 @@ interface SessionStudentsTabProps {
   canMarkAttendance?: boolean
   /** Mensaje a mostrar en el banner cuando `!canMarkAttendance`. */
   attendanceLockedReason?: string | null
+}
+
+/** Fila de criterio: casilla + ícono + texto (estilo ítem del sidebar). */
+function CritRow({ Icon, checked, onChange, disabled, label }: {
+  Icon: ComponentType<{ className?: string }>
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+  label: string
+}) {
+  return (
+    <label className={`flex items-center gap-3 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+        className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed"
+      />
+      <Icon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+      <span className="text-gray-700">{label}</span>
+    </label>
+  )
 }
 
 export default function SessionStudentsTab({
@@ -460,54 +490,27 @@ export default function SessionStudentsTab({
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Hábitos</p>
                     <div className="space-y-3">
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={asistencia} onChange={(e) => setAsistencia(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Asistió a la clase</span>
-                      </label>
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={hePuntualidad} onChange={(e) => setHePuntualidad(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Llegó puntual</span>
-                      </label>
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={heAsignacion} onChange={(e) => setHeAsignacion(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Cumplió la asignación anterior</span>
-                      </label>
+                      <CritRow Icon={CheckCircleIcon} checked={asistencia} onChange={setAsistencia} disabled={isLocked} label="Asistió a la clase" />
+                      <CritRow Icon={ClockIcon} checked={hePuntualidad} onChange={setHePuntualidad} disabled={isLocked} label="Llegó puntual" />
+                      <CritRow Icon={ClipboardDocumentCheckIcon} checked={heAsignacion} onChange={setHeAsignacion} disabled={isLocked} label="Cumplió la asignación anterior" />
                     </div>
                   </div>
                   {/* Desempeño */}
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Desempeño</p>
                     <div className="space-y-3">
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={daDominio} onChange={(e) => setDaDominio(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Demostró dominio del tema</span>
-                      </label>
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={participacion} onChange={(e) => setParticipacion(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Participó activamente</span>
-                      </label>
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={daDesafio} onChange={(e) => setDaDesafio(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Completó el Desafío Mosaico</span>
-                      </label>
+                      <CritRow Icon={AcademicCapIcon} checked={daDominio} onChange={setDaDominio} disabled={isLocked} label="Demostró dominio del tema" />
+                      <CritRow Icon={HandRaisedIcon} checked={participacion} onChange={setParticipacion} disabled={isLocked} label="Participó activamente" />
+                      <CritRow Icon={TrophyIcon} checked={daDesafio} onChange={setDaDesafio} disabled={isLocked} label="Completó el Desafío Mosaico" />
                     </div>
                   </div>
                   {/* Actitudes */}
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Actitudes</p>
                     <div className="space-y-3">
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={acPermanencia} onChange={(e) => setAcPermanencia(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Permaneció activo toda la sesión</span>
-                      </label>
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={acRespeto} onChange={(e) => setAcRespeto(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Respetó turnos y a sus compañeros</span>
-                      </label>
-                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                        <input type="checkbox" checked={acDisposicion} onChange={(e) => setAcDisposicion(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
-                        <span className="text-gray-700">Uso adecuado de cámara y micrófono</span>
-                      </label>
+                      <CritRow Icon={BoltIcon} checked={acPermanencia} onChange={setAcPermanencia} disabled={isLocked} label="Permaneció activo toda la sesión" />
+                      <CritRow Icon={UserGroupIcon} checked={acRespeto} onChange={setAcRespeto} disabled={isLocked} label="Respetó turnos y a sus compañeros" />
+                      <CritRow Icon={VideoCameraIcon} checked={acDisposicion} onChange={setAcDisposicion} disabled={isLocked} label="Uso adecuado de cámara y micrófono" />
                     </div>
                   </div>
                   </div>
@@ -564,7 +567,9 @@ export default function SessionStudentsTab({
               </div>
             </div>
 
-            {/* Calificación */}
+            {/* Calificación — OCULTA en MOSAICO (no se usa). Se conserva el código y
+                el campo `calificacion` por si se decide usarla más adelante. */}
+            {false && (
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="font-semibold text-gray-900 mb-4">Calificación</h3>
               <select
@@ -581,6 +586,7 @@ export default function SessionStudentsTab({
                 <option value="Necesita Mejorar">Necesita Mejorar</option>
               </select>
             </div>
+            )}
 
             {/* Comentarios para el usuario */}
             <div className="bg-white rounded-lg shadow-sm p-6">
