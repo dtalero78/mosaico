@@ -3,6 +3,11 @@
 import { useRef, useState } from 'react';
 import MathText from './MathText';
 import InsertEquationModal from './InsertEquationModal';
+import InsertImageModal from './InsertImageModal';
+import InsertLinkModal from './InsertLinkModal';
+
+/** ¿El texto trae ecuación, imagen o link (para mostrar la vista previa)? */
+const isRich = (s: string) => /\$|!\[|\]\(/.test(s || '');
 
 export interface ManualQuestion {
   id: number;
@@ -36,11 +41,20 @@ export function emptyManualQuestion(id: number): ManualQuestion {
 export default function ManualQuestionsEditor({
   value,
   onChange,
+  curso = '',
+  code = '',
+  step = '',
 }: {
   value: ManualQuestion[];
   onChange: (qs: ManualQuestion[]) => void;
+  /** Para subir imágenes a Spaces (evaluaciones/{curso}/{code}/{step}/). */
+  curso?: string;
+  code?: string;
+  step?: string;
 }) {
   const [eqOpen, setEqOpen] = useState(false);
+  const [imgOpen, setImgOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   const activeRef = useRef<ActiveField | null>(null);
 
   const update = (qs: ManualQuestion[]) => onChange(qs);
@@ -109,11 +123,22 @@ export default function ManualQuestionsEditor({
         <p className="text-xs text-gray-500">
           {value.length} pregunta(s). Solo opción múltiple / verdadero-falso (se autocalifican).
         </p>
-        <button type="button" onClick={() => setEqOpen(true)}
-          className="px-2.5 py-1 text-xs rounded-md border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
-          ∑ Insertar ecuación
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setEqOpen(true)}
+            className="px-2.5 py-1 text-xs rounded-md border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
+            ∑ Ecuación
+          </button>
+          <button type="button" onClick={() => setImgOpen(true)}
+            className="px-2.5 py-1 text-xs rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
+            🖼 Imagen
+          </button>
+          <button type="button" onClick={() => setLinkOpen(true)}
+            className="px-2.5 py-1 text-xs rounded-md border border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100">
+            🔗 Link
+          </button>
+        </div>
       </div>
+      <p className="text-[11px] text-gray-400 -mt-2">Enfoca un campo (pregunta / opción / explicación) y usa los botones para insertar ahí.</p>
 
       {value.map((q, qi) => (
         <div key={qi} className="border border-gray-200 rounded-xl p-4 bg-white">
@@ -136,10 +161,10 @@ export default function ManualQuestionsEditor({
             onFocus={(e) => trackFocus(e.currentTarget, qi, 'question')}
             onChange={(e) => setQuestion(qi, { question: e.target.value })}
             rows={2}
-            placeholder="Escribe la pregunta… (usa ∑ para ecuaciones)"
+            placeholder="Escribe la pregunta… (∑ ecuación · 🖼 imagen · 🔗 link)"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y"
           />
-          {q.question.includes('$') && (
+          {isRich(q.question) && (
             <div className="mt-1 text-sm text-gray-700"><MathText>{q.question}</MathText></div>
           )}
 
@@ -168,7 +193,7 @@ export default function ManualQuestionsEditor({
                   <button type="button" onClick={() => removeOption(qi, oj)}
                     className="text-gray-400 hover:text-red-500 text-sm px-1" title="Quitar opción">×</button>
                 )}
-                {opt.includes('$') && (
+                {isRich(opt) && (
                   <span className="text-sm text-gray-600"><MathText>{opt}</MathText></span>
                 )}
               </div>
@@ -196,6 +221,8 @@ export default function ManualQuestionsEditor({
       </button>
 
       <InsertEquationModal open={eqOpen} onClose={() => setEqOpen(false)} onInsert={insertSnippet} />
+      <InsertImageModal open={imgOpen} onClose={() => setImgOpen(false)} onInsert={insertSnippet} curso={curso} code={code} step={step} />
+      <InsertLinkModal open={linkOpen} onClose={() => setLinkOpen(false)} onInsert={insertSnippet} />
     </div>
   );
 }

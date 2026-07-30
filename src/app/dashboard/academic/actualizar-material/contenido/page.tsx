@@ -7,6 +7,8 @@ import { AcademicoPermission } from '@/types/permissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
 import MathText from '@/components/ecuaciones/MathText'
 import InsertEquationModal from '@/components/ecuaciones/InsertEquationModal'
+import InsertImageModal from '@/components/ecuaciones/InsertImageModal'
+import InsertLinkModal from '@/components/ecuaciones/InsertLinkModal'
 import ManualQuestionsEditor, { ManualQuestion, validateManualQuestions } from '@/components/ecuaciones/ManualQuestionsEditor'
 
 interface Leccion {
@@ -38,6 +40,13 @@ function LeccionEditor({
   const [modo, setModo] = useState<'IA' | 'MANUAL'>((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
   const [preguntas, setPreguntas] = useState<ManualQuestion[]>(leccion.preguntasManual || [])
   const [savingEval, setSavingEval] = useState(false)
+  const [imgOpen, setImgOpen] = useState(false)
+  const [linkOpen, setLinkOpen] = useState(false)
+
+  // La casilla "Evaluación" sólo se habilita en módulos/lecciones de Evaluación o
+  // Entrenamiento. "evaluac" ya matchea "Evaluación" (el acento va después), así
+  // que basta con minúsculas.
+  const esEvaluacion = /evaluac|entrenamiento/.test(`${code} ${leccion.step}`.toLowerCase())
 
   useEffect(() => {
     setDescription(leccion.description); setContenido(leccion.contenido)
@@ -121,11 +130,19 @@ function LeccionEditor({
       <input value={description} onChange={(e) => setDescription(e.target.value)}
         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-3" />
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs font-medium text-gray-500">Contenido / temario (fuente del quiz IA)</label>
+        <label className="block text-xs font-medium text-gray-500">Contenido / temario / Pregunta</label>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => setEqOpen(true)}
             className="px-2.5 py-1 text-xs rounded-md border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
-            ∑ Insertar ecuación
+            ∑ Ecuación
+          </button>
+          <button type="button" onClick={() => setImgOpen(true)}
+            className="px-2.5 py-1 text-xs rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
+            🖼 Imagen
+          </button>
+          <button type="button" onClick={() => setLinkOpen(true)}
+            className="px-2.5 py-1 text-xs rounded-md border border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100">
+            🔗 Link
           </button>
           <button type="button" onClick={() => setShowPreview((v) => !v)}
             className={`px-2.5 py-1 text-xs rounded-md border ${showPreview ? 'border-indigo-300 bg-indigo-100 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
@@ -143,6 +160,8 @@ function LeccionEditor({
         </div>
       )}
       <InsertEquationModal open={eqOpen} onClose={() => setEqOpen(false)} onInsert={insertSnippet} />
+      <InsertImageModal open={imgOpen} onClose={() => setImgOpen(false)} onInsert={insertSnippet} curso={curso} code={code} step={leccion.step} />
+      <InsertLinkModal open={linkOpen} onClose={() => setLinkOpen(false)} onInsert={insertSnippet} />
 
       {/* Actividades externas (Kahoot / WordWall) — nombre visible + URL */}
       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -175,39 +194,41 @@ function LeccionEditor({
         </button>
       </div>
 
-      {/* Evaluación: IA vs MANUAL */}
+      {/* Evaluación — casilla sólo habilitada en módulos/lecciones de Evaluación o Entrenamiento */}
       <div className="mt-4 pt-4 border-t border-gray-100">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-gray-500">Evaluación</span>
-            <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden text-xs">
-              <button type="button" onClick={() => setModo('IA')}
-                className={`px-3 py-1 ${modo === 'IA' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-                IA (del contenido)
-              </button>
-              <button type="button" onClick={() => setModo('MANUAL')}
-                className={`px-3 py-1 ${modo === 'MANUAL' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-                Manual
-              </button>
-            </div>
-          </div>
-          <button type="button" onClick={saveEval} disabled={savingEval}
-            className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
-            {savingEval ? 'Guardando…' : 'Guardar evaluación'}
-          </button>
+          <label className={`flex items-center gap-2 text-sm ${esEvaluacion ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+            title={esEvaluacion ? '' : 'Solo disponible en módulos/lecciones de Evaluación o Entrenamiento'}>
+            <input type="checkbox" checked={modo === 'MANUAL'} disabled={!esEvaluacion}
+              onChange={(e) => setModo(e.target.checked ? 'MANUAL' : 'IA')}
+              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 disabled:cursor-not-allowed" />
+            <span className="font-medium text-gray-700">Evaluación</span>
+          </label>
+          {esEvaluacion && modo === 'MANUAL' && (
+            <button type="button" onClick={saveEval} disabled={savingEval}
+              className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
+              {savingEval ? 'Guardando…' : 'Guardar evaluación'}
+            </button>
+          )}
         </div>
 
-        {modo === 'IA' ? (
+        {!esEvaluacion ? (
           <p className="text-xs text-gray-400">
-            Las 10 preguntas se generan automáticamente del contenido/temario con IA (requiere OPENAI_API_KEY).
+            Disponible solo en módulos/lecciones de <strong>Evaluación</strong> o <strong>Entrenamiento</strong>.
           </p>
-        ) : (
+        ) : modo === 'MANUAL' ? (
           <>
             <p className="text-xs text-gray-400 mb-3">
-              Preguntas escritas a mano; se califican solas (sin IA). Si aún no hay preguntas, agrega al menos una.
+              Preguntas escritas a mano (se autocalifican, sin IA). Cada pregunta tiene su enunciado y 4 respuestas
+              (marca la correcta). Puedes insertar <strong>ecuaciones, imágenes y links</strong> tanto en el enunciado
+              como en las respuestas.
             </p>
-            <ManualQuestionsEditor value={preguntas} onChange={setPreguntas} />
+            <ManualQuestionsEditor value={preguntas} onChange={setPreguntas} curso={curso} code={code} step={leccion.step} />
           </>
+        ) : (
+          <p className="text-xs text-gray-400">
+            Marca <strong>Evaluación</strong> para convertir esta lección en pregunta(s) de examen.
+          </p>
         )}
       </div>
     </div>
