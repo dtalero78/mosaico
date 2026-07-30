@@ -46,6 +46,24 @@ class NivelesRepositoryClass extends BaseRepository {
   }
 
   /**
+   * Igual que findByCode pero acotado al CURSO. En MOSAICO el `code` (módulo) se
+   * repite entre cursos (YOJI/OKINA/…/IMPULSA), así que filtrar solo por `code`
+   * mezcla el material de todos los cursos con ese módulo. El material del alumno
+   * debe salir SOLO de su curso.
+   */
+  async findByCodeAndCurso(code: string, curso: string) {
+    const rows = await queryMany(
+      `SELECT "_id", "code", "step", "description", "esParalelo", "material",
+              "clubs", "steps", "materiales", "materialUsuario", "orden", "videoUrl", "_createdDate", "_updatedDate"
+       FROM "NIVELES"
+       WHERE "code" = $1 AND UPPER("curso") = UPPER($2)
+       ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
+      [code, curso]
+    );
+    return this.parseMany(rows);
+  }
+
+  /**
    * Get videoUrl for a specific nivel + step combination
    */
   async findVideoByNivelAndStep(nivel: string, step: string) {

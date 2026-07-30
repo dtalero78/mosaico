@@ -433,7 +433,10 @@ async function getDetalleNivelacion(academicaId: string): Promise<{ modulo?: str
 /**
  * Get downloadable materials for the student's current nivel.
  */
-export async function getStudentMaterials(nivel: string) {
+export async function getStudentMaterials(nivel: string, curso?: string) {
+  // En MOSAICO el módulo (`code`) se repite entre cursos → hay que acotar por
+  // curso para no mezclar el material (p.ej. YOJI con IMPULSA en "Modulo 01").
+  if (curso) return NivelesRepository.findByCodeAndCurso(nivel, curso);
   return NivelesRepository.findByCode(nivel);
 }
 
