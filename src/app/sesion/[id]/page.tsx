@@ -71,6 +71,14 @@ interface ClassRecord {
   comentarios?: string
   advisorAnotaciones?: string
   actividadPropuesta?: string
+  // Criterios de evaluación de la sesión (Hábitos / Desempeño / Actitudes)
+  hePuntualidad?: boolean
+  heAsignacion?: boolean
+  daDominio?: boolean
+  daDesafio?: boolean
+  acPermanencia?: boolean
+  acRespeto?: boolean
+  acDisposicion?: boolean
   nivel?: string
   step?: string
 }
@@ -191,6 +199,13 @@ export default function SesionPage() {
               comentarios: booking.comentarios || '',
               advisorAnotaciones: booking.advisorAnotaciones || '',
               actividadPropuesta: booking.actividadPropuesta || '',
+              hePuntualidad: booking.hePuntualidad ?? false,
+              heAsignacion: booking.heAsignacion ?? false,
+              daDominio: booking.daDominio ?? false,
+              daDesafio: booking.daDesafio ?? false,
+              acPermanencia: booking.acPermanencia ?? false,
+              acRespeto: booking.acRespeto ?? false,
+              acDisposicion: booking.acDisposicion ?? false,
               nivel: booking.nivel,
               step: booking.step,
             },

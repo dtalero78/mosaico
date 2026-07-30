@@ -22,6 +22,8 @@ class BookingRepositoryClass extends BaseRepository {
       `SELECT ab."_id", ab."studentId", ab."eventoId", ab."tipo", ab."fecha", ab."hora",
               ab."advisor", ab."nivel", ab."step", ab."asistencia", ab."asistio",
               ab."participacion", ab."noAprobo", ab."cancelo", ab."calificacion",
+              ab."hePuntualidad", ab."heAsignacion", ab."daDominio", ab."daDesafio",
+              ab."acPermanencia", ab."acRespeto", ab."acDisposicion",
               ab."anotaciones", ab."comentarios", ab."advisorAnotaciones", ab."actividadPropuesta",
               ab."linkZoom", ab."asignadoPor", ab."origen", ab."agendadoPor",
               ab."agendadoPorEmail", ab."agendadoPorRol", ab."fechaAgendamiento",

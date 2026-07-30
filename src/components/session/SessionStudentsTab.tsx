@@ -35,6 +35,13 @@ interface ClassRecord {
   comentarios?: string
   advisorAnotaciones?: string
   actividadPropuesta?: string
+  hePuntualidad?: boolean
+  heAsignacion?: boolean
+  daDominio?: boolean
+  daDesafio?: boolean
+  acPermanencia?: boolean
+  acRespeto?: boolean
+  acDisposicion?: boolean
   nivel?: string
   step?: string
   noAprobo?: boolean
@@ -83,6 +90,15 @@ export default function SessionStudentsTab({
   const [asistencia, setAsistencia] = useState(false)
   const [participacion, setParticipacion] = useState(false)
   const [noAprobo, setNoAprobo] = useState(false)
+  // Criterios de evaluación de la sesión (Hábitos / Desempeño / Actitudes).
+  // asistencia = HE_ASISTENCIA, participacion = DA_PARTICIPACION (reusados).
+  const [hePuntualidad, setHePuntualidad] = useState(false)
+  const [heAsignacion, setHeAsignacion] = useState(false)
+  const [daDominio, setDaDominio] = useState(false)
+  const [daDesafio, setDaDesafio] = useState(false)
+  const [acPermanencia, setAcPermanencia] = useState(false)
+  const [acRespeto, setAcRespeto] = useState(false)
+  const [acDisposicion, setAcDisposicion] = useState(false)
   const [calificacion, setCalificacion] = useState('')
   const [comentarios, setComentarios] = useState('')
   const [advisorAnotaciones, setAdvisorAnotaciones] = useState('')
@@ -157,6 +173,14 @@ export default function SessionStudentsTab({
       setComentarios(selectedStudent.classRecord.comentarios || '')
       setAdvisorAnotaciones(selectedStudent.classRecord.advisorAnotaciones || '')
       setActividadPropuesta(selectedStudent.classRecord.actividadPropuesta || '')
+      const cr = selectedStudent.classRecord as any
+      setHePuntualidad(cr.hePuntualidad || false)
+      setHeAsignacion(cr.heAsignacion || false)
+      setDaDominio(cr.daDominio || false)
+      setDaDesafio(cr.daDesafio || false)
+      setAcPermanencia(cr.acPermanencia || false)
+      setAcRespeto(cr.acRespeto || false)
+      setAcDisposicion(cr.acDisposicion || false)
     } else {
       resetForm()
     }
@@ -170,6 +194,13 @@ export default function SessionStudentsTab({
     setComentarios('')
     setAdvisorAnotaciones('')
     setActividadPropuesta('')
+    setHePuntualidad(false)
+    setHeAsignacion(false)
+    setDaDominio(false)
+    setDaDesafio(false)
+    setAcPermanencia(false)
+    setAcRespeto(false)
+    setAcDisposicion(false)
   }
 
   const isJumpStep = () => {
@@ -235,6 +266,13 @@ export default function SessionStudentsTab({
           asistencia,
           participacion,
           noAprobo,
+          hePuntualidad,
+          heAsignacion,
+          daDominio,
+          daDesafio,
+          acPermanencia,
+          acRespeto,
+          acDisposicion,
           calificacion,
           comentarios,
           advisorAnotaciones,
@@ -285,6 +323,8 @@ export default function SessionStudentsTab({
     }
     // Evento normal: si no se marcó NADA, avisar antes de guardar.
     const vacio = !asistencia && !participacion && !noAprobo
+      && !hePuntualidad && !heAsignacion && !daDominio && !daDesafio
+      && !acPermanencia && !acRespeto && !acDisposicion
       && !calificacion.trim() && !comentarios.trim()
       && !advisorAnotaciones.trim() && !actividadPropuesta.trim()
     if (vacio) { setShowEmptyWarn(true); return }
@@ -413,28 +453,62 @@ export default function SessionStudentsTab({
             {/* Asistencia y Participación */}
             <div>
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Asistencia y Participación</h3>
-                <div className="space-y-4">
-                  <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={asistencia}
-                      onChange={(e) => setAsistencia(e.target.checked)}
-                      disabled={isLocked}
-                      className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed"
-                    />
-                    <span className="text-gray-700">Asistió a la clase</span>
-                  </label>
-                  <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={participacion}
-                      onChange={(e) => setParticipacion(e.target.checked)}
-                      disabled={isLocked}
-                      className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed"
-                    />
-                    <span className="text-gray-700">Participó activamente</span>
-                  </label>
+                <h3 className="font-semibold text-gray-900 mb-4">Evaluación de la Sesión</h3>
+                <div className="space-y-5">
+                  {/* Hábitos */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Hábitos</p>
+                    <div className="space-y-3">
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={asistencia} onChange={(e) => setAsistencia(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Asistió a la clase</span>
+                      </label>
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={hePuntualidad} onChange={(e) => setHePuntualidad(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Llegó puntual</span>
+                      </label>
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={heAsignacion} onChange={(e) => setHeAsignacion(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Cumplió la asignación anterior</span>
+                      </label>
+                    </div>
+                  </div>
+                  {/* Desempeño */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Desempeño</p>
+                    <div className="space-y-3">
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={daDominio} onChange={(e) => setDaDominio(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Demostró dominio del tema</span>
+                      </label>
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={participacion} onChange={(e) => setParticipacion(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Participó activamente</span>
+                      </label>
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={daDesafio} onChange={(e) => setDaDesafio(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Completó el Desafío Mosaico</span>
+                      </label>
+                    </div>
+                  </div>
+                  {/* Actitudes */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Actitudes</p>
+                    <div className="space-y-3">
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={acPermanencia} onChange={(e) => setAcPermanencia(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Permaneció activo toda la sesión</span>
+                      </label>
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={acRespeto} onChange={(e) => setAcRespeto(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Respetó turnos y a sus compañeros</span>
+                      </label>
+                      <label className={`flex items-center gap-3 ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                        <input type="checkbox" checked={acDisposicion} onChange={(e) => setAcDisposicion(e.target.checked)} disabled={isLocked} className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500 disabled:cursor-not-allowed" />
+                        <span className="text-gray-700">Uso adecuado de cámara y micrófono</span>
+                      </label>
+                    </div>
+                  </div>
                   {/* Nivelación — casilla + dropdown de lecciones del curso.
                       Se OCULTA cuando el evento es tipo NIVELACION (el evento ya
                       es la nivelación; marcar asistencia la cierra). */}

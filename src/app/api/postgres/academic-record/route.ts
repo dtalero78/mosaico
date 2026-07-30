@@ -6,10 +6,19 @@ import { autoAvanceModuloMosaico } from '@/services/modulo-avance.service';
 import { query, queryOne } from '@/lib/postgres';
 import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window';
 
+// Criterios de evaluación de la sesión (además de asistencia/participacion, que se
+// reusan como HE_ASISTENCIA / DA_PARTICIPACION).
+const CRITERIOS_EVAL = [
+  'hePuntualidad', 'heAsignacion',                 // Hábitos
+  'daDominio', 'daDesafio',                          // Desempeño
+  'acPermanencia', 'acRespeto', 'acDisposicion',     // Actitudes
+];
+
 const UPDATABLE_FIELDS = [
   'asistio', 'asistencia', 'participacion', 'noAprobo',
   'calificacion', 'comentarios', 'advisorAnotaciones', 'actividadPropuesta',
   'casoAtencion',
+  ...CRITERIOS_EVAL,
 ];
 
 /**
@@ -76,6 +85,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   }
   if (participacion !== undefined) updateData.participacion = participacion;
   if (noAprobo !== undefined) updateData.noAprobo = noAprobo;
+  // Criterios de evaluación de la sesión (Hábitos / Desempeño / Actitudes).
+  // asistencia = HE_ASISTENCIA y participacion = DA_PARTICIPACION se reusan arriba.
+  for (const c of CRITERIOS_EVAL) {
+    if (body[c] !== undefined) updateData[c] = !!body[c];
+  }
   if (calificacion !== undefined && calificacion !== '') {
     const mapped = typeof calificacion === 'string' ? calificacionMap[calificacion] : undefined;
     updateData.calificacion = mapped !== undefined ? mapped : (parseInt(calificacion) || 0);
