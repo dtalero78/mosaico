@@ -104,41 +104,44 @@ export default function ManualQuestionsEditor({
     activeRef.current = { el, qi, kind, oj };
   };
 
+  // Pregunta cuyo toolbar (∑/🖼/🔗) se usó — evita que la inserción caiga en el
+  // campo enfocado de OTRA pregunta.
+  const pendingQiRef = useRef<number | null>(null);
+  const openInsert = (qi: number, which: 'eq' | 'img' | 'link') => {
+    pendingQiRef.current = qi;
+    if (which === 'eq') setEqOpen(true);
+    else if (which === 'img') setImgOpen(true);
+    else setLinkOpen(true);
+  };
+
   const insertSnippet = (snippet: string) => {
+    const qi = pendingQiRef.current;
+    if (qi == null) return;
     const af = activeRef.current;
-    if (!af) return;
-    const el = af.el;
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? start;
-    const newVal = el.value.slice(0, start) + snippet + el.value.slice(end);
-    if (af.kind === 'question') setQuestion(af.qi, { question: newVal });
-    else if (af.kind === 'explanation') setQuestion(af.qi, { explanation: newVal });
-    else if (af.kind === 'option' && af.oj != null) setOption(af.qi, af.oj, newVal);
-    requestAnimationFrame(() => { try { el.focus(); const p = start + snippet.length; el.setSelectionRange(p, p); } catch {} });
+    // Sólo insertar en el campo enfocado si pertenece a ESTA pregunta.
+    if (af && af.qi === qi) {
+      const el = af.el;
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? start;
+      const newVal = el.value.slice(0, start) + snippet + el.value.slice(end);
+      if (af.kind === 'question') setQuestion(af.qi, { question: newVal });
+      else if (af.kind === 'explanation') setQuestion(af.qi, { explanation: newVal });
+      else if (af.kind === 'option' && af.oj != null) setOption(af.qi, af.oj, newVal);
+      requestAnimationFrame(() => { try { el.focus(); const p = start + snippet.length; el.setSelectionRange(p, p); } catch {} });
+    } else {
+      // Sin campo enfocado en esta pregunta → al final de su enunciado.
+      const q = value[qi];
+      if (q) setQuestion(qi, { question: `${q.question || ''}${q.question && !q.question.endsWith(' ') ? ' ' : ''}${snippet}` });
+    }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">
-          {value.length} pregunta(s). Solo opción múltiple / verdadero-falso (se autocalifican).
-        </p>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setEqOpen(true)}
-            className="px-2.5 py-1 text-xs rounded-md border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100">
-            ∑ Ecuación
-          </button>
-          <button type="button" onClick={() => setImgOpen(true)}
-            className="px-2.5 py-1 text-xs rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
-            🖼 Imagen
-          </button>
-          <button type="button" onClick={() => setLinkOpen(true)}
-            className="px-2.5 py-1 text-xs rounded-md border border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100">
-            🔗 Link
-          </button>
-        </div>
-      </div>
-      <p className="text-[11px] text-gray-400 -mt-2">Enfoca un campo (pregunta / opción / explicación) y usa los botones para insertar ahí.</p>
+      <p className="text-xs text-gray-500">
+        {value.length} pregunta(s). Solo opción múltiple / verdadero-falso (se autocalifican). Cada pregunta tiene sus
+        propios botones <span className="text-gray-700 font-medium">∑ 🖼 🔗</span>: insertan en la opción/campo enfocado
+        de esa pregunta, o al final de su enunciado.
+      </p>
 
       {value.map((q, qi) => (
         <div key={qi} className="border border-gray-200 rounded-xl p-4 bg-white">
@@ -155,7 +158,17 @@ export default function ManualQuestionsEditor({
               className="text-xs text-red-500 hover:text-red-700">Eliminar</button>
           </div>
 
-          <label className="block text-xs font-medium text-gray-500 mb-1">Enunciado</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-medium text-gray-500">Enunciado</label>
+            <div className="flex items-center gap-1.5">
+              <button type="button" onClick={() => openInsert(qi, 'eq')}
+                className="px-2 py-0.5 text-xs rounded-md border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100">∑ Ecuación</button>
+              <button type="button" onClick={() => openInsert(qi, 'img')}
+                className="px-2 py-0.5 text-xs rounded-md border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">🖼 Imagen</button>
+              <button type="button" onClick={() => openInsert(qi, 'link')}
+                className="px-2 py-0.5 text-xs rounded-md border border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100">🔗 Link</button>
+            </div>
+          </div>
           <textarea
             value={q.question}
             onFocus={(e) => trackFocus(e.currentTarget, qi, 'question')}
