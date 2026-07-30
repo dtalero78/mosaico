@@ -816,6 +816,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Exportar CSV',
     description: 'Muestra el botón "Exportar CSV" para descargar el reporte de Nivelaciones.',
   },
+  {
+    code: ServicioPermission.CASOS_ATENCION_VER,
+    module: Module.SERVICIO,
+    section: 'Casos Atención',
+    name: 'Página "Casos Atención"',
+    description: 'Acceso a /dashboard/servicio/casos-atencion. Estudiantes con un caso de atención abierto (ACADEMICA_BOOKINGS.casoAtencion=true) que el guía registró en la sesión, con filtros curso/salón/lección/guía/fecha y conteo por estudiante.',
+  },
+  {
+    code: ServicioPermission.CASOS_ATENCION_GESTION,
+    module: Module.SERVICIO,
+    section: 'Casos Atención',
+    name: '↳ Marcar Resuelto',
+    description: 'Muestra el botón "Resuelto" que cierra el caso (casoAtencion=false) y guarda un comentario en el historial del estudiante (ACADEMICA.historicCasoAtencion).',
+  },
+  {
+    code: ServicioPermission.CASOS_ATENCION_EXPORTAR,
+    module: Module.SERVICIO,
+    section: 'Casos Atención',
+    name: '↳ Exportar CSV',
+    description: 'Muestra el botón "Exportar CSV" para descargar el reporte de Casos de Atención.',
+  },
 
   // ========== COMERCIAL MODULE ==========
   // -- Página: Contrato Detalle (/dashboard/comercial/contrato/[id]) --

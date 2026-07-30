@@ -79,6 +79,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Lista de Sesiones', href: '/dashboard/servicio/lista-sesiones' },
       { name: 'Usuarios sin perfil creado', href: '/dashboard/servicio/sin-registro' },
       { name: 'Nivelaciones', href: '/dashboard/servicio/nivelaciones', newTab: true },
+      { name: 'Casos Atención', href: '/dashboard/servicio/casos-atencion', newTab: true },
     ],
   },
   {
@@ -347,6 +348,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/dashboard/servicio/nivelaciones': [
       ServicioPermission.NIVELACIONES_VER,
+    ],
+    '/dashboard/servicio/casos-atencion': [
+      ServicioPermission.CASOS_ATENCION_VER,
     ],
 
     // Comercial

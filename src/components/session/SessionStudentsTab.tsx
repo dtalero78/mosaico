@@ -522,18 +522,18 @@ export default function SessionStudentsTab({
               />
             </div>
 
-            {/* Anotaciones del Advisor */}
+            {/* Casos de Atención */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <DocumentTextIcon className="h-5 w-5" />
-                Anotaciones del Advisor (Privadas)
+                Casos de Atención
               </h3>
               <textarea
                 value={advisorAnotaciones}
                 onChange={(e) => setAdvisorAnotaciones(e.target.value)}
                 disabled={isLocked}
                 rows={4}
-                placeholder="Notas privadas del advisor..."
+                placeholder="Describe el caso de atención de este estudiante..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>

@@ -317,6 +317,11 @@ export enum ServicioPermission {
   NIVELACIONES_VER      = 'SERVICIO.NIVELACIONES.VER',
   NIVELACIONES_GESTION  = 'SERVICIO.NIVELACIONES.GESTION',  // aprobar/cancelar
   NIVELACIONES_EXPORTAR = 'SERVICIO.NIVELACIONES.EXPORTAR', // descargar CSV
+
+  // Casos de Atención — bookings marcados por el guía (casoAtencion=true) para seguimiento
+  CASOS_ATENCION_VER      = 'SERVICIO.CASOS_ATENCION.VER',
+  CASOS_ATENCION_GESTION  = 'SERVICIO.CASOS_ATENCION.GESTION',  // marcar Resuelto
+  CASOS_ATENCION_EXPORTAR = 'SERVICIO.CASOS_ATENCION.EXPORTAR', // descargar CSV
 }
 
 /**

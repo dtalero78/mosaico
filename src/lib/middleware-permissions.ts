@@ -185,6 +185,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/servicio/nivelaciones': [
     'SERVICIO.NIVELACIONES.VER' as Permission,
   ],
+  '/dashboard/servicio/casos-atencion': [
+    'SERVICIO.CASOS_ATENCION.VER' as Permission,
+  ],
 
   // Comercial - Crear Contrato
   '/dashboard/comercial/crear-contrato': [

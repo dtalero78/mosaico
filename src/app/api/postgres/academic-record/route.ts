@@ -9,6 +9,7 @@ import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window';
 const UPDATABLE_FIELDS = [
   'asistio', 'asistencia', 'participacion', 'noAprobo',
   'calificacion', 'comentarios', 'advisorAnotaciones', 'actividadPropuesta',
+  'casoAtencion',
 ];
 
 /**
@@ -80,7 +81,13 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     updateData.calificacion = mapped !== undefined ? mapped : (parseInt(calificacion) || 0);
   }
   if (comentarios !== undefined) updateData.comentarios = comentarios;
-  if (advisorAnotaciones !== undefined) updateData.advisorAnotaciones = advisorAnotaciones;
+  if (advisorAnotaciones !== undefined) {
+    updateData.advisorAnotaciones = advisorAnotaciones;
+    // Un "Caso de Atención" queda ABIERTO cuando el guía escribe texto en ese
+    // campo; se marca en el booking (estudiante+evento) para el reporte de
+    // Servicio › Casos Atención. Se cierra desde ahí (Resuelto).
+    updateData.casoAtencion = !!(advisorAnotaciones && String(advisorAnotaciones).trim());
+  }
   if (actividadPropuesta !== undefined) updateData.actividadPropuesta = actividadPropuesta;
 
   // ── Cierre de NIVELACION: validaciones previas ──
