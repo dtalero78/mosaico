@@ -138,7 +138,7 @@ function Content() {
         <h1 className="text-2xl font-bold text-gray-900">Material Interactivo</h1>
       </div>
       <p className="text-sm text-gray-500 mb-6">
-        Gestión de los libros que verá el estudiante en el panel. En MOSAICO hay <strong>un libro por curso</strong> (YOJI, OKINA, KODOMO, DANSHI, SENPAI, IMPULSA); cada libro se sube una vez con el script de carga.
+        Gestión de los libros que verá el estudiante en el panel. En MOSAICO hay <strong>un libro por curso</strong> (YOJI, OKINA, KODOMO, DANSHI, SENPAI, IMPULSA); cada libro se sube una vez con el script de carga. Usa el switch <strong>Visible/Oculto</strong> de cada curso para mostrar u ocultar su Material Interactivo a los estudiantes mientras haces adecuaciones (no borra el libro).
       </p>
 
       {/* Instructivo subida PDF */}
@@ -180,6 +180,43 @@ node scripts/upload-libro-interactivo.js \
   )
 }
 
+/** Switch visible/oculto para estudiantes (mientras se hacen adecuaciones). */
+function LibroVisibleSwitch({ libro, onReload }: { libro: LibroAdmin; onReload: () => void }) {
+  const [saving, setSaving] = useState(false)
+  const activo = libro.activo !== false   // por defecto visible
+  const toggle = async () => {
+    setSaving(true)
+    try {
+      await jsonFetchRetry(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/activo`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activo: !activo }),
+      })
+      onReload()
+    } catch (e: any) {
+      alert(e?.message || 'Error')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={saving}
+      title={activo ? 'Visible para estudiantes — click para ocultar' : 'Oculto para estudiantes — click para mostrar'}
+      className="flex items-center gap-2 disabled:opacity-50"
+    >
+      <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${activo ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${activo ? 'translate-x-4' : 'translate-x-1'}`} />
+      </span>
+      <span className={`text-xs font-medium ${activo ? 'text-emerald-700' : 'text-gray-500'}`}>
+        {saving ? '…' : activo ? 'Visible' : 'Oculto'}
+      </span>
+    </button>
+  )
+}
+
 function LibroCard({ libro, expanded, onToggle, onReload }: {
   libro: LibroAdmin
   expanded: boolean
@@ -189,21 +226,24 @@ function LibroCard({ libro, expanded, onToggle, onReload }: {
   const sinPaginas = libro.totalPaginas === 0
   return (
     <div className={`bg-white rounded-xl border ${sinPaginas ? 'border-amber-200' : 'border-gray-200'} shadow-sm overflow-hidden`}>
-      <button onClick={onToggle} className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50">
-        <div className="text-left">
+      <div className="w-full px-5 py-4 flex items-center justify-between gap-3">
+        <button onClick={onToggle} className="flex-1 text-left flex flex-col hover:opacity-80 min-w-0">
           <div className="flex items-center gap-2">
-            <BookOpenIcon className={`h-5 w-5 ${sinPaginas ? 'text-amber-500' : 'text-emerald-600'}`} />
+            <BookOpenIcon className={`h-5 w-5 flex-shrink-0 ${sinPaginas ? 'text-amber-500' : 'text-emerald-600'}`} />
             <h2 className="font-bold text-gray-800">{libro.codigo}</h2>
-            <span className="text-xs text-gray-500">— {libro.titulo}</span>
+            <span className="text-xs text-gray-500 truncate">— {libro.titulo}</span>
           </div>
           <p className="text-xs text-gray-500 mt-1">
             {sinPaginas
               ? <span className="text-amber-700 font-medium">Sin páginas cargadas — corre el script de subida</span>
               : <>{libro.totalPaginas} páginas · {libro.audios.length} audios · {libro.niveles.length} nivel(es) vinculados</>}
           </p>
+        </button>
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <LibroVisibleSwitch libro={libro} onReload={onReload} />
+          <button onClick={onToggle} className="text-xs text-gray-400 hover:text-gray-600">{expanded ? 'Cerrar' : 'Abrir'}</button>
         </div>
-        <span className="text-xs text-gray-400">{expanded ? 'Cerrar' : 'Abrir'}</span>
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-gray-100 p-5 space-y-5 bg-gray-50">

@@ -249,6 +249,17 @@ class LibrosInteractivosServiceClass {
     }));
   }
 
+  /**
+   * Muestra/oculta un libro para los estudiantes (switch del admin mientras se
+   * hacen adecuaciones). `activo=false` → el visor devuelve available:false y la
+   * tarjeta "Material Interactivo" desaparece del panel del alumno.
+   * Limpia el cache de resolución por nivel (que incluye `libro.activo`).
+   */
+  async setActivo(codigo: string, activo: boolean): Promise<void> {
+    await LibrosInteractivosRepository.setActivo(codigo, activo);
+    nivelCache.clear();
+  }
+
   /** Permite al admin invalidar caché tras editar (binding, audios). */
   invalidateNivelCache = invalidateNivelCache;
   invalidateLibroCache = invalidateLibroCache;
