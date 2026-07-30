@@ -12,6 +12,7 @@ interface MaterialFile {
 interface StepMaterial {
   _id: string
   step: string
+  description: string
   files: MaterialFile[]
 }
 
@@ -238,9 +239,14 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
             {steps.map(row => (
               <div key={row._id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 {/* Step header */}
-                <div className={`px-5 py-3 border-b border-gray-100 ${accent.light} flex items-center justify-between`}>
-                  <span className={`font-semibold text-sm ${accent.text}`}>{row.step}</span>
-                  <span className="text-xs text-gray-400">{row.files.length} archivo{row.files.length !== 1 ? 's' : ''}</span>
+                <div className={`px-5 py-3 border-b border-gray-100 ${accent.light} flex items-start justify-between gap-3`}>
+                  <div className="min-w-0">
+                    <span className={`font-semibold text-sm ${accent.text}`}>{row.step}</span>
+                    {row.description && (
+                      <p className="text-xs text-gray-600 mt-0.5">{row.description}</p>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0">{row.files.length} archivo{row.files.length !== 1 ? 's' : ''}</span>
                 </div>
 
                 {/* Files */}

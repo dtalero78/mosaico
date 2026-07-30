@@ -87,7 +87,7 @@ export async function GET(req: Request) {
 
   const field = tipo === 'usuario' ? 'materialUsuario' : 'material'
   const rows = await queryMany(
-    `SELECT "_id", "code", "step", "${field}", "orden"
+    `SELECT "_id", "code", "step", "description", "${field}", "orden"
      FROM "NIVELES"
      WHERE "code" = $1 AND ($2::text IS NULL OR "curso" = $2)
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
@@ -97,6 +97,7 @@ export async function GET(req: Request) {
   const steps = rows.map(row => ({
     _id:   row._id,
     step:  row.step,
+    description: row.description ?? '',
     files: parseFiles(row[field], tipo),
   }))
 
