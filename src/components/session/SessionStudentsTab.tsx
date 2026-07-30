@@ -455,6 +455,7 @@ export default function SessionStudentsTab({
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Evaluación de la Sesión</h3>
                 <div className="space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
                   {/* Hábitos */}
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Hábitos</p>
@@ -508,6 +509,7 @@ export default function SessionStudentsTab({
                         <span className="text-gray-700">Uso adecuado de cámara y micrófono</span>
                       </label>
                     </div>
+                  </div>
                   </div>
                   {/* Nivelación — casilla + dropdown de lecciones del curso.
                       Se OCULTA cuando el evento es tipo NIVELACION (el evento ya
