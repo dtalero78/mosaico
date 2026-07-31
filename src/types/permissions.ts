@@ -190,6 +190,8 @@ export enum AcademicoPermission {
 
   // Reporte Académico — consolidado semanal de métricas por salón (Académico › Guías)
   REPORTE_ACADEMICO_VER = 'ACADEMICO.REPORTE_ACADEMICO.VER',
+  REPORTE_ACADEMICO_PDF = 'ACADEMICO.REPORTE_ACADEMICO.PDF',             // imprimir / generar PDF del salón
+  REPORTE_ACADEMICO_INDIVIDUAL = 'ACADEMICO.REPORTE_ACADEMICO.INDIVIDUAL', // informe por estudiante + enviar WhatsApp
 
   // Refuerzo de Sesiones (antes "Solicitud de Sesiones" / Repetir Lección).
   // Los códigos NO se renombran: sólo cambió la etiqueta del menú, y renombrarlos

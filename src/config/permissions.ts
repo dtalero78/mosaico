@@ -592,7 +592,21 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     module: Module.ACADEMICO,
     section: 'Reporte Académico',
     name: 'Página "Reporte Académico"',
-    description: 'Acceso a /dashboard/academic/reporte-academico. Consolidado semanal de las métricas de sesión por salón (Hábitos/Desempeño/Actitudes), asistencia del curso, progreso, comentario IA y valoración del Guía. El Guía ve solo sus cursos; el admin elige el Guía en el filtro. Imprimible a PDF.',
+    description: 'Acceso a /dashboard/academic/reporte-academico. Consolidado semanal de las métricas de sesión por salón (Hábitos/Desempeño/Actitudes), asistencia del curso, progreso, comentario IA y valoración del Guía. El Guía ve solo sus cursos; el admin elige el Guía en el filtro.',
+  },
+  {
+    code: AcademicoPermission.REPORTE_ACADEMICO_PDF,
+    module: Module.ACADEMICO,
+    section: 'Reporte Académico',
+    name: 'Imprimir / Generar PDF',
+    description: 'Permite usar el botón "Imprimir / PDF" del Reporte Académico (genera el PDF del salón/semana).',
+  },
+  {
+    code: AcademicoPermission.REPORTE_ACADEMICO_INDIVIDUAL,
+    module: Module.ACADEMICO,
+    section: 'Reporte Académico',
+    name: 'Informe por estudiante + WhatsApp',
+    description: 'Permite abrir el informe individual de un estudiante y enviar su PDF por WhatsApp al apoderado.',
   },
   {
     code: AcademicoPermission.LISTA_USUARIOS_VER,

@@ -134,7 +134,9 @@ export default function ReporteAcademicoPage() {
 
           <div className="flex items-center justify-between mb-1 no-print">
             <h1 className="text-2xl font-bold text-gray-900">Reporte Académico</h1>
-            <button onClick={() => window.print()} className="px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">🖨 Imprimir / PDF</button>
+            <PermissionGuard permission={AcademicoPermission.REPORTE_ACADEMICO_PDF}>
+              <button onClick={() => window.print()} className="px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">🖨 Imprimir / PDF</button>
+            </PermissionGuard>
           </div>
           <p className="text-gray-500 mb-4 text-sm no-print">Consolidado semanal de métricas por salón. Óvalo por métrica según las sesiones de la semana. El Guía ve solo sus cursos.</p>
 
@@ -241,8 +243,10 @@ export default function ReporteAcademicoPage() {
                   <div key={r.academicaId} className="grid grid-cols-1 md:grid-cols-[170px_1fr_1fr]">
                     <div className="px-4 py-3 border-r border-gray-100">
                       <div className="flex flex-col"><b className="text-[13.5px]">{r.nombre}</b><span className="text-[11.5px] text-gray-500">{r.sesSemana} sesión(es) · {r.asistenciaCursoPct}% curso</span></div>
-                      <button onClick={() => setIndividual({ ...r, comentarioIA: comentIA[r.academicaId] || r.comentarioIA, notaGuia: notas[r.academicaId] ?? r.notaGuia })}
-                        className="no-print mt-2 text-xs font-semibold text-purple-700 hover:text-purple-900">📄 Informe individual</button>
+                      <PermissionGuard permission={AcademicoPermission.REPORTE_ACADEMICO_INDIVIDUAL}>
+                        <button onClick={() => setIndividual({ ...r, comentarioIA: comentIA[r.academicaId] || r.comentarioIA, notaGuia: notas[r.academicaId] ?? r.notaGuia })}
+                          className="no-print mt-2 text-xs font-semibold text-purple-700 hover:text-purple-900">📄 Informe individual</button>
+                      </PermissionGuard>
                     </div>
                     <div className="px-4 py-3 border-r border-gray-100">
                       <div className="flex items-center gap-2 mb-1"><span className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold">Comentario</span><span className="text-[9.5px] bg-fuchsia-50 text-fuchsia-600 rounded-full px-2 py-0.5 font-bold">✦ IA</span></div>

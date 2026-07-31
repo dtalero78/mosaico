@@ -20,7 +20,7 @@ const WHAPI_TOKEN = process.env.WHAPI_TOKEN || 'h2vjBWeG8csEl45GIuKgOr5pvGwCVTbu
  * Body: { academicaId, curso, salon, campaign?, guia?, startDate?, endDate? }
  */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
-  await requirePermission(session, AcademicoPermission.REPORTE_ACADEMICO_VER);
+  await requirePermission(session, AcademicoPermission.REPORTE_ACADEMICO_INDIVIDUAL);
   const b = await request.json().catch(() => ({}));
   const academicaId = String(b?.academicaId || '').trim();
   if (!academicaId) throw new ValidationError('Falta el estudiante.');

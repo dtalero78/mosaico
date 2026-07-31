@@ -15,23 +15,27 @@ const APPLY = process.argv.includes('--apply');
 const url = (process.env.DATABASE_URL || '').replace(/([?&])sslmode=[^&]*/, '');
 const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false } });
 
-const PERM = 'ACADEMICO.REPORTE_ACADEMICO.VER';
+const PERMS = ['ACADEMICO.REPORTE_ACADEMICO.VER', 'ACADEMICO.REPORTE_ACADEMICO.PDF', 'ACADEMICO.REPORTE_ACADEMICO.INDIVIDUAL'];
 const ROLES = ['GUIA', 'COORDINADOR_ACADEMICO', 'ASISTENTE_ACADEMICO', 'ACADEMICO_JEFE'];
 
 (async () => {
   console.log(APPLY ? '🔴 APPLY' : '🟡 DRY-RUN');
   const before = (await pool.query(
-    `SELECT "rol", ("permisos" @> $1::jsonb) AS tiene FROM "ROL_PERMISOS" WHERE "rol" = ANY($2) ORDER BY "rol"`,
-    [JSON.stringify([PERM]), ROLES]
+    `SELECT "rol", ("permisos" @> $1::jsonb) AS "tieneTodos" FROM "ROL_PERMISOS" WHERE "rol" = ANY($2) ORDER BY "rol"`,
+    [JSON.stringify(PERMS), ROLES]
   )).rows;
   console.table(before);
   if (APPLY) {
-    const r = await pool.query(
-      `UPDATE "ROL_PERMISOS" SET "permisos" = "permisos" || $1::jsonb, "fechaActualizacion" = NOW()
-        WHERE "rol" = ANY($2) AND NOT ("permisos" @> $1::jsonb)`,
-      [JSON.stringify([PERM]), ROLES]
-    );
-    console.log(`\n  ✅ Roles actualizados: ${r.rowCount}`);
+    let n = 0;
+    for (const perm of PERMS) {
+      const r = await pool.query(
+        `UPDATE "ROL_PERMISOS" SET "permisos" = "permisos" || $1::jsonb, "fechaActualizacion" = NOW()
+          WHERE "rol" = ANY($2) AND NOT ("permisos" @> $1::jsonb)`,
+        [JSON.stringify([perm]), ROLES]
+      );
+      n += r.rowCount || 0;
+    }
+    console.log(`\n  ✅ Actualizaciones aplicadas: ${n}`);
   } else {
     console.log('\n  (dry-run — corre con --apply)');
   }
