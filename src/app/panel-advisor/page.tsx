@@ -424,8 +424,8 @@ function PanelAdvisorContent() {
           {advisorSwitcher}
         </div>
 
-        {/* Botón de Libros */}
-        <div className="-mt-2">
+        {/* Acciones rápidas */}
+        <div className="-mt-2 flex flex-wrap gap-2">
           <button
             onClick={handleOpenBooksModal}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -433,6 +433,12 @@ function PanelAdvisorContent() {
             <BookOpenIcon className="h-5 w-5" />
             Descargar Libros
           </button>
+          <a
+            href="/dashboard/academic/reporte-academico"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors"
+          >
+            📊 Reporte Académico
+          </a>
         </div>
 
         {/* Pestañas: Calendario | Cursos asignados | Control de Horas */}
