@@ -29,6 +29,8 @@ export default function ReporteAcademicoPage() {
   const [notas, setNotas] = useState<Record<string, string>>({})
   const [savingNota, setSavingNota] = useState<string | null>(null)
   const [comentIA, setComentIA] = useState<Record<string, string>>({})
+  const [individual, setIndividual] = useState<any>(null)
+  const [enviando, setEnviando] = useState(false)
 
   const fetchData = useCallback(async (fl: typeof f) => {
     setLoading(true)
@@ -81,8 +83,21 @@ export default function ReporteAcademicoPage() {
     } catch (e: any) { toast.error(e?.message || 'Error al guardar') } finally { setSavingNota(null) }
   }
 
+  const enviarWhatsapp = async (r: any) => {
+    setEnviando(true)
+    try {
+      const res = await fetch('/api/postgres/reports/academico/reporte-academico/enviar-whatsapp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ academicaId: r.academicaId, curso: data.curso, salon: data.salon, guia: applied.guia || undefined, startDate: applied.startDate || undefined, endDate: applied.endDate || undefined }),
+      }).then(x => x.json())
+      if (res.error) throw new Error(res.error)
+      toast.success(`Enviado al apoderado (${res.to})`)
+    } catch (e: any) { toast.error(e?.message || 'Error al enviar por WhatsApp') } finally { setEnviando(false) }
+  }
+
   const rows = data?.rows || []
   const R = data?.resumen || {}
+  const ov = individual ? individual : null
 
   return (
     <DashboardLayout>
@@ -224,7 +239,11 @@ export default function ReporteAcademicoPage() {
               <div className="bg-white border border-gray-200 rounded-xl shadow-sm divide-y divide-gray-100">
                 {rows.map((r: any) => (
                   <div key={r.academicaId} className="grid grid-cols-1 md:grid-cols-[170px_1fr_1fr]">
-                    <div className="px-4 py-3 border-r border-gray-100"><div className="flex flex-col"><b className="text-[13.5px]">{r.nombre}</b><span className="text-[11.5px] text-gray-500">{r.sesSemana} sesión(es) · {r.asistenciaCursoPct}% curso</span></div></div>
+                    <div className="px-4 py-3 border-r border-gray-100">
+                      <div className="flex flex-col"><b className="text-[13.5px]">{r.nombre}</b><span className="text-[11.5px] text-gray-500">{r.sesSemana} sesión(es) · {r.asistenciaCursoPct}% curso</span></div>
+                      <button onClick={() => setIndividual({ ...r, comentarioIA: comentIA[r.academicaId] || r.comentarioIA, notaGuia: notas[r.academicaId] ?? r.notaGuia })}
+                        className="no-print mt-2 text-xs font-semibold text-purple-700 hover:text-purple-900">📄 Informe individual</button>
+                    </div>
                     <div className="px-4 py-3 border-r border-gray-100">
                       <div className="flex items-center gap-2 mb-1"><span className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold">Comentario</span><span className="text-[9.5px] bg-fuchsia-50 text-fuchsia-600 rounded-full px-2 py-0.5 font-bold">✦ IA</span></div>
                       <p className="text-[13px] text-gray-800 whitespace-pre-wrap min-h-[20px]">{comentIA[r.academicaId] || <span className="text-gray-400">— sin generar —</span>}</p>
@@ -244,6 +263,47 @@ export default function ReporteAcademicoPage() {
                 ))}
               </div>
             </>
+          )}
+
+          {/* Modal informe individual */}
+          {ov && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto no-print" onClick={() => setIndividual(null)}>
+              <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full my-6" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                  <h3 className="font-bold text-gray-900">Informe individual</h3>
+                  <button onClick={() => setIndividual(null)} title="Cerrar" className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+                </div>
+                <div className="p-5">
+                  <div className="text-lg font-extrabold">{ov.nombre}</div>
+                  <div className="text-xs text-gray-500 mb-3">ID {ov.numeroId} · {ov.plataforma} · Módulo {ov.nivel} · {ov.step}</div>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="border border-gray-200 rounded-lg p-2.5 text-center"><div className="text-[10px] uppercase text-gray-500 font-semibold">Sesiones</div><div className="text-xl font-extrabold">{ov.sesSemana}</div></div>
+                    <div className="border border-gray-200 rounded-lg p-2.5 text-center"><div className="text-[10px] uppercase text-gray-500 font-semibold">Asist. curso</div><div className="text-xl font-extrabold text-fuchsia-600">{ov.asistenciaCursoPct}%</div></div>
+                    <div className="border border-gray-200 rounded-lg p-2.5 text-center"><div className="text-[10px] uppercase text-gray-500 font-semibold">Progreso</div><div className="text-xl font-extrabold">{ov.progresoPct}%</div></div>
+                  </div>
+                  <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 mb-4">
+                    {METRIC_COLS.map(m => (
+                      <div key={m.key} className="flex items-center justify-between px-3 py-2 text-sm">
+                        <span className="text-gray-700">{m.ico} {m.label}</span>
+                        <span className="flex items-center gap-2"><span className={`oval ${ov.metricas[m.key]?.estado || 'none'}`}></span><span className="text-xs text-gray-500 tabular-nums">{ov.metricas[m.key]?.cumplidas || 0}/{ov.sesSemana}</span></span>
+                      </div>
+                    ))}
+                  </div>
+                  {ov.comentarioIA && <div className="mb-3"><div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario IA</div><p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.comentarioIA}</p></div>}
+                  {ov.notaGuia && <div className="mb-3"><div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Valoración del Guía</div><p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.notaGuia}</p></div>}
+                  <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
+                    {ov.apoderadoTelefono ? <>Se enviará el PDF de este informe al apoderado <b>{ov.apoderado || ''}</b> (••••{String(ov.apoderadoTelefono).slice(-4)}).</> : <>⚠ El apoderado no tiene teléfono registrado; no se puede enviar por WhatsApp.</>}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 px-5 py-3 border-t border-gray-100">
+                  <button onClick={() => setIndividual(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cerrar</button>
+                  <button onClick={() => enviarWhatsapp(ov)} disabled={enviando || !ov.apoderadoTelefono}
+                    className="px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                    {enviando ? 'Enviando…' : '📲 Enviar por WhatsApp'}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </PermissionGuard>
