@@ -24,8 +24,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const semanaInicio = String(b?.semanaInicio || '').trim();
   if (!academicaId || !salon || !semanaInicio) throw new ValidationError('Falta academicaId, salon o semanaInicio.');
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new ValidationError('Falta ANTHROPIC_API_KEY para generar el comentario.');
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new ValidationError('Falta OPENAI_API_KEY para generar el comentario.');
 
   const ses = Number(b?.sesSemana) || 0;
   const met = b?.metricas || {};
@@ -50,17 +50,14 @@ Redacta el comentario para el apoderado.`;
 
   let texto = '';
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', max_tokens: 400,
-        system, messages: [{ role: 'user', content: user }],
-      }),
+    // OpenAI gpt-4o-mini (mismo proveedor que las actividades complementarias).
+    const OpenAI = (await import('openai')).default;
+    const client = new OpenAI({ apiKey });
+    const r = await client.chat.completions.create({
+      model: 'gpt-4o-mini', max_tokens: 400, temperature: 0.5,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
     });
-    const j = await res.json();
-    if (!res.ok) throw new Error(j?.error?.message || `Anthropic ${res.status}`);
-    texto = String(j?.content?.[0]?.text || '').trim();
+    texto = String(r.choices?.[0]?.message?.content || '').trim();
   } catch (e: any) {
     throw new ValidationError('No se pudo generar el comentario IA: ' + (e?.message || 'error'));
   }
