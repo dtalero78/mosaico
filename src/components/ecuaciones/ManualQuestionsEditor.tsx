@@ -55,6 +55,7 @@ export default function ManualQuestionsEditor({
   const [eqOpen, setEqOpen] = useState(false);
   const [imgOpen, setImgOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [previewQi, setPreviewQi] = useState<number | null>(null);
   const activeRef = useRef<ActiveField | null>(null);
 
   const update = (qs: ManualQuestion[]) => onChange(qs);
@@ -154,8 +155,12 @@ export default function ManualQuestionsEditor({
                 <option value="true_false">Verdadero / Falso</option>
               </select>
             </div>
-            <button type="button" onClick={() => removeQuestion(qi)}
-              className="text-xs text-red-500 hover:text-red-700">Eliminar</button>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => setPreviewQi(qi)}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">👁 Vista previa</button>
+              <button type="button" onClick={() => removeQuestion(qi)}
+                className="text-xs text-red-500 hover:text-red-700">Eliminar</button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between mb-1">
@@ -232,6 +237,49 @@ export default function ManualQuestionsEditor({
         className="w-full py-2 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-600 hover:border-indigo-400 hover:text-indigo-600">
         + Agregar pregunta
       </button>
+
+      {/* Vista previa de una pregunta — tal como la ve el alumno (la correcta va marcada en verde) */}
+      {previewQi != null && value[previewQi] && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto"
+          onClick={() => setPreviewQi(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full my-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Vista previa — Pregunta {previewQi + 1}</h3>
+              <button type="button" onClick={() => setPreviewQi(null)} title="Cerrar"
+                className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
+            <div className="p-5">
+              <p className="text-xs font-semibold text-gray-500 mb-1">
+                Pregunta {previewQi + 1} · {value[previewQi].type === 'true_false' ? 'V/F' : 'opción múltiple'}
+              </p>
+              <div className="text-sm text-gray-800 mb-3">
+                <MathText block>{value[previewQi].question || '(sin enunciado)'}</MathText>
+              </div>
+              <div className="space-y-2">
+                {(value[previewQi].type === 'true_false' ? TF_OPTIONS : value[previewQi].options).map((opt, oj) => {
+                  const esCorrecta = !!opt && value[previewQi!].correctAnswer === opt;
+                  return (
+                    <label key={oj} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 border ${esCorrecta ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100'}`}>
+                      <input type="radio" disabled checked={esCorrecta} readOnly className="mt-1" />
+                      <span className={`text-sm ${esCorrecta ? 'text-emerald-800 font-medium' : 'text-gray-700'}`}>
+                        <MathText>{opt || `Opción ${oj + 1}`}</MathText>
+                      </span>
+                      {esCorrecta && <span className="ml-auto text-[11px] text-emerald-700 font-semibold">✓ correcta</span>}
+                    </label>
+                  );
+                })}
+              </div>
+              {value[previewQi].explanation?.trim() && (
+                <div className="mt-3 text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg p-2">
+                  <span className="font-semibold text-gray-500">Feedback: </span>
+                  <MathText>{value[previewQi].explanation || ''}</MathText>
+                </div>
+              )}
+              <p className="mt-3 text-[11px] text-gray-400">La marca verde (✓ correcta) solo la ves tú; el alumno ve las opciones sin resaltar.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <InsertEquationModal open={eqOpen} onClose={() => setEqOpen(false)} onInsert={insertSnippet} />
       <InsertImageModal open={imgOpen} onClose={() => setImgOpen(false)} onInsert={insertSnippet} curso={curso} code={code} step={step} />
