@@ -50,8 +50,8 @@ Datos: ${JSON.stringify(data)}
 // ── Call Claude API to generate a single chart ───────────────────
 
 async function generateChartWithClaude(chartPrompt: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
 
   const systemPrompt = `Eres un experto en visualización de datos. Genera un documento HTML completo con una sola gráfica SVG inline para un dashboard administrativo. El diseño debe ser moderno, limpio y profesional.
 
@@ -69,29 +69,16 @@ REGLAS:
 - Si el dataset está vacío, muestra un mensaje "Sin datos disponibles".
 - NO incluyas explicaciones, solo el HTML.`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 8000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: chartPrompt }],
-    }),
+  // OpenAI gpt-4o-mini (mismo proveedor que el comentario IA y las complementarias).
+  const OpenAI = (await import('openai')).default;
+  const client = new OpenAI({ apiKey });
+  const r = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    max_tokens: 8000,
+    temperature: 0.3,
+    messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: chartPrompt }],
   });
-
-  if (!response.ok) {
-    const err = await response.text();
-    console.error('[Charts] Claude API error:', response.status, err.slice(0, 500));
-    throw new Error(`Claude API error ${response.status}: ${err.slice(0, 200)}`);
-  }
-
-  const result = await response.json();
-  const text = result.content?.[0]?.text || '';
+  const text = r.choices?.[0]?.message?.content || '';
 
   const htmlMatch = text.match(/```html?\s*([\s\S]*?)```/);
   return htmlMatch ? htmlMatch[1].trim() : text.trim();
