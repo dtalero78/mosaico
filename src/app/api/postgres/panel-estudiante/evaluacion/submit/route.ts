@@ -30,7 +30,7 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
   const nombre = [student.primerNombre, student.segundoNombre, student.primerApellido, student.segundoApellido]
     .filter(Boolean).join(' ').trim() || null
 
-  if (!curso || !/evaluac/i.test(nivel)) {
+  if (!curso || !/evaluac|entren/i.test(nivel)) {
     throw new ValidationError('Tu lección actual no es una evaluación.')
   }
 

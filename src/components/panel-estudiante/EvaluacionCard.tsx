@@ -24,7 +24,7 @@ export default function EvaluacionCard() {
 
   const d: any = data || {}
   const reached = !!d.reached
-  const num = d.evalNum || ''
+  const label = d.evalCode || 'evaluación'  // nombre del módulo: "Evaluación 01" / "Entrenamiento 01"
   const preguntas: Pregunta[] = Array.isArray(d.preguntas) ? d.preguntas : []
 
   const [phase, setPhase] = useState<'idle' | 'confirm' | 'eval' | 'done'>('idle')
@@ -81,7 +81,7 @@ export default function EvaluacionCard() {
       {!reached ? (
         d.evalCode ? (
           <>
-            <p className="text-sm text-gray-600">Siguiente evaluación:</p>
+            <p className="text-sm text-gray-600">Siguiente:</p>
             <p className="text-lg font-bold text-orange-700 mt-0.5">{d.evalCode}</p>
             <p className="text-xs text-gray-500 mt-2">Se habilitará cuando avances a esa lección.</p>
           </>
@@ -90,7 +90,7 @@ export default function EvaluacionCard() {
         )
       ) : d.yaEnviada ? (
         <>
-          <p className="text-sm text-gray-700">Ya presentaste la <strong>Evaluación {num}</strong>.</p>
+          <p className="text-sm text-gray-700">Ya presentaste <strong>{label}</strong>.</p>
           {d.resultado && (
             <p className="text-xs text-gray-500 mt-1">Puntaje registrado: {d.resultado.score} / {d.resultado.total}</p>
           )}
@@ -98,7 +98,7 @@ export default function EvaluacionCard() {
       ) : d.tieneEvaluacion ? (
         <>
           <p className="text-sm text-gray-700">
-            Has avanzado a la <strong>Evaluación {num}</strong>. Espera las instrucciones en la sesión de tu guía para
+            Has avanzado a <strong>{label}</strong>. Espera las instrucciones en la sesión de tu guía para
             realizar la evaluación.
           </p>
           <button type="button" onClick={() => setPhase('confirm')}
@@ -115,8 +115,8 @@ export default function EvaluacionCard() {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-center">
             <ClipboardDocumentCheckIcon className="h-10 w-10 text-orange-500 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Evaluación {num}</h3>
-            <p className="text-sm text-gray-600">Tu guía ya te explicó cómo presentar la Evaluación. Tendrás 30 minutos para responderla.</p>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">{label}</h3>
+            <p className="text-sm text-gray-600">Tu guía ya te explicó cómo presentar la evaluación. Tendrás 30 minutos para responderla.</p>
             <div className="mt-6 flex justify-center gap-3">
               <button type="button" onClick={() => setPhase('idle')}
                 className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Salir</button>
@@ -132,7 +132,7 @@ export default function EvaluacionCard() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full my-6">
             <div className="sticky top-0 bg-white border-b border-gray-100 rounded-t-2xl px-5 py-3 flex items-center justify-between">
-              <h3 className="font-bold text-gray-900">Evaluación {num}</h3>
+              <h3 className="font-bold text-gray-900">{label}</h3>
               <div className={`flex items-center gap-1.5 text-sm font-semibold ${remaining <= 60 ? 'text-red-600' : 'text-gray-700'}`}>
                 <ClockIcon className="h-5 w-5" /> {mmss}
               </div>

@@ -42,14 +42,16 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
     [curso, nivel, step]
   )
   const currentOrden = cur?.orden ?? null
-  const actualEsEval = /evaluac/i.test(nivel)
+  // Módulos evaluables del alumno: "Evaluación NN" y "Entrenamiento NN"
+  // (misma regla que el editor de Contenido: /evaluac|entren/i).
+  const actualEsEval = /evaluac|entren/i.test(nivel)
 
   const evals = (await query(
     `SELECT "code","step","orden","evaluacionModo",
             (COALESCE("preguntasManual"::text,'[]') NOT IN ('[]','null')) AS "tienePreguntas",
             "preguntasManual"
        FROM "NIVELES"
-      WHERE UPPER("curso")=UPPER($1) AND "code" ILIKE '%evaluac%'
+      WHERE UPPER("curso")=UPPER($1) AND ("code" ILIKE '%evaluac%' OR "code" ILIKE '%entren%')
       ORDER BY "orden" ASC`,
     [curso]
   )).rows as any[]
