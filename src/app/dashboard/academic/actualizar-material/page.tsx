@@ -76,8 +76,8 @@ export default function ActualizarMaterialPage() {
             </svg>
           </div>
           <div className="text-center">
-            <div className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">Contenido</div>
-            <div className="text-sm text-gray-500 mt-1">Temario por lección (quiz IA)</div>
+            <div className="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">Gestión de Contenido</div>
+            <div className="text-sm text-gray-500 mt-1">Temario, evaluaciones y temporizador</div>
           </div>
         </button>
 

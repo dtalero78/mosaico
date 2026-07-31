@@ -49,6 +49,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const step = String(body?.step || '').trim();
   const apply = body?.apply === true;
   const preguntas: Preg[] = Array.isArray(body?.preguntas) ? body.preguntas : [];
+  const minRaw = Math.round(Number(body?.minutos));
+  const minutos = Number.isFinite(minRaw) && minRaw >= 1 && minRaw <= 180 ? minRaw : null;
 
   if (!curso || !code || !step) throw new ValidationError('Falta curso, módulo o lección de destino.');
   if (!preguntas.length) throw new ValidationError('No hay preguntas para importar.');
@@ -74,9 +76,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   }
 
   await query(
-    `UPDATE "NIVELES" SET "evaluacionModo"='MANUAL', "preguntasManual"=$4::jsonb
+    `UPDATE "NIVELES" SET "evaluacionModo"='MANUAL', "preguntasManual"=$4::jsonb,
+            "evaluacionMinutos"=COALESCE($5, "evaluacionMinutos")
       WHERE "curso"=$1 AND "code"=$2 AND "step"=$3`,
-    [curso, code, step, JSON.stringify(limpias)]
+    [curso, code, step, JSON.stringify(limpias), minutos]
   );
 
   const email = (session as any)?.user?.email || 'desconocido';

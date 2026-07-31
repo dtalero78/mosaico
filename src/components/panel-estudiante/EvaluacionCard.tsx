@@ -25,6 +25,7 @@ export default function EvaluacionCard() {
   const d: any = data || {}
   const reached = !!d.reached
   const label = d.evalCode || 'evaluación'  // nombre del módulo: "Evaluación 01" / "Entrenamiento 01"
+  const durMin = Number(d.duracionMin) > 0 ? Number(d.duracionMin) : 30
   const preguntas: Pregunta[] = Array.isArray(d.preguntas) ? d.preguntas : []
 
   const [phase, setPhase] = useState<'idle' | 'confirm' | 'eval' | 'done'>('idle')
@@ -64,7 +65,7 @@ export default function EvaluacionCard() {
   }, [phase, remaining])
 
   const aceptar = () => {
-    setAnswers({}); setRemaining(30 * 60); setResult(null)
+    setAnswers({}); setRemaining(durMin * 60); setResult(null)
     iniciadaRef.current = new Date().toISOString()
     setPhase('eval')
   }
@@ -116,7 +117,7 @@ export default function EvaluacionCard() {
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-center">
             <ClipboardDocumentCheckIcon className="h-10 w-10 text-orange-500 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-gray-900 mb-1">{label}</h3>
-            <p className="text-sm text-gray-600">Tu guía ya te explicó cómo presentar la evaluación. Tendrás 30 minutos para responderla.</p>
+            <p className="text-sm text-gray-600">Tu guía ya te explicó cómo presentar la evaluación. Tendrás {durMin} minutos para responderla.</p>
             <div className="mt-6 flex justify-center gap-3">
               <button type="button" onClick={() => setPhase('idle')}
                 className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Salir</button>

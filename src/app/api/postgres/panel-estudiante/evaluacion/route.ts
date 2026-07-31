@@ -47,7 +47,7 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
   const actualEsEval = /evaluac|entren/i.test(nivel)
 
   const evals = (await query(
-    `SELECT "code","step","orden","evaluacionModo",
+    `SELECT "code","step","orden","evaluacionModo","evaluacionMinutos",
             (COALESCE("preguntasManual"::text,'[]') NOT IN ('[]','null')) AS "tienePreguntas",
             "preguntasManual"
        FROM "NIVELES"
@@ -75,7 +75,7 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
       tieneEvaluacion,
       yaEnviada: !!prev,
       resultado: prev || null,
-      duracionMin: 30,
+      duracionMin: Number(actual?.evaluacionMinutos) > 0 ? Number(actual?.evaluacionMinutos) : 30,
       curso, code: nivel, step,
       preguntas: tieneEvaluacion ? sanitize(actual?.preguntasManual) : [],
     })

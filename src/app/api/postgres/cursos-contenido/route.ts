@@ -19,6 +19,7 @@ interface Row {
   orden: number | null;
   evaluacionModo: string | null;
   preguntasManual: any;
+  evaluacionMinutos: number | null;
 }
 
 function parseRecursos(raw: any): { nombre: string; link: string }[] {
@@ -52,7 +53,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const r = await query<Row>(
     `SELECT "step","description","contenido","actividadKahoot","actividadWordwall",
             "actividadKahootNombre","actividadWordwallNombre","descripcionModulo","recursos",
-            "orden","evaluacionModo","preguntasManual"
+            "orden","evaluacionModo","preguntasManual","evaluacionMinutos"
      FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
     [curso, code]
@@ -74,6 +75,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
       actividadWordwallNombre: x.actividadWordwallNombre ?? '',
       evaluacionModo: (x.evaluacionModo || 'IA').toUpperCase(),
       preguntasManual: parsePreguntas(x.preguntasManual),
+      evaluacionMinutos: Number(x.evaluacionMinutos) > 0 ? Number(x.evaluacionMinutos) : 30,
     })),
   });
 });
@@ -125,7 +127,8 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
     const hasWordwallN = Object.prototype.hasOwnProperty.call(body, 'actividadWordwallNombre');
     const hasModo = Object.prototype.hasOwnProperty.call(body, 'evaluacionModo');
     const hasPreg = Object.prototype.hasOwnProperty.call(body, 'preguntasManual');
-    if (!hasDesc && !hasCont && !hasKahoot && !hasWordwall && !hasKahootN && !hasWordwallN && !hasModo && !hasPreg) throw new ValidationError('nada que actualizar');
+    const hasMin = Object.prototype.hasOwnProperty.call(body, 'evaluacionMinutos');
+    if (!hasDesc && !hasCont && !hasKahoot && !hasWordwall && !hasKahootN && !hasWordwallN && !hasModo && !hasPreg && !hasMin) throw new ValidationError('nada que actualizar');
 
     const sets: string[] = [];
     const params: any[] = [curso, code, step];
@@ -145,6 +148,11 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
       const preg = Array.isArray(body.preguntasManual) ? body.preguntasManual : [];
       sets.push(`"preguntasManual" = $${i++}::jsonb`); params.push(JSON.stringify(preg));
     }
+    if (hasMin) {
+      const min = Math.round(Number(body.evaluacionMinutos));
+      if (!Number.isFinite(min) || min < 1 || min > 180) throw new ValidationError('evaluacionMinutos inválido (1–180)');
+      sets.push(`"evaluacionMinutos" = $${i++}`); params.push(min);
+    }
     sets.push(`"_updatedDate" = NOW()`);
 
     const res = await query(
@@ -152,7 +160,7 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
       params
     );
     if (res.rowCount === 0) throw new ValidationError('Lección no encontrada');
-    accion = (hasModo || hasPreg) ? 'EVALUACION' : hasCont ? 'CONTENIDO' : 'DESCRIPCION';
+    accion = (hasModo || hasPreg || hasMin) ? 'EVALUACION' : hasCont ? 'CONTENIDO' : 'DESCRIPCION';
   }
 
   await query(`

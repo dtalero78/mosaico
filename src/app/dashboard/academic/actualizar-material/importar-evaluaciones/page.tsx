@@ -146,7 +146,7 @@ export default function ImportarEvaluacionesPage() {
     try {
       const res = await fetch('/api/postgres/niveles/importar-evaluacion', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ curso, code, step, preguntas, apply: true }),
+        body: JSON.stringify({ curso, code, step, preguntas, apply: true, minutos: Number(meta?.time) || undefined }),
       }).then((r) => r.json())
       if (res.error) throw new Error(res.error)
       toast.success(`Evaluación importada: ${res.importadas} pregunta(s) en ${curso} / ${code} / ${step}`)
@@ -180,7 +180,7 @@ export default function ImportarEvaluacionesPage() {
           <p className="text-xs text-gray-500 mt-2">
             {preguntas.length} pregunta(s){meta.time && ` · ${meta.time} min`}{meta.attempts && ` · ${meta.attempts} intentos`}{meta.passing && ` · aprobación ${meta.passing}`}
           </p>
-          <p className="text-[11px] text-gray-400 mt-1">Nota: el tiempo/intentos/aprobación del CSV son informativos; el alumno la presenta con el temporizador de 30 min del panel.</p>
+          <p className="text-[11px] text-gray-400 mt-1">El tiempo del CSV se usa como temporizador del alumno ({Number(meta.time) > 0 ? `${meta.time} min` : '30 min'}); lo puedes ajustar luego en Gestión de Contenido. Intentos/aprobación son informativos.</p>
         </div>
       )}
 

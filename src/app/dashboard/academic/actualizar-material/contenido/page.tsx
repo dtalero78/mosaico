@@ -21,6 +21,7 @@ interface Leccion {
   actividadWordwallNombre?: string
   evaluacionModo?: string
   preguntasManual?: ManualQuestion[]
+  evaluacionMinutos?: number
 }
 
 function LeccionEditor({
@@ -39,6 +40,7 @@ function LeccionEditor({
 
   const [modo, setModo] = useState<'IA' | 'MANUAL'>((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
   const [preguntas, setPreguntas] = useState<ManualQuestion[]>(leccion.preguntasManual || [])
+  const [minutos, setMinutos] = useState<number>(Number(leccion.evaluacionMinutos) > 0 ? Number(leccion.evaluacionMinutos) : 30)
   const [savingEval, setSavingEval] = useState(false)
   const [imgOpen, setImgOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
@@ -54,6 +56,7 @@ function LeccionEditor({
     setKahootNombre(leccion.actividadKahootNombre || ''); setWordwallNombre(leccion.actividadWordwallNombre || '')
     setModo((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
     setPreguntas(leccion.preguntasManual || [])
+    setMinutos(Number(leccion.evaluacionMinutos) > 0 ? Number(leccion.evaluacionMinutos) : 30)
   }, [leccion])
 
   const saveEval = async () => {
@@ -66,7 +69,7 @@ function LeccionEditor({
       const r = await fetch('/api/postgres/cursos-contenido', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ curso, code, step: leccion.step, evaluacionModo: modo, preguntasManual: modo === 'MANUAL' ? preguntas : [] }),
+        body: JSON.stringify({ curso, code, step: leccion.step, evaluacionModo: modo, preguntasManual: modo === 'MANUAL' ? preguntas : [], evaluacionMinutos: minutos }),
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
       toast.success(`Evaluación de ${leccion.step} guardada (${modo})`)
@@ -218,6 +221,21 @@ function LeccionEditor({
           </p>
         ) : modo === 'MANUAL' ? (
           <>
+            {/* Temporizador que verá el alumno al presentar esta evaluación/entrenamiento */}
+            <div className="flex items-center gap-3 mb-3 p-2.5 bg-orange-50 border border-orange-100 rounded-lg">
+              <span className="text-sm font-medium text-gray-700">Tiempo del alumno:</span>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setMinutos((m) => Math.max(1, m - 5))}
+                  className="w-7 h-7 rounded-md border border-gray-300 text-gray-700 hover:bg-white font-bold leading-none">−</button>
+                <input type="number" min={1} max={180} value={minutos}
+                  onChange={(e) => setMinutos(Math.min(180, Math.max(1, Math.round(Number(e.target.value) || 1))))}
+                  className="w-16 text-center border border-gray-300 rounded-md py-1 text-sm" />
+                <button type="button" onClick={() => setMinutos((m) => Math.min(180, m + 5))}
+                  className="w-7 h-7 rounded-md border border-gray-300 text-gray-700 hover:bg-white font-bold leading-none">+</button>
+              </div>
+              <span className="text-sm text-gray-600">minutos</span>
+              <span className="text-[11px] text-gray-400 ml-auto">Se aplica al guardar la evaluación.</span>
+            </div>
             <p className="text-xs text-gray-400 mb-3">
               Preguntas escritas a mano (se autocalifican, sin IA). Cada pregunta tiene su enunciado y 4 respuestas
               (marca la correcta). Puedes insertar <strong>ecuaciones, imágenes y links</strong> tanto en el enunciado
@@ -299,7 +317,7 @@ export default function ContenidoCursoPage() {
   return (
     <PermissionGuard permission={AcademicoPermission.ACTUALIZAR_MATERIAL} showDefaultMessage>
       <div className="p-6 max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Contenido del curso</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Gestión de Contenido</h1>
         <p className="text-gray-500 mb-6">
           Edita la descripción del módulo y el contenido/temario de cada lección. El contenido alimenta el quiz de actividades complementarias.
         </p>
