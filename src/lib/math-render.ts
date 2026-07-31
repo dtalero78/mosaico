@@ -19,6 +19,32 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/**
+ * Decodifica entidades HTML (nombradas + numéricas) a su carácter Unicode.
+ * Los CSV tipo Tutor LMS traen tildes/signos como `&oacute;`, `&iquest;`,
+ * `&minus;`, etc. Se aplica al texto plano ANTES de escaparlo, para que se vean
+ * correctos tanto en importaciones nuevas como en las ya guardadas.
+ */
+const NAMED_ENTITIES: Record<string, string> = {
+  aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú', uuml: 'ü', ntilde: 'ñ',
+  Aacute: 'Á', Eacute: 'É', Iacute: 'Í', Oacute: 'Ó', Uacute: 'Ú', Uuml: 'Ü', Ntilde: 'Ñ',
+  iquest: '¿', iexcl: '¡', laquo: '«', raquo: '»', ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’',
+  ndash: '–', mdash: '—', hellip: '…', deg: '°', middot: '·', times: '×', divide: '÷',
+  plusmn: '±', le: '≤', ge: '≥', ne: '≠', minus: '−', frac12: '½', frac14: '¼', frac34: '¾',
+  sup2: '²', sup3: '³', euro: '€', pound: '£', cent: '¢', copy: '©', reg: '®', trade: '™',
+  nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+};
+export function decodeHtmlEntities(s: string): string {
+  if (!s) return s;
+  return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (whole, ent) => {
+    if (ent[0] === '#') {
+      const code = ent[1] === 'x' || ent[1] === 'X' ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10);
+      try { return Number.isFinite(code) ? String.fromCodePoint(code) : whole; } catch { return whole; }
+    }
+    return NAMED_ENTITIES[ent] != null ? NAMED_ENTITIES[ent] : whole;
+  });
+}
+
 /** Escapa una cadena para usarla dentro de un atributo HTML entre comillas dobles. */
 function escapeAttr(s: string): string {
   return escapeHtml(s).replace(/"/g, '&quot;');
@@ -41,7 +67,7 @@ export function renderMathText(input: string): string {
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = regex.exec(input)) !== null) {
-    if (m.index > last) parts.push(escapeHtml(input.slice(last, m.index)));
+    if (m.index > last) parts.push(escapeHtml(decodeHtmlEntities(input.slice(last, m.index))));
 
     if (m[1] != null || m[2] != null) {
       // Ecuación LaTeX
@@ -54,7 +80,7 @@ export function renderMathText(input: string): string {
       }
     } else if (m[4] != null) {
       // Imagen ![alt](url)
-      const url = safeUrl(m[4]);
+      const url = safeUrl(decodeHtmlEntities(m[4]));
       if (url) {
         // Imagen en BLOQUE y CENTRADA (su propia línea): el texto de la pregunta
         // queda ARRIBA y el texto que siga queda DEBAJO de la imagen.
@@ -64,7 +90,7 @@ export function renderMathText(input: string): string {
       }
     } else if (m[6] != null) {
       // Link [texto](url)
-      const url = safeUrl(m[6]);
+      const url = safeUrl(decodeHtmlEntities(m[6]));
       if (url) {
         parts.push(`<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer" class="text-indigo-600 underline">${escapeHtml(m[5] ?? '')}</a>`);
       } else {
@@ -73,7 +99,7 @@ export function renderMathText(input: string): string {
     }
     last = regex.lastIndex;
   }
-  if (last < input.length) parts.push(escapeHtml(input.slice(last)));
+  if (last < input.length) parts.push(escapeHtml(decodeHtmlEntities(input.slice(last))));
   return parts.join('');
 }
 

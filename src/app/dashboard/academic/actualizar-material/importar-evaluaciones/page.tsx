@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
 import MathText from '@/components/ecuaciones/MathText'
+import { decodeHtmlEntities } from '@/lib/math-render'
 import { ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 
 interface Preg {
@@ -40,10 +41,9 @@ function parseCsv(text: string): string[][] {
 /* HTML del enunciado → texto/ecuación. Operaciones verticales (líneas de números con
    signo) se reconstruyen como expresión $a - b + c$ para que KaTeX las renderice. */
 function htmlLines(html: string): string[] {
-  let t = String(html || '')
-    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>').replace(/&#39;/g, "'").replace(/&quot;/gi, '"')
-  t = t.replace(/<\/p>/gi, '\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')
+  // 1º quitar etiquetas (los <p>/<br> → salto de línea), 2º decodificar entidades.
+  let t = String(html || '').replace(/<\/p>/gi, '\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')
+  t = decodeHtmlEntities(t)
   return t.split('\n').map((x) => x.trim()).filter(Boolean)
 }
 function buildEnunciado(titulo: string, html: string): string {
@@ -91,8 +91,8 @@ function toPreguntas(rows: string[][]): { meta: Meta | null; preguntas: Preg[] }
   for (const r of rows) {
     const type = (r[0] || '').trim().toLowerCase()
     if (type === 'settings') meta = { title: r[1] || '', description: r[2] || '', time: r[3] || '', attempts: r[6] || '', passing: r[7] || '' }
-    else if (type === 'question') { flush(); cur = { titulo: r[1] || '', html: r[2] || '', tutorType: r[3] || '', answers: [] } }
-    else if (type === 'answer' && cur) cur.answers.push({ text: r[1] || '', correct: (r[3] || '').trim() === '1' })
+    else if (type === 'question') { flush(); cur = { titulo: decodeHtmlEntities(r[1] || ''), html: r[2] || '', tutorType: r[3] || '', answers: [] } }
+    else if (type === 'answer' && cur) cur.answers.push({ text: decodeHtmlEntities(r[1] || ''), correct: (r[3] || '').trim() === '1' })
   }
   flush()
   return { meta, preguntas }
