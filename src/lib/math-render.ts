@@ -56,7 +56,9 @@ export function renderMathText(input: string): string {
       // Imagen ![alt](url)
       const url = safeUrl(m[4]);
       if (url) {
-        parts.push(`<img src="${escapeAttr(url)}" alt="${escapeAttr(m[3] ?? '')}" class="inline-block max-w-full max-h-72 my-1 rounded border border-gray-200" />`);
+        // Imagen en BLOQUE y CENTRADA (su propia línea): el texto de la pregunta
+        // queda ARRIBA y el texto que siga queda DEBAJO de la imagen.
+        parts.push(`<img src="${escapeAttr(url)}" alt="${escapeAttr(m[3] ?? '')}" class="block mx-auto max-w-full max-h-96 my-3 rounded border border-gray-200" />`);
       } else {
         parts.push(escapeHtml(m[0]));
       }

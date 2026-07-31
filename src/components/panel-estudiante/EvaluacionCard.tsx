@@ -147,7 +147,7 @@ export default function EvaluacionCard() {
                 return (
                   <div key={key} className="border border-gray-100 rounded-xl p-4">
                     <p className="text-sm font-semibold text-gray-500 mb-1">Pregunta {i + 1}</p>
-                    <div className="text-sm text-gray-800 mb-3"><MathText>{q.question}</MathText></div>
+                    <div className="text-sm text-gray-800 mb-3"><MathText block>{q.question}</MathText></div>
                     <div className="space-y-2">
                       {opts.map((opt, oj) => (
                         <label key={oj} className="flex items-start gap-2 cursor-pointer">

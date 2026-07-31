@@ -178,7 +178,7 @@ export default function ManualQuestionsEditor({
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-y"
           />
           {isRich(q.question) && (
-            <div className="mt-1 text-sm text-gray-700"><MathText>{q.question}</MathText></div>
+            <div className="mt-1 text-sm text-gray-700"><MathText block>{q.question}</MathText></div>
           )}
 
           <label className="block text-xs font-medium text-gray-500 mt-3 mb-1">

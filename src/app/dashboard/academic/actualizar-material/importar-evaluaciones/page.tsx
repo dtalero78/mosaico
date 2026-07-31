@@ -225,7 +225,7 @@ export default function ImportarEvaluacionesPage() {
                   <p className="text-xs font-semibold text-gray-500">Pregunta {i + 1} · {q.type === 'true_false' ? 'V/F' : 'opción múltiple'}</p>
                   {q._issues.length > 0 && <span className="text-[11px] text-red-600">⚠ {q._issues.join(', ')}</span>}
                 </div>
-                <div className="text-sm text-gray-800 my-2"><MathText>{q.question}</MathText></div>
+                <div className="text-sm text-gray-800 my-2"><MathText block>{q.question}</MathText></div>
                 <ul className="space-y-1">
                   {q.options.map((o, oj) => (
                     <li key={oj} className={`text-sm flex items-start gap-2 ${o === q.correctAnswer ? 'text-emerald-700 font-medium' : 'text-gray-600'}`}>
