@@ -5,6 +5,7 @@ import { AcademicoPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 import { ValidationError } from '@/lib/errors';
+import { normalizarCuestionario } from '@/lib/cuestionarios';
 
 interface Row {
   step: string;
@@ -20,6 +21,7 @@ interface Row {
   evaluacionModo: string | null;
   preguntasManual: any;
   evaluacionMinutos: number | null;
+  cuestionarios: any;
 }
 
 function parseRecursos(raw: any): { nombre: string; link: string }[] {
@@ -53,7 +55,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const r = await query<Row>(
     `SELECT "step","description","contenido","actividadKahoot","actividadWordwall",
             "actividadKahootNombre","actividadWordwallNombre","descripcionModulo","recursos",
-            "orden","evaluacionModo","preguntasManual","evaluacionMinutos"
+            "orden","evaluacionModo","preguntasManual","evaluacionMinutos","cuestionarios"
      FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
     [curso, code]
@@ -76,6 +78,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
       evaluacionModo: (x.evaluacionModo || 'IA').toUpperCase(),
       preguntasManual: parsePreguntas(x.preguntasManual),
       evaluacionMinutos: Number(x.evaluacionMinutos) > 0 ? Number(x.evaluacionMinutos) : 30,
+      cuestionarios: parsePreguntas(x.cuestionarios),
     })),
   });
 });
@@ -128,7 +131,8 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
     const hasModo = Object.prototype.hasOwnProperty.call(body, 'evaluacionModo');
     const hasPreg = Object.prototype.hasOwnProperty.call(body, 'preguntasManual');
     const hasMin = Object.prototype.hasOwnProperty.call(body, 'evaluacionMinutos');
-    if (!hasDesc && !hasCont && !hasKahoot && !hasWordwall && !hasKahootN && !hasWordwallN && !hasModo && !hasPreg && !hasMin) throw new ValidationError('nada que actualizar');
+    const hasCuest = Object.prototype.hasOwnProperty.call(body, 'cuestionarios');
+    if (!hasDesc && !hasCont && !hasKahoot && !hasWordwall && !hasKahootN && !hasWordwallN && !hasModo && !hasPreg && !hasMin && !hasCuest) throw new ValidationError('nada que actualizar');
 
     const sets: string[] = [];
     const params: any[] = [curso, code, step];
@@ -153,6 +157,20 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
       if (!Number.isFinite(min) || min < 1 || min > 180) throw new ValidationError('evaluacionMinutos inválido (1–180)');
       sets.push(`"evaluacionMinutos" = $${i++}`); params.push(min);
     }
+    if (hasCuest) {
+      // Varios cuestionarios por lección de Evaluación (cada uno título+tiempo+preguntas).
+      const inRaw = Array.isArray(body.cuestionarios) ? body.cuestionarios : [];
+      const errores: string[] = [];
+      const limpios = inRaw.map((c: any, idx: number) => {
+        const { limpio, errores: e } = normalizarCuestionario(c, idx);
+        errores.push(...e);
+        return limpio;
+      });
+      if (errores.length) throw new ValidationError('Revisa los cuestionarios:\n' + errores.join('\n'));
+      sets.push(`"cuestionarios" = $${i++}::jsonb`); params.push(JSON.stringify(limpios));
+      // Guardar cuestionarios implica evaluación MANUAL.
+      if (!hasModo) { sets.push(`"evaluacionModo" = $${i++}`); params.push('MANUAL'); }
+    }
     sets.push(`"_updatedDate" = NOW()`);
 
     const res = await query(
@@ -160,7 +178,7 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
       params
     );
     if (res.rowCount === 0) throw new ValidationError('Lección no encontrada');
-    accion = (hasModo || hasPreg || hasMin) ? 'EVALUACION' : hasCont ? 'CONTENIDO' : 'DESCRIPCION';
+    accion = (hasModo || hasPreg || hasMin || hasCuest) ? 'EVALUACION' : hasCont ? 'CONTENIDO' : 'DESCRIPCION';
   }
 
   await query(`

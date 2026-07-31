@@ -2,33 +2,19 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { resolveStudentFromSession } from '@/services/panel-estudiante.service'
 import { query, queryOne } from '@/lib/postgres'
+import { deriveCuestionarios, sanitizeCuestionarios } from '@/lib/cuestionarios'
 
 /**
  * GET /api/postgres/panel-estudiante/evaluacion
  *
  * Estado de la evaluación del alumno según su avance:
- *  - reached=false → la SIGUIENTE evaluación por delante (módulo Evaluación NN).
- *  - reached=true  → su lección actual ES una Evaluación: devuelve las preguntas
- *    (SIN la respuesta correcta) + si ya la envió (una vez) + duración (30 min).
- * Los módulos de evaluación se detectan por code ~ /evaluac/i.
+ *  - reached=false → la SIGUIENTE evaluación/entrenamiento por delante.
+ *  - reached=true  → su lección actual ES evaluable: devuelve la LISTA de
+ *    cuestionarios (SIN respuestas correctas), cuáles ya envió y si está completa.
+ *    El alumno los presenta TODOS en orden.
+ * Módulos evaluables: code ~ /evaluac|entren/i.
  */
 const extraNum = (code: string) => { const m = String(code || '').match(/(\d+)/); return m ? m[1] : '' }
-
-function parseQs(preguntas: any): any[] {
-  try {
-    const arr = Array.isArray(preguntas) ? preguntas : (typeof preguntas === 'string' ? JSON.parse(preguntas || '[]') : [])
-    return Array.isArray(arr) ? arr : []
-  } catch { return [] }
-}
-/** Preguntas para el alumno: SIN correctAnswer ni explicación. */
-function sanitize(preguntas: any): any[] {
-  return parseQs(preguntas).map((q: any, i: number) => ({
-    id: q.id ?? i,
-    type: q.type || 'multiple_choice',
-    question: q.question || '',
-    options: Array.isArray(q.options) ? q.options : [],
-  }))
-}
 
 export const GET = handlerWithAuth(async (_req, _ctx, session) => {
   const student: any = await resolveStudentFromSession(session)
@@ -42,14 +28,10 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
     [curso, nivel, step]
   )
   const currentOrden = cur?.orden ?? null
-  // Módulos evaluables del alumno: "Evaluación NN" y "Entrenamiento NN"
-  // (misma regla que el editor de Contenido: /evaluac|entren/i).
   const actualEsEval = /evaluac|entren/i.test(nivel)
 
   const evals = (await query(
-    `SELECT "code","step","orden","evaluacionModo","evaluacionMinutos",
-            (COALESCE("preguntasManual"::text,'[]') NOT IN ('[]','null')) AS "tienePreguntas",
-            "preguntasManual"
+    `SELECT "code","step","orden","evaluacionModo","evaluacionMinutos","preguntasManual","cuestionarios"
        FROM "NIVELES"
       WHERE UPPER("curso")=UPPER($1) AND ("code" ILIKE '%evaluac%' OR "code" ILIKE '%entren%')
       ORDER BY "orden" ASC`,
@@ -58,14 +40,19 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
 
   if (actualEsEval) {
     const actual = evals.find(e => e.code === nivel && e.step === step) || evals.find(e => e.code === nivel)
-    const tieneEvaluacion = !!actual?.tienePreguntas && String(actual?.evaluacionModo).toUpperCase() === 'MANUAL'
+    const cuestionarios = deriveCuestionarios(actual || {})
+    const tieneEvaluacion = cuestionarios.length > 0
 
-    const prev = await queryOne<{ score: number; total: number; enviadaEn: string }>(
-      `SELECT "score","total","enviadaEn" FROM "EVALUACION_RESPUESTAS"
-        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "step"=$4 AND "enviadaEn" IS NOT NULL
-        ORDER BY "enviadaEn" DESC LIMIT 1`,
+    const prev = (await query<{ cuestionarioId: string | null; score: number; total: number }>(
+      `SELECT "cuestionarioId","score","total" FROM "EVALUACION_RESPUESTAS"
+        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "step"=$4 AND "enviadaEn" IS NOT NULL`,
       [student.academicaId, curso, nivel, step]
-    )
+    )).rows
+    // Compat: filas antiguas sin cuestionarioId → cuentan como el primer cuestionario.
+    const primerId = cuestionarios[0]?.id || 'c1'
+    const enviadosIds = new Set(prev.map(r => r.cuestionarioId || primerId))
+    const resultados = prev.map(r => ({ cuestionarioId: r.cuestionarioId || primerId, score: r.score, total: r.total }))
+    const completa = tieneEvaluacion && cuestionarios.every(c => enviadosIds.has(c.id))
 
     return successResponse({
       available: true,
@@ -73,11 +60,11 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
       evalCode: nivel,
       evalNum: extraNum(nivel),
       tieneEvaluacion,
-      yaEnviada: !!prev,
-      resultado: prev || null,
-      duracionMin: Number(actual?.evaluacionMinutos) > 0 ? Number(actual?.evaluacionMinutos) : 30,
+      cuestionarios: tieneEvaluacion ? sanitizeCuestionarios(cuestionarios) : [],
+      enviados: Array.from(enviadosIds),
+      resultados,
+      completa,
       curso, code: nivel, step,
-      preguntas: tieneEvaluacion ? sanitize(actual?.preguntasManual) : [],
     })
   }
 

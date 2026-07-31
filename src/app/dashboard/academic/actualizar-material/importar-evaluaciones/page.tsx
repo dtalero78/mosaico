@@ -107,7 +107,7 @@ export default function ImportarEvaluacionesPage() {
   const [code, setCode] = useState('')
   const [step, setStep] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [previas, setPrevias] = useState<number | null>(null)
+  const [dryInfo, setDryInfo] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -137,7 +137,7 @@ export default function ImportarEvaluacionesPage() {
         body: JSON.stringify({ curso, code, step, preguntas, apply: false }),
       }).then((r) => r.json())
       if (res.error) throw new Error(res.error)
-      setPrevias(res.previas ?? 0); setConfirmOpen(true)
+      setDryInfo(res); setConfirmOpen(true)
     } catch (e: any) { toast.error(e?.message || 'No se pudo validar la importación') }
   }
 
@@ -146,10 +146,11 @@ export default function ImportarEvaluacionesPage() {
     try {
       const res = await fetch('/api/postgres/niveles/importar-evaluacion', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ curso, code, step, preguntas, apply: true, minutos: Number(meta?.time) || undefined }),
+        body: JSON.stringify({ curso, code, step, preguntas, apply: true, titulo: meta?.title || undefined, minutos: Number(meta?.time) || undefined }),
       }).then((r) => r.json())
       if (res.error) throw new Error(res.error)
-      toast.success(`Evaluación importada: ${res.importadas} pregunta(s) en ${curso} / ${code} / ${step}`)
+      if (res.cuestionarioTitulo) toast.success(`Cuestionario "${res.cuestionarioTitulo}" agregado (${res.totalCuestionarios} en total) en ${code} / ${step}`)
+      else toast.success(`Evaluación importada: ${res.importadas} pregunta(s) en ${curso} / ${code} / ${step}`)
       setConfirmOpen(false)
     } catch (e: any) { toast.error(e?.message || 'Error al importar') } finally { setSaving(false) }
   }
@@ -157,7 +158,7 @@ export default function ImportarEvaluacionesPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Importar Evaluaciones desde CSV</h1>
-      <p className="text-gray-500 mb-6">Sube un CSV de preguntas (formato Tutor LMS) y cárgalo como evaluación manual de una lección. Reemplaza las preguntas de esa lección.</p>
+      <p className="text-gray-500 mb-6">Sube un CSV de preguntas (formato Tutor LMS). En módulos <strong>Evaluación</strong> se <strong>agrega como un cuestionario más</strong> (el alumno los presenta en orden); en <strong>Entrenamiento</strong> reemplaza las preguntas de la lección.</p>
 
       {/* Carga de archivo */}
       <div
@@ -256,14 +257,28 @@ export default function ImportarEvaluacionesPage() {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Confirmar importación</h3>
-            <p className="text-sm text-gray-600">
-              Se cargarán <strong>{preguntas.length}</strong> pregunta(s) en <strong>{curso} / {code} / {step}</strong> como evaluación manual.
-            </p>
-            {previas && previas > 0 ? (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2 mt-3">
-                ⚠ Esta lección ya tiene <strong>{previas}</strong> pregunta(s). Se <strong>reemplazan</strong> por las nuevas.
-              </p>
-            ) : null}
+            {dryInfo?.esEvaluacion ? (
+              <>
+                <p className="text-sm text-gray-600">
+                  Se <strong>agregará un cuestionario</strong> {meta?.title ? <>«<strong>{meta.title}</strong>» </> : ''}
+                  con <strong>{preguntas.length}</strong> pregunta(s){meta?.time ? <> y <strong>{meta.time} min</strong></> : ''} en <strong>{code} / {step}</strong>.
+                </p>
+                <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg p-2 mt-3">
+                  Esta evaluación tendrá <strong>{(dryInfo.cuestionariosPrevios || 0) + 1}</strong> cuestionario(s). El alumno los presenta en orden.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600">
+                  Se cargarán <strong>{preguntas.length}</strong> pregunta(s) en <strong>{curso} / {code} / {step}</strong> como evaluación manual.
+                </p>
+                {dryInfo?.previas > 0 ? (
+                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2 mt-3">
+                    ⚠ Esta lección ya tiene <strong>{dryInfo.previas}</strong> pregunta(s). Se <strong>reemplazan</strong> por las nuevas.
+                  </p>
+                ) : null}
+              </>
+            )}
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setConfirmOpen(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm">Cancelar</button>
               <button type="button" onClick={importar} disabled={saving} className="px-5 py-2 rounded-lg bg-orange-600 text-white font-medium hover:bg-orange-700 disabled:opacity-50 text-sm">

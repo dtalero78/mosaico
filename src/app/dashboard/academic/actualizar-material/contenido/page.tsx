@@ -9,7 +9,7 @@ import MathText from '@/components/ecuaciones/MathText'
 import InsertEquationModal from '@/components/ecuaciones/InsertEquationModal'
 import InsertImageModal from '@/components/ecuaciones/InsertImageModal'
 import InsertLinkModal from '@/components/ecuaciones/InsertLinkModal'
-import ManualQuestionsEditor, { ManualQuestion, validateManualQuestions } from '@/components/ecuaciones/ManualQuestionsEditor'
+import ManualQuestionsEditor, { ManualQuestion, validateManualQuestions, emptyManualQuestion } from '@/components/ecuaciones/ManualQuestionsEditor'
 
 interface Leccion {
   step: string
@@ -22,7 +22,10 @@ interface Leccion {
   evaluacionModo?: string
   preguntasManual?: ManualQuestion[]
   evaluacionMinutos?: number
+  cuestionarios?: CuestEdit[]
 }
+
+interface CuestEdit { id: string; titulo: string; minutos: number; preguntas: ManualQuestion[] }
 
 function LeccionEditor({
   curso, code, leccion, onSaved,
@@ -49,6 +52,23 @@ function LeccionEditor({
   // Entrenamiento. "evaluac" ya matchea "Evaluación" (el acento va después), así
   // que basta con minúsculas.
   const esEvaluacion = /evaluac|entrenamiento/.test(`${code} ${leccion.step}`.toLowerCase())
+  // Solo los módulos EVALUACIÓN admiten VARIOS cuestionarios; Entrenamiento sigue con uno.
+  const esModuloEvaluacion = /evaluac/.test(code.toLowerCase())
+
+  const buildCuestFromLeccion = (): CuestEdit[] => {
+    const cs = Array.isArray(leccion.cuestionarios) ? leccion.cuestionarios : []
+    if (cs.length) return cs.map((c: any, i: number) => ({
+      id: String(c?.id || `c${i + 1}`), titulo: String(c?.titulo || `Cuestionario ${i + 1}`),
+      minutos: Number(c?.minutos) > 0 ? Number(c?.minutos) : 30, preguntas: Array.isArray(c?.preguntas) ? c.preguntas : [],
+    }))
+    if ((leccion.preguntasManual || []).length) return [{
+      id: 'c1', titulo: 'Cuestionario 1',
+      minutos: Number(leccion.evaluacionMinutos) > 0 ? Number(leccion.evaluacionMinutos) : 30,
+      preguntas: leccion.preguntasManual || [],
+    }]
+    return []
+  }
+  const [cuestionarios, setCuestionarios] = useState<CuestEdit[]>(buildCuestFromLeccion())
 
   useEffect(() => {
     setDescription(leccion.description); setContenido(leccion.contenido)
@@ -57,7 +77,39 @@ function LeccionEditor({
     setModo((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
     setPreguntas(leccion.preguntasManual || [])
     setMinutos(Number(leccion.evaluacionMinutos) > 0 ? Number(leccion.evaluacionMinutos) : 30)
+    setCuestionarios(buildCuestFromLeccion())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leccion])
+
+  // ── Multi-cuestionario (solo módulos EVALUACIÓN) ──
+  const addCuestionario = () => setCuestionarios((cs) => [
+    ...cs, { id: `c${cs.length + 1}_${Math.random().toString(36).slice(2, 6)}`, titulo: `Cuestionario ${cs.length + 1}`, minutos: 30, preguntas: [emptyManualQuestion(1)] },
+  ])
+  const removeCuestionario = (idx: number) => setCuestionarios((cs) => cs.filter((_, i) => i !== idx))
+  const patchCuestionario = (idx: number, patch: Partial<CuestEdit>) => setCuestionarios((cs) => cs.map((c, i) => (i === idx ? { ...c, ...patch } : c)))
+
+  const saveCuestionarios = async () => {
+    if (!cuestionarios.length) { toast.error('Agrega al menos un cuestionario.'); return }
+    for (const c of cuestionarios) {
+      if (!c.titulo.trim()) { toast.error('Cada cuestionario necesita un título.'); return }
+      const err = validateManualQuestions(c.preguntas)
+      if (err) { toast.error(`«${c.titulo}»: ${err}`); return }
+    }
+    setSavingEval(true)
+    try {
+      const r = await fetch('/api/postgres/cursos-contenido', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curso, code, step: leccion.step, evaluacionModo: 'MANUAL', cuestionarios }),
+      }).then((x) => x.json())
+      if (r.error) throw new Error(r.error)
+      toast.success(`Evaluación de ${leccion.step} guardada (${cuestionarios.length} cuestionario(s))`)
+      onSaved()
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al guardar la evaluación')
+    } finally {
+      setSavingEval(false)
+    }
+  }
 
   const saveEval = async () => {
     if (modo === 'MANUAL') {
@@ -208,7 +260,7 @@ function LeccionEditor({
             <span className="font-medium text-gray-700">Evaluación</span>
           </label>
           {esEvaluacion && modo === 'MANUAL' && (
-            <button type="button" onClick={saveEval} disabled={savingEval}
+            <button type="button" onClick={esModuloEvaluacion ? saveCuestionarios : saveEval} disabled={savingEval}
               className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
               {savingEval ? 'Guardando…' : 'Guardar evaluación'}
             </button>
@@ -219,9 +271,47 @@ function LeccionEditor({
           <p className="text-xs text-gray-400">
             Disponible solo en módulos/lecciones de <strong>Evaluación</strong> o <strong>Entrenamiento</strong>.
           </p>
+        ) : modo === 'MANUAL' && esModuloEvaluacion ? (
+          /* Módulo EVALUACIÓN → varios cuestionarios (el alumno los presenta en orden) */
+          <>
+            <p className="text-xs text-gray-400 mb-3">
+              Esta evaluación puede tener <strong>varios cuestionarios</strong>. El alumno los presenta <strong>en orden</strong>;
+              cada uno tiene su título, su tiempo y sus preguntas (se autocalifican).
+            </p>
+            <div className="space-y-4">
+              {cuestionarios.map((c, ci) => (
+                <div key={c.id} className="border border-orange-200 rounded-xl p-4 bg-orange-50/40">
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <span className="text-sm font-bold text-orange-800">Cuestionario {ci + 1}</span>
+                    <input value={c.titulo} onChange={(e) => patchCuestionario(ci, { titulo: e.target.value })}
+                      placeholder="Título (ej. Parte 1 — Operaciones directas)"
+                      className="flex-1 min-w-[180px] px-2 py-1 border border-gray-300 rounded-md text-sm" />
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => patchCuestionario(ci, { minutos: Math.max(1, c.minutos - 5) })}
+                        className="w-7 h-7 rounded-md border border-gray-300 text-gray-700 hover:bg-white font-bold leading-none">−</button>
+                      <input type="number" min={1} max={180} value={c.minutos}
+                        onChange={(e) => patchCuestionario(ci, { minutos: Math.min(180, Math.max(1, Math.round(Number(e.target.value) || 1))) })}
+                        className="w-14 text-center border border-gray-300 rounded-md py-1 text-sm" />
+                      <button type="button" onClick={() => patchCuestionario(ci, { minutos: Math.min(180, c.minutos + 5) })}
+                        className="w-7 h-7 rounded-md border border-gray-300 text-gray-700 hover:bg-white font-bold leading-none">+</button>
+                      <span className="text-xs text-gray-500">min</span>
+                    </div>
+                    <button type="button" onClick={() => removeCuestionario(ci)}
+                      className="text-xs text-red-500 hover:text-red-700 ml-auto">Eliminar cuestionario</button>
+                  </div>
+                  <ManualQuestionsEditor value={c.preguntas} onChange={(qs) => patchCuestionario(ci, { preguntas: qs })}
+                    curso={curso} code={code} step={leccion.step} />
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={addCuestionario}
+              className="mt-3 w-full py-2 border-2 border-dashed border-orange-300 rounded-xl text-sm text-orange-700 hover:border-orange-500 hover:text-orange-800">
+              + Agregar cuestionario
+            </button>
+          </>
         ) : modo === 'MANUAL' ? (
           <>
-            {/* Temporizador que verá el alumno al presentar esta evaluación/entrenamiento */}
+            {/* Entrenamiento → un solo cuestionario. Temporizador que verá el alumno. */}
             <div className="flex items-center gap-3 mb-3 p-2.5 bg-orange-50 border border-orange-100 rounded-lg">
               <span className="text-sm font-medium text-gray-700">Tiempo del alumno:</span>
               <div className="flex items-center gap-1">
