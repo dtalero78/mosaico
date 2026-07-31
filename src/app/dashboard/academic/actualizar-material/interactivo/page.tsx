@@ -145,15 +145,20 @@ function Content() {
       <details className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-6 text-sm">
         <summary className="cursor-pointer font-semibold text-gray-800">📘 ¿Cómo subir un PDF nuevo?</summary>
         <div className="mt-2 text-xs text-gray-700 space-y-1">
-          <p>La conversión PDF → imágenes se hace con un script local. Desde la raíz del repo:</p>
+          <p>Un solo script hace todo (convierte, rota apaisadas, sube a Spaces y registra el libro). Desde la raíz del repo:</p>
           <pre className="bg-gray-900 text-emerald-300 rounded p-2 overflow-x-auto text-[11px]">
-node scripts/upload-libro-interactivo.js \
-  --codigo=BEGINNER \
-  --pdf=./libro-beginner.pdf \
+node scripts/subir-libro-interactivo.js \
+  --codigo=YOJI \
+  --pdf="./YOJI COLOR 2026.pdf" \
   --titulo="Curso — MOSAICO 2026" \
+  --rotar=7:cw,9:cw,10:ccw \
   --apply
           </pre>
-          <p className="text-gray-600">Requiere `pdftoppm` (poppler-utils) instalado en el sistema operativo del que ejecuta el script.</p>
+          <p className="text-gray-600">
+            Sin <code>--apply</code> es dry-run (solo cuenta páginas). <code>--rotar=N:cw|ccw|180</code> endereza páginas apaisadas
+            (ej. YOJI 2026: <code>7:cw,9:cw,10:ccw</code>). Localiza <code>pdftoppm</code> y Chrome solos; sube al bucket de
+            MOSAICO y limpia páginas huérfanas si el PDF nuevo trae menos páginas. Requiere <code>pdftoppm</code> (poppler) en el equipo.
+          </p>
         </div>
       </details>
 
