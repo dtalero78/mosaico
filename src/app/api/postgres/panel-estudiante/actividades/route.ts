@@ -19,6 +19,10 @@ export const GET = handlerWithAuth(async (_request, _context, session) => {
   let wordwall: string | null = null;
   let kahootNombre: string | null = null;
   let wordwallNombre: string | null = null;
+  let kahootModulo: string | null = null;
+  let wordwallModulo: string | null = null;
+  let kahootModuloNombre: string | null = null;
+  let wordwallModuloNombre: string | null = null;
   let recursos: { nombre: string; link: string }[] = [];
   if (curso && modulo && leccion) {
     // Comparación insensible a acentos/mayúsculas: NIVELES usa "Lección" y el
@@ -54,7 +58,26 @@ export const GET = handlerWithAuth(async (_request, _context, session) => {
     recursos = (Array.isArray(raw) ? raw : [])
       .map((x: any) => ({ nombre: String(x?.nombre || '').trim(), link: String(x?.link || '').trim() }))
       .filter((x) => x.link);
+
+    // Actividades del MÓDULO (uniformes en todas las lecciones): 1ª fila del módulo con datos.
+    const act = await queryOne<{
+      k: string | null; kn: string | null; w: string | null; wn: string | null;
+    }>(
+      `SELECT MAX("actividadKahootModulo") AS k, MAX("actividadKahootModuloNombre") AS kn,
+              MAX("actividadWordwallModulo") AS w, MAX("actividadWordwallModuloNombre") AS wn
+         FROM "NIVELES"
+        WHERE "curso" = $1 AND ${norm('"code"')} = ${norm('$2')}`,
+      [curso, modulo]
+    );
+    kahootModulo = act?.k || null;
+    kahootModuloNombre = act?.kn || null;
+    wordwallModulo = act?.w || null;
+    wordwallModuloNombre = act?.wn || null;
   }
 
-  return successResponse({ kahoot, wordwall, kahootNombre, wordwallNombre, recursos, curso, modulo, leccion });
+  return successResponse({
+    kahoot, wordwall, kahootNombre, wordwallNombre,
+    kahootModulo, wordwallModulo, kahootModuloNombre, wordwallModuloNombre,
+    recursos, curso, modulo, leccion,
+  });
 });

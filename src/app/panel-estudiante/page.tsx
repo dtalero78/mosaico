@@ -245,8 +245,26 @@ function PanelEstudianteContent() {
                       <span className="inline-block w-2 h-2 rounded-full bg-pink-500" /> {actividadesQuery.data.wordwallNombre || 'WordWall'}
                     </a>
                   )}
-                  {!actividadesQuery.data?.kahoot && !actividadesQuery.data?.wordwall && (
-                    <p className="px-3 py-2 text-xs text-gray-400">Sin actividades para tu lección actual</p>
+                  {(actividadesQuery.data?.kahootModulo || actividadesQuery.data?.wordwallModulo) && (
+                    <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-gray-400 border-t border-gray-100 mt-1">Del módulo</p>
+                  )}
+                  {actividadesQuery.data?.kahootModulo && (
+                    <a href={actividadesQuery.data.kahootModulo} target="_blank" rel="noopener noreferrer"
+                      onClick={() => setShowActividades(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      <span className="inline-block w-2 h-2 rounded-full bg-purple-500" /> {actividadesQuery.data.kahootModuloNombre || 'Kahoot'}
+                    </a>
+                  )}
+                  {actividadesQuery.data?.wordwallModulo && (
+                    <a href={actividadesQuery.data.wordwallModulo} target="_blank" rel="noopener noreferrer"
+                      onClick={() => setShowActividades(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      <span className="inline-block w-2 h-2 rounded-full bg-pink-500" /> {actividadesQuery.data.wordwallModuloNombre || 'WordWall'}
+                    </a>
+                  )}
+                  {!actividadesQuery.data?.kahoot && !actividadesQuery.data?.wordwall
+                    && !actividadesQuery.data?.kahootModulo && !actividadesQuery.data?.wordwallModulo && (
+                    <p className="px-3 py-2 text-xs text-gray-400">Sin actividades para tu módulo/lección</p>
                   )}
                 </div>
               </>

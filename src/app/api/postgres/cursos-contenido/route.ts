@@ -17,6 +17,10 @@ interface Row {
   actividadWordwallNombre: string | null;
   descripcionModulo: string | null;
   recursos: any;
+  actividadKahootModulo: string | null;
+  actividadKahootModuloNombre: string | null;
+  actividadWordwallModulo: string | null;
+  actividadWordwallModuloNombre: string | null;
   orden: number | null;
   evaluacionModo: string | null;
   preguntasManual: any;
@@ -55,6 +59,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const r = await query<Row>(
     `SELECT "step","description","contenido","actividadKahoot","actividadWordwall",
             "actividadKahootNombre","actividadWordwallNombre","descripcionModulo","recursos",
+            "actividadKahootModulo","actividadKahootModuloNombre","actividadWordwallModulo","actividadWordwallModuloNombre",
             "orden","evaluacionModo","preguntasManual","evaluacionMinutos","cuestionarios"
      FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
@@ -67,6 +72,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     descripcionModulo: r.rows[0]?.descripcionModulo ?? '',
     // Recursos son a nivel MÓDULO (uniformes en todas las lecciones); tomo el 1º con datos.
     recursos: parseRecursos(r.rows.find((x) => parseRecursos(x.recursos).length)?.recursos ?? r.rows[0]?.recursos),
+    // Actividades del MÓDULO (uniformes en todas las lecciones): 1ª fila con dato.
+    kahootModulo: r.rows.find((x) => x.actividadKahootModulo)?.actividadKahootModulo ?? '',
+    kahootModuloNombre: r.rows.find((x) => x.actividadKahootModuloNombre)?.actividadKahootModuloNombre ?? '',
+    wordwallModulo: r.rows.find((x) => x.actividadWordwallModulo)?.actividadWordwallModulo ?? '',
+    wordwallModuloNombre: r.rows.find((x) => x.actividadWordwallModuloNombre)?.actividadWordwallModuloNombre ?? '',
     lecciones: r.rows.map((x) => ({
       step: x.step,
       description: x.description ?? '',
@@ -103,23 +113,29 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
   let auditStep = step || '-';
 
   if (!step) {
-    // Modo módulo: descripcionModulo y/o recursos → a TODAS las lecciones del módulo.
+    // Modo módulo: descripcionModulo, recursos y/o actividades del módulo → a TODAS las lecciones.
     const hasDescMod = Object.prototype.hasOwnProperty.call(body, 'descripcionModulo');
     const hasRecursos = Object.prototype.hasOwnProperty.call(body, 'recursos');
-    if (!hasDescMod && !hasRecursos) {
-      throw new ValidationError('descripcionModulo o recursos requerido en modo módulo');
+    const modAct: Record<string, string> = {
+      actividadKahootModulo: 'kahootModulo', actividadKahootModuloNombre: 'kahootModuloNombre',
+      actividadWordwallModulo: 'wordwallModulo', actividadWordwallModuloNombre: 'wordwallModuloNombre',
+    };
+    const hasAct = Object.keys(modAct).filter((col) => Object.prototype.hasOwnProperty.call(body, modAct[col]));
+    if (!hasDescMod && !hasRecursos && !hasAct.length) {
+      throw new ValidationError('descripcionModulo, recursos o actividades requerido en modo módulo');
     }
     const sets: string[] = [];
     const params: any[] = [curso, code];
     let i = 3;
     if (hasDescMod) { sets.push(`"descripcionModulo" = $${i++}`); params.push(body.descripcionModulo || null); }
     if (hasRecursos) { sets.push(`"recursos" = $${i++}::jsonb`); params.push(JSON.stringify(parseRecursos(body.recursos))); }
+    for (const col of hasAct) { sets.push(`"${col}" = $${i++}`); params.push(String(body[modAct[col]] || '').trim() || null); }
     sets.push(`"_updatedDate" = NOW()`);
     await query(
       `UPDATE "NIVELES" SET ${sets.join(', ')} WHERE "curso" = $1 AND "code" = $2`,
       params
     );
-    accion = hasRecursos ? (hasDescMod ? 'MODULO' : 'RECURSOS_MODULO') : 'DESCRIPCION_MODULO';
+    accion = (hasDescMod || hasRecursos) ? (hasRecursos ? (hasDescMod ? 'MODULO' : 'RECURSOS_MODULO') : 'DESCRIPCION_MODULO') : 'ACTIVIDAD_MODULO';
   } else {
     // Modo lección: description, contenido, evaluacionModo y/o preguntasManual
     const hasDesc = Object.prototype.hasOwnProperty.call(body, 'description');

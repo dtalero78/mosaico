@@ -350,6 +350,10 @@ export default function ContenidoCursoPage() {
   const [descripcionModulo, setDescripcionModulo] = useState('')
   const [descripcionModuloOrig, setDescripcionModuloOrig] = useState('')
   const [recursos, setRecursos] = useState<{ nombre: string; link: string }[]>([])
+  const [kahootModulo, setKahootModulo] = useState('')
+  const [kahootModuloNombre, setKahootModuloNombre] = useState('')
+  const [wordwallModulo, setWordwallModulo] = useState('')
+  const [wordwallModuloNombre, setWordwallModuloNombre] = useState('')
   const [lecciones, setLecciones] = useState<Leccion[]>([])
   const [loadingMod, setLoadingMod] = useState(false)
   const [loadingLec, setLoadingLec] = useState(false)
@@ -376,6 +380,8 @@ export default function ContenidoCursoPage() {
         setDescripcionModulo(d.descripcionModulo || '')
         setDescripcionModuloOrig(d.descripcionModulo || '')
         setRecursos(Array.isArray(d.recursos) ? d.recursos : [])
+        setKahootModulo(d.kahootModulo || ''); setKahootModuloNombre(d.kahootModuloNombre || '')
+        setWordwallModulo(d.wordwallModulo || ''); setWordwallModuloNombre(d.wordwallModuloNombre || '')
       })
       .catch(() => toast.error('Error al cargar contenido'))
       .finally(() => setLoadingLec(false))
@@ -392,11 +398,13 @@ export default function ContenidoCursoPage() {
         body: JSON.stringify({
           curso, code, descripcionModulo,
           recursos: recursos.map(x => ({ nombre: (x.nombre || '').trim(), link: (x.link || '').trim() })).filter(x => x.nombre || x.link),
+          kahootModulo: kahootModulo.trim(), kahootModuloNombre: kahootModuloNombre.trim(),
+          wordwallModulo: wordwallModulo.trim(), wordwallModuloNombre: wordwallModuloNombre.trim(),
         }),
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
       setDescripcionModuloOrig(descripcionModulo)
-      toast.success('Módulo guardado (descripción + recursos)')
+      toast.success('Módulo guardado (descripción, recursos y actividades)')
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar')
     } finally {
@@ -480,6 +488,32 @@ export default function ContenidoCursoPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Actividades del módulo (Kahoot / WordWall) → las ven TODOS los del módulo, sin importar la lección */}
+              <div className="mt-4 pt-3 border-t border-fuchsia-100">
+                <label className="text-sm font-medium text-gray-700">Actividades del módulo</label>
+                <p className="text-xs text-gray-500 mb-2">Una actividad Kahoot y una WordWall para <strong>todo el módulo</strong> (las ve cualquier estudiante del módulo, sin importar su lección).</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-purple-700">Actividad Kahoot</span>
+                    <input value={kahootModuloNombre} onChange={(e) => setKahootModuloNombre(e.target.value)}
+                      placeholder="Nombre visible (ej. Kahoot Módulo 1)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                    <input value={kahootModulo} type="url" onChange={(e) => setKahootModulo(e.target.value)}
+                      placeholder="https://kahoot.it/…"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-pink-700">Actividad WordWall</span>
+                    <input value={wordwallModuloNombre} onChange={(e) => setWordwallModuloNombre(e.target.value)}
+                      placeholder="Nombre visible (ej. WordWall Módulo 1)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                    <input value={wordwallModulo} type="url" onChange={(e) => setWordwallModulo(e.target.value)}
+                      placeholder="https://wordwall.net/…"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                  </div>
+                </div>
               </div>
             </div>
 
