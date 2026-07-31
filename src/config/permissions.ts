@@ -588,6 +588,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/sesiones-sin-gestion. Lista de eventos pasados sin registrar (sesionCerrada=false) con filtros por fecha y advisor. Muestra inscritos/asistencia marcada para detectar si el advisor empezó pero no cerró, y un acceso directo al panel del evento para que el coordinador gestione el cierre.',
   },
   {
+    code: AcademicoPermission.REPORTE_ACADEMICO_VER,
+    module: Module.ACADEMICO,
+    section: 'Reporte Académico',
+    name: 'Página "Reporte Académico"',
+    description: 'Acceso a /dashboard/academic/reporte-academico. Consolidado semanal de las métricas de sesión por salón (Hábitos/Desempeño/Actitudes), asistencia del curso, progreso, comentario IA y valoración del Guía. El Guía ve solo sus cursos; el admin elige el Guía en el filtro. Imprimible a PDF.',
+  },
+  {
     code: AcademicoPermission.LISTA_USUARIOS_VER,
     module: Module.ACADEMICO,
     section: 'Lista de Usuarios',

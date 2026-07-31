@@ -188,6 +188,9 @@ export enum AcademicoPermission {
   LISTA_USUARIOS_EXPORTAR = 'ACADEMICO.LISTA_USUARIOS.EXPORTAR',
   LISTA_USUARIOS_EDITAR   = 'ACADEMICO.LISTA_USUARIOS.EDITAR',
 
+  // Reporte Académico — consolidado semanal de métricas por salón (Académico › Guías)
+  REPORTE_ACADEMICO_VER = 'ACADEMICO.REPORTE_ACADEMICO.VER',
+
   // Refuerzo de Sesiones (antes "Solicitud de Sesiones" / Repetir Lección).
   // Los códigos NO se renombran: sólo cambió la etiqueta del menú, y renombrarlos
   // obligaría a re-sembrar los roles que ya los tienen.
