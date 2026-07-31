@@ -75,7 +75,7 @@ export default function EvaluacionCard() {
     <div className="bg-orange-50 border border-orange-100 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-1">
         <ClipboardDocumentCheckIcon className="h-5 w-5 text-orange-600" />
-        <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wide">Evaluación</h3>
+        <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wide">Entrenamientos y Evaluaciones</h3>
       </div>
 
       {!reached ? (
