@@ -43,14 +43,18 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
   const cuest = cuestionarios.find(c => c.id === cuestionarioId)
   if (!cuest) throw new ValidationError('Cuestionario no encontrado en tu lección.')
 
-  // No permitir re-presentar un cuestionario ya enviado.
-  const yaEnviado = await queryOne<{ n: number }>(
-    `SELECT 1 AS n FROM "EVALUACION_RESPUESTAS"
+  const APROBACION = 60, MAX_INTENTOS = 3
+
+  // Intentos previos de ESTE cuestionario (compat: filas viejas con cuestionarioId NULL = primer cuestionario).
+  const prevAtt = (await query<{ aprobado: boolean | null }>(
+    `SELECT "aprobado" FROM "EVALUACION_RESPUESTAS"
       WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "step"=$4
-        AND ("cuestionarioId"=$5 OR ("cuestionarioId" IS NULL AND $5=$6)) AND "enviadaEn" IS NOT NULL LIMIT 1`,
+        AND ("cuestionarioId"=$5 OR ("cuestionarioId" IS NULL AND $5=$6)) AND "enviadaEn" IS NOT NULL`,
     [academicaId, curso, nivel, step, cuestionarioId, cuestionarios[0].id]
-  )
-  if (yaEnviado) throw new ValidationError('Ya presentaste este cuestionario.')
+  )).rows
+  if (prevAtt.some(r => r.aprobado)) throw new ValidationError('Ya aprobaste este cuestionario.')
+  if (prevAtt.length >= MAX_INTENTOS) throw new ValidationError('Agotaste los 3 intentos de este cuestionario.')
+  const intento = prevAtt.length + 1
 
   const preguntas = cuest.preguntas
   let score = 0
@@ -63,17 +67,24 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
     return { qId, question: q.question ?? '', selected, correct: q.correctAnswer ?? '', ok }
   })
   const total = preguntas.length
+  const porcentaje = total ? Math.round((score / total) * 100) : 0
+  const aprobado = porcentaje >= APROBACION
   const enviadaEn = new Date()
   const duracionSeg = iniciadaEn ? Math.max(0, Math.round((enviadaEn.getTime() - iniciadaEn.getTime()) / 1000)) : null
 
   const id = `evr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   await query(
     `INSERT INTO "EVALUACION_RESPUESTAS"
-       ("_id","academicaId","numeroId","nombre","curso","code","step","cuestionarioId","cuestionarioTitulo","respuestas","score","total","iniciadaEn","enviadaEn","duracionSeg")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15)`,
+       ("_id","academicaId","numeroId","nombre","curso","code","step","cuestionarioId","cuestionarioTitulo","respuestas","score","total","porcentaje","aprobado","intento","iniciadaEn","enviadaEn","duracionSeg")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18)`,
     [id, academicaId, numeroId, nombre, curso, nivel, step, cuestionarioId, cuest.titulo, JSON.stringify(detalle), score, total,
-     iniciadaEn ? iniciadaEn.toISOString() : null, enviadaEn.toISOString(), duracionSeg]
+     porcentaje, aprobado, intento, iniciadaEn ? iniciadaEn.toISOString() : null, enviadaEn.toISOString(), duracionSeg]
   )
 
-  return successResponse({ ok: true, score, total, cuestionarioId })
+  const agotado = !aprobado && intento >= MAX_INTENTOS
+  return successResponse({
+    ok: true, score, total, porcentaje, aprobado, intento,
+    intentosRestantes: aprobado ? 0 : Math.max(0, MAX_INTENTOS - intento),
+    agotado, cuestionarioId,
+  })
 })
