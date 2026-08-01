@@ -215,6 +215,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/comercial/consulta-cursos': [
     'COMERCIAL.CONSULTA_CURSOS' as Permission,
   ],
+  '/dashboard/comercial/gestion-contrato': [
+    'COMERCIAL.GESTION_CONTRATO.VER' as Permission,
+  ],
 
   // Comercial - Subir Lote de Personas (CSV)
   '/subir-lote': [

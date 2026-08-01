@@ -14,6 +14,7 @@ interface PersonPageProps {
   }
   searchParams?: {
     tab?: string
+    soloGeneral?: string
   }
 }
 
@@ -32,14 +33,14 @@ export default async function PersonPage({ params, searchParams }: PersonPagePro
     <DashboardLayout>
       <PermissionGuard permission={PersonPermission.VER_DOCUMENTACION}>
         <Suspense fallback={<PersonPageLoading />}>
-          <PersonContent personId={params.id} initialTab={searchParams?.tab} />
+          <PersonContent personId={params.id} initialTab={searchParams?.tab} soloGeneral={searchParams?.soloGeneral === '1'} />
         </Suspense>
       </PermissionGuard>
     </DashboardLayout>
   )
 }
 
-async function PersonContent({ personId, initialTab }: { personId: string; initialTab?: string }) {
+async function PersonContent({ personId, initialTab, soloGeneral }: { personId: string; initialTab?: string; soloGeneral?: boolean }) {
   try {
     // Call PostgreSQL API endpoint
     const baseUrl = getBaseUrl()
@@ -167,8 +168,9 @@ async function PersonContent({ personId, initialTab }: { personId: string; initi
           person={personData.person}
           financialData={financialData}
           beneficiaries={beneficiaries}
-          initialTab={initialTab}
+          initialTab={soloGeneral ? 'general' : initialTab}
           isSuspendida={suspendida}
+          soloGeneral={soloGeneral}
         />
       </div>
     )

@@ -928,6 +928,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Botón "Descargar CSV"',
     description: 'Exportar el listado de cursos de campaña a CSV',
   },
+  {
+    code: ComercialPermission.GESTION_CONTRATO,
+    module: Module.COMERCIAL,
+    section: 'Gestión Contrato',
+    name: 'Página "Gestión Contrato"',
+    description: 'Acceso a /dashboard/comercial/gestion-contrato. Lista de contratos firmados sin aprobar (nombre, contrato, fecha, estado) con opciones de adjuntar documentos y "dejar listo".',
+  },
 
   // ========== APROBACION MODULE (/dashboard/aprobacion) ==========
   {

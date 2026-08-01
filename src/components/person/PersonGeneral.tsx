@@ -123,7 +123,7 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
             <span>Ver Documentación</span>
           </button>
         </PermissionGuard>
-        <PermissionGuard permission={PersonPermission.VER_DOCUMENTACION}>
+        <PermissionGuard permission={PersonPermission.ADICION_DOCUMENTACION}>
           <button
             onClick={openFileChooser}
             disabled={uploadingFiles.length > 0}
