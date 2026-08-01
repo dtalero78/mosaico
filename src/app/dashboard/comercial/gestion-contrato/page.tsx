@@ -9,24 +9,30 @@ import { ComercialPermission } from '@/types/permissions'
 const fmtFecha = (v: any) => { if (!v) return '—'; try { return new Date(v).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return String(v).slice(0, 10) } }
 
 export default function GestionContratoPage() {
-  const [search, setSearch] = useState('')
-  const [applied, setApplied] = useState('')
+  const emptyF = { asesor: '', contrato: '', numeroId: '', estado: '', startDate: '', endDate: '' }
+  const [f, setF] = useState(emptyF)
+  const [applied, setApplied] = useState(emptyF)
   const [rows, setRows] = useState<any[]>([])
+  const [asesores, setAsesores] = useState<string[]>([])
+  const [estados, setEstados] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [confirmar, setConfirmar] = useState<any>(null)
   const [saving, setSaving] = useState(false)
 
-  const fetchData = useCallback(async (s: string) => {
+  const fetchData = useCallback(async (fl: typeof emptyF) => {
     setLoading(true)
     try {
-      const qs = new URLSearchParams(); if (s) qs.set('search', s)
+      const qs = new URLSearchParams()
+      Object.entries(fl).forEach(([k, v]) => { if (v) qs.set(k, v) })
       const res = await fetch(`/api/postgres/comercial/gestion-contrato?${qs}`, { cache: 'no-store' }).then(r => r.json())
       if (res.error) throw new Error(res.error)
-      setRows(res.rows || [])
+      setRows(res.rows || []); setAsesores(res.asesores || []); setEstados(res.estados || [])
     } catch (e: any) { toast.error(e?.message || 'Error al cargar') } finally { setLoading(false) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => { fetchData(applied) }, [applied, fetchData])
+  const hayFiltro = Object.values(applied).some(Boolean)
 
   const dejarListo = async (r: any) => {
     setSaving(true)
@@ -49,13 +55,41 @@ export default function GestionContratoPage() {
           <p className="text-gray-500 mb-4 text-sm">Contratos <strong>firmados sin aprobar</strong>. Adjunta la documentación y marca <strong>Dejar listo</strong> cuando el contrato esté completo para aprobación.</p>
 
           <div className="flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
-            <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
-              <label className="text-xs font-medium text-gray-500 uppercase">Buscar</label>
-              <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') setApplied(search) }}
-                placeholder="Nombre, ID o número de contrato…" className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase">Asesor</label>
+              <select value={f.asesor} onChange={e => setF({ ...f, asesor: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[150px]">
+                <option value="">Todos</option>
+                {asesores.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
             </div>
-            <button onClick={() => setApplied(search)} className="px-4 py-2 rounded-lg bg-purple-700 text-white text-sm font-medium hover:bg-purple-800">Buscar</button>
-            {applied && <button onClick={() => { setSearch(''); setApplied('') }} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 text-sm hover:bg-gray-50">Limpiar</button>}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase"># Contrato</label>
+              <input value={f.contrato} onChange={e => setF({ ...f, contrato: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') setApplied({ ...f }) }}
+                placeholder="Ej. 01-M5-…" className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[120px]" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase"># ID</label>
+              <input value={f.numeroId} onChange={e => setF({ ...f, numeroId: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') setApplied({ ...f }) }}
+                placeholder="Documento" className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[110px]" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase">Estado</label>
+              <select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[120px]">
+                <option value="">Todos</option>
+                {estados.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase">Desde</label>
+              <input type="date" value={f.startDate} onChange={e => setF({ ...f, startDate: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase">Hasta</label>
+              <input type="date" value={f.endDate} onChange={e => setF({ ...f, endDate: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="flex-1" />
+            <button onClick={() => setApplied({ ...f })} className="px-4 py-2 rounded-lg bg-purple-700 text-white text-sm font-medium hover:bg-purple-800">Aplicar</button>
+            {hayFiltro && <button onClick={() => { setF(emptyF); setApplied(emptyF) }} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 text-sm hover:bg-gray-50">Limpiar</button>}
           </div>
 
           <div className="text-sm text-gray-500 mb-2">{loading ? 'Cargando…' : `${rows.length} contrato(s) firmados sin aprobar`}</div>

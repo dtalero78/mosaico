@@ -13,38 +13,54 @@ import { query } from '@/lib/postgres';
  * POST … { id }  → "Dejar listo": marca el contrato como gestionado (sale de la lista).
  * Gateado por COMERCIAL.GESTION_CONTRATO.VER.
  */
+// Universo base: titulares FIRMADOS y SIN APROBAR, pendientes de gestión.
+const BASE = `p."tipoUsuario"='TITULAR'
+  AND p."hashConsentimiento" IS NOT NULL AND p."hashConsentimiento" <> ''
+  AND (p."aprobacion" IS NULL OR p."aprobacion" NOT IN ('Aprobado','Aprobada'))
+  AND COALESCE(p."gestionContratoListo", false) = false
+  AND (p."estado" IS NULL OR p."estado" <> 'FINALIZADA')
+  AND COALESCE(p."contrato", '') NOT LIKE 'PRB-%'`;
+
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ComercialPermission.GESTION_CONTRATO);
   const sp = new URL(request.url).searchParams;
-  const search = (sp.get('search') || '').trim();
+  const asesor = (sp.get('asesor') || '').trim();
+  const contrato = (sp.get('contrato') || '').trim();
+  const numeroId = (sp.get('numeroId') || '').trim();
+  const estado = (sp.get('estado') || '').trim();
+  const startDate = (sp.get('startDate') || '').trim();
+  const endDate = (sp.get('endDate') || '').trim();
 
+  const where: string[] = [BASE];
   const params: any[] = [];
-  let filtro = '';
-  if (search) {
-    params.push(`%${search}%`);
-    filtro = `AND (p."numeroId" ILIKE $1 OR p."contrato" ILIKE $1
-      OR TRIM(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido")) ILIKE $1)`;
-  }
+  if (asesor) { params.push(asesor); where.push(`p."asesor" = $${params.length}`); }
+  if (contrato) { params.push(`%${contrato}%`); where.push(`p."contrato" ILIKE $${params.length}`); }
+  if (numeroId) { params.push(`%${numeroId}%`); where.push(`p."numeroId" ILIKE $${params.length}`); }
+  if (estado) { params.push(estado); where.push(`COALESCE(p."aprobacion",'Pendiente') = $${params.length}`); }
+  if (startDate) { params.push(startDate); where.push(`COALESCE(p."fechaContrato", p."inicioContrato")::date >= $${params.length}::date`); }
+  if (endDate) { params.push(endDate); where.push(`COALESCE(p."fechaContrato", p."inicioContrato")::date <= $${params.length}::date`); }
 
   const rows = (await query<any>(
-    `SELECT p."_id", p."numeroId", p."contrato", p."plataforma",
+    `SELECT p."_id", p."numeroId", p."contrato", p."plataforma", p."asesor",
             TRIM(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido")) AS nombre,
             COALESCE(p."fechaContrato", p."inicioContrato") AS fecha,
             p."aprobacion", p."estado", p."extemporanea"
        FROM "PEOPLE" p
-      WHERE p."tipoUsuario"='TITULAR'
-        AND p."hashConsentimiento" IS NOT NULL AND p."hashConsentimiento" <> ''
-        AND (p."aprobacion" IS NULL OR p."aprobacion" NOT IN ('Aprobado','Aprobada'))
-        AND COALESCE(p."gestionContratoListo", false) = false
-        AND (p."estado" IS NULL OR p."estado" <> 'FINALIZADA')
-        AND COALESCE(p."contrato", '') NOT LIKE 'PRB-%'
-        ${filtro}
+      WHERE ${where.join(' AND ')}
       ORDER BY COALESCE(p."fechaContrato", p."inicioContrato") DESC NULLS LAST
       LIMIT 1000`,
     params
   )).rows;
 
-  return successResponse({ rows, total: rows.length });
+  // Opciones de los dropdowns (del universo base completo).
+  const asesores = (await query<{ asesor: string }>(
+    `SELECT DISTINCT p."asesor" FROM "PEOPLE" p WHERE ${BASE} AND p."asesor" IS NOT NULL AND p."asesor" <> '' ORDER BY p."asesor"`
+  )).rows.map(r => r.asesor);
+  const estados = (await query<{ estado: string }>(
+    `SELECT DISTINCT COALESCE(p."aprobacion",'Pendiente') AS estado FROM "PEOPLE" p WHERE ${BASE} ORDER BY estado`
+  )).rows.map(r => r.estado);
+
+  return successResponse({ rows, total: rows.length, asesores, estados });
 });
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
