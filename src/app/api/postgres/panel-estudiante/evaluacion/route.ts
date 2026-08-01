@@ -23,8 +23,11 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
   const step = student.step || ''     // lección actual
   if (!curso) return successResponse({ available: false })
 
+  // Match tolerante a tildes/mayúsculas (el alumno puede tener "Leccion" y NIVELES "Lección").
+  const norm = (c: string) => `translate(lower(${c}),'áéíóúñ','aeioun')`
   const cur = await queryOne<{ orden: number | null }>(
-    `SELECT "orden" FROM "NIVELES" WHERE UPPER("curso")=UPPER($1) AND "code"=$2 AND "step"=$3 LIMIT 1`,
+    `SELECT "orden" FROM "NIVELES"
+      WHERE UPPER("curso")=UPPER($1) AND ${norm('"code"')}=${norm('$2')} AND ${norm('"step"')}=${norm('$3')} LIMIT 1`,
     [curso, nivel, step]
   )
   const currentOrden = cur?.orden ?? null
@@ -71,10 +74,14 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
   const siguiente = currentOrden != null
     ? evals.find(e => e.orden != null && e.orden > currentOrden)
     : evals[0]
+  const faltanLecciones = (siguiente?.orden != null && currentOrden != null)
+    ? Math.max(0, Number(siguiente.orden) - Number(currentOrden))
+    : null
   return successResponse({
     available: true,
     reached: false,
     evalCode: siguiente?.code || null,
     evalNum: siguiente ? extraNum(siguiente.code) : null,
+    faltanLecciones,
   })
 })

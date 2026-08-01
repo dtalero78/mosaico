@@ -94,6 +94,11 @@ export default function EvaluacionCard() {
           <>
             <p className="text-sm text-gray-600">Siguiente:</p>
             <p className="text-lg font-bold text-orange-700 mt-0.5">{d.evalCode}</p>
+            {Number(d.faltanLecciones) > 0 ? (
+              <p className="text-sm text-gray-700 mt-2">Te faltan <strong className="text-orange-700">{d.faltanLecciones}</strong> lección(es) para llegar.</p>
+            ) : d.faltanLecciones === 0 ? (
+              <p className="text-sm text-emerald-700 font-medium mt-2">¡Estás a un paso! Es tu próxima lección.</p>
+            ) : null}
             <p className="text-xs text-gray-500 mt-2">Se habilitará cuando avances a esa lección.</p>
           </>
         ) : (
