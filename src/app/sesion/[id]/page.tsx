@@ -415,6 +415,7 @@ export default function SesionPage() {
                     groupSize={groupSiblings.length}
                   />
                   <RepetirLeccionButton eventoId={evento._id} onMarked={() => loadEventoData()} />
+                  <RevisarEvaluacionButton evento={evento} />
                 </div>
               </div>
             </div>
@@ -979,6 +980,89 @@ function RepetirLeccionButton({ eventoId, onMarked }: { eventoId: string; onMark
                 </div>
               </>
             ) : null}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
+ * Botón "Revisar Evaluación" — solo visible cuando la lección del evento es de un
+ * módulo Evaluación. Abre un modal con los inscritos y, por cada cuestionario, sus
+ * intentos / mejor nota / aprobó o no.
+ */
+function RevisarEvaluacionButton({ evento }: { evento: CalendarioEvent }) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<any>(null)
+
+  if (!/evaluac/i.test(evento.nivel || '')) return null
+
+  const abrir = async () => {
+    setOpen(true); setLoading(true); setData(null)
+    try {
+      const j = await fetch(`/api/postgres/events/${evento._id}/evaluacion-resultados`, { cache: 'no-store' }).then(r => r.json())
+      setData(j)
+    } catch { setData({ error: true }) } finally { setLoading(false) }
+  }
+
+  const cel = (x: any) => {
+    if (!x) return <div><span className="inline-flex text-[11px] font-bold rounded-full px-2 py-0.5 bg-gray-100 text-gray-500">Pendiente</span></div>
+    const cls = x.estado === 'aprobado' ? 'bg-emerald-100 text-emerald-700' : x.estado === 'no_aprobado' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+    const txt = x.estado === 'aprobado' ? `✓ Aprobó · ${x.mejor}%` : x.estado === 'no_aprobado' ? `✕ No aprobó · ${x.mejor}%` : `En curso · ${x.mejor}%`
+    return <div><span className={`inline-flex text-[11px] font-bold rounded-full px-2 py-0.5 ${cls}`}>{txt}</span><span className="block text-[10px] text-gray-500 mt-0.5">{x.intentos} de 3 intentos</span></div>
+  }
+
+  return (
+    <>
+      <button type="button" onClick={abrir}
+        className="inline-flex items-center gap-1.5 px-4 py-2 bg-fuchsia-600 text-white text-sm font-medium rounded-lg hover:bg-fuchsia-700">
+        🧾 Revisar Evaluación
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full my-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div><b className="text-gray-900">Revisar Evaluación</b><div className="text-xs text-gray-500">{data?.label || `${evento.nivel} · ${evento.step}`}</div></div>
+              <button onClick={() => setOpen(false)} title="Cerrar" className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
+            <div className="p-4">
+              {loading ? <p className="text-sm text-gray-400 text-center py-8">Cargando…</p>
+                : !data || data.error ? <p className="text-sm text-red-600 text-center py-8">No se pudo cargar.</p>
+                : !data.esEvaluacion ? <p className="text-sm text-gray-500 text-center py-8">Este evento no es una evaluación.</p>
+                : (data.rows || []).length === 0 ? <p className="text-sm text-gray-500 text-center py-8">Sin inscritos ni resultados todavía.</p>
+                : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[560px] border-collapse">
+                      <thead><tr className="text-left">
+                        <th className="text-[11px] font-semibold text-gray-600 uppercase px-3 py-2 border-b-2 border-gray-200">Estudiante</th>
+                        {(data.cuestionarios || []).map((c: any) => (
+                          <th key={c.id} className="text-[11px] font-semibold text-gray-600 uppercase px-3 py-2 border-b-2 border-gray-200">{c.titulo}</th>
+                        ))}
+                        <th className="text-[11px] font-semibold text-gray-600 uppercase px-3 py-2 border-b-2 border-gray-200">Estado</th>
+                      </tr></thead>
+                      <tbody>
+                        {(data.rows || []).map((r: any) => (
+                          <tr key={r.academicaId} className="hover:bg-fuchsia-50/40">
+                            <td className="px-3 py-2.5 border-b border-gray-100"><div className="flex flex-col"><b className="text-[13px]">{r.nombre}</b><span className="text-[11px] text-gray-500">ID {r.numeroId}</span></div></td>
+                            {(data.cuestionarios || []).map((c: any) => <td key={c.id} className="px-3 py-2.5 border-b border-gray-100">{cel(r.porCuest[c.id])}</td>)}
+                            <td className="px-3 py-2.5 border-b border-gray-100">
+                              <span className={`inline-flex text-[11px] font-bold rounded-full px-2 py-0.5 ${r.estadoGlobal === 'completa' ? 'bg-emerald-100 text-emerald-700' : r.estadoGlobal === 'reprobo' ? 'bg-red-100 text-red-700' : r.estadoGlobal === 'en_curso' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                                {r.estadoGlobal === 'completa' ? 'Completa' : r.estadoGlobal === 'reprobo' ? 'Reprobó' : r.estadoGlobal === 'en_curso' ? 'En curso' : 'No iniciada'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+            </div>
+            <div className="flex justify-end px-5 py-3 border-t border-gray-100">
+              <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg bg-fuchsia-600 text-white text-sm font-medium hover:bg-fuchsia-700">Cerrar</button>
+            </div>
           </div>
         </div>
       )}

@@ -82,6 +82,32 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
   )
 
   const agotado = !aprobado && intento >= MAX_INTENTOS
+
+  // Fase B — al COMPLETAR la evaluación (todos los cuestionarios resueltos), marcar
+  // el booking del evento: participacion = aprobó todos; noAprobo = reprobó alguno.
+  // Best-effort (no rompe el envío si no hay booking).
+  try {
+    const todos = (await query<{ cuestionarioId: string | null; aprobado: boolean | null }>(
+      `SELECT "cuestionarioId","aprobado" FROM "EVALUACION_RESPUESTAS"
+        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "step"=$4 AND "enviadaEn" IS NOT NULL`,
+      [academicaId, curso, nivel, step]
+    )).rows
+    const primerId = cuestionarios[0].id
+    const est: Record<string, { intentos: number; aprobado: boolean }> = {}
+    for (const c of cuestionarios) est[c.id] = { intentos: 0, aprobado: false }
+    for (const r of todos) { const id = r.cuestionarioId || primerId; const e = est[id]; if (!e) continue; e.intentos++; if (r.aprobado) e.aprobado = true }
+    const resueltoAll = cuestionarios.every(c => est[c.id].aprobado || est[c.id].intentos >= MAX_INTENTOS)
+    if (resueltoAll) {
+      const allAprob = cuestionarios.every(c => est[c.id].aprobado)
+      const nm = (col: string) => `translate(lower(${col}),'áéíóúñ','aeioun')`
+      await query(
+        `UPDATE "ACADEMICA_BOOKINGS" SET "asistio"=true, "participacion"=$4, "noAprobo"=$5
+          WHERE "idEstudiante"=$1 AND ${nm('"nivel"')}=${nm('$2')} AND ${nm('"step"')}=${nm('$3')}`,
+        [academicaId, nivel, step, allAprob, !allAprob]
+      )
+    }
+  } catch { /* marca best-effort */ }
+
   return successResponse({
     ok: true, score, total, porcentaje, aprobado, intento,
     intentosRestantes: aprobado ? 0 : Math.max(0, MAX_INTENTOS - intento),

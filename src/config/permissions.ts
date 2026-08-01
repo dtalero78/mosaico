@@ -588,6 +588,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/sesiones-sin-gestion. Lista de eventos pasados sin registrar (sesionCerrada=false) con filtros por fecha y advisor. Muestra inscritos/asistencia marcada para detectar si el advisor empezó pero no cerró, y un acceso directo al panel del evento para que el coordinador gestione el cierre.',
   },
   {
+    code: AcademicoPermission.EVALUACIONES_VER,
+    module: Module.ACADEMICO,
+    section: 'Evaluaciones',
+    name: 'Página "Evaluaciones"',
+    description: 'Acceso a /dashboard/academic/evaluaciones. Resultados de las evaluaciones y cuestionarios por curso: por estudiante, mejor nota, intentos y aprobó/no aprobó. También alimenta el botón "Revisar Evaluación" del panel del evento.',
+  },
+  {
     code: AcademicoPermission.REPORTE_ACADEMICO_VER,
     module: Module.ACADEMICO,
     section: 'Reporte Académico',

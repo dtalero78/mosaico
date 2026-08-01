@@ -188,6 +188,9 @@ export enum AcademicoPermission {
   LISTA_USUARIOS_EXPORTAR = 'ACADEMICO.LISTA_USUARIOS.EXPORTAR',
   LISTA_USUARIOS_EDITAR   = 'ACADEMICO.LISTA_USUARIOS.EDITAR',
 
+  // Evaluaciones — resultados de evaluaciones/cuestionarios por curso (Académico)
+  EVALUACIONES_VER = 'ACADEMICO.EVALUACIONES.VER',
+
   // Reporte Académico — consolidado semanal de métricas por salón (Académico › Guías)
   REPORTE_ACADEMICO_VER = 'ACADEMICO.REPORTE_ACADEMICO.VER',
   REPORTE_ACADEMICO_PDF = 'ACADEMICO.REPORTE_ACADEMICO.PDF',             // imprimir / generar PDF del salón

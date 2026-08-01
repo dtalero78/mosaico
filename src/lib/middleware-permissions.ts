@@ -121,6 +121,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/reporte-academico': [
     'ACADEMICO.REPORTE_ACADEMICO.VER' as Permission,
   ],
+  '/dashboard/academic/evaluaciones': [
+    'ACADEMICO.EVALUACIONES.VER' as Permission,
+  ],
   '/dashboard/academic/lista-usuarios': [
     'ACADEMICO.LISTA_USUARIOS.VER' as Permission,
   ],
