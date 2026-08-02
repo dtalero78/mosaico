@@ -22,6 +22,10 @@ import { Pool } from 'pg';
 // Rangos que cuentan como "líder" — donde se detiene la subida por la escalera.
 const LIDER_RANKS = ['SALES_MANAGER', 'GERENTE', 'JEFE_GRUPO'];
 
+// Scoping de vistas comerciales: quién ve TODO vs quién ve solo su equipo.
+const VE_TODO_RANKS = new Set(['SALES_MANAGER', 'GERENTE_DIVISIONAL', 'DIRECTOR_INTERNACIONAL', 'CEO']);
+const LIDER_EQUIPO_RANKS = new Set(['GERENTE', 'JEFE_GRUPO']);
+
 export interface LiderComercial {
   nombre: string;
   correo: string | null;
@@ -108,4 +112,49 @@ export async function resolverLiderComercial(
     console.warn('[crm] resolverLiderComercial falló:', err?.message || err);
     return null;
   }
+}
+
+export interface ComercialScope {
+  /** true = ve todos los contratos (Sales Manager+, o usuario fuera del CRM). */
+  seeAll: boolean;
+  /** correo del líder por el que se filtra (Gerente/Jefe de Grupo). null si seeAll. */
+  liderCorreo: string | null;
+  position: string | null;
+}
+
+const scopeCache = new Map<string, { v: ComercialScope; exp: number }>();
+
+/**
+ * Alcance de vista de un usuario comercial según su rango en la escalera del CRM:
+ *  - GERENTE / JEFE_GRUPO → ve SOLO los contratos cuyo líder sea él (liderCorreo = su correo).
+ *  - SALES_MANAGER y arriba (CEO, Director, Gerente Divisional) → ve TODO.
+ *  - No está en el CRM (admin/coordinador con permiso) → ve TODO (sin restricción).
+ * Cacheado 5 min por correo. Best-effort: si el CRM no responde → seeAll (no bloquea la vista).
+ */
+export async function getUserComercialScope(email?: string | null): Promise<ComercialScope> {
+  const e = String(email || '').trim().toLowerCase();
+  const openAll: ComercialScope = { seeAll: true, liderCorreo: null, position: null };
+  if (!e) return openAll;
+  const pool = getCrmPool();
+  if (!pool) return openAll;
+  const now = Date.now();
+  const cached = scopeCache.get(e);
+  if (cached && cached.exp > now) return cached.v;
+  let scope = openAll;
+  try {
+    const r = await pool.query(
+      `SELECT lower(email) AS email, "position"::text AS pos FROM "User"
+        WHERE lower(email) = $1 ORDER BY ("isActive" IS TRUE) DESC LIMIT 1`,
+      [e],
+    );
+    if (r.rows.length) {
+      const pos = r.rows[0].pos as string;
+      if (LIDER_EQUIPO_RANKS.has(pos)) scope = { seeAll: false, liderCorreo: r.rows[0].email, position: pos };
+      else scope = { seeAll: true, liderCorreo: null, position: pos }; // Sales Manager+ / Full Exec / Asesor → todo
+    }
+  } catch (err: any) {
+    console.warn('[crm] getUserComercialScope falló:', err?.message || err);
+  }
+  scopeCache.set(e, { v: scope, exp: now + 5 * 60 * 1000 });
+  return scope;
 }
