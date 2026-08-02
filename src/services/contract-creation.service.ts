@@ -5,6 +5,7 @@ import { ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { generateUserLogin } from '@/lib/user-login';
 import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
+import { resolverLiderComercial, type LiderComercial } from '@/lib/crm';
 
 /**
  * Regla numeroId MOSAICO: sólo el titular puede compartir numeroId con su propia
@@ -233,7 +234,7 @@ export async function insertBeneficiarioTx(
  *
  * Best-effort: nunca debe romper la creación del contrato.
  */
-export async function registrarAsesorEnEquipoComercial(titular: any): Promise<void> {
+export async function registrarAsesorEnEquipoComercial(titular: any, liderDado?: LiderComercial | null): Promise<void> {
   const nombre = String(titular?.asesor || '').trim();
   const correo = String(titular?.asesorMail || '').trim();
   const plataforma = String(titular?.plataforma || '').trim();
@@ -241,14 +242,25 @@ export async function registrarAsesorEnEquipoComercial(titular: any): Promise<vo
   // Sin correo válido no hay fila que crear (EQUIPO_COMERCIAL.correo es NOT NULL).
   if (!nombre || !correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return;
 
+  // Líder-tope del asesor (escalera del CRM). Se resuelve si no vino dado. Best-effort.
+  let lider = liderDado;
+  if (lider === undefined) {
+    try { lider = await resolverLiderComercial(correo, nombre); } catch { lider = null; }
+  }
+
   try {
-    // ON CONFLICT sobre el índice único de LOWER(TRIM(correo)): si ya está, no se toca.
+    // ON CONFLICT sobre el índice único de LOWER(TRIM(correo)): nombre/correo NO se
+    // pisan (respeta el alta oficial de un admin), pero SÍ se refresca el líder.
+    // COALESCE evita borrar un líder existente si el CRM no respondió (lider null).
     await query(
       `INSERT INTO "EQUIPO_COMERCIAL"
-         ("_id","nombre","correo","plataforma","rol","activo","origen","_createdDate","_updatedDate")
-       VALUES ($1,$2,$3,$4,'COMERCIAL',true,'CONTRATO',NOW(),NOW())
-       ON CONFLICT (LOWER(TRIM("correo"))) DO NOTHING`,
-      [ids.comercial(), nombre, correo, plataforma || null]
+         ("_id","nombre","correo","plataforma","rol","activo","origen","lider","liderCorreo","_createdDate","_updatedDate")
+       VALUES ($1,$2,$3,$4,'COMERCIAL',true,'CONTRATO',$5,$6,NOW(),NOW())
+       ON CONFLICT (LOWER(TRIM("correo"))) DO UPDATE
+         SET "lider" = COALESCE(EXCLUDED."lider", "EQUIPO_COMERCIAL"."lider"),
+             "liderCorreo" = COALESCE(EXCLUDED."liderCorreo", "EQUIPO_COMERCIAL"."liderCorreo"),
+             "_updatedDate" = NOW()`,
+      [ids.comercial(), nombre, correo, plataforma || null, lider?.nombre || null, lider?.correo || null]
     );
   } catch (err: any) {
     console.warn('[contract-creation] no se pudo registrar el asesor en EQUIPO_COMERCIAL:', err?.message || err);
@@ -364,9 +376,31 @@ export async function createFullContract(input: CreateContractInput) {
     await incrementarCupoCurso(b.campaign, b.tipoCurso, b.horarioCurso);
   }
 
-  // Registrar al asesor (nombre + correo + plataforma) en EQUIPO_COMERCIAL, para
-  // que el correo del ejecutivo quede resoluble en el PDF. Best-effort.
-  await registrarAsesorEnEquipoComercial(titular);
+  // Resolver el líder-tope del asesor en la escalera del CRM (best-effort; si el
+  // CRM no responde queda null y NO bloquea la creación del contrato).
+  let liderComercial: LiderComercial | null = null;
+  try {
+    liderComercial = await resolverLiderComercial(titular.asesorMail, titular.asesor);
+  } catch { liderComercial = null; }
+
+  // Guardar el líder como snapshot del contrato en el titular (para reportar por líder).
+  if (liderComercial) {
+    try {
+      await query(
+        `UPDATE "PEOPLE" SET "liderComercial"=$2, "liderComercialCorreo"=$3, "_updatedDate"=NOW() WHERE "_id"=$1`,
+        [titularId, liderComercial.nombre, liderComercial.correo]
+      );
+      if (created.titular) {
+        created.titular.liderComercial = liderComercial.nombre;
+        created.titular.liderComercialCorreo = liderComercial.correo;
+      }
+    } catch (err: any) {
+      console.warn('[contract-creation] no se pudo guardar liderComercial en el titular:', err?.message || err);
+    }
+  }
+
+  // Registrar al asesor (nombre + correo + líder) en EQUIPO_COMERCIAL. Best-effort.
+  await registrarAsesorEnEquipoComercial(titular, liderComercial);
 
   // 4. FINANCIERO
   if (financial && financial.totalPlan) {
