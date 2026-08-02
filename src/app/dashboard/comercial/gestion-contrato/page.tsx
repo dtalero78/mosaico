@@ -9,11 +9,12 @@ import { ComercialPermission } from '@/types/permissions'
 const fmtFecha = (v: any) => { if (!v) return '—'; try { return new Date(v).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return String(v).slice(0, 10) } }
 
 export default function GestionContratoPage() {
-  const emptyF = { asesor: '', contrato: '', numeroId: '', estado: '', startDate: '', endDate: '' }
+  const emptyF = { asesor: '', lider: '', contrato: '', numeroId: '', estado: '', startDate: '', endDate: '' }
   const [f, setF] = useState(emptyF)
   const [applied, setApplied] = useState(emptyF)
   const [rows, setRows] = useState<any[]>([])
   const [asesores, setAsesores] = useState<string[]>([])
+  const [lideres, setLideres] = useState<string[]>([])
   const [estados, setEstados] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [confirmar, setConfirmar] = useState<any>(null)
@@ -26,7 +27,7 @@ export default function GestionContratoPage() {
       Object.entries(fl).forEach(([k, v]) => { if (v) qs.set(k, v) })
       const res = await fetch(`/api/postgres/comercial/gestion-contrato?${qs}`, { cache: 'no-store' }).then(r => r.json())
       if (res.error) throw new Error(res.error)
-      setRows(res.rows || []); setAsesores(res.asesores || []); setEstados(res.estados || [])
+      setRows(res.rows || []); setAsesores(res.asesores || []); setEstados(res.estados || []); setLideres(res.lideres || [])
     } catch (e: any) { toast.error(e?.message || 'Error al cargar') } finally { setLoading(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -60,6 +61,14 @@ export default function GestionContratoPage() {
               <select value={f.asesor} onChange={e => setF({ ...f, asesor: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[150px]">
                 <option value="">Todos</option>
                 {asesores.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase">Líder</label>
+              <select value={f.lider} onChange={e => setF({ ...f, lider: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[150px]">
+                <option value="">Todos</option>
+                {lideres.map((l) => <option key={l} value={l}>{l}</option>)}
+                <option value="(Sin líder)">(Sin líder)</option>
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -115,7 +124,7 @@ export default function GestionContratoPage() {
                     <tr key={r._id} className="hover:bg-purple-50/40">
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="flex flex-col"><b className="text-[13.5px] text-gray-900">{r.nombre || '(sin nombre)'}</b>
-                          <span className="text-[11.5px] text-gray-500">ID {r.numeroId} · {r.plataforma || ''}{r.extemporanea ? ' · ⏰ Extemporánea' : ''}</span></div>
+                          <span className="text-[11.5px] text-gray-500">ID {r.numeroId} · {r.plataforma || ''}{r.liderComercial ? ` · 👤 ${r.liderComercial}` : ''}{r.extemporanea ? ' · ⏰ Extemporánea' : ''}</span></div>
                       </td>
                       <td className="px-3 py-3 border-b border-gray-100 text-sm font-medium text-gray-700">{r.contrato || '—'}</td>
                       <td className="px-3 py-3 border-b border-gray-100 text-sm text-gray-600">{fmtFecha(r.fecha)}</td>

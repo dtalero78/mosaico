@@ -28,6 +28,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const contrato = (sp.get('contrato') || '').trim();
   const numeroId = (sp.get('numeroId') || '').trim();
   const estado = (sp.get('estado') || '').trim();
+  const lider = (sp.get('lider') || '').trim();
   const startDate = (sp.get('startDate') || '').trim();
   const endDate = (sp.get('endDate') || '').trim();
 
@@ -37,6 +38,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (contrato) { params.push(`%${contrato}%`); where.push(`p."contrato" ILIKE $${params.length}`); }
   if (numeroId) { params.push(`%${numeroId}%`); where.push(`p."numeroId" ILIKE $${params.length}`); }
   if (estado) { params.push(estado); where.push(`COALESCE(p."aprobacion",'Pendiente') = $${params.length}`); }
+  if (lider) {
+    if (lider === '(Sin líder)') { where.push(`p."liderComercial" IS NULL`); }
+    else { params.push(lider); where.push(`p."liderComercial" = $${params.length}`); }
+  }
   if (startDate) { params.push(startDate); where.push(`COALESCE(p."fechaContrato", p."inicioContrato")::date >= $${params.length}::date`); }
   if (endDate) { params.push(endDate); where.push(`COALESCE(p."fechaContrato", p."inicioContrato")::date <= $${params.length}::date`); }
 
@@ -44,7 +49,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `SELECT p."_id", p."numeroId", p."contrato", p."plataforma", p."asesor",
             TRIM(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido")) AS nombre,
             COALESCE(p."fechaContrato", p."inicioContrato") AS fecha,
-            p."aprobacion", p."estado", p."extemporanea"
+            p."aprobacion", p."estado", p."extemporanea", p."liderComercial"
        FROM "PEOPLE" p
       WHERE ${where.join(' AND ')}
       ORDER BY COALESCE(p."fechaContrato", p."inicioContrato") DESC NULLS LAST
@@ -59,8 +64,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const estados = (await query<{ estado: string }>(
     `SELECT DISTINCT COALESCE(p."aprobacion",'Pendiente') AS estado FROM "PEOPLE" p WHERE ${BASE} ORDER BY estado`
   )).rows.map(r => r.estado);
+  const lideres = (await query<{ lider: string }>(
+    `SELECT DISTINCT p."liderComercial" AS lider FROM "PEOPLE" p WHERE ${BASE} AND p."liderComercial" IS NOT NULL AND p."liderComercial" <> '' ORDER BY p."liderComercial"`
+  )).rows.map(r => r.lider);
 
-  return successResponse({ rows, total: rows.length, asesores, estados });
+  return successResponse({ rows, total: rows.length, asesores, estados, lideres });
 });
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
