@@ -20,7 +20,14 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
   // → salón ascendente.
   const result = await query(
     `SELECT "_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","guia","horarioCurso","inicioCurso",
-            "duracionCurso","finalCurso","numeroUsuarios","usuInscritos","paraMenores","activa"
+            "duracionCurso","finalCurso","numeroUsuarios","paraMenores","activa",
+            -- cupos = beneficiarios ACTIVOS (los inactivos/retractados no ocupan cupo)
+            (SELECT COUNT(*)::int FROM "PEOPLE" pe
+               WHERE pe."tipoUsuario"='BENEFICIARIO'
+                 AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign"
+                 AND pe."tipoCurso" = "CURSOS_CAMPAIGN"."tipoCurso"
+                 AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso"
+                 AND COALESCE(pe."estadoInactivo", false) = false) AS "usuInscritos"
      FROM "CURSOS_CAMPAIGN"
      ORDER BY
        MAX("_createdDate") OVER (PARTITION BY "campaign") DESC,
