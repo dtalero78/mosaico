@@ -23,6 +23,16 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
   const step = student.step || ''     // lección actual
   if (!curso) return successResponse({ available: false })
 
+  // Filtro de categoría de módulo evaluable:
+  //  ?tipo=evaluacion   → sólo módulos "Evaluación NN"
+  //  ?tipo=entrenamiento→ sólo módulos "Entrenamiento NN"
+  //  (sin tipo)         → ambos (comportamiento combinado histórico).
+  const tipo = (new URL(_req.url).searchParams.get('tipo') || '').toLowerCase()
+  const catRegex = tipo === 'evaluacion' ? /evaluac/i : tipo === 'entrenamiento' ? /entren/i : /evaluac|entren/i
+  const catSql = tipo === 'evaluacion' ? `"code" ILIKE '%evaluac%'`
+    : tipo === 'entrenamiento' ? `"code" ILIKE '%entren%'`
+    : `("code" ILIKE '%evaluac%' OR "code" ILIKE '%entren%')`
+
   // Match tolerante a tildes/mayúsculas (el alumno puede tener "Leccion" y NIVELES "Lección").
   const norm = (c: string) => `translate(lower(${c}),'áéíóúñ','aeioun')`
   const cur = await queryOne<{ orden: number | null }>(
@@ -31,12 +41,12 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
     [curso, nivel, step]
   )
   const currentOrden = cur?.orden ?? null
-  const actualEsEval = /evaluac|entren/i.test(nivel)
+  const actualEsEval = catRegex.test(nivel)
 
   const evals = (await query(
     `SELECT "code","step","orden","evaluacionModo","evaluacionMinutos","preguntasManual","cuestionarios"
        FROM "NIVELES"
-      WHERE UPPER("curso")=UPPER($1) AND ("code" ILIKE '%evaluac%' OR "code" ILIKE '%entren%')
+      WHERE UPPER("curso")=UPPER($1) AND ${catSql}
       ORDER BY "orden" ASC`,
     [curso]
   )).rows as any[]

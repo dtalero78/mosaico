@@ -20,10 +20,11 @@ const ordinal = (i: number) => ORD[i] || `${i + 1}ª`
  * Evaluación/Entrenamiento presenta sus cuestionarios EN ORDEN: cada cuestionario
  * se presenta pregunta por pregunta, con hasta 3 intentos y aprobación ≥60%.
  */
-export default function EvaluacionCard() {
+export default function EvaluacionCard({ tipo, titulo }: { tipo?: 'evaluacion' | 'entrenamiento'; titulo?: string } = {}) {
+  const qs = tipo ? `?tipo=${tipo}` : ''
   const { data, refetch } = useQuery(
-    'evaluacion-estado',
-    () => fetch('/api/postgres/panel-estudiante/evaluacion', { cache: 'no-store' })
+    ['evaluacion-estado', tipo || 'all'],
+    () => fetch(`/api/postgres/panel-estudiante/evaluacion${qs}`, { cache: 'no-store' })
       .then((r) => r.json()).catch(() => ({ available: false })),
     { staleTime: 60_000, refetchOnWindowFocus: false }
   )
@@ -93,7 +94,7 @@ export default function EvaluacionCard() {
     <div className="bg-orange-50 border border-orange-100 rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-1">
         <ClipboardDocumentCheckIcon className="h-5 w-5 text-orange-600" />
-        <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wide">Entrenamientos y Evaluaciones</h3>
+        <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wide">{titulo || 'Entrenamientos y Evaluaciones'}</h3>
       </div>
 
       {!reached ? (
@@ -109,7 +110,7 @@ export default function EvaluacionCard() {
             <p className="text-xs text-gray-500 mt-2">Se habilitará cuando avances a esa lección.</p>
           </>
         ) : (
-          <p className="text-sm text-gray-500 mt-1">No tienes una evaluación próxima.</p>
+          <p className="text-sm text-gray-500 mt-1">No tienes {tipo === 'entrenamiento' ? 'un entrenamiento próximo' : 'una evaluación próxima'}.</p>
         )
       ) : !d.tieneEvaluacion ? (
         <p className="text-sm text-gray-500 mt-1">La evaluación de esta lección aún no está disponible.</p>

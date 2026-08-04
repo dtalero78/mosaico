@@ -129,6 +129,8 @@ function PanelEstudianteContent() {
     IMPULSA: 'bg-fuchsia-50 border border-fuchsia-100',
   }
   const cursoBg = CURSO_BG[(profile?.tipoCurso || '').toUpperCase()] || 'bg-gray-50 border border-gray-100'
+  // IMPULSA opera distinto: sin talleres/olimpiadas/actividades/recursos ni nivelaciones.
+  const esImpulsa = (profile?.tipoCurso || '').toUpperCase() === 'IMPULSA'
 
   // Derive next class info for student card
   const nextClass = useMemo(() => {
@@ -196,6 +198,7 @@ function PanelEstudianteContent() {
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="mx-auto px-2 flex flex-wrap items-center gap-3">
           <span className="text-lg font-bold text-primary-700 mr-2">MOSAICO</span>
+          {!esImpulsa && (<>
           <span className="text-sm text-gray-500 mr-1">Booking:</span>
           <button
             type="button"
@@ -213,9 +216,11 @@ function PanelEstudianteContent() {
             <CalendarDaysIcon className="h-4 w-4" />
             Inscripción Olimpiadas
           </button>
+          </>)}
 
           <div className="flex-1" />
 
+          {!esImpulsa && (<>
           {/* Grupo desplegable Actividades */}
           <div className="relative">
             <button
@@ -302,6 +307,7 @@ function PanelEstudianteContent() {
               </>
             )}
           </div>
+          </>)}
 
           <button
             onClick={() => setShowMaterials(true)}
@@ -354,8 +360,12 @@ function PanelEstudianteContent() {
             animation: lgs-ticker 35s linear infinite;
           }
         `}</style>
-        <div className="flex-shrink-0 bg-primary-600 flex items-center justify-center min-w-[200px] px-4 py-2 gap-2">
-          <span className="text-white text-xs font-black uppercase tracking-widest">📢 MOSAICO</span>
+        <div className={`flex-shrink-0 flex items-center justify-center min-w-[200px] px-4 py-2 gap-2 ${esImpulsa ? 'bg-white' : 'bg-primary-600'}`}>
+          {esImpulsa ? (
+            <img src="/logo-impulsa.png" alt="IMPULSA" className="h-7 w-auto object-contain" />
+          ) : (
+            <span className="text-white text-xs font-black uppercase tracking-widest">📢 MOSAICO</span>
+          )}
         </div>
         <div className="flex-1 overflow-hidden flex items-center py-2">
           <span className="lgs-ticker-text text-sm font-medium px-8" style={{ color: tickerColor }}>
@@ -515,17 +525,27 @@ function PanelEstudianteContent() {
               ) : null}
             </div>
 
-            {/* Nivelación (izq) + Evaluación (der) — 2 columnas */}
+            {/* 2 columnas. IMPULSA: Evaluaciones (izq) + Entrenamientos (der), sin
+                Nivelación (no aplica). Resto: Nivelación (izq) + Entren./Eval. (der). */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-              {/* Nivelación Programada — visible siempre; se habilita cuando el
-                  admin aprueba la nivelación y la agenda (booking tipo=NIVELACION) */}
-              <NivelacionProgramadaCard
-                booking={nivelacionBooking}
-                onCancel={handleCancel}
-                isCancelling={cancelMutation.isLoading}
-              />
-              {/* Evaluación — siguiente evaluación / acceso al llegar a la lección */}
-              <EvaluacionCard />
+              {esImpulsa ? (
+                <>
+                  <EvaluacionCard tipo="evaluacion" titulo="Evaluaciones" />
+                  <EvaluacionCard tipo="entrenamiento" titulo="Entrenamientos" />
+                </>
+              ) : (
+                <>
+                  {/* Nivelación Programada — visible siempre; se habilita cuando el
+                      admin aprueba la nivelación y la agenda (booking tipo=NIVELACION) */}
+                  <NivelacionProgramadaCard
+                    booking={nivelacionBooking}
+                    onCancel={handleCancel}
+                    isCancelling={cancelMutation.isLoading}
+                  />
+                  {/* Evaluación — siguiente evaluación / acceso al llegar a la lección */}
+                  <EvaluacionCard />
+                </>
+              )}
             </div>
 
             {/* EVENTOS PROGRAMADOS — eventos de la semana (sesiones, talleres, otros) */}
