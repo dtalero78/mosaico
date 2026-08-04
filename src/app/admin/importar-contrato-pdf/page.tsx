@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -28,6 +28,14 @@ export default function ImportarContratoPdfPage() {
   const [campaigns, setCampaigns] = useState<string[]>([])
   const [candidateCampaigns, setCandidateCampaigns] = useState<string[]>([])
   const [campaign, setCampaign] = useState('')
+  const [cursos, setCursos] = useState<any[]>([])
+
+  useEffect(() => {
+    fetch('/api/postgres/cursos-campaign', { cache: 'no-store' }).then(r => r.json())
+      .then(d => setCursos(d.rows || [])).catch(() => setCursos([]))
+  }, [])
+  const cursosDe = (tipoCurso: string) => cursos.filter((c: any) =>
+    c.campaign === campaign && String(c.tipoCurso || '').toUpperCase() === String(tipoCurso || '').toUpperCase())
 
   const extraer = async () => {
     if (!file) return
@@ -165,17 +173,31 @@ export default function ImportarContratoPdfPage() {
                         <Input label="Email" value={b.email} onChange={(v: any) => setBen(i, 'email', v)} />
                         <Input label="Celular" value={b.celular} onChange={(v: any) => setBen(i, 'celular', v)} />
                         <Input label="Programa (tipoCurso)" value={b.tipoCurso} onChange={(v: any) => setBen(i, 'tipoCurso', v)} />
-                        <Input label="Horario (horarioCurso)" value={b.horarioCurso} onChange={(v: any) => setBen(i, 'horarioCurso', v)} wide />
+                        {campaign && cursosDe(b.tipoCurso).length > 0 ? (
+                          <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                            <span className="text-[11px] font-medium text-gray-500 uppercase">Curso · Salón (de {campaign})</span>
+                            <select value={b.horarioCurso || ''} onChange={e => setBen(i, 'horarioCurso', e.target.value)}
+                              className={`border rounded-lg px-3 py-2 text-sm ${cursosDe(b.tipoCurso).some((c: any) => c.horarioCurso === b.horarioCurso) ? 'border-gray-300' : 'border-amber-400 bg-amber-50'}`}>
+                              <option value="">— Elige el curso/salón —</option>
+                              {cursosDe(b.tipoCurso).map((c: any) => <option key={c.salon + c.horarioCurso} value={c.horarioCurso}>Salón {c.salon} · {c.horarioCurso}</option>)}
+                              {b.horarioCurso && !cursosDe(b.tipoCurso).some((c: any) => c.horarioCurso === b.horarioCurso) && (
+                                <option value={b.horarioCurso}>{b.horarioCurso} (del PDF — no está en {campaign})</option>
+                              )}
+                            </select>
+                          </label>
+                        ) : (
+                          <Input label="Horario (horarioCurso)" value={b.horarioCurso} onChange={(v: any) => setBen(i, 'horarioCurso', v)} wide />
+                        )}
                         <Input label="Apoderado" value={b.apoderado} onChange={(v: any) => setBen(i, 'apoderado', v)} />
                         <Input label="Tel. apoderado" value={b.apoderadoTelefono} onChange={(v: any) => setBen(i, 'apoderadoTelefono', v)} />
                         <Input label="Mail apoderado" value={b.apoderadoMail} onChange={(v: any) => setBen(i, 'apoderadoMail', v)} />
                       </div>
-                      {b.tipoCurso && b.horarioCurso && (() => {
-                        const m = (b.cursoMatches || []).find((x: any) => x.campaign === campaign)
-                        if (!campaign) return <p className="text-[11px] text-gray-500 mt-2">Curso disponible en: {(b.cursoMatches || []).map((x: any) => `${x.campaign} (salón ${x.salon})`).join(' · ') || '⚠ ninguna campaña'} — elige la campaña arriba.</p>
-                        return m
-                          ? <p className="text-[11px] text-emerald-700 mt-2 font-medium">✓ Salón {m.salon} en {campaign}</p>
-                          : <p className="text-[11px] text-red-600 mt-2 font-medium">⚠ {b.tipoCurso} {b.horarioCurso} no existe en {campaign} → quedará sin salón (corrige el horario o la campaña).</p>
+                      {b.tipoCurso && (() => {
+                        if (!campaign) return <p className="text-[11px] text-gray-500 mt-2">Elige la campaña arriba para ver/elegir el salón.</p>
+                        const c = cursos.find((x: any) => x.campaign === campaign && String(x.tipoCurso || '').toUpperCase() === String(b.tipoCurso || '').toUpperCase() && x.horarioCurso === b.horarioCurso)
+                        return c
+                          ? <p className="text-[11px] text-emerald-700 mt-2 font-medium">✓ Salón {c.salon} · {c.horarioCurso} en {campaign}</p>
+                          : <p className="text-[11px] text-red-600 mt-2 font-medium">⚠ El horario no coincide con ningún curso de {campaign} → quedará sin salón. Elige el curso/salón en el dropdown.</p>
                       })()}
                     </div>
                   ))}
