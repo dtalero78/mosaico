@@ -259,6 +259,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/informes/estadisticas/horarios': ['INFORMES.ESTADISTICAS.HORARIOS' as Permission],
 
   // Mantenimiento - Migrar Contrato
+  '/admin/importar-contrato-pdf': [
+    'MANTENIMIENTO.CONTRATOS.IMPORTAR_PDF' as Permission,
+  ],
   '/admin/migrar-contrato': [
     'MANTENIMIENTO.CONTRATOS.MIGRAR' as Permission,
   ],

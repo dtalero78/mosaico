@@ -1017,6 +1017,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a migrar contratos existentes creando titular y beneficiarios manualmente con número de contrato predefinido',
   },
   {
+    code: MantenimientoPermission.IMPORTAR_CONTRATO_PDF,
+    module: Module.MANTENIMIENTO,
+    section: 'Contratos',
+    name: 'Importar Contrato PDF',
+    description: 'Importar un contrato desde su PDF (extracción con IA), revisar los datos y crearlo listo para editar',
+  },
+  {
     code: MantenimientoPermission.BLOQUEAR_CONTRATO,
     module: Module.MANTENIMIENTO,
     section: 'Usuarios',

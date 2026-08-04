@@ -208,6 +208,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Edición Contrato', href: '/admin/edicion-contrato', newTab: true },
           { name: 'Generar Contrato', href: '/admin/generar-contrato', newTab: true },
           { name: 'Migrar Contrato',  href: '/admin/migrar-contrato',  newTab: true },
+          { name: 'Importar PDF',     href: '/admin/importar-contrato-pdf', newTab: true },
         ],
       },
       {
@@ -384,6 +385,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/admin/migrar-contrato': [
       MantenimientoPermission.MIGRAR_CONTRATO,
+    ],
+    '/admin/importar-contrato-pdf': [
+      MantenimientoPermission.IMPORTAR_CONTRATO_PDF,
     ],
     '/admin/bloqueo-contrato': [
       MantenimientoPermission.BLOQUEAR_CONTRATO,
