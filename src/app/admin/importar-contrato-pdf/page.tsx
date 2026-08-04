@@ -146,9 +146,6 @@ export default function ImportarContratoPdfPage() {
                   <Input label="Ciudad" value={t.ciudad} onChange={(v: any) => setTit('ciudad', v)} />
                   <Input label="Asesor" value={t.asesor} onChange={(v: any) => setTit('asesor', v)} />
                   <Input label="Correo asesor" value={t.asesorMail} onChange={(v: any) => setTit('asesorMail', v)} />
-                  <Input label="Apoderado" value={t.apoderado} onChange={(v: any) => setTit('apoderado', v)} />
-                  <Input label="Tel. apoderado" value={t.apoderadoTelefono} onChange={(v: any) => setTit('apoderadoTelefono', v)} />
-                  <Input label="Mail apoderado" value={t.apoderadoMail} onChange={(v: any) => setTit('apoderadoMail', v)} />
                 </div>
               </div>
 
@@ -169,6 +166,9 @@ export default function ImportarContratoPdfPage() {
                         <Input label="Celular" value={b.celular} onChange={(v: any) => setBen(i, 'celular', v)} />
                         <Input label="Programa (tipoCurso)" value={b.tipoCurso} onChange={(v: any) => setBen(i, 'tipoCurso', v)} />
                         <Input label="Horario (horarioCurso)" value={b.horarioCurso} onChange={(v: any) => setBen(i, 'horarioCurso', v)} wide />
+                        <Input label="Apoderado" value={b.apoderado} onChange={(v: any) => setBen(i, 'apoderado', v)} />
+                        <Input label="Tel. apoderado" value={b.apoderadoTelefono} onChange={(v: any) => setBen(i, 'apoderadoTelefono', v)} />
+                        <Input label="Mail apoderado" value={b.apoderadoMail} onChange={(v: any) => setBen(i, 'apoderadoMail', v)} />
                       </div>
                       {b.tipoCurso && b.horarioCurso && (() => {
                         const m = (b.cursoMatches || []).find((x: any) => x.campaign === campaign)

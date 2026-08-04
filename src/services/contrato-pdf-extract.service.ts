@@ -21,7 +21,7 @@ Del TEXTO del contrato extrae SOLO lo que esté presente. Devuelve JSON con esta
    "rut":"", "fechaNacimiento":"", "domicilio":"", "ciudad":"", "telefonoCasa":"", "celular":"",
    "email":"", "ingresos":"", "empresa":"", "cargo":"", "genero":""
  },
- "apoderado": { "nombre":"", "telefono":"", "email":"" },
+ "apoderado": { "nombre":"", "telefono":"", "email":"" },   // SOLO del campo "APODERADO" explícito (plantilla IMPULSA). En MOSAICO no existe → déjalo VACÍO. NUNCA uses CONTACTO ni el asesor como apoderado.
  "referencias": [ { "nombre":"", "telefono":"", "parentesco":"" } ],   // 0..2
  "beneficiarios": [ {                 // "Usuario1", "Usuario2"... (puede ser 1 o varios)
    "primerNombre":"", "segundoNombre":"", "primerApellido":"", "segundoApellido":"",
@@ -114,9 +114,8 @@ export async function extraerContratoDePdf(buffer: Buffer): Promise<ExtractResul
     plataforma: 'Chile',
     asesor: clean(asesor.nombre) || null,
     asesorMail: clean(asesor.correo) || null,
-    apoderado: clean(ap.nombre) || null,
-    apoderadoTelefono: clean(ap.telefono).replace(/[^\d]/g, '') || null,
-    apoderadoMail: clean(ap.email) || null,
+    // El apoderado NO va en el titular — va en cada beneficiario (ver `apo` abajo).
+    apoderado: null, apoderadoTelefono: null, apoderadoMail: null,
     referenciaUno: clean(refs[0]?.nombre) || null,
     parentezcoRefUno: clean(refs[0]?.parentesco) || null,
     telRefUno: clean(refs[0]?.telefono).replace(/[^\d]/g, '') || null,
@@ -124,6 +123,15 @@ export async function extraerContratoDePdf(buffer: Buffer): Promise<ExtractResul
     parentezcoRefDos: clean(refs[1]?.parentesco) || null,
     telRefDos: clean(refs[1]?.telefono).replace(/[^\d]/g, '') || null,
     esCursoImpulsa: esImpulsa,
+  };
+
+  // Apoderado (se guarda POR BENEFICIARIO, como Crear/Migrar Contrato): el explícito
+  // del PDF (IMPULSA) o, si no hay, el titular (padre/madre para cursos de menores).
+  const nombreTitular = [t.primerNombre, t.segundoNombre, t.primerApellido, t.segundoApellido].map(clean).filter(Boolean).join(' ');
+  const apo = {
+    nombre: clean(ap.nombre) || nombreTitular || null,
+    telefono: clean(ap.telefono).replace(/[^\d]/g, '') || clean(t.celular).replace(/[^\d]/g, '') || null,
+    mail: clean(ap.email) || clean(t.email) || null,
   };
 
   const beneficiarios: Record<string, any>[] = (Array.isArray(raw.beneficiarios) ? raw.beneficiarios : [])
@@ -144,8 +152,8 @@ export async function extraerContratoDePdf(buffer: Buffer): Promise<ExtractResul
         email: clean(b.email) || null, celular: clean(b.celular).replace(/[^\d]/g, '') || null,
         domicilio: clean(b.domicilio) || null,
         tipoCurso, horarioCurso, campaign: null,
-        // apoderado heredado del titular (los beneficiarios menores lo comparten)
-        apoderado: titular.apoderado, apoderadoTelefono: titular.apoderadoTelefono, apoderadoMail: titular.apoderadoMail,
+        // Apoderado POR BENEFICIARIO (prellenado; editable en el preview).
+        apoderado: apo.nombre, apoderadoTelefono: apo.telefono, apoderadoMail: apo.mail,
       };
     });
   if (!beneficiarios.length) inconsistencias.push('No se detectó ningún beneficiario/usuario.');
