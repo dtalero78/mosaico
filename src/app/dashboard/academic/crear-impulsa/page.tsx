@@ -15,6 +15,8 @@ export default function CrearImpulsaPage() {
   const [cupos, setCupos] = useState(20)
   const [guia, setGuia] = useState('')
   const [guias, setGuias] = useState<{ _id: string; nombreCompleto: string }[]>([])
+  const [campaigns, setCampaigns] = useState<string[]>([])
+  const [nuevaCampaign, setNuevaCampaign] = useState(false)
   const [inicio, setInicio] = useState('')
   const [fin, setFin] = useState('')
   const [festivos, setFestivos] = useState<string[]>([])
@@ -26,6 +28,9 @@ export default function CrearImpulsaPage() {
   useEffect(() => {
     fetch('/api/postgres/guias', { cache: 'no-store' }).then(r => r.json())
       .then(d => setGuias(d.guias || d.data || [])).catch(() => setGuias([]))
+    fetch('/api/postgres/cursos-campaign', { cache: 'no-store' }).then(r => r.json())
+      .then(d => setCampaigns([...new Set(((d.rows || []) as any[]).map(x => x.campaign).filter(Boolean))].sort().reverse() as string[]))
+      .catch(() => setCampaigns([]))
   }, [])
 
   const config: ImpulsaConfig = {
@@ -83,7 +88,18 @@ export default function CrearImpulsaPage() {
           <Section title="1 · Datos del curso">
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <label className="flex flex-col gap-1 text-sm"><span className="text-xs font-medium text-gray-500 uppercase">Campaña</span>
-                <input value={campaign} onChange={e => setCampaign(e.target.value.toUpperCase())} placeholder="AGOSTO102026" className="border border-gray-300 rounded-lg px-3 py-2 text-sm" /></label>
+                {nuevaCampaign ? (
+                  <div className="flex gap-1">
+                    <input value={campaign} onChange={e => setCampaign(e.target.value.toUpperCase())} placeholder="NUEVA CAMPAÑA" autoFocus className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1" />
+                    <button type="button" onClick={() => { setNuevaCampaign(false); setCampaign('') }} title="Elegir de la lista" className="px-2 text-gray-400 hover:text-gray-600">✕</button>
+                  </div>
+                ) : (
+                  <select value={campaign} onChange={e => { if (e.target.value === '__new__') { setNuevaCampaign(true); setCampaign('') } else setCampaign(e.target.value) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="">— Elige campaña —</option>
+                    {campaigns.map(c => <option key={c} value={c}>{c}</option>)}
+                    <option value="__new__">➕ Nueva campaña…</option>
+                  </select>
+                )}</label>
               <label className="flex flex-col gap-1 text-sm"><span className="text-xs font-medium text-gray-500 uppercase">Salón</span>
                 <input value={salon} onChange={e => setSalon(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" /></label>
               <label className="flex flex-col gap-1 text-sm"><span className="text-xs font-medium text-gray-500 uppercase">Cupos</span>
