@@ -26,6 +26,7 @@ export default function ImportarContratoPdfPage() {
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<any>(null)      // { titular, beneficiarios, financial, contrato, titularEsBeneficiario, inconsistencias }
   const [campaigns, setCampaigns] = useState<string[]>([])
+  const [candidateCampaigns, setCandidateCampaigns] = useState<string[]>([])
   const [campaign, setCampaign] = useState('')
 
   const extraer = async () => {
@@ -37,7 +38,12 @@ export default function ImportarContratoPdfPage() {
       if (res.error) throw new Error(res.error)
       setData(res)
       setCampaigns(res.campaigns || [])
-      setCampaign(res.esImpulsa ? (res.campaigns || []).find((c: string) => c.startsWith('AGOSTO10')) || '' : '')
+      const cand: string[] = res.candidateCampaigns || []
+      setCandidateCampaigns(cand)
+      // Auto-selecciona sólo si hay UNA campaña candidata (con el curso+horario); si hay
+      // varias, se deja vacío para que el usuario elija conscientemente.
+      const impulsaDef = res.esImpulsa ? cand.find((c: string) => c.startsWith('AGOSTO10')) : null
+      setCampaign(impulsaDef || (cand.length === 1 ? cand[0] : ''))
       toast.success('Datos extraídos. Revisa y corrige antes de crear.')
     } catch (e: any) { toast.error(e?.message || 'Error al extraer') } finally { setExtracting(false) }
   }
@@ -49,6 +55,8 @@ export default function ImportarContratoPdfPage() {
   const crear = async () => {
     if (!data?.contrato?.trim()) { toast.error('Falta el número de contrato'); return }
     if (!data?.titular?.numeroId) { toast.error('Falta el RUT del titular'); return }
+    const needsCampaign = (data.beneficiarios || []).some((b: any) => b.tipoCurso)
+    if (needsCampaign && !campaign) { toast.error('Selecciona la campaña — de ahí sale el salón del curso'); return }
     setSaving(true)
     try {
       const beneficiarios = (data.beneficiarios || []).map((b: any) => ({ ...b, campaign: campaign || b.campaign || null }))
@@ -104,11 +112,20 @@ export default function ImportarContratoPdfPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Input label="N.º Contrato" value={data.contrato} onChange={(v: any) => setData((d: any) => ({ ...d, contrato: v }))} />
                   <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-                    <span className="text-[11px] font-medium text-gray-500 uppercase">Campaña (para enganchar el curso)</span>
-                    <select value={campaign} onChange={e => setCampaign(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                      <option value="">— Sin campaña (curso queda sin enganche) —</option>
-                      {campaigns.map(c => <option key={c} value={c}>{c}</option>)}
+                    <span className="text-[11px] font-medium text-gray-500 uppercase">Campaña <span className="text-red-500">*</span> — de aquí sale el salón</span>
+                    <select value={campaign} onChange={e => setCampaign(e.target.value)}
+                      className={`border rounded-lg px-3 py-2 text-sm ${!campaign ? 'border-amber-400 bg-amber-50' : 'border-gray-300'}`}>
+                      <option value="">— Elige la campaña —</option>
+                      {candidateCampaigns.length > 0 && (
+                        <optgroup label="Con el curso de los beneficiarios">
+                          {candidateCampaigns.map(c => <option key={c} value={c}>{c} ✓</option>)}
+                        </optgroup>
+                      )}
+                      <optgroup label="Todas las campañas">
+                        {campaigns.map(c => <option key={c} value={c}>{c}</option>)}
+                      </optgroup>
                     </select>
+                    {candidateCampaigns.length > 1 && <span className="text-[11px] text-amber-700">El curso existe en {candidateCampaigns.length} campañas — elige cuál corresponde (cambia el salón).</span>}
                   </label>
                 </div>
               </div>
@@ -153,6 +170,13 @@ export default function ImportarContratoPdfPage() {
                         <Input label="Programa (tipoCurso)" value={b.tipoCurso} onChange={(v: any) => setBen(i, 'tipoCurso', v)} />
                         <Input label="Horario (horarioCurso)" value={b.horarioCurso} onChange={(v: any) => setBen(i, 'horarioCurso', v)} wide />
                       </div>
+                      {b.tipoCurso && b.horarioCurso && (() => {
+                        const m = (b.cursoMatches || []).find((x: any) => x.campaign === campaign)
+                        if (!campaign) return <p className="text-[11px] text-gray-500 mt-2">Curso disponible en: {(b.cursoMatches || []).map((x: any) => `${x.campaign} (salón ${x.salon})`).join(' · ') || '⚠ ninguna campaña'} — elige la campaña arriba.</p>
+                        return m
+                          ? <p className="text-[11px] text-emerald-700 mt-2 font-medium">✓ Salón {m.salon} en {campaign}</p>
+                          : <p className="text-[11px] text-red-600 mt-2 font-medium">⚠ {b.tipoCurso} {b.horarioCurso} no existe en {campaign} → quedará sin salón (corrige el horario o la campaña).</p>
+                      })()}
                     </div>
                   ))}
                 </div>

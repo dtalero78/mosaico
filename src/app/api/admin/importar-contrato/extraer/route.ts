@@ -35,5 +35,26 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     `SELECT DISTINCT "campaign" FROM "CURSOS_CAMPAIGN" WHERE "activa" IS NOT FALSE ORDER BY "campaign" DESC`
   )).rows.map(r => r.campaign);
 
-  return successResponse({ ...extract, campaigns });
+  // Por cada beneficiario: en qué campañas existe su curso (tipoCurso + horarioCurso)
+  // y con qué salón. Sirve para sugerir la campaña y mostrar el salón resuelto.
+  for (const b of extract.beneficiarios as any[]) {
+    b.cursoMatches = [];
+    if (b.tipoCurso && b.horarioCurso) {
+      const m = await query<{ campaign: string; salon: string }>(
+        `SELECT "campaign","salon" FROM "CURSOS_CAMPAIGN"
+          WHERE UPPER("tipoCurso")=UPPER($1) AND "horarioCurso"=$2 AND "activa" IS NOT FALSE
+          ORDER BY "campaign" DESC`,
+        [b.tipoCurso, b.horarioCurso]
+      );
+      b.cursoMatches = m.rows;
+      if (!m.rows.length) {
+        extract.inconsistencias.push(`Beneficiario ${b.primerNombre || ''} ${b.primerApellido || ''}: no existe curso ${b.tipoCurso} ${b.horarioCurso} en ninguna campaña activa (quedará sin salón).`);
+      }
+    }
+  }
+  // Campañas candidatas: donde TODOS los beneficiarios con curso tienen match.
+  const sets = (extract.beneficiarios as any[]).filter(b => b.cursoMatches?.length).map(b => new Set(b.cursoMatches.map((m: any) => m.campaign)));
+  const candidateCampaigns = sets.length ? [...sets[0]].filter((c: any) => sets.every(s => s.has(c))) : [];
+
+  return successResponse({ ...extract, campaigns, candidateCampaigns });
 });
