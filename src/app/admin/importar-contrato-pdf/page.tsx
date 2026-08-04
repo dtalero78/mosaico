@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { MantenimientoPermission } from '@/types/permissions'
+import { normId } from '@/lib/contrato-import'
 
 const set = (obj: any, k: string, v: any) => ({ ...obj, [k]: v })
 
@@ -67,11 +68,23 @@ export default function ImportarContratoPdfPage() {
     if (needsCampaign && !campaign) { toast.error('Selecciona la campaña — de ahí sale el salón del curso'); return }
     setSaving(true)
     try {
-      const beneficiarios = (data.beneficiarios || []).map((b: any) => ({ ...b, campaign: campaign || b.campaign || null }))
+      let beneficiarios = (data.beneficiarios || []).map((b: any) => ({ ...b, campaign: campaign || b.campaign || null }))
+      let titular = { ...data.titular }
+      // Titular es beneficiario: el curso lo toma el titular; se saca de la lista de
+      // beneficiarios el que comparte su RUT (createFullContract lo agrega como
+      // beneficiario con el curso del titular → evita el "numeroId duplicado").
+      if (data.titularEsBeneficiario === true) {
+        const idx = beneficiarios.findIndex((b: any) => normId(b.numeroId) === normId(titular.numeroId))
+        if (idx >= 0) {
+          const self = beneficiarios[idx]
+          titular = { ...titular, tipoCurso: self.tipoCurso, horarioCurso: self.horarioCurso, campaign: self.campaign || campaign || null }
+          beneficiarios = beneficiarios.filter((_: any, j: number) => j !== idx)
+        }
+      }
       const res = await fetch('/api/admin/migrar-contrato', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contrato: data.contrato.trim(), titular: data.titular, financial: data.financial,
+          contrato: data.contrato.trim(), titular, financial: data.financial,
           beneficiarios, titularEsBeneficiario: data.titularEsBeneficiario === true,
         }),
       }).then(r => r.json())
@@ -140,7 +153,14 @@ export default function ImportarContratoPdfPage() {
 
               {/* Titular */}
               <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                <h3 className="text-sm font-bold text-gray-800 uppercase mb-3">Titular {data.titularEsBeneficiario && <span className="text-[11px] text-primary-700">· es beneficiario</span>}</h3>
+                <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                  <h3 className="text-sm font-bold text-gray-800 uppercase">Titular</h3>
+                  <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                    <input type="checkbox" checked={data.titularEsBeneficiario === true}
+                      onChange={e => setData((d: any) => ({ ...d, titularEsBeneficiario: e.target.checked }))} />
+                    ¿Este titular será beneficiario? <span className="text-gray-400">(toma el curso)</span>
+                  </label>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Input label="Primer nombre" value={t.primerNombre} onChange={(v: any) => setTit('primerNombre', v)} />
                   <Input label="Segundo nombre" value={t.segundoNombre} onChange={(v: any) => setTit('segundoNombre', v)} />
