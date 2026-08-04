@@ -1,5 +1,6 @@
 import 'server-only';
 import { handler, successResponse } from '@/lib/api-helpers';
+import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
@@ -80,7 +81,7 @@ export const GET = handler(async (
   const cursoReal = (tipoCursoRow?.tipoCurso
     || ((student as any).curso && String((student as any).curso).toUpperCase() !== 'WELCOME' ? (student as any).curso : '')
     || '').toUpperCase();
-  const welcomeModule = cursoReal === 'IMPULSA' ? 'IMPULSA' : 'MOSAICO';
+  const welcomeModule = welcomeModuloForCurso(cursoReal);
 
   // Eventos WELCOME del módulo del alumno, sólo de las PRÓXIMAS 2 SEMANAS.
   const welcomeEvents = await queryMany(

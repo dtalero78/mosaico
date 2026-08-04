@@ -7,6 +7,7 @@ import { query, queryOne, withTransaction } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { generateUserLogin } from '@/lib/user-login';
 import { generarClave } from '@/lib/password-gen';
+import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 import { randomUUID } from 'crypto';
 
 /**
@@ -113,7 +114,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     [campaign, tipoCurso, horarioCurso]
   );
   if (!cc) throw new ValidationError('No existe ese curso en la campaña seleccionada.');
-  const welcomeModulo = tipoCurso === 'IMPULSA' ? 'IMPULSA' : 'MOSAICO';
+  const welcomeModulo = welcomeModuloForCurso(tipoCurso);
 
   // Curso real → primer módulo/lección (para PEOPLE.nivel/step).
   const nr = await queryOne<{ code: string; step: string }>(

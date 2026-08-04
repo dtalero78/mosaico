@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Student, Class } from '@/types'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { visibleEnHistorial } from '@/lib/fecha-semana'
+import { welcomeModuloForCurso } from '@/lib/welcome-modulo'
 import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -284,13 +285,13 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const isImpulsa = studentCourse.toUpperCase().startsWith('IMPULSA')
 
   // Query de alcance para /events/filtered según el tipo de evento elegido:
-  //  - WELCOME    → eventos WELCOME (curso WELCOME); módulo IMPULSA si el alumno
-  //                 es IMPULSA, MOSAICO para el resto de cursos.
+  //  - WELCOME    → eventos WELCOME (curso WELCOME); módulo según el grupo del curso:
+  //                 IMPULSA→IMPULSA, YOJI/OKINA/KODOMO→MOSKIDS, DANSHI/SENPAI→MOSADULTOS.
   //  - NIVELACION → sólo nivelaciones del MISMO curso del alumno (ej. YOJI).
   //  - SESSION/CLUB → comportamiento existente (por módulo/nivel del alumno).
   const buildEventScopeQuery = (): string => {
     if (selectedEventType === 'WELCOME') {
-      return `tipoEvento=WELCOME&nivel=${encodeURIComponent(isImpulsa ? 'IMPULSA' : 'MOSAICO')}`
+      return `tipoEvento=WELCOME&nivel=${encodeURIComponent(welcomeModuloForCurso(studentCourse))}`
     }
     if (selectedEventType === 'NIVELACION') {
       return `tipoEvento=NIVELACION&curso=${encodeURIComponent(studentCourse)}`

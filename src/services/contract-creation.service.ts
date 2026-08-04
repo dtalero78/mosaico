@@ -6,6 +6,7 @@ import { ids } from '@/lib/id-generator';
 import { generateUserLogin } from '@/lib/user-login';
 import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
 import { resolverLiderComercial, type LiderComercial } from '@/lib/crm';
+import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 
 /**
  * Regla numeroId MOSAICO: sólo el titular puede compartir numeroId con su propia
@@ -155,7 +156,7 @@ export async function insertBeneficiarioTx(
     realStep = nr.rows[0]?.step || '';
   }
   // Módulo del curso puente WELCOME según el curso real: IMPULSA → IMPULSA, resto → MOSAICO.
-  const welcomeModulo = (b.tipoCurso === 'IMPULSA') ? 'IMPULSA' : 'MOSAICO';
+  const welcomeModulo = welcomeModuloForCurso(b.tipoCurso);
 
   // 1. PEOPLE beneficiario — nace INACTIVO. Guarda el CURSO REAL.
   const benefResult = await client.query(
