@@ -148,6 +148,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/crear-campana': [
     'ACADEMICO.CAMPANA.CREAR' as Permission,
   ],
+  '/dashboard/academic/crear-impulsa': [
+    'ACADEMICO.CAMPANA.CREAR' as Permission,
+  ],
   '/dashboard/academic/jump-evaluaciones': [
     'ACADEMICO.JUMP_EVAL.REVISAR' as Permission,
   ],

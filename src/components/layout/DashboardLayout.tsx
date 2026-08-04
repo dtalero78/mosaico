@@ -70,6 +70,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       },
       { name: 'Mantenimiento Cursos', href: '/dashboard/academic/actualizar-material', newTab: true },
       { name: 'Campañas', href: '/dashboard/academic/crear-campana', newTab: true },
+      { name: 'Crear IMPULSA', href: '/dashboard/academic/crear-impulsa', newTab: true },
       { name: 'Evaluaciones Jump', href: '/dashboard/academic/jump-evaluaciones' },
     ],
   },
@@ -280,6 +281,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       AcademicoPermission.CONTROL_HORAS_VER,
     ],
     '/dashboard/academic/crear-campana': [
+      AcademicoPermission.CAMPANA_CREAR,
+    ],
+    '/dashboard/academic/crear-impulsa': [
       AcademicoPermission.CAMPANA_CREAR,
     ],
     '/dashboard/academic/sesiones-sin-gestion': [

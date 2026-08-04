@@ -1,0 +1,92 @@
+import 'server-only';
+import { query } from '@/lib/postgres';
+import { ids } from '@/lib/id-generator';
+import {
+  computeImpulsaCalendario, type ImpulsaConfig, type EventoImpulsa,
+} from '@/lib/impulsa-calendario';
+
+export interface CursoImpulsa {
+  _id: string;
+  campaign: string;
+  tipoCurso: string;     // 'IMPULSA'
+  salon?: string | null;
+  guia?: string | null;  // GUIAS._id
+  numeroUsuarios?: number | null;
+  horarioCurso?: string | null; // "LUN-MIÉ-VIE 20:00-21:00"
+}
+
+const nombreEventoDe = (ev: EventoImpulsa, curso: CursoImpulsa): string =>
+  ev.tipo === 'SESSION' ? (curso.horarioCurso || `${ev.horaInicio}-${ev.horaFin}`)
+  : ev.tipo === 'ENTRENAMIENTO' ? 'Entrenamiento'
+  : 'Evaluación';
+
+/**
+ * Materializa el calendario IMPULSA en CALENDARIO (borra los eventos previos del
+ * curso y reinserta) y guarda la config en IMPULSA_CURSO_CONFIG. El instante UTC de
+ * cada evento se calcula por fecha con `('<fecha> <hora>'::timestamp AT TIME ZONE
+ * <authorTz>)` → PostgreSQL aplica el offset IANA correcto (DST incluido).
+ *
+ * NO toca bookings ni asistencia — la preservación de estado de alumnos (al
+ * reconfigurar un curso con inscritos) la maneja el llamador (ver script de
+ * reconfiguración), igual que `regenerarCursoPreservandoEstado`.
+ */
+export async function materializarCalendarioImpulsa(
+  curso: CursoImpulsa, cfg: ImpulsaConfig, actor?: string | null,
+): Promise<{ count: number; resumen: ReturnType<typeof computeImpulsaCalendario>['resumen'] }> {
+  const calc = computeImpulsaCalendario(cfg);
+  const tz = calc.authorTz;
+  const eventos: EventoImpulsa[] = [...calc.sesiones, ...calc.entrenamientos, ...calc.evaluaciones];
+
+  await query(`DELETE FROM "CALENDARIO" WHERE "cursoCampaignId" = $1`, [curso._id]);
+
+  if (eventos.length) {
+    const cols = '"_id","tipo","evento","fecha","hora","dia","advisor","nivel","titulo","tituloONivel","nombreEvento","limiteUsuarios","cursoCampaignId","inscritos","origen","sesionCerrada","campaign","curso","salon","_createdDate","_updatedDate"';
+    const titulo = [curso.campaign, curso.tipoCurso, (curso.salon || '').trim()].filter(Boolean).join(' - ');
+    const advisor = (curso.guia || '').trim();
+    const limite = Number(curso.numeroUsuarios) || 0;
+    // $1,$2,$3 = campaign, curso, salon (constantes del curso). Luego 12 params por evento.
+    const params: any[] = [curso.campaign, curso.tipoCurso, (curso.salon || '').trim()];
+    const rows: string[] = [];
+    eventos.forEach((ev, r) => {
+      const b = 3 + r * 12;
+      rows.push(
+        `($${b + 1},$${b + 2},$${b + 2},$${b + 3},$${b + 4},` +
+        `($${b + 5}::timestamp AT TIME ZONE $${b + 6}),` +
+        `$${b + 7},$${b + 8},$${b + 9},$${b + 9},$${b + 10},$${b + 11},$${b + 12},` +
+        `0,'POSTGRES',false,$1,$2,$3,NOW(),NOW())`
+      );
+      params.push(
+        ids.event(),                          // _id
+        ev.tipo,                              // tipo (= evento)
+        ev.fecha,                             // fecha
+        ev.horaInicio,                        // hora
+        `${ev.fecha} ${ev.horaInicio}:00`,    // dia local (→ AT TIME ZONE)
+        tz,                                   // authorTz
+        advisor,                              // advisor (GUIAS._id)
+        curso.tipoCurso,                      // nivel (= 'IMPULSA')
+        titulo,                               // titulo (= tituloONivel)
+        nombreEventoDe(ev, curso),            // nombreEvento
+        limite,                               // limiteUsuarios
+        curso._id,                            // cursoCampaignId
+      );
+    });
+    await query(`INSERT INTO "CALENDARIO" (${cols}) VALUES ${rows.join(', ')}`, params);
+  }
+
+  // Persistir la config (upsert por curso).
+  await query(
+    `INSERT INTO "IMPULSA_CURSO_CONFIG"
+       ("_id","cursoCampaignId","authorTz","inicioSesiones","finSesiones","festivos","entrenamientos","evaluaciones","resumen","materializado","creadoPor","_createdDate","_updatedDate")
+     VALUES ($1,$2,$3,$4::date,$5::date,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,true,$10,NOW(),NOW())
+     ON CONFLICT ("cursoCampaignId") DO UPDATE SET
+       "authorTz"=EXCLUDED."authorTz", "inicioSesiones"=EXCLUDED."inicioSesiones",
+       "finSesiones"=EXCLUDED."finSesiones", "festivos"=EXCLUDED."festivos",
+       "entrenamientos"=EXCLUDED."entrenamientos", "evaluaciones"=EXCLUDED."evaluaciones",
+       "resumen"=EXCLUDED."resumen", "materializado"=true, "_updatedDate"=NOW()`,
+    [ids.audit(), curso._id, tz, cfg.inicioSesiones, cfg.finSesiones,
+     JSON.stringify(cfg.festivos || []), JSON.stringify(cfg.entrenamientos || []),
+     JSON.stringify(cfg.evaluaciones || []), JSON.stringify(calc.resumen), actor || null],
+  );
+
+  return { count: eventos.length, resumen: calc.resumen };
+}
