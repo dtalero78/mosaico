@@ -18,3 +18,14 @@ export function welcomeModuloForCurso(tipoCurso?: string | null): WelcomeModulo 
   // YOJI / OKINA / KODOMO (y default) → menores
   return 'MOSKIDS';
 }
+
+/**
+ * ¿Los mensajes de bienvenida / link de perfil de este curso van al APODERADO
+ * (en vez de al alumno)? Cursos de menores de edad: YOJI, OKINA, KODOMO y DANSHI.
+ * SENPAI e IMPULSA son de mayores → el mensaje va al propio alumno.
+ * (Distinto de `esMenores`, que NO incluye DANSHI.)
+ */
+export function cursoUsaApoderadoParaMensajes(tipoCurso?: string | null): boolean {
+  const t = String(tipoCurso || '').trim().toUpperCase();
+  return t === 'YOJI' || t === 'OKINA' || t === 'KODOMO' || t === 'DANSHI';
+}
