@@ -525,28 +525,21 @@ function PanelEstudianteContent() {
               ) : null}
             </div>
 
-            {/* 2 columnas. IMPULSA: Evaluaciones (izq) + Entrenamientos (der), sin
-                Nivelación (no aplica). Resto: Nivelación (izq) + Entren./Eval. (der). */}
+            {/* Fila 1 — Evaluaciones (izq) + Entrenamientos (der): para TODOS los cursos. */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-              {esImpulsa ? (
-                <>
-                  <EvaluacionCard tipo="evaluacion" titulo="Evaluaciones" />
-                  <EvaluacionCard tipo="entrenamiento" titulo="Entrenamientos" />
-                </>
-              ) : (
-                <>
-                  {/* Nivelación Programada — visible siempre; se habilita cuando el
-                      admin aprueba la nivelación y la agenda (booking tipo=NIVELACION) */}
-                  <NivelacionProgramadaCard
-                    booking={nivelacionBooking}
-                    onCancel={handleCancel}
-                    isCancelling={cancelMutation.isLoading}
-                  />
-                  {/* Evaluación — siguiente evaluación / acceso al llegar a la lección */}
-                  <EvaluacionCard />
-                </>
-              )}
+              <EvaluacionCard tipo="evaluacion" titulo="Evaluaciones" />
+              <EvaluacionCard tipo="entrenamiento" titulo="Entrenamientos" />
             </div>
+            {/* Fila 2 — Nivelación Programada (ancho completo). Sólo cursos MOSAICO;
+                IMPULSA no tiene nivelaciones. Se habilita cuando el admin la aprueba
+                y la agenda (booking tipo=NIVELACION). */}
+            {!esImpulsa && (
+              <NivelacionProgramadaCard
+                booking={nivelacionBooking}
+                onCancel={handleCancel}
+                isCancelling={cancelMutation.isLoading}
+              />
+            )}
 
             {/* EVENTOS PROGRAMADOS — eventos de la semana (sesiones, talleres, otros) */}
             <MyEventsSection
