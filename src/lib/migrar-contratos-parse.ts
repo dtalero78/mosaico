@@ -24,9 +24,9 @@ export function parseFecha(s: unknown): string | null { // "1/06/2026" → "2026
 export function normCampaign(s: unknown, campaignMap: Record<string, string> = {}): string | null {
   const u = stripAccents(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (campaignMap[u]) return campaignMap[u];
-  if (u.startsWith('JUNIO')) return 'JUNIO082026';
-  if (u.startsWith('AGOSTO')) return 'AGOSTO172026';
-  if (u.startsWith('ABRIL')) return 'ABRIL132026';
+  if (u.startsWith('JUNIO')) return 'JUNIO082026M';
+  if (u.startsWith('AGOSTO')) return 'AGOSTO172026M';
+  if (u.startsWith('ABRIL')) return 'ABRIL132026M';
   if (u.startsWith('SINCAMPAIGN') || u.startsWith('SINCANPAIGN')) return 'SINCAMPAIGN'; // typo tolerado
   return null; // basura → queda sin campaña (se omite)
 }
@@ -168,8 +168,8 @@ export function parseContratosCsv(text: string, opts: ParseOpts = {}): ParsedCon
     const campaignRaw = col(row, 'campaign');
     const hasImpulsa = benefs.some(b => b.tipoCurso === 'IMPULSA');
     let campaign = CAMPAIGN_FORZADA || normCampaign(campaignRaw, CAMPAIGN_MAP);
-    if (campaign === 'SINCAMPAIGN') campaign = hasImpulsa ? 'AGOSTO172026' : 'JUNIO082026';
-    else if (!campaign && hasImpulsa) campaign = 'AGOSTO172026';
+    if (campaign === 'SINCAMPAIGN') campaign = hasImpulsa ? 'AGOSTO102026I' : 'JUNIO082026M';
+    else if (!campaign && hasImpulsa) campaign = 'AGOSTO102026I';
 
     benefs.forEach(b => { b.apoderado = apoderado; b.apoderadoTelefono = apoderadoTelefono; b.apoderadoMail = null; b.campaign = campaign; });
 

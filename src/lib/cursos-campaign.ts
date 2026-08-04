@@ -113,9 +113,13 @@ const MESES_ES: Record<string, number> = {
   JULIO: 7, AGOSTO: 8, SEPTIEMBRE: 9, OCTUBRE: 10, NOVIEMBRE: 11, DICIEMBRE: 12,
 };
 
-/** "AGOSTO172026" → "2026-08-17"; "JUNIO082026" → "2026-06-08". null si no parsea. */
+/**
+ * "AGOSTO172026" → "2026-08-17"; "JUNIO082026" → "2026-06-08". null si no parsea.
+ * Tolera el sufijo de marca `M` (MOSAICO) o `I` (IMPULSA) tras el año, ej.
+ * "AGOSTO172026M" / "AGOSTO102026I".
+ */
 export function campaignNameToDate(name: string): string | null {
-  const m = String(name || '').toUpperCase().match(/^([A-Z]+)(\d{1,2})(\d{4})$/);
+  const m = String(name || '').toUpperCase().replace(/(\d{4})[A-Z]$/, '$1').match(/^([A-Z]+)(\d{1,2})(\d{4})$/);
   if (!m) return null;
   const mes = MESES_ES[m[1]];
   if (!mes) return null;

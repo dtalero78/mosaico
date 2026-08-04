@@ -90,7 +90,7 @@ export default function CrearImpulsaPage() {
               <label className="flex flex-col gap-1 text-sm"><span className="text-xs font-medium text-gray-500 uppercase">Campaña</span>
                 {nuevaCampaign ? (
                   <div className="flex gap-1">
-                    <input value={campaign} onChange={e => setCampaign(e.target.value.toUpperCase())} placeholder="NUEVA CAMPAÑA" autoFocus className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1" />
+                    <input value={campaign} onChange={e => setCampaign(e.target.value.toUpperCase())} placeholder="Ej. AGOSTO102026I (IMPULSA → sufijo I)" autoFocus className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1" />
                     <button type="button" onClick={() => { setNuevaCampaign(false); setCampaign('') }} title="Elegir de la lista" className="px-2 text-gray-400 hover:text-gray-600">✕</button>
                   </div>
                 ) : (

@@ -445,7 +445,7 @@ function CrearCampanaContent() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className={lblCls}>Nombre de la campaña *</label>
-                <input type="text" value={campaign} onChange={e => setCampaign(e.target.value)} className={inputCls} placeholder="Ej. VERANO2026" />
+                <input type="text" value={campaign} onChange={e => setCampaign(e.target.value)} className={inputCls} placeholder="Ej. AGOSTO172026M (MOSAICO → sufijo M)" />
               </div>
               <div>
                 <label className={lblCls}>Inicio de campaña (apertura de matrícula)</label>
