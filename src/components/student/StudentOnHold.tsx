@@ -1,14 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { OnHoldHistoryEntry } from '@/types'
 import { api, ApiError } from '@/hooks/use-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission } from '@/types/permissions'
 import UploadDocButton from './UploadDocButton'
 
+interface CursoRow {
+  campaign: string
+  tipoCurso: string
+  horarioCurso: string
+  salon: string | null
+  numeroUsuarios: number
+  usuInscritos: number
+}
+
 interface StudentOnHoldProps {
-  studentId: string
+  studentId: string          // ACADEMICA._id
   peopleId: string | null
   numeroId: string
   estadoInactivo: boolean
@@ -16,6 +25,11 @@ interface StudentOnHoldProps {
   currentFechaFinOnHold?: string | null
   onHoldCount?: number
   onHoldHistory?: OnHoldHistoryEntry[]
+  // Curso actual del alumno (para prellenar el destino al reactivar)
+  currentCampaign?: string | null
+  currentCurso?: string | null
+  currentHorario?: string | null
+  currentSalon?: string | null
 }
 
 export default function StudentOnHold({
@@ -26,7 +40,11 @@ export default function StudentOnHold({
   currentFechaOnHold,
   currentFechaFinOnHold,
   onHoldCount = 0,
-  onHoldHistory = []
+  onHoldHistory = [],
+  currentCampaign,
+  currentCurso,
+  currentHorario,
+  currentSalon,
 }: StudentOnHoldProps) {
   const { hasPermission, isRole, isLoading: permLoading } = usePermissions()
   const hasFullAccess = isRole('SUPER_ADMIN') || isRole('ADMIN')
@@ -41,6 +59,37 @@ export default function StudentOnHold({
   const [fechaFinOnHold, setFechaFinOnHold] = useState('')
   const [motivoOnHold, setMotivoOnHold] = useState('')
   const [isTogglingOnHold, setIsTogglingOnHold] = useState(false)
+
+  // Reactivación: cascada Campaña → Curso → Salón (destino, con cupo)
+  const [showReactivar, setShowReactivar] = useState(false)
+  const [cursoRows, setCursoRows] = useState<CursoRow[]>([])
+  const [rcCampaign, setRcCampaign] = useState('')
+  const [rcTipoCurso, setRcTipoCurso] = useState('')
+  const [rcRowKey, setRcRowKey] = useState('') // `${horarioCurso}||${salon}`
+
+  useEffect(() => {
+    if (!showReactivar) return
+    fetch('/api/postgres/cursos-campaign', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setCursoRows(((d.data || d).rows || []) as CursoRow[]))
+      .catch(() => setCursoRows([]))
+    // Prellenar con el curso actual del alumno
+    setRcCampaign(currentCampaign || '')
+    setRcTipoCurso(currentCurso || '')
+    setRcRowKey(currentHorario ? `${currentHorario}||${currentSalon || ''}` : '')
+  }, [showReactivar, currentCampaign, currentCurso, currentHorario, currentSalon])
+
+  const rcCampanias = useMemo(() => Array.from(new Set(cursoRows.map(r => r.campaign))).sort().reverse(), [cursoRows])
+  const rcTipos = useMemo(() => Array.from(new Set(cursoRows.filter(r => r.campaign === rcCampaign).map(r => r.tipoCurso))), [cursoRows, rcCampaign])
+  const rcSalones = useMemo(
+    () => cursoRows.filter(r => r.campaign === rcCampaign && r.tipoCurso === rcTipoCurso)
+                   .sort((a, b) => String(a.salon).localeCompare(String(b.salon))),
+    [cursoRows, rcCampaign, rcTipoCurso])
+  const rcSelected = useMemo(
+    () => rcSalones.find(r => `${r.horarioCurso}||${r.salon || ''}` === rcRowKey) || null,
+    [rcSalones, rcRowKey])
+  const rcFull = rcSelected ? (rcSelected.numeroUsuarios > 0 && (rcSelected.usuInscritos ?? 0) >= rcSelected.numeroUsuarios) : false
+  const rcCanConfirm = !!rcCampaign && !!rcTipoCurso && !!rcSelected && !rcFull
 
   // Sincronizar con el prop inicial
   useEffect(() => {
@@ -69,17 +118,20 @@ export default function StudentOnHold({
       return
     }
 
-    // Si se está desactivando, confirmar directamente
-    const confirmed = window.confirm(
-      `⚠️ ¿Está seguro que desea DESACTIVAR el estado OnHold para este estudiante?\n\n` +
-      `Esta acción:\n` +
-      `  • Eliminará las fechas OnHold\n` +
-      `  • REACTIVARÁ al estudiante en ACADEMICA`
-    )
+    // Si se está reactivando, pedir campaña/curso/salón destino (con cupo) antes.
+    setShowReactivar(true)
+  }
 
-    if (!confirmed) return
-
-    await executeOnHoldToggle(false, '', '')
+  const handleReactivarConfirm = async () => {
+    if (!rcSelected) { alert('⚠️ Selecciona campaña, curso y salón destino'); return }
+    if (rcFull) { alert('⚠️ El curso destino está lleno. Elige otro con cupo.'); return }
+    await executeOnHoldToggle(false, '', '', undefined, {
+      campaign: rcSelected.campaign,
+      tipoCurso: rcSelected.tipoCurso,
+      horarioCurso: rcSelected.horarioCurso,
+      salon: rcSelected.salon || '',
+    })
+    setShowReactivar(false)
   }
 
   const handleModalConfirm = async () => {
@@ -111,16 +163,21 @@ export default function StudentOnHold({
     setShowModal(false)
   }
 
-  const executeOnHoldToggle = async (setOnHold: boolean, inicio: string, fin: string, motivo?: string) => {
+  const executeOnHoldToggle = async (
+    setOnHold: boolean, inicio: string, fin: string, motivo?: string,
+    destino?: { campaign: string; tipoCurso: string; horarioCurso: string; salon: string }
+  ) => {
     setIsTogglingOnHold(true)
 
     try {
       const data = await api.post('/api/postgres/students/onhold', {
         studentId: peopleId || studentId,
+        academicaId: studentId,           // ACADEMICA._id, para mover el curso al reactivar
         setOnHold,
         fechaOnHold: setOnHold ? inicio : null,
         fechaFinOnHold: setOnHold ? fin : null,
-        motivo: motivo || undefined
+        motivo: motivo || undefined,
+        destino: !setOnHold ? destino : undefined,
       })
 
       setIsOnHold(setOnHold)
@@ -293,6 +350,71 @@ export default function StudentOnHold({
                     Activar OnHold
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Reactivación — destino (campaña/curso/salón) con cupo */}
+      {showReactivar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">▶️ Reactivar Estudiante</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Al reactivar se reanuda el contrato (se extiende por los días pausados). Elige la
+                <strong> campaña, curso y salón</strong> a los que ingresará (debe tener cupo).
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Campaña</label>
+                  <select value={rcCampaign} onChange={e => { setRcCampaign(e.target.value); setRcTipoCurso(''); setRcRowKey('') }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                    <option value="">-- Selecciona campaña --</option>
+                    {rcCampanias.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Curso</label>
+                  <select value={rcTipoCurso} disabled={!rcCampaign} onChange={e => { setRcTipoCurso(e.target.value); setRcRowKey('') }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm disabled:bg-gray-100">
+                    <option value="">-- Selecciona curso --</option>
+                    {rcTipos.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Salón / Horario (cupo)</label>
+                  <select value={rcRowKey} disabled={!rcTipoCurso} onChange={e => setRcRowKey(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm disabled:bg-gray-100">
+                    <option value="">-- Selecciona salón --</option>
+                    {rcSalones.map(r => {
+                      const full = r.numeroUsuarios > 0 && (r.usuInscritos ?? 0) >= r.numeroUsuarios
+                      return (
+                        <option key={`${r.horarioCurso}||${r.salon || ''}`} value={`${r.horarioCurso}||${r.salon || ''}`} disabled={full}>
+                          {r.salon || '—'} · {r.horarioCurso} · {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}{full ? ' (LLENO)' : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  {rcSelected && (
+                    <p className={`text-xs mt-1 ${rcFull ? 'text-red-600' : 'text-green-600'}`}>
+                      {rcFull ? 'Este salón está lleno — elige otro.' : `Cupo disponible: ${(rcSelected.numeroUsuarios - (rcSelected.usuInscritos ?? 0))} libre(s).`}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button onClick={() => setShowReactivar(false)} disabled={isTogglingOnHold}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button onClick={handleReactivarConfirm} disabled={!rcCanConfirm || isTogglingOnHold}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                  {isTogglingOnHold ? 'Reactivando…' : 'Reactivar en este curso'}
+                </button>
               </div>
             </div>
           </div>

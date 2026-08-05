@@ -310,6 +310,10 @@ export default function StudentContract({ student, contratoFinalizado = false }:
           currentFechaFinOnHold={(student as any).fechaFinOnHold}
           onHoldCount={(student as any).onHoldCount}
           onHoldHistory={(student as any).onHoldHistory}
+          currentCampaign={(student as any).campaign}
+          currentCurso={(student as any).tipoCurso || (student as any).curso}
+          currentHorario={(student as any).horarioCurso}
+          currentSalon={(student as any).salon}
         />
       </div>
 
