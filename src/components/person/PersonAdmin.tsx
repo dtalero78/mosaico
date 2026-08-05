@@ -979,9 +979,21 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3">
-                    <h4 className="font-medium text-gray-900">
-                      {beneficiary.nombre} {beneficiary.apellido}
-                    </h4>
+                    {isBeneficiaryApproved(beneficiary) && (beneficiary as any).academicaId ? (
+                      <a
+                        href={`/student/${(beneficiary as any).academicaId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-blue-700 hover:text-blue-900 hover:underline"
+                        title="Abrir ficha académica del beneficiario"
+                      >
+                        {beneficiary.nombre} {beneficiary.apellido}
+                      </a>
+                    ) : (
+                      <h4 className="font-medium text-gray-900">
+                        {beneficiary.nombre} {beneficiary.apellido}
+                      </h4>
+                    )}
                     {/* Un beneficiario sin aprobar nace inactivo — mostrarlo como
                         "Inactivo" a secas confundía (parecía dado de baja). */}
                     {isBeneficiaryApproved(beneficiary) ? (
