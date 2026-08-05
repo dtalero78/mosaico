@@ -49,6 +49,10 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
   const [linkUrl, setLinkUrl] = useState('')
   const [savingLink, setSavingLink] = useState(false)
 
+  // Actividades WordWall del módulo (solo material del guía) — misma fuente que Contenido.
+  const [modActs, setModActs] = useState<{ nombre: string; link: string }[]>([])
+  const [savingActs, setSavingActs] = useState(false)
+
   // Hidden file input per step
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
 
@@ -79,6 +83,37 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
   }, [tipo, curso])
 
   useEffect(() => { loadSteps(selectedNivel) }, [selectedNivel, loadSteps])
+
+  // Cargar actividades WordWall del módulo (solo material del guía)
+  useEffect(() => {
+    if (tipo !== 'advisor' || !curso || !selectedNivel) { setModActs([]); return }
+    fetch(`/api/postgres/cursos-contenido?curso=${encodeURIComponent(curso)}&code=${encodeURIComponent(selectedNivel)}`)
+      .then(r => r.json())
+      .then(d => setModActs(Array.isArray(d?.actividadesWordwall) ? d.actividadesWordwall : []))
+      .catch(() => setModActs([]))
+  }, [tipo, curso, selectedNivel])
+
+  async function saveActs() {
+    if (!curso || !selectedNivel) return
+    setSavingActs(true)
+    try {
+      const r = await fetch('/api/postgres/cursos-contenido', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          curso, code: selectedNivel,
+          actividadesWordwall: modActs.map(a => ({ nombre: (a.nombre || '').trim(), link: (a.link || '').trim() })).filter(a => a.nombre || a.link),
+        }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error ?? 'Error al guardar actividades')
+      toast.success('Actividades del módulo guardadas')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Error inesperado')
+    } finally {
+      setSavingActs(false)
+    }
+  }
 
   // ── Trigger file picker ────────────────────────────────────────────────────
   function triggerFilePick(stepId: string) {
@@ -174,6 +209,21 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
     }
   }
 
+  // ── Copiar enlace al portapapeles ──────────────────────────────────────────
+  async function copyLink(file: MaterialFile) {
+    const isLink = isDriveUrl(file.key) || /^https?:\/\//.test(file.key)
+    const url = isLink
+      ? file.key
+      : `${window.location.origin}/api/postgres/niveles/material?key=${encodeURIComponent(file.key)}`
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Enlace copiado')
+    } catch {
+      // Fallback si clipboard no está disponible
+      window.prompt('Copia el enlace:', url)
+    }
+  }
+
   // ── Log download ───────────────────────────────────────────────────────────
   async function handleDownload(stepRow: StepMaterial, file: MaterialFile) {
     // Enlace de Drive u otra URL http → abrir directo
@@ -247,6 +297,59 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
           </div>
         </div>
 
+        {/* Actividades WordWall del módulo (solo material del guía) */}
+        {tipo === 'advisor' && selectedNivel && (
+          <div className="bg-white rounded-xl border border-pink-200 shadow-sm p-4 mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-pink-700">Actividades del módulo (WordWall)</h3>
+                <p className="text-xs text-gray-500">Aplican a todo el módulo <strong>{selectedNivel}</strong> — el estudiante las ve sin importar su lección. Puedes agregar varias.</p>
+              </div>
+              <button type="button" onClick={() => setModActs(a => [...a, { nombre: '', link: '' }])}
+                className="text-xs px-2 py-1 rounded-md bg-pink-100 text-pink-700 hover:bg-pink-200 flex-shrink-0">
+                + Agregar actividad
+              </button>
+            </div>
+            {modActs.length === 0 ? (
+              <p className="text-xs text-gray-400 mt-2">Sin actividades. Agrega una con nombre y link de WordWall.</p>
+            ) : (
+              <div className="space-y-2 mt-3">
+                {modActs.map((act, idx) => {
+                  const validLink = /^https?:\/\//.test((act.link || '').trim())
+                  return (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <input value={act.nombre} type="text"
+                        onChange={e => setModActs(a => a.map((x, i) => i === idx ? { ...x, nombre: e.target.value } : x))}
+                        placeholder="Título (ej. WordWall Módulo 1)"
+                        className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                      <input value={act.link} type="url"
+                        onChange={e => setModActs(a => a.map((x, i) => i === idx ? { ...x, link: e.target.value } : x))}
+                        placeholder="https://wordwall.net/…"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                      <button type="button" disabled={!validLink}
+                        onClick={() => window.open(act.link, '_blank', 'noopener,noreferrer')}
+                        className="text-[11px] px-2 py-2 rounded border border-gray-200 text-blue-600 hover:bg-blue-50 disabled:opacity-40 flex-shrink-0"
+                        title="Abrir actividad">Abrir</button>
+                      <button type="button" disabled={!validLink}
+                        onClick={async () => { try { await navigator.clipboard.writeText(act.link.trim()); toast.success('Enlace copiado') } catch { window.prompt('Copia el enlace:', act.link.trim()) } }}
+                        className="text-[11px] px-2 py-2 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 flex-shrink-0"
+                        title="Copiar enlace">Copiar</button>
+                      <button type="button" onClick={() => setModActs(a => a.filter((_, i) => i !== idx))}
+                        className="text-sm px-2 py-2 rounded-md text-red-600 hover:bg-red-50 flex-shrink-0" title="Quitar actividad">✕</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <div className="mt-3 flex justify-end">
+              <button type="button" onClick={saveActs} disabled={savingActs}
+                className="text-sm px-4 py-2 rounded-lg bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-50">
+                {savingActs ? 'Guardando…' : 'Guardar actividades'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Steps table */}
         {!selectedNivel && (
           <div className="text-center py-16 text-gray-400">
@@ -292,13 +395,41 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                   {row.files.length === 0 && (
                     <p className="text-sm text-gray-400 italic py-1">Sin archivos</p>
                   )}
-                  {row.files.map(file => (
-                    <div key={file.key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm text-gray-700 truncate">{file.name}</span>
+                  {row.files.map(file => {
+                    const esLink = isDriveUrl(file.key) || /^https?:\/\//.test(file.key)
+                    return (
+                    <div key={file.key} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {esLink ? (
+                            <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 115.656 5.656l-1.5 1.5" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                          <span className="text-sm text-gray-800 font-medium truncate">{file.name}</span>
+                          {esLink && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 flex-shrink-0">enlace</span>}
+                        </div>
+                        {/* Link visible + copiar */}
+                        <div className="flex items-center gap-2 mt-1 pl-6">
+                          {esLink ? (
+                            <a href={file.key} target="_blank" rel="noopener noreferrer" title={file.key}
+                              className="text-xs text-blue-600 truncate max-w-[52ch] hover:underline">{file.key}</a>
+                          ) : (
+                            <span className="text-xs text-gray-400">Archivo subido</span>
+                          )}
+                          <button type="button" onClick={() => copyLink(file)}
+                            className="text-[11px] px-2 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 flex-shrink-0 inline-flex items-center gap-1"
+                            title="Copiar enlace">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Copiar enlace
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                         {/* Descargar */}
@@ -346,7 +477,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                         </button>
                       </div>
                     </div>
-                  ))}
+                    ) })}
                 </div>
 
                 {/* Add new file (no replace) */}
