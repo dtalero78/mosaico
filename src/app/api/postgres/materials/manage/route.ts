@@ -6,6 +6,7 @@ import { query, queryMany, queryOne } from '@/lib/postgres'
 import { spacesClient, SPACES_BUCKET } from '@/lib/spaces'
 import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { generateId } from '@/lib/id-generator'
+import { isDriveUrl } from '@/lib/drive-embed'
 
 // ── Audit table (created once on first use) ──────────────────────────────────
 let auditTableReady = false
@@ -165,6 +166,47 @@ export async function POST(req: Request) {
   })
 
   return NextResponse.json({ success: true, key, message: 'Material actualizado correctamente' })
+}
+
+// ── PUT /api/postgres/materials/manage  (JSON: stepId,tipo,nivel,step,name,url) ──
+//    Agrega un ENLACE de Google Drive como material del guía (sin subir archivo).
+//    Solo aplica a tipo='advisor' (el campo materialUsuario guarda keys de Spaces).
+export async function PUT(req: Request) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { stepId, tipo, nivel, step, name, url } = await req.json()
+  if (!stepId || !nivel || !step || !name || !url) {
+    return NextResponse.json({ error: 'Faltan parámetros requeridos' }, { status: 400 })
+  }
+  if (tipo !== 'advisor') {
+    return NextResponse.json({ error: 'Los enlaces de Drive solo aplican al material del guía' }, { status: 400 })
+  }
+  if (!isDriveUrl(url)) {
+    return NextResponse.json({ error: 'La URL debe ser de Google Drive o Google Docs' }, { status: 400 })
+  }
+
+  const field = 'material'
+  const row   = await queryOne(`SELECT "${field}" FROM "NIVELES" WHERE "_id" = $1`, [stepId])
+  let files   = parseFiles(row?.[field], tipo)
+
+  // Evitar duplicar el mismo enlace
+  files = files.filter(f => f.key !== url)
+  files.push({ key: String(url).trim(), name: String(name).trim() })
+
+  await query(
+    `UPDATE "NIVELES" SET "${field}" = $1::jsonb, "_updatedDate" = NOW() WHERE "_id" = $2`,
+    [rebuildField(files, tipo), stepId]
+  )
+
+  await logAudit({
+    tipo, nivel, step,
+    accion: 'agregar_enlace',
+    archivoNuevo: String(url).trim(),
+    realizadoPor: session.user.email ?? 'desconocido',
+  })
+
+  return NextResponse.json({ success: true, message: 'Enlace de Drive agregado correctamente' })
 }
 
 // ── DELETE /api/postgres/materials/manage  (JSON: stepId,tipo,nivel,step,fileKey) ──

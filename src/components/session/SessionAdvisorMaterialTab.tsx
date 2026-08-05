@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { BookOpenIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { isDriveUrl, driveEmbedUrl } from '@/lib/drive-embed'
 
 interface Material {
   index: number
@@ -80,6 +81,13 @@ export default function SessionAdvisorMaterialTab({ step, nivel }: Props) {
   }
 
   const handleVisualize = async (mat: Material) => {
+    // Enlace de Google Drive → incrustar la vista previa /preview (sin presigned)
+    if (isDriveUrl(mat.url)) {
+      setViewerTitle(mat.name)
+      setViewerLoading(false)
+      setViewerUrl(driveEmbedUrl(mat.url) || mat.url)
+      return
+    }
     if (!mat.key) return
     setViewerTitle(mat.name)
     setViewerLoading(true)
@@ -165,7 +173,8 @@ export default function SessionAdvisorMaterialTab({ step, nivel }: Props) {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {materials.map(mat => {
-                const office = isOfficeFile(mat.name) && !!mat.key
+                const drive = isDriveUrl(mat.url)
+                const office = (isOfficeFile(mat.name) && !!mat.key) || drive
                 const available = !!mat.key || isValidHttpUrl(mat.url)
                 return (
                   <tr key={mat.index} className="hover:bg-amber-50 transition-colors">
@@ -238,7 +247,7 @@ export default function SessionAdvisorMaterialTab({ step, nivel }: Props) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Los archivos PPTX, DOCX y XLSX tienen botón <strong>Visualizar</strong> para ver en pantalla</span>
+          <span>Los archivos PPTX, DOCX, XLSX y los <strong>enlaces de Google Drive</strong> tienen botón <strong>Visualizar</strong> para ver en pantalla</span>
         </div>
       </div>
 

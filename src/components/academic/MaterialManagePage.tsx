@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import { isDriveUrl } from '@/lib/drive-embed'
 
 interface MaterialFile {
   key: string
@@ -41,6 +42,12 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
     newFile?: File
   } | null>(null)
   const [confirming, setConfirming] = useState(false)
+
+  // Enlace de Google Drive (solo material del guía)
+  const [linkModal, setLinkModal] = useState<{ stepId: string; step: string } | null>(null)
+  const [linkName, setLinkName] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
+  const [savingLink, setSavingLink] = useState(false)
 
   // Hidden file input per step
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
@@ -141,9 +148,40 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
     }
   }
 
+  // ── Agregar enlace de Google Drive (solo advisor) ──────────────────────────
+  async function submitLink() {
+    if (!linkModal) return
+    const name = linkName.trim()
+    const url = linkUrl.trim()
+    if (!name) { toast.error('Escribe un título'); return }
+    if (!isDriveUrl(url)) { toast.error('La URL debe ser de Google Drive o Google Docs'); return }
+    setSavingLink(true)
+    try {
+      const r = await fetch('/api/postgres/materials/manage', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stepId: linkModal.stepId, tipo, nivel: selectedNivel, step: linkModal.step, name, url }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error ?? 'Error al agregar enlace')
+      toast.success('Enlace de Drive agregado')
+      setLinkModal(null); setLinkName(''); setLinkUrl('')
+      await loadSteps(selectedNivel)
+    } catch (err: any) {
+      toast.error(err.message ?? 'Error inesperado')
+    } finally {
+      setSavingLink(false)
+    }
+  }
+
   // ── Log download ───────────────────────────────────────────────────────────
   async function handleDownload(stepRow: StepMaterial, file: MaterialFile) {
-    // Open in new tab
+    // Enlace de Drive u otra URL http → abrir directo
+    if (isDriveUrl(file.key) || /^https?:\/\//.test(file.key)) {
+      window.open(file.key, '_blank', 'noopener,noreferrer')
+      return
+    }
+    // Archivo en Spaces → proxy de descarga
     window.open(`/api/postgres/niveles/material?key=${encodeURIComponent(file.key)}`, '_blank', 'noopener,noreferrer')
     // Audit log (fire and forget)
     fetch('/api/postgres/materials/manage', {
@@ -312,7 +350,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                 </div>
 
                 {/* Add new file (no replace) */}
-                <div className={`px-5 pb-3`}>
+                <div className={`px-5 pb-3 flex items-center gap-4`}>
                   <button
                     type="button"
                     onClick={() => triggerFilePick(`${row._id}-add`)}
@@ -323,6 +361,18 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                     </svg>
                     Agregar archivo
                   </button>
+                  {tipo === 'advisor' && (
+                    <button
+                      type="button"
+                      onClick={() => { setLinkModal({ stepId: row._id, step: row.step }); setLinkName(''); setLinkUrl('') }}
+                      className="text-xs font-medium text-blue-600 hover:underline flex items-center gap-1"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 115.656 5.656l-1.5 1.5" />
+                      </svg>
+                      Agregar enlace de Drive
+                    </button>
+                  )}
                   <input
                     type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.zip"
                     className="hidden"
@@ -419,6 +469,67 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                     Procesando…
                   </span>
                 ) : modal.type === 'delete' ? 'Eliminar' : (modal.file ? 'Reemplazar' : 'Subir')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: agregar enlace de Google Drive */}
+      {linkModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 115.656 5.656l-1.5 1.5" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900 text-center mb-1">Agregar enlace de Google Drive</h2>
+            <p className="text-xs text-gray-400 text-center mb-4">
+              Módulo: <strong>{selectedNivel}</strong> · Lección: <strong>{linkModal.step}</strong>
+            </p>
+
+            <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
+            <input
+              type="text"
+              value={linkName}
+              onChange={e => setLinkName(e.target.value)}
+              placeholder="Ej. Presentación Lección 02"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+
+            <label className="block text-sm font-medium text-gray-700 mb-1">Enlace de Google Drive</label>
+            <input
+              type="url"
+              value={linkUrl}
+              onChange={e => setLinkUrl(e.target.value)}
+              placeholder="https://drive.google.com/file/d/…/view"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {linkUrl.trim() !== '' && !isDriveUrl(linkUrl) && (
+              <p className="text-xs text-red-500 mt-1">La URL debe ser de Google Drive o Google Docs.</p>
+            )}
+            <p className="text-xs text-gray-500 mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠ El archivo en Drive debe estar compartido como <strong>“Cualquiera con el enlace: Lector”</strong>,
+              de lo contrario no se verá en la plataforma. Sirve para PDF, PowerPoint (.pptx) y Google Slides.
+            </p>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                type="button"
+                onClick={() => setLinkModal(null)}
+                disabled={savingLink}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={submitLink}
+                disabled={savingLink || !linkName.trim() || !isDriveUrl(linkUrl)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {savingLink ? 'Guardando…' : 'Agregar enlace'}
               </button>
             </div>
           </div>
