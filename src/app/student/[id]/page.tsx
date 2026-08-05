@@ -123,6 +123,9 @@ async function StudentContent({ studentId }: { studentId: string }) {
                   <span className="badge badge-error">
                     ❌ Aprobada
                   </span>
+                ) : student.estadoInactivo ? (
+                  // On Hold o Suspendida: no mostrar "Próxima Sesión"
+                  null
                 ) : nextClass ? (
                   <span className="badge badge-warning">
                     Próxima Sesión: {formatDateTimeColombia(nextClass.fechaEvento)}
