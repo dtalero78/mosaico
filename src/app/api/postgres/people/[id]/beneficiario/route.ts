@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { PersonPermission } from '@/types/permissions';
 import { query, queryOne, transaction } from '@/lib/postgres';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
+import { cupoOcupadoSql } from '@/lib/cupo';
 import {
   insertBeneficiarioTx,
   incrementarCupoCurso,
@@ -66,7 +67,14 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
 
   // El curso debe existir en la campaña y estar activo.
   const curso = await queryOne<any>(
-    `SELECT "salon", COALESCE("numeroUsuarios",0) AS cupos, COALESCE("usuInscritos",0) AS inscritos
+    `SELECT "salon", COALESCE("numeroUsuarios",0) AS cupos,
+            -- inscritos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
+            (SELECT COUNT(*)::int FROM "PEOPLE" pe
+               WHERE pe."tipoUsuario"='BENEFICIARIO'
+                 AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign"
+                 AND pe."tipoCurso" = "CURSOS_CAMPAIGN"."tipoCurso"
+                 AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso"
+                 AND ${cupoOcupadoSql('pe')}) AS inscritos
      FROM "CURSOS_CAMPAIGN"
      WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "activa"=true LIMIT 1`,
     [body.campaign, body.tipoCurso, body.horarioCurso]

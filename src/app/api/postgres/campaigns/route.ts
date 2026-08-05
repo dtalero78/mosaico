@@ -7,6 +7,7 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-campaign';
 import { generarEventosCurso } from '@/services/cursos-campaign-eventos.service';
+import { cupoOcupadoSql } from '@/lib/cupo';
 
 /**
  * GET /api/postgres/campaigns  → lista de cursos/campañas (admin Crea Campaña).
@@ -21,13 +22,13 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
   const result = await query(
     `SELECT "_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","guia","horarioCurso","inicioCurso",
             "duracionCurso","finalCurso","numeroUsuarios","paraMenores","activa",
-            -- cupos = beneficiarios ACTIVOS (los inactivos/retractados no ocupan cupo)
+            -- cupos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
             (SELECT COUNT(*)::int FROM "PEOPLE" pe
                WHERE pe."tipoUsuario"='BENEFICIARIO'
                  AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign"
                  AND pe."tipoCurso" = "CURSOS_CAMPAIGN"."tipoCurso"
                  AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso"
-                 AND COALESCE(pe."estadoInactivo", false) = false) AS "usuInscritos"
+                 AND ${cupoOcupadoSql('pe')}) AS "usuInscritos"
      FROM "CURSOS_CAMPAIGN"
      ORDER BY
        MAX("_createdDate") OVER (PARTITION BY "campaign") DESC,

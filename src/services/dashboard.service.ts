@@ -18,6 +18,7 @@ import { AcademicaRepository } from '@/repositories/academica.repository';
 import { CalendarioRepository } from '@/repositories/calendar.repository';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { queryMany, queryOne } from '@/lib/postgres';
+import { cupoOcupadoSql } from '@/lib/cupo';
 
 // ── Cache module-level (vive entre requests dentro de la misma instancia) ──
 
@@ -205,9 +206,9 @@ export async function getCampaniasResumen(tz: string = 'America/Bogota'): Promis
               MAX("finalCampaign"::text)          AS "cierreMatricula",
               MAX("finalCurso"::text)             AS "finalCursoMax",
               COUNT(*)::int                        AS "cursos",
-              -- inscritos = beneficiarios ACTIVOS de la campaña (inactivos no cuentan)
+              -- inscritos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
               (SELECT COUNT(*)::int FROM "PEOPLE" pe WHERE pe."tipoUsuario"='BENEFICIARIO'
-                 AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign" AND COALESCE(pe."estadoInactivo",false)=false) AS "inscritos",
+                 AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign" AND ${cupoOcupadoSql('pe')}) AS "inscritos",
               SUM(COALESCE("numeroUsuarios",0))::int AS "cupos"
          FROM "CURSOS_CAMPAIGN"
         WHERE "campaign" IS NOT NULL
@@ -217,9 +218,9 @@ export async function getCampaniasResumen(tz: string = 'America/Bogota'): Promis
     // Cursos activos (finalCurso >= hoy) por tipo.
     queryMany<any>(
       `SELECT cc."tipoCurso" AS "tipo", COUNT(*)::int AS "cursos",
-              -- inscritos = beneficiarios ACTIVOS cuyo curso (de ese tipo) está vigente
+              -- inscritos = beneficiarios (contrato NO rechazado/retractado/nulo) cuyo curso vigente (ver lib/cupo)
               (SELECT COUNT(*)::int FROM "PEOPLE" pe
-                 WHERE pe."tipoUsuario"='BENEFICIARIO' AND pe."tipoCurso"=cc."tipoCurso" AND COALESCE(pe."estadoInactivo",false)=false
+                 WHERE pe."tipoUsuario"='BENEFICIARIO' AND pe."tipoCurso"=cc."tipoCurso" AND ${cupoOcupadoSql('pe')}
                    AND EXISTS (SELECT 1 FROM "CURSOS_CAMPAIGN" c2 WHERE c2."campaign"=pe."campaign"
                                  AND c2."tipoCurso"=pe."tipoCurso" AND c2."horarioCurso"=pe."horarioCurso" AND c2."finalCurso"::text >= $1)
               )::int AS "inscritos"

@@ -14,6 +14,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { NotFoundError } from '@/lib/errors';
 import { queryOne, queryMany } from '@/lib/postgres';
+import { cupoOcupadoSql, estadoContratoDisplay } from '@/lib/cupo';
 
 export const GET = handlerWithAuth(async (_req, { params }, session) => {
   await requirePermission(session, AcademicoPermission.CAMPANA_CREAR);
@@ -24,16 +25,24 @@ export const GET = handlerWithAuth(async (_req, { params }, session) => {
   );
   if (!curso) throw new NotFoundError('CURSOS_CAMPAIGN', params.id);
 
+  // Solo los que OCUPAN cupo (contrato NO rechazado/retractado/nulo — ver lib/cupo),
+  // así el listado coincide con el número de cupos.
   const inscritos = await queryMany<any>(
     `SELECT p."_id"            AS "peopleId",
             a."_id"            AS "academicaId",
             p."numeroId",
             p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido",
-            p."salon", p."contrato", p."aprobacion", p."estadoInactivo"
+            p."salon", p."contrato", p."aprobacion", p."estadoInactivo",
+            t."aprobacion"     AS "aprobTitular"
        FROM "PEOPLE" p
        LEFT JOIN "ACADEMICA" a ON a."numeroId" = p."numeroId" AND a."tipoUsuario" = 'BENEFICIARIO'
+       LEFT JOIN LATERAL (
+         SELECT "aprobacion" FROM "PEOPLE" pt
+          WHERE pt."contrato" = p."contrato" AND pt."tipoUsuario" = 'TITULAR' LIMIT 1
+       ) t ON true
       WHERE p."tipoUsuario" = 'BENEFICIARIO'
         AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
+        AND ${cupoOcupadoSql('p')}
       ORDER BY p."primerApellido" NULLS LAST, p."primerNombre" NULLS LAST`,
     [curso.campaign, curso.tipoCurso, curso.horarioCurso]
   );
@@ -46,6 +55,8 @@ export const GET = handlerWithAuth(async (_req, { params }, session) => {
     salon: r.salon ?? null,
     contrato: r.contrato ?? null,
     aprobacion: r.aprobacion ?? null,
+    // Estado del CONTRATO para mostrar (Pendiente/Aprobado/Devuelto): los liberadores ya no se listan.
+    estadoContrato: estadoContratoDisplay(r.aprobTitular ?? null, r.aprobacion ?? null),
     inactivo: r.estadoInactivo === true,
   }));
 

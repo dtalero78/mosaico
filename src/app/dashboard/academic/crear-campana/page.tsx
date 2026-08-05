@@ -927,9 +927,14 @@ function CrearCampanaContent() {
                         </td>
                         <td className="px-4 py-2 font-mono text-xs text-gray-700">{b.numeroId}</td>
                         <td className="px-4 py-2">
-                          {b.inactivo
-                            ? <span className="text-xs text-red-600">Inactivo</span>
-                            : <span className="text-xs text-emerald-600">{b.aprobacion || 'Activo'}</span>}
+                          {(() => {
+                            const e = b.estadoContrato || (b.aprobacion || 'Pendiente')
+                            const cls = e === 'Aprobado' ? 'text-emerald-600'
+                              : e === 'Devuelto' ? 'text-blue-600'
+                              : e === 'Pendiente' ? 'text-amber-600'
+                              : 'text-red-600'
+                            return <span className={`text-xs ${cls}`}>{e}</span>
+                          })()}
                         </td>
                       </tr>
                     ))}

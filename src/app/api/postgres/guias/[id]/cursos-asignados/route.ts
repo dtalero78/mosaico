@@ -1,6 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
+import { cupoOcupadoSql } from '@/lib/cupo';
 
 /**
  * GET /api/postgres/guias/[id]/cursos-asignados
@@ -17,7 +18,13 @@ export const GET = handlerWithAuth(async (_req, { params }) => {
             "finalCurso"::text   AS "finalCurso",
             "finalCampaign"::text AS "finalCampaign",
             COALESCE("numeroUsuarios", 0) AS "numeroUsuarios",
-            COALESCE("usuInscritos", 0)   AS "usuInscritos"
+            -- cupos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
+            (SELECT COUNT(*)::int FROM "PEOPLE" pe
+               WHERE pe."tipoUsuario"='BENEFICIARIO'
+                 AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign"
+                 AND pe."tipoCurso" = "CURSOS_CAMPAIGN"."tipoCurso"
+                 AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso"
+                 AND ${cupoOcupadoSql('pe')}) AS "usuInscritos"
      FROM "CURSOS_CAMPAIGN"
      WHERE "guia" = $1 AND "activa" = true
      ORDER BY "campaign",
