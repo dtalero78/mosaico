@@ -176,6 +176,8 @@ export default function SessionAdvisorMaterialTab({ step, nivel }: Props) {
                 const drive = isDriveUrl(mat.url)
                 const office = (isOfficeFile(mat.name) && !!mat.key) || drive
                 const available = !!mat.key || isValidHttpUrl(mat.url)
+                // Enlace externo (p. ej. actividad WordWall): abrir en pestaña nueva, no "descargar"
+                const plainLink = !mat.key && !drive && isValidHttpUrl(mat.url)
                 return (
                   <tr key={mat.index} className="hover:bg-amber-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{mat.index}</td>
@@ -226,7 +228,7 @@ export default function SessionAdvisorMaterialTab({ step, nivel }: Props) {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                 d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            Descargar
+                            {plainLink ? 'Abrir' : 'Descargar'}
                           </button>
                         ) : (
                           <span className="px-3 py-1.5 text-xs text-gray-400 bg-gray-100 rounded-lg">

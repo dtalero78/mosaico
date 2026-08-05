@@ -43,15 +43,12 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
   } | null>(null)
   const [confirming, setConfirming] = useState(false)
 
-  // Enlace de Google Drive (solo material del guía)
-  const [linkModal, setLinkModal] = useState<{ stepId: string; step: string } | null>(null)
+  // Enlace por lección (solo material del guía): 'drive' (presentación) o 'actividad' (WordWall)
+  const [linkModal, setLinkModal] = useState<{ stepId: string; step: string; kind: 'drive' | 'actividad' } | null>(null)
   const [linkName, setLinkName] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
   const [savingLink, setSavingLink] = useState(false)
 
-  // Actividades WordWall del módulo (solo material del guía) — misma fuente que Contenido.
-  const [modActs, setModActs] = useState<{ nombre: string; link: string }[]>([])
-  const [savingActs, setSavingActs] = useState(false)
 
   // Hidden file input per step
   const fileInputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
@@ -83,37 +80,6 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
   }, [tipo, curso])
 
   useEffect(() => { loadSteps(selectedNivel) }, [selectedNivel, loadSteps])
-
-  // Cargar actividades WordWall del módulo (solo material del guía)
-  useEffect(() => {
-    if (tipo !== 'advisor' || !curso || !selectedNivel) { setModActs([]); return }
-    fetch(`/api/postgres/cursos-contenido?curso=${encodeURIComponent(curso)}&code=${encodeURIComponent(selectedNivel)}`)
-      .then(r => r.json())
-      .then(d => setModActs(Array.isArray(d?.actividadesWordwall) ? d.actividadesWordwall : []))
-      .catch(() => setModActs([]))
-  }, [tipo, curso, selectedNivel])
-
-  async function saveActs() {
-    if (!curso || !selectedNivel) return
-    setSavingActs(true)
-    try {
-      const r = await fetch('/api/postgres/cursos-contenido', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          curso, code: selectedNivel,
-          actividadesWordwall: modActs.map(a => ({ nombre: (a.nombre || '').trim(), link: (a.link || '').trim() })).filter(a => a.nombre || a.link),
-        }),
-      })
-      const data = await r.json()
-      if (!r.ok) throw new Error(data.error ?? 'Error al guardar actividades')
-      toast.success('Actividades del módulo guardadas')
-    } catch (err: any) {
-      toast.error(err.message ?? 'Error inesperado')
-    } finally {
-      setSavingActs(false)
-    }
-  }
 
   // ── Trigger file picker ────────────────────────────────────────────────────
   function triggerFilePick(stepId: string) {
@@ -188,8 +154,10 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
     if (!linkModal) return
     const name = linkName.trim()
     const url = linkUrl.trim()
+    const esDrive = linkModal.kind === 'drive'
     if (!name) { toast.error('Escribe un título'); return }
-    if (!isDriveUrl(url)) { toast.error('La URL debe ser de Google Drive o Google Docs'); return }
+    if (esDrive && !isDriveUrl(url)) { toast.error('La URL debe ser de Google Drive o Google Docs'); return }
+    if (!esDrive && !/^https?:\/\//.test(url)) { toast.error('La URL debe empezar con http(s)://'); return }
     setSavingLink(true)
     try {
       const r = await fetch('/api/postgres/materials/manage', {
@@ -297,59 +265,6 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
           </div>
         </div>
 
-        {/* Actividades WordWall del módulo (solo material del guía) */}
-        {tipo === 'advisor' && selectedNivel && (
-          <div className="bg-white rounded-xl border border-pink-200 shadow-sm p-4 mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-pink-700">Actividades del módulo (WordWall)</h3>
-                <p className="text-xs text-gray-500">Aplican a todo el módulo <strong>{selectedNivel}</strong> — el estudiante las ve sin importar su lección. Puedes agregar varias.</p>
-              </div>
-              <button type="button" onClick={() => setModActs(a => [...a, { nombre: '', link: '' }])}
-                className="text-xs px-2 py-1 rounded-md bg-pink-100 text-pink-700 hover:bg-pink-200 flex-shrink-0">
-                + Agregar actividad
-              </button>
-            </div>
-            {modActs.length === 0 ? (
-              <p className="text-xs text-gray-400 mt-2">Sin actividades. Agrega una con nombre y link de WordWall.</p>
-            ) : (
-              <div className="space-y-2 mt-3">
-                {modActs.map((act, idx) => {
-                  const validLink = /^https?:\/\//.test((act.link || '').trim())
-                  return (
-                    <div key={idx} className="flex gap-2 items-start">
-                      <input value={act.nombre} type="text"
-                        onChange={e => setModActs(a => a.map((x, i) => i === idx ? { ...x, nombre: e.target.value } : x))}
-                        placeholder="Título (ej. WordWall Módulo 1)"
-                        className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                      <input value={act.link} type="url"
-                        onChange={e => setModActs(a => a.map((x, i) => i === idx ? { ...x, link: e.target.value } : x))}
-                        placeholder="https://wordwall.net/…"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                      <button type="button" disabled={!validLink}
-                        onClick={() => window.open(act.link, '_blank', 'noopener,noreferrer')}
-                        className="text-[11px] px-2 py-2 rounded border border-gray-200 text-blue-600 hover:bg-blue-50 disabled:opacity-40 flex-shrink-0"
-                        title="Abrir actividad">Abrir</button>
-                      <button type="button" disabled={!validLink}
-                        onClick={async () => { try { await navigator.clipboard.writeText(act.link.trim()); toast.success('Enlace copiado') } catch { window.prompt('Copia el enlace:', act.link.trim()) } }}
-                        className="text-[11px] px-2 py-2 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 flex-shrink-0"
-                        title="Copiar enlace">Copiar</button>
-                      <button type="button" onClick={() => setModActs(a => a.filter((_, i) => i !== idx))}
-                        className="text-sm px-2 py-2 rounded-md text-red-600 hover:bg-red-50 flex-shrink-0" title="Quitar actividad">✕</button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            <div className="mt-3 flex justify-end">
-              <button type="button" onClick={saveActs} disabled={savingActs}
-                className="text-sm px-4 py-2 rounded-lg bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-50">
-                {savingActs ? 'Guardando…' : 'Guardar actividades'}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Steps table */}
         {!selectedNivel && (
           <div className="text-center py-16 text-gray-400">
@@ -395,7 +310,13 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                   {row.files.length === 0 && (
                     <p className="text-sm text-gray-400 italic py-1">Sin archivos</p>
                   )}
-                  {row.files.map(file => {
+                  {[...row.files]
+                    .sort((a, b) => {
+                      const la = isDriveUrl(a.key) || /^https?:\/\//.test(a.key) ? 1 : 0
+                      const lb = isDriveUrl(b.key) || /^https?:\/\//.test(b.key) ? 1 : 0
+                      return la - lb   // archivos (0) primero, enlaces/actividades (1) después
+                    })
+                    .map(file => {
                     const esLink = isDriveUrl(file.key) || /^https?:\/\//.test(file.key)
                     return (
                     <div key={file.key} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
@@ -493,16 +414,29 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                     Agregar archivo
                   </button>
                   {tipo === 'advisor' && (
-                    <button
-                      type="button"
-                      onClick={() => { setLinkModal({ stepId: row._id, step: row.step }); setLinkName(''); setLinkUrl('') }}
-                      className="text-xs font-medium text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 115.656 5.656l-1.5 1.5" />
-                      </svg>
-                      Agregar enlace de Drive
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setLinkModal({ stepId: row._id, step: row.step, kind: 'drive' }); setLinkName(''); setLinkUrl('') }}
+                        className="text-xs font-medium text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 115.656 5.656l-1.5 1.5" />
+                        </svg>
+                        Agregar enlace de Drive
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLinkModal({ stepId: row._id, step: row.step, kind: 'actividad' }); setLinkName(''); setLinkUrl('') }}
+                        className="text-xs font-medium text-pink-600 hover:underline flex items-center gap-1"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Agregar actividad
+                      </button>
+                    </>
                   )}
                   <input
                     type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.zip"
@@ -615,7 +549,9 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 11-5.656-5.656l1.5-1.5M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 115.656 5.656l-1.5 1.5" />
               </svg>
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 text-center mb-1">Agregar enlace de Google Drive</h2>
+            <h2 className="text-lg font-semibold text-gray-900 text-center mb-1">
+              {linkModal.kind === 'drive' ? 'Agregar enlace de Google Drive' : 'Agregar actividad'}
+            </h2>
             <p className="text-xs text-gray-400 text-center mb-4">
               Módulo: <strong>{selectedNivel}</strong> · Lección: <strong>{linkModal.step}</strong>
             </p>
@@ -625,24 +561,30 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
               type="text"
               value={linkName}
               onChange={e => setLinkName(e.target.value)}
-              placeholder="Ej. Presentación Lección 02"
+              placeholder={linkModal.kind === 'drive' ? 'Ej. Presentación Lección 02' : 'Ej. WordWall Lección 02'}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
 
-            <label className="block text-sm font-medium text-gray-700 mb-1">Enlace de Google Drive</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {linkModal.kind === 'drive' ? 'Enlace de Google Drive' : 'Enlace de la actividad'}
+            </label>
             <input
               type="url"
               value={linkUrl}
               onChange={e => setLinkUrl(e.target.value)}
-              placeholder="https://drive.google.com/file/d/…/view"
+              placeholder={linkModal.kind === 'drive' ? 'https://drive.google.com/file/d/…/view' : 'https://wordwall.net/…'}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            {linkUrl.trim() !== '' && !isDriveUrl(linkUrl) && (
+            {linkModal.kind === 'drive' && linkUrl.trim() !== '' && !isDriveUrl(linkUrl) && (
               <p className="text-xs text-red-500 mt-1">La URL debe ser de Google Drive o Google Docs.</p>
             )}
+            {linkModal.kind === 'actividad' && linkUrl.trim() !== '' && !/^https?:\/\//.test(linkUrl.trim()) && (
+              <p className="text-xs text-red-500 mt-1">La URL debe empezar con http(s)://</p>
+            )}
             <p className="text-xs text-gray-500 mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              ⚠ El archivo en Drive debe estar compartido como <strong>“Cualquiera con el enlace: Lector”</strong>,
-              de lo contrario no se verá en la plataforma. Sirve para PDF, PowerPoint (.pptx) y Google Slides.
+              {linkModal.kind === 'drive'
+                ? <>⚠ El archivo en Drive debe estar compartido como <strong>“Cualquiera con el enlace: Lector”</strong>, de lo contrario no se verá en la plataforma. Sirve para PDF, PowerPoint (.pptx) y Google Slides.</>
+                : <>Pega el enlace de la actividad (ej. WordWall). El guía la verá en su pestaña <strong>Material</strong> de la sesión.</>}
             </p>
 
             <div className="flex gap-3 mt-5">
@@ -657,10 +599,10 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
               <button
                 type="button"
                 onClick={submitLink}
-                disabled={savingLink || !linkName.trim() || !isDriveUrl(linkUrl)}
+                disabled={savingLink || !linkName.trim() || (linkModal.kind === 'drive' ? !isDriveUrl(linkUrl) : !/^https?:\/\//.test(linkUrl.trim()))}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
               >
-                {savingLink ? 'Guardando…' : 'Agregar enlace'}
+                {savingLink ? 'Guardando…' : (linkModal.kind === 'drive' ? 'Agregar enlace' : 'Agregar actividad')}
               </button>
             </div>
           </div>

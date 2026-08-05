@@ -180,10 +180,11 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'Faltan parámetros requeridos' }, { status: 400 })
   }
   if (tipo !== 'advisor') {
-    return NextResponse.json({ error: 'Los enlaces de Drive solo aplican al material del guía' }, { status: 400 })
+    return NextResponse.json({ error: 'Los enlaces solo aplican al material del guía' }, { status: 400 })
   }
-  if (!isDriveUrl(url)) {
-    return NextResponse.json({ error: 'La URL debe ser de Google Drive o Google Docs' }, { status: 400 })
+  // Acepta enlaces de Google Drive (presentaciones) o cualquier URL http(s) (actividades WordWall, etc.)
+  if (!isDriveUrl(url) && !/^https?:\/\//.test(String(url).trim())) {
+    return NextResponse.json({ error: 'La URL debe empezar con http(s)://' }, { status: 400 })
   }
 
   const field = 'material'
