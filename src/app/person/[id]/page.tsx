@@ -101,6 +101,7 @@ async function PersonContent({ personId, initialTab, soloGeneral }: { personId: 
       horarioCurso: person.horarioCurso,
       campaign: person.campaign,
       existeEnAcademica: person.existeEnAcademica,
+      academicaId: person.academicaId || null,
       estadoInactivo: person.estadoInactivo || false
     }))
 
