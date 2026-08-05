@@ -17,6 +17,11 @@ interface CalendarioEvent {
   observaciones?: string
   limiteUsuarios: number
   linkZoom?: string
+  // Lección a la que corresponde el evento (curso → módulo → lección)
+  nivel?: string
+  step?: string
+  sesionModulo?: string | null
+  sesionLeccion?: string | null
 }
 
 interface SessionGeneralTabProps {
@@ -99,6 +104,29 @@ export default function SessionGeneralTab({ evento, studentCount }: SessionGener
           </div>
         </div>
       </div>
+
+      {/* Módulo / Lección a la que corresponde el evento (amarra material y actividades) */}
+      {(() => {
+        const modulo = evento.sesionModulo || evento.nivel || ''
+        const leccion = evento.sesionLeccion || evento.step || ''
+        if (!modulo && !leccion) return null
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Módulo</label>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-gray-900">{modulo || '—'}</p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Lección</label>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-gray-900">{leccion || '—'}</p>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Observaciones */}
       {evento.observaciones && (

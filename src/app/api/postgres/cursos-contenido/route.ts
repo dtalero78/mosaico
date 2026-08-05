@@ -21,6 +21,7 @@ interface Row {
   actividadKahootModuloNombre: string | null;
   actividadWordwallModulo: string | null;
   actividadWordwallModuloNombre: string | null;
+  actividadesWordwallModulo: any;
   orden: number | null;
   evaluacionModo: string | null;
   preguntasManual: any;
@@ -60,6 +61,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `SELECT "step","description","contenido","actividadKahoot","actividadWordwall",
             "actividadKahootNombre","actividadWordwallNombre","descripcionModulo","recursos",
             "actividadKahootModulo","actividadKahootModuloNombre","actividadWordwallModulo","actividadWordwallModuloNombre",
+            "actividadesWordwallModulo",
             "orden","evaluacionModo","preguntasManual","evaluacionMinutos","cuestionarios"
      FROM "NIVELES" WHERE "curso" = $1 AND "code" = $2
      ORDER BY "orden" ASC NULLS LAST, "step" ASC`,
@@ -72,11 +74,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     descripcionModulo: r.rows[0]?.descripcionModulo ?? '',
     // Recursos son a nivel MÓDULO (uniformes en todas las lecciones); tomo el 1º con datos.
     recursos: parseRecursos(r.rows.find((x) => parseRecursos(x.recursos).length)?.recursos ?? r.rows[0]?.recursos),
-    // Actividades del MÓDULO (uniformes en todas las lecciones): 1ª fila con dato.
-    kahootModulo: r.rows.find((x) => x.actividadKahootModulo)?.actividadKahootModulo ?? '',
-    kahootModuloNombre: r.rows.find((x) => x.actividadKahootModuloNombre)?.actividadKahootModuloNombre ?? '',
-    wordwallModulo: r.rows.find((x) => x.actividadWordwallModulo)?.actividadWordwallModulo ?? '',
-    wordwallModuloNombre: r.rows.find((x) => x.actividadWordwallModuloNombre)?.actividadWordwallModuloNombre ?? '',
+    // Actividades WordWall del MÓDULO (lista abierta, uniformes en todas las lecciones): 1ª fila con datos.
+    // Kahoot descontinuado — ya no se expone para edición.
+    actividadesWordwall: parseRecursos(r.rows.find((x) => parseRecursos(x.actividadesWordwallModulo).length)?.actividadesWordwallModulo ?? r.rows[0]?.actividadesWordwallModulo),
     lecciones: r.rows.map((x) => ({
       step: x.step,
       description: x.description ?? '',
@@ -121,7 +121,9 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
       actividadWordwallModulo: 'wordwallModulo', actividadWordwallModuloNombre: 'wordwallModuloNombre',
     };
     const hasAct = Object.keys(modAct).filter((col) => Object.prototype.hasOwnProperty.call(body, modAct[col]));
-    if (!hasDescMod && !hasRecursos && !hasAct.length) {
+    // Nuevo: lista abierta de actividades WordWall del módulo (reemplaza el WordWall único; Kahoot descontinuado).
+    const hasActWW = Object.prototype.hasOwnProperty.call(body, 'actividadesWordwall');
+    if (!hasDescMod && !hasRecursos && !hasAct.length && !hasActWW) {
       throw new ValidationError('descripcionModulo, recursos o actividades requerido en modo módulo');
     }
     const sets: string[] = [];
@@ -129,6 +131,7 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
     let i = 3;
     if (hasDescMod) { sets.push(`"descripcionModulo" = $${i++}`); params.push(body.descripcionModulo || null); }
     if (hasRecursos) { sets.push(`"recursos" = $${i++}::jsonb`); params.push(JSON.stringify(parseRecursos(body.recursos))); }
+    if (hasActWW) { sets.push(`"actividadesWordwallModulo" = $${i++}::jsonb`); params.push(JSON.stringify(parseRecursos(body.actividadesWordwall))); }
     for (const col of hasAct) { sets.push(`"${col}" = $${i++}`); params.push(String(body[modAct[col]] || '').trim() || null); }
     sets.push(`"_updatedDate" = NOW()`);
     await query(

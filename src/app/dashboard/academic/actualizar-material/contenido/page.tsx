@@ -32,9 +32,8 @@ function LeccionEditor({
 }: { curso: string; code: string; leccion: Leccion; onSaved: () => void }) {
   const [description, setDescription] = useState(leccion.description)
   const [contenido, setContenido] = useState(leccion.contenido)
-  const [kahoot, setKahoot] = useState(leccion.actividadKahoot || '')
+  // Kahoot descontinuado; solo WordWall por lección.
   const [wordwall, setWordwall] = useState(leccion.actividadWordwall || '')
-  const [kahootNombre, setKahootNombre] = useState(leccion.actividadKahootNombre || '')
   const [wordwallNombre, setWordwallNombre] = useState(leccion.actividadWordwallNombre || '')
   const [busy, setBusy] = useState(false)
   const [eqOpen, setEqOpen] = useState(false)
@@ -72,8 +71,8 @@ function LeccionEditor({
 
   useEffect(() => {
     setDescription(leccion.description); setContenido(leccion.contenido)
-    setKahoot(leccion.actividadKahoot || ''); setWordwall(leccion.actividadWordwall || '')
-    setKahootNombre(leccion.actividadKahootNombre || ''); setWordwallNombre(leccion.actividadWordwallNombre || '')
+    setWordwall(leccion.actividadWordwall || '')
+    setWordwallNombre(leccion.actividadWordwallNombre || '')
     setModo((leccion.evaluacionModo as any) === 'MANUAL' ? 'MANUAL' : 'IA')
     setPreguntas(leccion.preguntasManual || [])
     setMinutos(Number(leccion.evaluacionMinutos) > 0 ? Number(leccion.evaluacionMinutos) : 30)
@@ -149,8 +148,8 @@ function LeccionEditor({
   }
 
   const dirty = description !== leccion.description || contenido !== leccion.contenido
-    || kahoot !== (leccion.actividadKahoot || '') || wordwall !== (leccion.actividadWordwall || '')
-    || kahootNombre !== (leccion.actividadKahootNombre || '') || wordwallNombre !== (leccion.actividadWordwallNombre || '')
+    || wordwall !== (leccion.actividadWordwall || '')
+    || wordwallNombre !== (leccion.actividadWordwallNombre || '')
 
   const save = async () => {
     setBusy(true)
@@ -160,9 +159,7 @@ function LeccionEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           curso, code, step: leccion.step, description, contenido,
-          actividadKahoot: kahoot.trim() || null,
           actividadWordwall: wordwall.trim() || null,
-          actividadKahootNombre: kahootNombre.trim() || null,
           actividadWordwallNombre: wordwallNombre.trim() || null,
         }),
       }).then((x) => x.json())
@@ -218,19 +215,10 @@ function LeccionEditor({
       <InsertImageModal open={imgOpen} onClose={() => setImgOpen(false)} onInsert={insertSnippet} curso={curso} code={code} step={leccion.step} />
       <InsertLinkModal open={linkOpen} onClose={() => setLinkOpen(false)} onInsert={insertSnippet} />
 
-      {/* Actividades externas (Kahoot / WordWall) — nombre visible + URL */}
-      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* Actividad externa (WordWall) — nombre visible + URL. Kahoot descontinuado. */}
+      <div className="mt-4 grid grid-cols-1 gap-3">
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-gray-500">Actividad Kahoot</label>
-          <input value={kahootNombre} onChange={(e) => setKahootNombre(e.target.value)} type="text"
-            placeholder="Nombre visible (ej. Kahoot Lección 2)"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-          <input value={kahoot} onChange={(e) => setKahoot(e.target.value)} type="url"
-            placeholder="https://kahoot.it/…"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-        </div>
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-gray-500">Actividad WordWall</label>
+          <label className="block text-xs font-medium text-gray-500">Actividad WordWall (de la lección)</label>
           <input value={wordwallNombre} onChange={(e) => setWordwallNombre(e.target.value)} type="text"
             placeholder="Nombre visible (ej. WordWall Lección 2)"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
@@ -350,10 +338,8 @@ export default function ContenidoCursoPage() {
   const [descripcionModulo, setDescripcionModulo] = useState('')
   const [descripcionModuloOrig, setDescripcionModuloOrig] = useState('')
   const [recursos, setRecursos] = useState<{ nombre: string; link: string }[]>([])
-  const [kahootModulo, setKahootModulo] = useState('')
-  const [kahootModuloNombre, setKahootModuloNombre] = useState('')
-  const [wordwallModulo, setWordwallModulo] = useState('')
-  const [wordwallModuloNombre, setWordwallModuloNombre] = useState('')
+  // Actividades WordWall del módulo: lista abierta (Kahoot descontinuado).
+  const [actividadesWordwall, setActividadesWordwall] = useState<{ nombre: string; link: string }[]>([])
   const [lecciones, setLecciones] = useState<Leccion[]>([])
   const [loadingMod, setLoadingMod] = useState(false)
   const [loadingLec, setLoadingLec] = useState(false)
@@ -380,8 +366,7 @@ export default function ContenidoCursoPage() {
         setDescripcionModulo(d.descripcionModulo || '')
         setDescripcionModuloOrig(d.descripcionModulo || '')
         setRecursos(Array.isArray(d.recursos) ? d.recursos : [])
-        setKahootModulo(d.kahootModulo || ''); setKahootModuloNombre(d.kahootModuloNombre || '')
-        setWordwallModulo(d.wordwallModulo || ''); setWordwallModuloNombre(d.wordwallModuloNombre || '')
+        setActividadesWordwall(Array.isArray(d.actividadesWordwall) ? d.actividadesWordwall : [])
       })
       .catch(() => toast.error('Error al cargar contenido'))
       .finally(() => setLoadingLec(false))
@@ -398,8 +383,7 @@ export default function ContenidoCursoPage() {
         body: JSON.stringify({
           curso, code, descripcionModulo,
           recursos: recursos.map(x => ({ nombre: (x.nombre || '').trim(), link: (x.link || '').trim() })).filter(x => x.nombre || x.link),
-          kahootModulo: kahootModulo.trim(), kahootModuloNombre: kahootModuloNombre.trim(),
-          wordwallModulo: wordwallModulo.trim(), wordwallModuloNombre: wordwallModuloNombre.trim(),
+          actividadesWordwall: actividadesWordwall.map(x => ({ nombre: (x.nombre || '').trim(), link: (x.link || '').trim() })).filter(x => x.nombre || x.link),
         }),
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
@@ -490,30 +474,36 @@ export default function ContenidoCursoPage() {
                 )}
               </div>
 
-              {/* Actividades del módulo (Kahoot / WordWall) → las ven TODOS los del módulo, sin importar la lección */}
+              {/* Actividades WordWall del módulo → lista abierta; las ven TODOS los del módulo, sin importar la lección */}
               <div className="mt-4 pt-3 border-t border-fuchsia-100">
-                <label className="text-sm font-medium text-gray-700">Actividades del módulo</label>
-                <p className="text-xs text-gray-500 mb-2">Una actividad Kahoot y una WordWall para <strong>todo el módulo</strong> (las ve cualquier estudiante del módulo, sin importar su lección).</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <span className="text-xs font-semibold text-purple-700">Actividad Kahoot</span>
-                    <input value={kahootModuloNombre} onChange={(e) => setKahootModuloNombre(e.target.value)}
-                      placeholder="Nombre visible (ej. Kahoot Módulo 1)"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                    <input value={kahootModulo} type="url" onChange={(e) => setKahootModulo(e.target.value)}
-                      placeholder="https://kahoot.it/…"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                  </div>
-                  <div className="space-y-2">
-                    <span className="text-xs font-semibold text-pink-700">Actividad WordWall</span>
-                    <input value={wordwallModuloNombre} onChange={(e) => setWordwallModuloNombre(e.target.value)}
-                      placeholder="Nombre visible (ej. WordWall Módulo 1)"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                    <input value={wordwallModulo} type="url" onChange={(e) => setWordwallModulo(e.target.value)}
-                      placeholder="https://wordwall.net/…"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-                  </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">Actividades WordWall del módulo</label>
+                  <button type="button" onClick={() => setActividadesWordwall((a) => [...a, { nombre: '', link: '' }])}
+                    className="text-xs px-2 py-1 rounded-md bg-pink-100 text-pink-700 hover:bg-pink-200">
+                    + Agregar actividad
+                  </button>
                 </div>
+                <p className="text-xs text-gray-500 mb-2">Puedes agregar <strong>varias</strong> actividades WordWall para <strong>todo el módulo</strong> (las ve cualquier estudiante del módulo, sin importar su lección).</p>
+                {actividadesWordwall.length === 0 ? (
+                  <p className="text-xs text-gray-400">Sin actividades. Agrega una con nombre y link de WordWall.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {actividadesWordwall.map((act, idx) => (
+                      <div key={idx} className="flex gap-2 items-start">
+                        <input value={act.nombre} type="text"
+                          onChange={(e) => setActividadesWordwall((a) => a.map((x, i) => i === idx ? { ...x, nombre: e.target.value } : x))}
+                          placeholder="Nombre visible (ej. WordWall Módulo 1)"
+                          className="w-1/3 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                        <input value={act.link} type="url"
+                          onChange={(e) => setActividadesWordwall((a) => a.map((x, i) => i === idx ? { ...x, link: e.target.value } : x))}
+                          placeholder="https://wordwall.net/…"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                        <button type="button" onClick={() => setActividadesWordwall((a) => a.filter((_, i) => i !== idx))}
+                          className="text-sm px-2 py-2 rounded-md text-red-600 hover:bg-red-50" title="Quitar actividad">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

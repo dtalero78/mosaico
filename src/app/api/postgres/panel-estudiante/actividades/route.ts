@@ -24,6 +24,7 @@ export const GET = handlerWithAuth(async (_request, _context, session) => {
   let kahootModuloNombre: string | null = null;
   let wordwallModuloNombre: string | null = null;
   let recursos: { nombre: string; link: string }[] = [];
+  let actividadesWordwall: { nombre: string; link: string }[] = [];
   if (curso && modulo && leccion) {
     // Comparación insensible a acentos/mayúsculas: NIVELES usa "Lección" y el
     // alumno puede tener "Leccion" (sin tilde). translate() no requiere extensión.
@@ -73,11 +74,26 @@ export const GET = handlerWithAuth(async (_request, _context, session) => {
     kahootModuloNombre = act?.kn || null;
     wordwallModulo = act?.w || null;
     wordwallModuloNombre = act?.wn || null;
+
+    // Lista abierta de actividades WordWall del MÓDULO (nueva; Kahoot descontinuado).
+    const aww = await queryOne<{ arr: any }>(
+      `SELECT "actividadesWordwallModulo" AS arr FROM "NIVELES"
+        WHERE "curso" = $1 AND ${norm('"code"')} = ${norm('$2')}
+          AND jsonb_array_length(COALESCE("actividadesWordwallModulo",'[]'::jsonb)) > 0
+        LIMIT 1`,
+      [curso, modulo]
+    );
+    const rawAww = Array.isArray(aww?.arr) ? aww!.arr
+      : (typeof aww?.arr === 'string' ? (() => { try { return JSON.parse(aww!.arr as any); } catch { return []; } })() : []);
+    actividadesWordwall = (Array.isArray(rawAww) ? rawAww : [])
+      .map((x: any) => ({ nombre: String(x?.nombre || '').trim(), link: String(x?.link || '').trim() }))
+      .filter((x) => x.link);
   }
 
   return successResponse({
     kahoot, wordwall, kahootNombre, wordwallNombre,
     kahootModulo, wordwallModulo, kahootModuloNombre, wordwallModuloNombre,
+    actividadesWordwall,
     recursos, curso, modulo, leccion,
   });
 });
