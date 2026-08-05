@@ -4,9 +4,11 @@ import 'server-only';
  * Regla de CUPOS de curso (MOSAICO).
  *
  * Un beneficiario OCUPA un cupo desde que se crea el contrato y lo mantiene mientras
- * el contrato esté **Pendiente, Devuelto o Aprobado**. El cupo se **libera** solo si el
- * contrato queda **Rechazado, Retractado o Contrato nulo** (estados que viven en el
- * `aprobacion` del TITULAR — el beneficiario solo tiene Aprobado/Pendiente).
+ * el contrato esté **Pendiente, Devuelto o Aprobado**. El cupo se **libera** cuando:
+ *  - el contrato queda **Rechazado, Retractado o Contrato nulo** (estados que viven en
+ *    el `aprobacion` del TITULAR — el beneficiario solo tiene Aprobado/Pendiente), o
+ *  - el beneficiario está en **OnHold** (`fechaOnHold` seteada): se conserva su
+ *    campaña/curso/salón pero deja de ocupar cupo hasta que se restablezca.
  *
  * NO se usa `estadoInactivo` para los cupos: un beneficiario Pendiente nace inactivo
  * (aún no aprobado) pero SÍ ocupa cupo.
@@ -21,11 +23,11 @@ export const ESTADOS_LIBERAN_CUPO = ['rechazado', 'retractado', 'contrato nulo']
  * `alias` es el alias de la fila PEOPLE (beneficiario) en la query que lo invoca.
  */
 export function cupoOcupadoSql(alias: string): string {
-  return `NOT EXISTS (
+  return `(${alias}."fechaOnHold" IS NULL AND NOT EXISTS (
     SELECT 1 FROM "PEOPLE" t_cupo
      WHERE t_cupo."contrato" = ${alias}."contrato"
        AND t_cupo."tipoUsuario" = 'TITULAR'
-       AND LOWER(TRIM(COALESCE(t_cupo."aprobacion", ''))) IN ('rechazado', 'retractado', 'contrato nulo'))`;
+       AND LOWER(TRIM(COALESCE(t_cupo."aprobacion", ''))) IN ('rechazado', 'retractado', 'contrato nulo')))`;
 }
 
 /**
