@@ -456,8 +456,9 @@ export default function SesionPage() {
               ),
               advisorMaterial: (
                 <SessionAdvisorMaterialTab
-                  step={evento.step || ''}
-                  nivel={evento.nivel || ''}
+                  step={evento.sesionLeccion || evento.step || ''}
+                  nivel={evento.sesionModulo || evento.nivel || ''}
+                  curso={evento.sesionModulo ? (evento.nivel || undefined) : undefined}
                 />
               )
             }}

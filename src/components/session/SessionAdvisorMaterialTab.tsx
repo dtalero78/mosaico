@@ -12,10 +12,12 @@ interface Material {
 }
 
 interface Props {
-  /** Step name, e.g. "Step 3" */
+  /** Lección, e.g. "Lección 01" (o "Step 3" en legacy) */
   step: string
-  /** Nivel code, e.g. "BN1" */
+  /** Módulo/code, e.g. "Modulo 00" (o "BN1" en legacy) */
   nivel: string
+  /** Curso, e.g. "YOJI" — el code (módulo) se repite entre cursos en MOSAICO */
+  curso?: string
 }
 
 /** Returns true for Office files that can be previewed via MS Office Online */
@@ -23,7 +25,7 @@ function isOfficeFile(name: string) {
   return /\.(pptx?|docx?|xlsx?)$/i.test(name)
 }
 
-export default function SessionAdvisorMaterialTab({ step, nivel }: Props) {
+export default function SessionAdvisorMaterialTab({ step, nivel, curso }: Props) {
   const [materials, setMaterials]     = useState<Material[]>([])
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState<string | null>(null)
@@ -33,7 +35,7 @@ export default function SessionAdvisorMaterialTab({ step, nivel }: Props) {
   const [viewerTitle, setViewerTitle] = useState('')
   const [viewerLoading, setViewerLoading] = useState(false)
 
-  useEffect(() => { loadMaterials() }, [step, nivel])
+  useEffect(() => { loadMaterials() }, [step, nivel, curso])
 
   const loadMaterials = async () => {
     if (!step) return
@@ -42,6 +44,7 @@ export default function SessionAdvisorMaterialTab({ step, nivel }: Props) {
       setError(null)
       const params = new URLSearchParams({ step, tipo: 'advisor' })
       if (nivel) params.set('nivel', nivel)
+      if (curso) params.set('curso', curso)
       const r = await fetch(`/api/postgres/materials/nivel?${params}`)
       if (!r.ok) throw new Error('Error al cargar material')
       const data = await r.json()

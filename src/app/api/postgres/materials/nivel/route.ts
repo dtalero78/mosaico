@@ -16,7 +16,8 @@ import { queryOne } from '@/lib/postgres';
 export const GET = handlerWithAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const stepParam  = searchParams.get('step');
-  const nivelParam = searchParams.get('nivel');   // optional
+  const nivelParam = searchParams.get('nivel');   // optional — code/módulo
+  const cursoParam = searchParams.get('curso');   // optional — en MOSAICO el code (módulo) se repite entre cursos
   const tipo       = searchParams.get('tipo') || 'all';
 
   if (!stepParam) throw new ValidationError('step query parameter is required');
@@ -26,26 +27,20 @@ export const GET = handlerWithAuth(async (request) => {
     ? stepParam
     : stepParam.replace(/^Step(\d+)$/, 'Step $1');
 
-  // Query NIVELES — optionally filter by nivel/code
-  const row = nivelParam
-    ? await queryOne(
-        `SELECT "_id", "code", "step", "material", "materialUsuario",
-                "description", "clubs", "steps", "esParalelo",
-                "_createdDate", "_updatedDate"
-         FROM "NIVELES"
-         WHERE ("step" = $1 OR "step" = $2) AND "code" = $3
-         LIMIT 1`,
-        [stepParam, normalizedStep, nivelParam]
-      )
-    : await queryOne(
-        `SELECT "_id", "code", "step", "material", "materialUsuario",
-                "description", "clubs", "steps", "esParalelo",
-                "_createdDate", "_updatedDate"
-         FROM "NIVELES"
-         WHERE "step" = $1 OR "step" = $2
-         LIMIT 1`,
-        [stepParam, normalizedStep]
-      );
+  // Query NIVELES — filtro por step (lección) + code (módulo) + curso, según lo disponible.
+  const conds: string[] = ['("step" = $1 OR "step" = $2)'];
+  const params: any[] = [stepParam, normalizedStep];
+  if (nivelParam) { params.push(nivelParam); conds.push(`"code" = $${params.length}`); }
+  if (cursoParam) { params.push(cursoParam); conds.push(`"curso" = $${params.length}`); }
+  const row = await queryOne(
+    `SELECT "_id", "code", "step", "material", "materialUsuario",
+            "description", "clubs", "steps", "esParalelo",
+            "_createdDate", "_updatedDate"
+     FROM "NIVELES"
+     WHERE ${conds.join(' AND ')}
+     LIMIT 1`,
+    params
+  );
 
   if (!row) {
     return successResponse({ materials: [], material: null, message: `No material found for ${stepParam}` });
