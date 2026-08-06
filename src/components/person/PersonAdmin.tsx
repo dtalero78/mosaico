@@ -143,6 +143,23 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   const [suspendMotivo, setSuspendMotivo] = useState('')
   const [isSubmittingSuspend, setIsSubmittingSuspend] = useState(false)
 
+  // Reactivación de beneficiario: cascada Campaña → Curso → Salón destino (con cupo).
+  const [rcCampaign, setRcCampaign] = useState('')
+  const [rcTipoCurso, setRcTipoCurso] = useState('')
+  const [rcRowKey, setRcRowKey] = useState('') // `${horarioCurso}||${salon}`
+  const rcCampanias = useMemo(() => Array.from(new Set(cursosCampaign.map(r => r.campaign))).sort().reverse(), [cursosCampaign])
+  const rcTipos = useMemo(() => Array.from(new Set(cursosCampaign.filter(r => r.campaign === rcCampaign).map(r => r.tipoCurso))), [cursosCampaign, rcCampaign])
+  const rcSalones = useMemo(
+    () => cursosCampaign.filter(r => r.campaign === rcCampaign && r.tipoCurso === rcTipoCurso)
+                        .sort((a, b) => String(a.salon).localeCompare(String(b.salon))),
+    [cursosCampaign, rcCampaign, rcTipoCurso]
+  )
+  const rcSelected = useMemo(
+    () => rcSalones.find(r => `${r.horarioCurso}||${r.salon || ''}` === rcRowKey) || null,
+    [rcSalones, rcRowKey]
+  )
+  const rcFull = rcSelected ? ((rcSelected.numeroUsuarios ?? 0) > 0 && (rcSelected.usuInscritos ?? 0) >= (rcSelected.numeroUsuarios ?? 0)) : false
+
   // Sincronizar las props con el estado local
   useEffect(() => {
     console.log('🔄 PersonAdmin: Beneficiaries props changed:', beneficiaries)
@@ -344,6 +361,17 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     setSuspendMotivo('')
   }
 
+  const handleActivateBeneficiary = (beneficiary: Beneficiary) => {
+    // Reactivar libera vuelve a tomar cupo → hay que elegir campaña/curso/salón
+    // destino (con cupo). Se prellena con el curso actual del beneficiario.
+    const b: any = beneficiary
+    setRcCampaign(b.campaign || '')
+    setRcTipoCurso(beneficiary.curso || b.tipoCurso || '')
+    setRcRowKey(`${b.horarioCurso || ''}||${beneficiary.salon || ''}`)
+    setSuspendTarget({ kind: 'beneficiary', activate: true, beneficiary })
+    setSuspendMotivo('')
+  }
+
   const confirmDeleteBeneficiary = async () => {
     if (!beneficiaryToDelete) return
 
@@ -509,15 +537,30 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
         : [suspendTarget.beneficiary._id]
       const activate = suspendTarget.activate
 
+      // Al REACTIVAR un beneficiario: enviar destino (campaña/curso/salón) + academicaId
+      // para validar cupo y moverlo allí antes de reactivar.
+      let destino: any = undefined
+      let academicaId: string | undefined
+      if (activate && suspendTarget.kind === 'beneficiary' && rcSelected) {
+        destino = {
+          campaign: rcSelected.campaign,
+          tipoCurso: rcSelected.tipoCurso,
+          horarioCurso: rcSelected.horarioCurso,
+          salon: rcSelected.salon || '',
+        }
+        academicaId = (suspendTarget.beneficiary as any).academicaId || undefined
+      }
+
       let failures = 0
+      let lastError = ''
       for (const id of ids) {
         const res = await fetch(`/api/postgres/students/${id}/toggle-status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ active: activate, motivo }),
+          body: JSON.stringify({ active: activate, motivo, destino, academicaId }),
         })
         const data = await res.json().catch(() => ({}))
-        if (!res.ok || !data.success) failures++
+        if (!res.ok || !data.success) { failures++; lastError = data?.error || data?.message || lastError }
       }
 
       if (failures === 0) {
@@ -527,8 +570,12 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
             `Personas actualizadas: ${ids.length}`
           )
           window.location.href = window.location.href
+        } else if (activate && destino) {
+          // Reactivación con cambio de curso/salón → recargar para reflejar el nuevo curso.
+          alert(`✅ Beneficiario reactivado en ${destino.tipoCurso} · ${destino.salon || destino.horarioCurso} (${destino.campaign}).`)
+          window.location.href = window.location.href
         } else {
-          // Beneficiario individual: actualizar lista local sin recargar
+          // Beneficiario individual (inactivar): actualizar lista local sin recargar
           const ben = suspendTarget.beneficiary
           setCurrentBeneficiaries(prev =>
             prev.map(b =>
@@ -541,7 +588,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
           setSuspendMotivo('')
         }
       } else {
-        alert(`❌ Error al cambiar estado: ${failures} de ${ids.length} fallaron`)
+        alert(`❌ Error al cambiar estado: ${failures} de ${ids.length} fallaron${lastError ? `\n\n${lastError}` : ''}`)
       }
     } catch (error) {
       console.error('Error al cambiar estado:', error)
@@ -1058,12 +1105,18 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     </PermissionGuard>
                   )}
                   {isBeneficiaryApproved(beneficiary) ? (
-                    // Aprobado y activo → se puede inactivar. Aprobado pero inactivo
-                    // (OnHold / inactivación admin) → solo se informa el estado.
+                    // Aprobado y activo → se puede inactivar. Aprobado pero inactivo →
+                    // se puede REACTIVAR (pide campaña/curso/salón destino con cupo).
                     beneficiary.estado === 'Inactivo' ? (
-                      <div className="inline-flex items-center px-4 py-1.5 border border-gray-400 text-sm font-medium rounded text-gray-500 bg-gray-50 cursor-not-allowed">
-                        Inactivo
-                      </div>
+                      <PermissionGuard permission={PersonPermission.ACTIVAR_DESACTIVAR}>
+                        <button
+                          onClick={() => handleActivateBeneficiary(beneficiary)}
+                          className="inline-flex items-center px-4 py-1.5 border border-green-600 text-sm font-medium rounded text-green-600 bg-white hover:bg-green-600 hover:text-white transition-colors"
+                          title="Reactivar beneficiario (elige curso/salón destino)"
+                        >
+                          Activar
+                        </button>
+                      </PermissionGuard>
                     ) : (
                       <PermissionGuard permission={PersonPermission.ACTIVAR_DESACTIVAR}>
                         <button
@@ -1817,6 +1870,52 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 </p>
               </div>
 
+              {activate && !isContract && (
+                <div className="mb-4 space-y-2 border-t border-gray-100 pt-3">
+                  <p className="text-xs text-gray-600">
+                    Al inactivar se liberó su cupo. Elige el <strong>curso y salón destino</strong> (con cupo)
+                    donde irá al reactivar. Se prellena con su curso anterior.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Campaña</label>
+                    <select value={rcCampaign} onChange={(e) => { setRcCampaign(e.target.value); setRcTipoCurso(''); setRcRowKey('') }}
+                      disabled={isSubmittingSuspend} className="input-field">
+                      <option value="">Selecciona…</option>
+                      {rcCampanias.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Curso</label>
+                    <select value={rcTipoCurso} onChange={(e) => { setRcTipoCurso(e.target.value); setRcRowKey('') }}
+                      disabled={isSubmittingSuspend || !rcCampaign} className="input-field">
+                      <option value="">Selecciona…</option>
+                      {rcTipos.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Salón</label>
+                    <select value={rcRowKey} onChange={(e) => setRcRowKey(e.target.value)}
+                      disabled={isSubmittingSuspend || !rcTipoCurso} className="input-field">
+                      <option value="">Selecciona…</option>
+                      {rcSalones.map((r) => {
+                        const full = (r.numeroUsuarios ?? 0) > 0 && (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0)
+                        const key = `${r.horarioCurso}||${r.salon || ''}`
+                        return (
+                          <option key={key} value={key} disabled={full}>
+                            {r.salon || '—'} · {r.horarioCurso} · {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}{full ? ' (LLENO)' : ''}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </div>
+                  {rcSelected && (
+                    <p className={`text-xs ${rcFull ? 'text-red-600' : 'text-green-700'}`}>
+                      {rcFull ? 'Este salón está lleno — elige otro con cupo.' : `Cupo disponible: ${(rcSelected.numeroUsuarios ?? 0) - (rcSelected.usuInscritos ?? 0)} libre(s).`}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center space-x-3">
                 <button
                   type="button"
@@ -1829,7 +1928,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 <button
                   type="button"
                   onClick={confirmSuspendAction}
-                  disabled={isSubmittingSuspend || !suspendMotivo.trim()}
+                  disabled={isSubmittingSuspend || !suspendMotivo.trim() || (activate && !isContract && (!rcSelected || rcFull))}
                   className={`flex-1 ${btnColor} border border-transparent rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center`}
                 >
                   {isSubmittingSuspend ? (
