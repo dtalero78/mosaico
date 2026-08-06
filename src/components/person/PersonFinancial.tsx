@@ -24,11 +24,11 @@ interface RecaudoUser {
   activo: boolean
 }
 
-const GESTOR_ROLES = ['RECAUDO_ASIST', 'RECAUDOS_JEFE']
+const GESTOR_ROLES = ['RECAUDOS_ASESOR', 'RECAUDOS_JEFE']
 // Roles que pueden aparecer en PAGOS_TITULARES.gestorRecaudo (cuota#0 = comercial; resto = recaudo)
-const DISPLAY_ROLES = ['RECAUDO_ASIST', 'RECAUDOS_JEFE', 'COMERCIAL', 'SUPER_ADMIN', 'ADMIN']
+const DISPLAY_ROLES = ['RECAUDOS_ASESOR', 'RECAUDOS_JEFE', 'COMERCIAL', 'SUPER_ADMIN', 'ADMIN']
 const ROLE_LABEL: Record<string, string> = {
-  RECAUDO_ASIST: 'Asistente',
+  RECAUDOS_ASESOR: 'Asesor',
   RECAUDOS_JEFE: 'Jefe',
   COMERCIAL: 'Comercial',
   SUPER_ADMIN: 'Admin',
@@ -59,9 +59,9 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   // SuperAdmin/Admin ve siempre las acciones (incluso sobre pagos validados),
   // resto de roles solo ve acciones sobre pagos pendientes.
   const isAdmin = isRole('SUPER_ADMIN' as any) || isRole('ADMIN' as any)
-  // RECAUDO_ASIST: rol operativo de captura — sólo registra pagos e imprime
+  // RECAUDOS_ASESOR: rol operativo de captura — sólo registra pagos e imprime
   // recibos. No valida (lo hace el JEFE / financiero) ni elimina pagos.
-  const isRecaudoAsist = isRole('RECAUDO_ASIST' as any)
+  const isRecaudoAsist = isRole('RECAUDOS_ASESOR' as any)
   const [pagos, setPagos] = useState<any[]>([])
   const [loadingPagos, setLoadingPagos] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
@@ -605,7 +605,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                             <td className="px-3 py-2 text-right">
                               <div className="flex items-center justify-end gap-1">
                                 {/* Recibo: disponible apenas se registra el pago (NO requiere validado).
-                                    Para RECAUDO_ASIST ésta es la única acción visible. */}
+                                    Para RECAUDOS_ASESOR ésta es la única acción visible. */}
                                 <PermissionGuard permission={PersonPermission.PAGOS_RECIBO}>
                                   <button
                                     type="button"
@@ -617,7 +617,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                                   </button>
                                 </PermissionGuard>
                                 {/* Validar: visible si no está validado (cualquier rol con permiso),
-                                    EXCEPTO RECAUDO_ASIST que sólo registra/imprime — la validación
+                                    EXCEPTO RECAUDOS_ASESOR que sólo registra/imprime — la validación
                                     contable es responsabilidad del jefe/financiero. */}
                                 {!p.validado && !isRecaudoAsist && (
                                   <PermissionGuard permission={PersonPermission.PAGOS_VALIDAR}>
@@ -633,7 +633,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                                 )}
                                 {/* Eliminar: visible para pagos pendientes (cualquier rol con permiso)
                                     o siempre para SuperAdmin/Admin (pueden borrar validados también).
-                                    RECAUDO_ASIST nunca puede borrar, ni siquiera pagos pendientes que
+                                    RECAUDOS_ASESOR nunca puede borrar, ni siquiera pagos pendientes que
                                     él mismo registró. */}
                                 {(!p.validado || isAdmin) && !isRecaudoAsist && (
                                   <PermissionGuard permission={PersonPermission.PAGOS_ELIMINAR}>

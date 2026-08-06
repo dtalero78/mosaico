@@ -5,7 +5,7 @@ import { ValidationError } from '@/lib/errors';
 import { computePlataformaScope, getSessionPlataforma, buildPlataformaWhereSql } from '@/lib/recaudos-scope';
 
 /**
- * GET /api/postgres/users/by-role?roles=RECAUDO_ASIST,RECAUDOS_JEFE&activeOnly=true
+ * GET /api/postgres/users/by-role?roles=RECAUDOS_ASESOR,RECAUDOS_JEFE&activeOnly=true
  *
  * Lists USUARIOS_ROLES filtered by one or more roles. Used to populate
  * dropdowns where the admin selects a user (e.g. assigning a collection
@@ -43,7 +43,7 @@ export const GET = handlerWithAuth(async (request: NextRequest, _ctx, session) =
   }
 
   // Aplicar scope de plataforma del caller (sólo cuando se piden roles Recaudos).
-  const wantsRecaudos = roles.some(r => r === 'RECAUDO_ASIST' || r === 'RECAUDOS_JEFE');
+  const wantsRecaudos = roles.some(r => r === 'RECAUDOS_ASESOR' || r === 'RECAUDOS_JEFE');
   if (wantsRecaudos) {
     const callerRole = ((session.user as any)?.role ?? '').toString();
     const callerEmail = session.user?.email ?? null;

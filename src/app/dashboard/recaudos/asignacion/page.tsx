@@ -51,9 +51,9 @@ interface DisplayUser {
   rol: string
 }
 
-const GESTOR_ROLES_FILTRO = ['RECAUDO_ASIST', 'RECAUDOS_JEFE']
+const GESTOR_ROLES_FILTRO = ['RECAUDOS_ASESOR', 'RECAUDOS_JEFE']
 const ROLE_LABEL: Record<string, string> = {
-  RECAUDO_ASIST: 'Asistente',
+  RECAUDOS_ASESOR: 'Asesor',
   RECAUDOS_JEFE: 'Jefe',
 }
 
@@ -88,7 +88,7 @@ export default function AsignacionRecaudosPage() {
   const userRole = ((session?.user as any)?.role ?? '').toString()
   const isAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN' || userRole === 'admin'
   const isJefe  = userRole === 'RECAUDOS_JEFE'
-  // RECAUDO_ASIST no puede filtrar por gestor (siempre se ve a sí mismo)
+  // RECAUDOS_ASESOR no puede filtrar por gestor (siempre se ve a sí mismo)
   const canFiltrarGestor = isAdmin || isJefe
 
   // Filtros

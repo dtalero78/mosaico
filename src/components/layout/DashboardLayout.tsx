@@ -108,8 +108,9 @@ const getNavigation = (userEmail: string, userRole: string) => [
     name: 'Recaudos',
     icon: BanknotesIcon,
     children: [
-      { name: 'Gestión',    href: '/dashboard/recaudos/gestion',    newTab: true },
-      { name: 'Asignación', href: '/dashboard/recaudos/asignacion', newTab: true },
+      { name: 'Gestión',      href: '/dashboard/recaudos/gestion',      newTab: true },
+      { name: 'Asignación',   href: '/dashboard/recaudos/asignacion',   newTab: true },
+      { name: 'Aprobaciones', href: '/dashboard/recaudos/aprobaciones', newTab: true },
     ],
   },
   {
@@ -438,6 +439,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/recaudos/asignacion': [
       RecaudosPermission.ASIGNACION_VER,
     ],
+    '/dashboard/recaudos/aprobaciones': [
+      RecaudosPermission.APROBACIONES_VER,
+    ],
     // Aprobación — cada ítem con su propio permiso de acceso (VER)
     '/dashboard/aprobacion': [
       AprobacionPermission.CENTRO_VER,
@@ -525,6 +529,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     'Recaudos': [
       RecaudosPermission.GESTION_VER,
       RecaudosPermission.ASIGNACION_VER,
+      RecaudosPermission.APROBACIONES_VER,
     ],
   }
 

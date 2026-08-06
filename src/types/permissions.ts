@@ -29,7 +29,7 @@ export enum Role {
   SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
   // MOSAICO: el rol "advisor" se llama GUIA. La key del enum se mantiene (ADVISOR)
-  // para no tocar las ~refs Role.ADVISOR; solo cambia el valor (igual que RECAUDOS_ASIST='RECAUDO_ASIST').
+  // para no tocar las ~refs Role.ADVISOR; solo cambia el valor (igual que RECAUDOS_ASIST='RECAUDOS_ASESOR').
   ADVISOR = 'GUIA',
   COMERCIAL = 'COMERCIAL',
   APROBADOR = 'APROBADOR',
@@ -40,7 +40,7 @@ export enum Role {
   SERVICIO = 'SERVICIO',
   SERVICIO_ASIST = 'SERVICIO_ASIST',
   SERVICIO_JEFE = 'SERVICIO_JEFE',
-  RECAUDOS_ASIST = 'RECAUDO_ASIST',
+  RECAUDOS_ASIST = 'RECAUDOS_ASESOR',
   RECAUDOS_JEFE = 'RECAUDOS_JEFE',
   READONLY = 'READONLY',
   COORDINADOR_ACADEMICO = 'COORDINADOR_ACADEMICO',
@@ -386,9 +386,14 @@ export enum MantenimientoPermission {
  * Permisos del módulo RECAUDOS (Menú Recaudos)
  */
 export enum RecaudosPermission {
-  GESTION_VER         = 'RECAUDOS.GESTION.VER',
-  ASIGNACION_VER      = 'RECAUDOS.ASIGNACION.VER',
-  ASIGNACION_EXPORTAR = 'RECAUDOS.ASIGNACION.EXPORTAR',
+  GESTION_VER          = 'RECAUDOS.GESTION.VER',
+  BANCOS_VER           = 'RECAUDOS.BANCOS.VER',
+  ASIGNACION_VER       = 'RECAUDOS.ASIGNACION.VER',
+  ASIGNACION_EXPORTAR  = 'RECAUDOS.ASIGNACION.EXPORTAR',
+  APROBACIONES_VER     = 'RECAUDOS.APROBACIONES.VER',
+  APROBACIONES_ASIGNAR = 'RECAUDOS.APROBACIONES.ASIGNAR',
+  // Aprobar (validar) pagos e inscripciones EN BLOQUE desde el Centro de Validación.
+  APROBACION_MASIVA    = 'RECAUDOS.APROBACION_MASIVA',
 }
 
 /**

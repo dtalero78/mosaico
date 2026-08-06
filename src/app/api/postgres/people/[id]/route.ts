@@ -329,7 +329,7 @@ export const PATCH = handlerWithAuth(async (
   // Validate gestorRecaudo assignment:
   //   - Only allowed on TITULAR rows
   //   - Value must reference an existing USUARIOS_ROLES._id with rol IN
-  //     ('RECAUDO_ASIST', 'RECAUDOS_JEFE') and activo=true.
+  //     ('RECAUDOS_ASESOR', 'RECAUDOS_JEFE') and activo=true.
   //   - null/empty clears the assignment (allowed).
   if (Object.prototype.hasOwnProperty.call(body, 'gestorRecaudo')) {
     if (currentPerson.tipoUsuario !== 'TITULAR') {
@@ -343,7 +343,7 @@ export const PATCH = handlerWithAuth(async (
       );
       if (!user) throw new ValidationError(`Usuario no encontrado: ${value}`);
       if (!user.activo) throw new ValidationError('El usuario seleccionado no está activo');
-      if (!['RECAUDO_ASIST', 'RECAUDOS_JEFE'].includes(user.rol)) {
+      if (!['RECAUDOS_ASESOR', 'RECAUDOS_JEFE'].includes(user.rol)) {
         throw new ValidationError(`Rol inválido para gestor de recaudo: ${user.rol}`);
       }
     } else {

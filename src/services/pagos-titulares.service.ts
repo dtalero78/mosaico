@@ -142,8 +142,8 @@ export const pagosTitularesService = {
    * Filtro role-based (server-side, no se puede burlar desde el cliente):
    *  - SUPER_ADMIN / ADMIN  → todos los titulares (gestorRecaudo opcional).
    *  - RECAUDOS_JEFE        → titulares con gestor asignado a CUALQUIER
-   *                            user con rol RECAUDOS_JEFE o RECAUDO_ASIST.
-   *  - RECAUDO_ASIST        → SÓLO los titulares con gestor = su _id.
+   *                            user con rol RECAUDOS_JEFE o RECAUDOS_ASESOR.
+   *  - RECAUDOS_ASESOR        → SÓLO los titulares con gestor = su _id.
    *                            Ignora cualquier `gestorRecaudo` enviado.
    *  - Otros roles          → lanza ForbiddenError.
    *
@@ -165,7 +165,7 @@ export const pagosTitularesService = {
     const role = (session.role || '').toString();
     const isAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'admin';
     const isJefe  = role === 'RECAUDOS_JEFE';
-    const isAsist = role === 'RECAUDO_ASIST';
+    const isAsist = role === 'RECAUDOS_ASESOR';
 
     if (!isAdmin && !isJefe && !isAsist) {
       throw new ValidationError('Rol no autorizado para ver asignaciones');
@@ -186,14 +186,14 @@ export const pagosTitularesService = {
       }
       gestorIn = [found._id];
     } else if (isJefe) {
-      // RECAUDOS_JEFE ve todos los gestores con rol RECAUDOS_JEFE o RECAUDO_ASIST
+      // RECAUDOS_JEFE ve todos los gestores con rol RECAUDOS_JEFE o RECAUDOS_ASESOR
       // PERO restringidos al scope de plataforma del propio jefe.
       const jefePlataforma = await getSessionPlataforma(session.email);
       const jefeScope = computePlataformaScope(role, jefePlataforma);
       const scopeSql = buildPlataformaWhereSql(jefeScope, '"plataforma"', 1);
       const rows = await query(
         `SELECT "_id" FROM "USUARIOS_ROLES"
-         WHERE "rol" IN ('RECAUDOS_JEFE', 'RECAUDO_ASIST') AND "activo" = true${scopeSql.sql}`,
+         WHERE "rol" IN ('RECAUDOS_JEFE', 'RECAUDOS_ASESOR') AND "activo" = true${scopeSql.sql}`,
         scopeSql.params,
       );
       gestorIn = rows.rows.map((r: any) => r._id);

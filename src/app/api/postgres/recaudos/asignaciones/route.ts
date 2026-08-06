@@ -7,8 +7,8 @@
  *
  *     - SUPER_ADMIN / ADMIN  → todos
  *     - RECAUDOS_JEFE        → todos los titulares cuyo gestor sea
- *                              RECAUDOS_JEFE o RECAUDO_ASIST
- *     - RECAUDO_ASIST        → sólo sus propios titulares (ignora override)
+ *                              RECAUDOS_JEFE o RECAUDOS_ASESOR
+ *     - RECAUDOS_ASESOR        → sólo sus propios titulares (ignora override)
  *     - resto                → 403
  *
  * Sólo retorna titulares con `gestorRecaudo IS NOT NULL`.

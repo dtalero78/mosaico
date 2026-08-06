@@ -44,7 +44,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     module: Module.PERSON,
     section: 'Financiera',
     name: 'Botón "Asignar Ejecutivo de Recaudos"',
-    description: 'Botón en la pestaña Financiera del titular para asignar/reasignar el gestor de recaudo (USUARIOS_ROLES con rol RECAUDO_ASIST o RECAUDOS_JEFE). Sin este permiso el botón no aparece y el campo es de solo lectura',
+    description: 'Botón en la pestaña Financiera del titular para asignar/reasignar el gestor de recaudo (USUARIOS_ROLES con rol RECAUDOS_ASESOR o RECAUDOS_JEFE). Sin este permiso el botón no aparece y el campo es de solo lectura',
   },
   {
     code: PersonPermission.CAMBIO_ESTADO_CARTERA,
@@ -1135,7 +1135,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     module: Module.RECAUDOS,
     section: 'Asignación',
     name: 'Sub-ítem "Asignación" (sidebar Recaudos)',
-    description: 'Acceso a /dashboard/recaudos/asignacion — vista "Usuarios Asignados" filtrada por rol del usuario logueado (RECAUDOS_JEFE ve todos los titulares con gestor asignado; RECAUDO_ASIST ve sólo los suyos; SUPER_ADMIN/ADMIN ven todos)',
+    description: 'Acceso a /dashboard/recaudos/asignacion — vista "Usuarios Asignados" filtrada por rol del usuario logueado (RECAUDOS_JEFE ve todos los titulares con gestor asignado; RECAUDOS_ASESOR ve sólo los suyos; SUPER_ADMIN/ADMIN ven todos)',
   },
   {
     code: RecaudosPermission.ASIGNACION_EXPORTAR,
@@ -1143,6 +1143,34 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     section: 'Asignación',
     name: 'Botón "Exportar Excel" en Asignación',
     description: 'Permite descargar a Excel la tabla de titulares asignados. SUPER_ADMIN y ADMIN siempre pueden; otros roles requieren este permiso explícito',
+  },
+  {
+    code: RecaudosPermission.BANCOS_VER,
+    module: Module.RECAUDOS,
+    section: 'Bancos',
+    name: 'Sub-ítem "Bancos" (sidebar Recaudos)',
+    description: 'Acceso a /dashboard/recaudos/bancos — misma consulta del Centro de Validación pero filtrada/agrupada por Medio de Pago',
+  },
+  {
+    code: RecaudosPermission.APROBACIONES_VER,
+    module: Module.RECAUDOS,
+    section: 'Aprobaciones',
+    name: 'Sub-ítem "Aprobaciones" (sidebar Recaudos)',
+    description: 'Acceso a /dashboard/recaudos/aprobaciones — lista de titulares aprobados activos para asignar gestor de recaudo',
+  },
+  {
+    code: RecaudosPermission.APROBACIONES_ASIGNAR,
+    module: Module.RECAUDOS,
+    section: 'Aprobaciones',
+    name: 'Asignación masiva de gestor en Aprobaciones',
+    description: 'Permite asignar masivamente un ejecutivo de recaudo (gestorRecaudo) a los contratos seleccionados en Aprobaciones',
+  },
+  {
+    code: RecaudosPermission.APROBACION_MASIVA,
+    module: Module.RECAUDOS,
+    section: 'Gestión',
+    name: 'Aprobación masiva de pagos e inscripciones',
+    description: 'Habilita las casillas de selección + botón "Aprobar seleccionados" para validar pagos e inscripciones EN BLOQUE en el Centro de Validación (Gestión / Bancos)',
   },
 ];
 

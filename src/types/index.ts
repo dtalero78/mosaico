@@ -100,7 +100,7 @@ export interface Person {
   // Documents
   documentacion?: Array<string | { url: string; nombre: string; tipo?: string; fechaSubida?: string }>
 
-  // Collection executive (USUARIOS_ROLES._id with rol RECAUDO_ASIST or RECAUDOS_JEFE)
+  // Collection executive (USUARIOS_ROLES._id with rol RECAUDOS_ASESOR or RECAUDOS_JEFE)
   gestorRecaudo?: string | null
 
   // Marca manual de recaudo (alimentada vía botón "Opcional" en PersonFinancial).

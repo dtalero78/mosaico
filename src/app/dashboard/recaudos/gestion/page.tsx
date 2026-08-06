@@ -44,9 +44,9 @@ interface DisplayUser {
   rol: string
 }
 
-const DISPLAY_ROLES = ['RECAUDO_ASIST', 'RECAUDOS_JEFE', 'COMERCIAL', 'SUPER_ADMIN', 'ADMIN']
+const DISPLAY_ROLES = ['RECAUDOS_ASESOR', 'RECAUDOS_JEFE', 'COMERCIAL', 'SUPER_ADMIN', 'ADMIN']
 const ROLE_LABEL: Record<string, string> = {
-  RECAUDO_ASIST: 'Asistente',
+  RECAUDOS_ASESOR: 'Asesor',
   RECAUDOS_JEFE: 'Jefe',
   COMERCIAL: 'Comercial',
   SUPER_ADMIN: 'Admin',
@@ -280,7 +280,7 @@ export default function GestionRecaudosPage() {
               >
                 <option value="">Todos</option>
                 {displayUsers
-                  .filter(u => u.rol === 'RECAUDO_ASIST' || u.rol === 'RECAUDOS_JEFE')
+                  .filter(u => u.rol === 'RECAUDOS_ASESOR' || u.rol === 'RECAUDOS_JEFE')
                   .map(u => (
                     <option key={u._id} value={u._id}>
                       {u.nombre} · {ROLE_LABEL[u.rol] || u.rol}

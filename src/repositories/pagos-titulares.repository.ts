@@ -2,7 +2,7 @@
  * PagosTitulares Repository
  *
  * SQL for the PAGOS_TITULARES table — one row per payment registered against
- * a TITULAR. Validated by RECAUDOS_JEFE/RECAUDO_ASIST before being considered
+ * a TITULAR. Validated by RECAUDOS_JEFE/RECAUDOS_ASESOR before being considered
  * final.
  *
  * Schema lives in scripts/create-pagos-titulares-table.js (CREATE TABLE IF
