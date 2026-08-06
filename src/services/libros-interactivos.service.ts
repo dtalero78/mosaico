@@ -97,26 +97,37 @@ class LibrosInteractivosServiceClass {
    * Resuelve binding + libro del nivel en 1 query con cache.
    * Devuelve null si el nivel no tiene libro o el libro está inactivo.
    */
-  private async resolveNivelLibro(nivelCode: string): Promise<NivelLibroResolved | null> {
-    const cached = getNivelCached(nivelCode);
+  private async resolveNivelLibro(nivelCode: string, modulo?: string | null): Promise<NivelLibroResolved | null> {
+    const cacheKey = modulo ? `${nivelCode}::${modulo}` : nivelCode;
+    const cached = getNivelCached(cacheKey);
     if (cached !== undefined) return cached;
 
     let value: NivelLibroResolved | null = null;
-    // 1) Binding por rangos en NIVELES (modelo LGS: BN1..F3 → BEGINNER con rango).
-    const row = await NivelLibroBindingRepository.findNivelWithLibro(nivelCode);
-    if (row && row.libro) {
-      value = row;
-    } else {
-      // 2) MOSAICO: un libro por CURSO, sin binding de rangos. El código recibido
-      //    es el curso (YOJI, OKINA, …) y coincide con LIBROS_INTERACTIVOS.codigo
-      //    → se sirve el libro completo (rango 1..totalPaginas).
-      const libro = await LibrosInteractivosRepository.findByCodigo(nivelCode);
-      if (libro) {
-        value = { nivelCode, libroPaginaInicio: null, libroPaginaFin: null, libro };
+
+    // 0) MOSAICO con módulo: rango del MÓDULO del alumno scopeado por curso
+    //    (nivelCode = curso YOJI/OKINA/…, modulo = "Modulo 02"). Si el módulo tiene
+    //    binding con rango → se sirve SOLO ese rango de páginas.
+    if (modulo) {
+      const row = await NivelLibroBindingRepository.findNivelWithLibroByCurso(nivelCode, modulo);
+      if (row && row.libro) value = row;
+    }
+
+    if (!value) {
+      // 1) Binding por rangos en NIVELES (modelo LGS: BN1..F3 → BEGINNER con rango).
+      const row = await NivelLibroBindingRepository.findNivelWithLibro(nivelCode);
+      if (row && row.libro) {
+        value = row;
+      } else {
+        // 2) MOSAICO sin binding de rangos: un libro por CURSO. El código recibido
+        //    es el curso y coincide con LIBROS_INTERACTIVOS.codigo → libro completo.
+        const libro = await LibrosInteractivosRepository.findByCodigo(nivelCode);
+        if (libro) {
+          value = { nivelCode, libroPaginaInicio: null, libroPaginaFin: null, libro };
+        }
       }
     }
 
-    setNivelCached(nivelCode, value);
+    setNivelCached(cacheKey, value);
     return value;
   }
 
@@ -124,8 +135,8 @@ class LibrosInteractivosServiceClass {
    * Resuelve la metadata que necesita el visor para un nivel dado.
    * Lanza NotFoundError si el nivel no tiene libro asociado o el libro no existe.
    */
-  async getMetadataForNivel(nivelCode: string): Promise<VisorMetadata> {
-    const resolved = await this.resolveNivelLibro(nivelCode);
+  async getMetadataForNivel(nivelCode: string, modulo?: string | null): Promise<VisorMetadata> {
+    const resolved = await this.resolveNivelLibro(nivelCode, modulo);
     if (!resolved || !resolved.libro || !resolved.libro.activo) {
       throw new NotFoundError('LibroInteractivo', `nivel=${nivelCode}`);
     }
@@ -169,8 +180,8 @@ class LibrosInteractivosServiceClass {
    * Presigned URL de la imagen de una página LOCAL del nivel.
    * Usa el resolver cacheado (cero queries en cache-hit).
    */
-  async getPagePresignedUrl(nivelCode: string, paginaLocal: number): Promise<string> {
-    const resolved = await this.resolveNivelLibro(nivelCode);
+  async getPagePresignedUrl(nivelCode: string, paginaLocal: number, modulo?: string | null): Promise<string> {
+    const resolved = await this.resolveNivelLibro(nivelCode, modulo);
     if (!resolved || !resolved.libro || !resolved.libro.activo) {
       throw new NotFoundError('LibroInteractivo', `nivel=${nivelCode}`);
     }
@@ -196,8 +207,9 @@ class LibrosInteractivosServiceClass {
   async getAudiosForPage(
     nivelCode: string,
     paginaLocal: number,
+    modulo?: string | null,
   ): Promise<Array<{ idx: number; titulo: string | null; url: string }>> {
-    const resolved = await this.resolveNivelLibro(nivelCode);
+    const resolved = await this.resolveNivelLibro(nivelCode, modulo);
     if (!resolved || !resolved.libro || !resolved.libro.activo) return [];
 
     const libro = resolved.libro;

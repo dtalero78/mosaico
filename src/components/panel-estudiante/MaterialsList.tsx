@@ -20,17 +20,20 @@ export default function MaterialsList({ data, isLoading }: MaterialsListProps) {
   const materials = data?.materials || []
   const nivel = data?.nivel || ''
   const nivelNormalizado = normalizeNivelCode(nivel)
-  // En MOSAICO el material interactivo es un LIBRO POR CURSO; se resuelve por el
-  // curso del alumno (YOJI, OKINA, …), no por su módulo (`nivel`).
+  // El material interactivo es un LIBRO POR CURSO; se resuelve por el curso del
+  // alumno (YOJI, OKINA, …) y se RECORTA al rango del módulo actual (`nivel`) para
+  // que el alumno solo vea las páginas de su módulo (no todo el libro).
   const cursoNormalizado = normalizeNivelCode(data?.curso || '')
+  const moduloActual = (nivel || '').trim()   // ej. "Modulo 02" (sin uppercasear)
+  const moduloQs = moduloActual ? `?modulo=${encodeURIComponent(moduloActual)}` : ''
 
   // ¿El curso tiene material interactivo (libro con páginas) cargado?
   // React Query con staleTime 5 min — evita queries innecesarias en navegación
   // interna y re-renders del componente.
   const { data: libroData } = useQuery(
-    ['libros-interactivos-availability', cursoNormalizado],
+    ['libros-interactivos-availability', cursoNormalizado, moduloActual],
     () =>
-      fetch(`/api/postgres/libros-interactivos/${encodeURIComponent(cursoNormalizado)}`)
+      fetch(`/api/postgres/libros-interactivos/${encodeURIComponent(cursoNormalizado)}${moduloQs}`)
         .then(r => r.json())
         .catch(() => ({ available: false })),
     {
@@ -83,7 +86,7 @@ export default function MaterialsList({ data, isLoading }: MaterialsListProps) {
       {/* Material interactivo del curso — si el libro tiene páginas cargadas */}
       {interactivoDisponible && (
         <a
-          href={`/panel-estudiante/material-interactivo/${encodeURIComponent(cursoNormalizado)}`}
+          href={`/panel-estudiante/material-interactivo/${encodeURIComponent(cursoNormalizado)}${moduloQs}`}
           className="flex items-center gap-3 p-3 mb-3 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors group border border-emerald-200"
         >
           <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center group-hover:bg-emerald-200">

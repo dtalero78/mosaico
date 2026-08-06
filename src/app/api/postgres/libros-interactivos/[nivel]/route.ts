@@ -14,12 +14,14 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { LibrosInteractivosService } from '@/services/libros-interactivos.service';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 
-export const GET = handlerWithAuth(async (_req, ctx) => {
+export const GET = handlerWithAuth(async (req, ctx) => {
   const nivel = decodeURIComponent(ctx.params.nivel || '').toUpperCase().trim();
   if (!nivel) return successResponse({ available: false });
+  // Módulo actual del alumno (opcional): recorta el libro al rango de ESE módulo.
+  const modulo = new URL(req.url).searchParams.get('modulo')?.trim() || null;
 
   try {
-    const metadata = await LibrosInteractivosService.getMetadataForNivel(nivel);
+    const metadata = await LibrosInteractivosService.getMetadataForNivel(nivel, modulo);
     return successResponse({ available: true, ...metadata });
   } catch (err: any) {
     // Sin libro asignado o sin páginas cargadas todavía → la feature simplemente

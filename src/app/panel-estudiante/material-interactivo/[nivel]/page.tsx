@@ -56,7 +56,14 @@ export default function MaterialInteractivoPage() {
   // Cuando preview=1 + admin → bypass del feature flag global.
   const isPreview = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('preview') === '1'
-  const previewQsFirst = isPreview ? '?preview=1' : ''
+  // Módulo actual del alumno: recorta el libro a las páginas de ESE módulo.
+  const modulo = typeof window !== 'undefined'
+    ? (new URLSearchParams(window.location.search).get('modulo') || '')
+    : ''
+  // QS para metadata (incluye preview + modulo) y sufijo para page/audio (que ya llevan ?n=).
+  const metaParams = [isPreview ? 'preview=1' : '', modulo ? `modulo=${encodeURIComponent(modulo)}` : ''].filter(Boolean)
+  const previewQsFirst = metaParams.length ? `?${metaParams.join('&')}` : ''
+  const moduloSuffix = modulo ? `&modulo=${encodeURIComponent(modulo)}` : ''
 
   const [meta, setMeta] = useState<Metadata | null>(null)
   const [page, setPage] = useState(1)
@@ -118,7 +125,7 @@ export default function MaterialInteractivoPage() {
       for (const p of targetPages) {
         if (imageCache[p]) continue
         try {
-          const r = await fetch(`/api/postgres/libros-interactivos/${encodeURIComponent(nivel)}/page?n=${p}`)
+          const r = await fetch(`/api/postgres/libros-interactivos/${encodeURIComponent(nivel)}/page?n=${p}${moduloSuffix}`)
           const j = await r.json()
           if (cancelled) return
           if (j?.success && j.url) {
@@ -138,7 +145,7 @@ export default function MaterialInteractivoPage() {
       return
     }
     let cancelled = false
-    fetch(`/api/postgres/libros-interactivos/${encodeURIComponent(nivel)}/audio?n=${page}`)
+    fetch(`/api/postgres/libros-interactivos/${encodeURIComponent(nivel)}/audio?n=${page}${moduloSuffix}`)
       .then(r => r.json())
       .then(j => {
         if (cancelled) return

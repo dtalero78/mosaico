@@ -10,11 +10,13 @@ import { ValidationError } from '@/lib/errors';
 
 export const GET = handlerWithAuth(async (req, ctx) => {
   const nivel = decodeURIComponent(ctx.params.nivel || '').toUpperCase().trim();
-  const nStr = new URL(req.url).searchParams.get('n');
+  const sp = new URL(req.url).searchParams;
+  const nStr = sp.get('n');
+  const modulo = sp.get('modulo')?.trim() || null;
   const n = nStr ? parseInt(nStr, 10) : NaN;
   if (!nivel || !Number.isInteger(n) || n < 1) {
     throw new ValidationError('Parámetros inválidos (nivel + n requeridos)');
   }
-  const url = await LibrosInteractivosService.getPagePresignedUrl(nivel, n);
+  const url = await LibrosInteractivosService.getPagePresignedUrl(nivel, n, modulo);
   return successResponse({ url, pagina: n });
 });
