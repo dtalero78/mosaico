@@ -451,6 +451,9 @@ export default function SesionPage() {
               ),
               material: (
                 <SessionMaterialTab
+                  step={evento.sesionLeccion || evento.step || ''}
+                  nivel={evento.sesionModulo || evento.nivel || ''}
+                  curso={evento.sesionModulo ? (evento.nivel || undefined) : undefined}
                   eventoNombre={evento.nombreEvento}
                 />
               ),

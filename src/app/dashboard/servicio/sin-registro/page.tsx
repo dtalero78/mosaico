@@ -354,12 +354,12 @@ export default function SinRegistroPage() {
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchQuery ? 'No se encontraron resultados' : 'No hay beneficiarios sin registro'}
+              {searchQuery ? 'No se encontraron resultados' : 'No hay beneficiarios pendientes'}
             </h3>
             <p className="text-gray-500">
               {searchQuery
                 ? 'Intenta ajustar los criterios de búsqueda'
-                : '¡Excelente! Todos los beneficiarios tienen registro académico asignado.'
+                : '¡Excelente! Todos los beneficiarios completaron su perfil en /nuevo-usuario.'
               }
             </p>
           </div>

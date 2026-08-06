@@ -10,30 +10,44 @@ interface Material {
 }
 
 interface SessionMaterialTabProps {
-  eventoNombre: string
+  /** Lección (step real) del evento — ej. "Leccion 01". Preferido. */
+  step?: string
+  /** Módulo (code) del evento — ej. "Modulo 01". */
+  nivel?: string
+  /** Curso — ej. "IMPULSA" (el code/módulo se repite entre cursos). */
+  curso?: string
+  /** Nombre del evento (fallback legacy: en cursos viejos el step iba aquí). */
+  eventoNombre?: string
 }
 
-export default function SessionMaterialTab({ eventoNombre }: SessionMaterialTabProps) {
+export default function SessionMaterialTab({ step, nivel, curso, eventoNombre }: SessionMaterialTabProps) {
   const [materials, setMaterials] = useState<Material[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Step efectivo: la lección del evento; fallback al nombre del evento (legacy).
+  const effStep = (step && step.trim()) ? step.trim() : (eventoNombre || '')
+
   useEffect(() => {
     loadMaterials()
-  }, [eventoNombre])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effStep, nivel, curso])
 
   const loadMaterials = async () => {
-    if (!eventoNombre) {
-      console.warn('⚠️ No hay step definido para cargar material')
+    if (!effStep) {
+      console.warn('⚠️ No hay step/lección definido para cargar material')
       return
     }
 
     try {
       setLoading(true)
       setError(null)
-      console.log('📚 Cargando material para step:', eventoNombre)
+      const params = new URLSearchParams({ step: effStep, tipo: 'usuario' })
+      if (nivel) params.set('nivel', nivel)
+      if (curso) params.set('curso', curso)
+      console.log('📚 Cargando libros para lección:', effStep, { nivel, curso })
 
-      const response = await fetch(`/api/postgres/materials/nivel?step=${encodeURIComponent(eventoNombre)}&tipo=usuario`)
+      const response = await fetch(`/api/postgres/materials/nivel?${params.toString()}`)
 
       if (!response.ok) throw new Error('Error al cargar material')
 
@@ -91,7 +105,7 @@ export default function SessionMaterialTab({ eventoNombre }: SessionMaterialTabP
         <div className="text-center">
           <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
           <p className="text-gray-600">No hay material disponible para este step</p>
-          <p className="text-sm text-gray-500 mt-2">Step: {eventoNombre}</p>
+          <p className="text-sm text-gray-500 mt-2">Step: {effStep}</p>
         </div>
       </div>
     )
@@ -102,7 +116,7 @@ export default function SessionMaterialTab({ eventoNombre }: SessionMaterialTabP
       <div className="bg-emerald-600 px-6 py-4">
         <div className="flex items-center gap-3">
           <DocumentTextIcon className="h-6 w-6 text-white" />
-          <h3 className="text-lg font-bold text-white">Material del Step - {eventoNombre}</h3>
+          <h3 className="text-lg font-bold text-white">Material del Step - {effStep}</h3>
           <span className="ml-auto px-3 py-1 bg-white text-emerald-600 rounded-full text-sm font-semibold">
             {materials.length} {materials.length === 1 ? 'archivo' : 'archivos'}
           </span>
