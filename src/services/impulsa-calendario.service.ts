@@ -21,6 +21,34 @@ const nombreEventoDe = (ev: EventoImpulsa, curso: CursoImpulsa): string =>
   : 'Evaluación';
 
 /**
+ * Asigna `sesionModulo`/`sesionLeccion` a los eventos IMPULSA de un curso,
+ * mapeando por TIPO en secuencia contra las lecciones de NIVELES (por orden):
+ *   SESSION → "Modulo NN" · ENTRENAMIENTO → "Entrenamiento" · EVALUACION → "Evaluación".
+ * Así la pestaña Material y el display resuelven la lección de cada sesión.
+ */
+async function asignarLeccionesImpulsa(cursoCampaignId: string): Promise<void> {
+  const catLec = (code: string) => /entren/i.test(code) ? 'ENTREN' : /evaluac/i.test(code) ? 'EVALUAC' : 'MODULO';
+  const catEv = (tipo: string) => {
+    const t = String(tipo || '').toUpperCase();
+    return t === 'ENTRENAMIENTO' ? 'ENTREN' : t === 'EVALUACION' ? 'EVALUAC' : (t === 'SESSION' || t === 'SESION') ? 'MODULO' : null;
+  };
+  const nv = (await query<{ code: string; step: string }>(
+    `SELECT "code","step" FROM "NIVELES" WHERE UPPER("curso")='IMPULSA' ORDER BY "orden" ASC`
+  )).rows;
+  const lecciones: Record<string, { code: string; step: string }[]> = { MODULO: [], ENTREN: [], EVALUAC: [] };
+  for (const l of nv) lecciones[catLec(l.code)].push(l);
+  const ev = (await query<{ _id: string; tipo: string }>(
+    `SELECT "_id","tipo" FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 ORDER BY "dia" ASC, "_id" ASC`, [cursoCampaignId]
+  )).rows;
+  const cursor: Record<string, number> = { MODULO: 0, ENTREN: 0, EVALUAC: 0 };
+  for (const e of ev) {
+    const cat = catEv(e.tipo); if (!cat) continue;
+    const lec = lecciones[cat][cursor[cat]++]; if (!lec) continue;
+    await query(`UPDATE "CALENDARIO" SET "sesionModulo"=$2,"sesionLeccion"=$3 WHERE "_id"=$1`, [e._id, lec.code, lec.step]);
+  }
+}
+
+/**
  * Materializa el calendario IMPULSA en CALENDARIO (borra los eventos previos del
  * curso y reinserta) y guarda la config en IMPULSA_CURSO_CONFIG. El instante UTC de
  * cada evento se calcula por fecha con `('<fecha> <hora>'::timestamp AT TIME ZONE
@@ -71,6 +99,9 @@ export async function materializarCalendarioImpulsa(
       );
     });
     await query(`INSERT INTO "CALENDARIO" (${cols}) VALUES ${rows.join(', ')}`, params);
+    // Asigna módulo/lección a cada evento (por tipo, en secuencia) para que la
+    // pestaña Material y el display los resuelvan. Best-effort.
+    await asignarLeccionesImpulsa(curso._id).catch((e) => console.warn('asignarLeccionesImpulsa:', e?.message));
   }
 
   // Persistir la config (upsert por curso).
