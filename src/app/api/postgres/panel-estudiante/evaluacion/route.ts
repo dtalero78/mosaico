@@ -27,7 +27,11 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
   //  ?tipo=evaluacion   → sólo módulos "Evaluación NN"
   //  ?tipo=entrenamiento→ sólo módulos "Entrenamiento NN"
   //  (sin tipo)         → ambos (comportamiento combinado histórico).
+  //  ?tipo=leccion → cuestionarios de la LECCIÓN ACTUAL (curso+módulo+lección),
+  //                  sin importar la categoría del módulo (IMPULSA: toda lección
+  //                  puede traer cuestionarios). Siempre reached=true.
   const tipo = (new URL(_req.url).searchParams.get('tipo') || '').toLowerCase()
+  const esLeccion = tipo === 'leccion'
   const catRegex = tipo === 'evaluacion' ? /evaluac/i : tipo === 'entrenamiento' ? /entren/i : /evaluac|entren/i
   const catSql = tipo === 'evaluacion' ? `"code" ILIKE '%evaluac%'`
     : tipo === 'entrenamiento' ? `"code" ILIKE '%entren%'`
@@ -41,18 +45,28 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
     [curso, nivel, step]
   )
   const currentOrden = cur?.orden ?? null
-  const actualEsEval = catRegex.test(nivel)
+  const actualEsEval = esLeccion ? true : catRegex.test(nivel)
 
-  const evals = (await query(
-    `SELECT "code","step","orden","evaluacionModo","evaluacionMinutos","preguntasManual","cuestionarios"
-       FROM "NIVELES"
-      WHERE UPPER("curso")=UPPER($1) AND ${catSql}
-      ORDER BY "orden" ASC`,
-    [curso]
-  )).rows as any[]
+  const evals = (esLeccion
+    ? await query(
+        `SELECT "code","step","orden","evaluacionModo","evaluacionMinutos","preguntasManual","cuestionarios"
+           FROM "NIVELES"
+          WHERE UPPER("curso")=UPPER($1) AND ${norm('"code"')}=${norm('$2')} AND ${norm('"step"')}=${norm('$3')}
+          LIMIT 1`,
+        [curso, nivel, step]
+      )
+    : await query(
+        `SELECT "code","step","orden","evaluacionModo","evaluacionMinutos","preguntasManual","cuestionarios"
+           FROM "NIVELES"
+          WHERE UPPER("curso")=UPPER($1) AND ${catSql}
+          ORDER BY "orden" ASC`,
+        [curso]
+      )).rows as any[]
 
   if (actualEsEval) {
-    const actual = evals.find(e => e.code === nivel && e.step === step) || evals.find(e => e.code === nivel)
+    const actual = esLeccion
+      ? (evals[0] || null)
+      : (evals.find(e => e.code === nivel && e.step === step) || evals.find(e => e.code === nivel))
     const cuestionarios = deriveCuestionarios(actual || {})
     const tieneEvaluacion = cuestionarios.length > 0
 

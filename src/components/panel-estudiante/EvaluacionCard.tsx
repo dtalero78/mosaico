@@ -15,12 +15,22 @@ interface Cuest {
 const ORD = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava']
 const ordinal = (i: number) => ORD[i] || `${i + 1}ª`
 
+// Paleta por caja (strings literales para que Tailwind las detecte).
+type TonoKey = 'orange' | 'sky' | 'rose' | 'violet'
+const TONOS: Record<TonoKey, { card: string; head: string; icon: string; accent: string }> = {
+  orange: { card: 'bg-orange-50 border-orange-100', head: 'text-orange-800', icon: 'text-orange-600', accent: 'text-orange-700' },
+  sky:    { card: 'bg-sky-50 border-sky-100',       head: 'text-sky-800',    icon: 'text-sky-600',    accent: 'text-sky-700' },
+  rose:   { card: 'bg-rose-50 border-rose-100',     head: 'text-rose-800',   icon: 'text-rose-600',   accent: 'text-rose-700' },
+  violet: { card: 'bg-violet-50 border-violet-100', head: 'text-violet-800', icon: 'text-violet-600', accent: 'text-violet-700' },
+}
+
 /**
  * Card "Entrenamientos y Evaluaciones". Al llegar el alumno a una lección de
  * Evaluación/Entrenamiento presenta sus cuestionarios EN ORDEN: cada cuestionario
  * se presenta pregunta por pregunta, con hasta 3 intentos y aprobación ≥60%.
  */
-export default function EvaluacionCard({ tipo, titulo }: { tipo?: 'evaluacion' | 'entrenamiento'; titulo?: string } = {}) {
+export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo?: 'evaluacion' | 'entrenamiento' | 'leccion'; titulo?: string; tono?: TonoKey } = {}) {
+  const T = TONOS[tono] || TONOS.orange
   const qs = tipo ? `?tipo=${tipo}` : ''
   const { data, refetch } = useQuery(
     ['evaluacion-estado', tipo || 'all'],
@@ -91,35 +101,39 @@ export default function EvaluacionCard({ tipo, titulo }: { tipo?: 'evaluacion' |
   const idxActivo = idxDe(activo)
 
   return (
-    <div className="bg-orange-50 border border-orange-100 rounded-2xl p-5">
+    <div className={`${T.card} border rounded-2xl p-4`}>
       <div className="flex items-center gap-2 mb-1">
-        <ClipboardDocumentCheckIcon className="h-5 w-5 text-orange-600" />
-        <h3 className="text-sm font-bold text-orange-800 uppercase tracking-wide">{titulo || 'Entrenamientos y Evaluaciones'}</h3>
+        <ClipboardDocumentCheckIcon className={`h-5 w-5 ${T.icon}`} />
+        <h3 className={`text-sm font-bold ${T.head} uppercase tracking-wide`}>{titulo || 'Entrenamientos y Evaluaciones'}</h3>
       </div>
 
       {!reached ? (
         d.evalCode ? (
-          <>
-            <p className="text-sm text-gray-600">Siguiente:</p>
-            <p className="text-lg font-bold text-orange-700 mt-0.5">{d.evalCode}</p>
+          // Bloque compacto: "Siguiente <code>" en una línea + una línea de detalle.
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-[11px] text-gray-500 uppercase tracking-wide">Siguiente:</span>
+            <span className={`text-base font-bold ${T.accent}`}>{d.evalCode}</span>
             {Number(d.faltanLecciones) > 0 ? (
-              <p className="text-sm text-gray-700 mt-2">Te faltan <strong className="text-orange-700">{d.faltanLecciones}</strong> lección(es) para llegar.</p>
+              <span className="text-xs text-gray-600 w-full">Te faltan <strong className={T.accent}>{d.faltanLecciones}</strong> lección(es); se habilitará al avanzar.</span>
             ) : d.faltanLecciones === 0 ? (
-              <p className="text-sm text-emerald-700 font-medium mt-2">¡Estás a un paso! Es tu próxima lección.</p>
-            ) : null}
-            <p className="text-xs text-gray-500 mt-2">Se habilitará cuando avances a esa lección.</p>
-          </>
+              <span className="text-xs text-emerald-700 font-medium w-full">¡Estás a un paso! Es tu próxima lección.</span>
+            ) : (
+              <span className="text-xs text-gray-500 w-full">Se habilitará cuando avances a esa lección.</span>
+            )}
+          </div>
         ) : (
-          <p className="text-sm text-gray-500 mt-1">No tienes {tipo === 'entrenamiento' ? 'un entrenamiento próximo' : 'una evaluación próxima'}.</p>
+          <p className="text-sm text-gray-500 mt-1">No tienes {tipo === 'entrenamiento' ? 'un entrenamiento próximo' : tipo === 'leccion' ? 'cuestionarios en esta lección' : 'una evaluación próxima'}.</p>
         )
       ) : !d.tieneEvaluacion ? (
-        <p className="text-sm text-gray-500 mt-1">La evaluación de esta lección aún no está disponible.</p>
+        <p className="text-sm text-gray-500 mt-1">{tipo === 'leccion' ? 'Esta lección aún no tiene cuestionarios.' : 'La evaluación de esta lección aún no está disponible.'}</p>
       ) : (
         <>
           <p className="text-sm text-gray-700">
-            Has avanzado a <strong>{label}</strong>. {total > 1
-              ? <>Debes presentar los <strong>{total} cuestionarios</strong> en orden.</>
-              : <>Sigue las instrucciones de tu guía para realizar la evaluación.</>}
+            {tipo === 'leccion'
+              ? (total > 1 ? <>Esta lección tiene <strong>{total} cuestionarios</strong>. Preséntalos en orden.</> : <>Presenta el cuestionario de esta lección.</>)
+              : (total > 1
+                ? <>Has avanzado a <strong>{label}</strong>. Debes presentar los <strong>{total} cuestionarios</strong> en orden.</>
+                : <>Has avanzado a <strong>{label}</strong>. Sigue las instrucciones de tu guía para realizar la evaluación.</>)}
           </p>
           {d.completa && <p className="text-xs text-emerald-700 font-medium mt-1">✓ Completaste la evaluación.</p>}
           {total > 1 && !d.completa && <p className="text-xs text-gray-500 mt-1">Progreso: {hechos}/{total}</p>}

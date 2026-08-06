@@ -131,6 +131,9 @@ function PanelEstudianteContent() {
   const cursoBg = CURSO_BG[(profile?.tipoCurso || '').toUpperCase()] || 'bg-gray-50 border border-gray-100'
   // IMPULSA opera distinto: sin talleres/olimpiadas/actividades/recursos ni nivelaciones.
   const esImpulsa = (profile?.tipoCurso || '').toUpperCase() === 'IMPULSA'
+  // Título de la caja "Lección ##" (sólo IMPULSA): número de la lección actual.
+  const leccionNum = (profile?.step || '').match(/\d+/)?.[0]
+  const leccionTitulo = leccionNum ? `Lección ${leccionNum}` : 'Lección actual'
 
   // Derive next class info for student card
   const nextClass = useMemo(() => {
@@ -513,11 +516,14 @@ function PanelEstudianteContent() {
               ) : null}
             </div>
 
-            {/* Cajas apiladas a ancho completo, en orden Entrenamientos → Evaluaciones
-                → Nivelación (misma presentación que la caja de Nivelación). Aplica a
-                TODOS los cursos, IMPULSA incluido (IMPULSA no muestra Nivelación). */}
-            <EvaluacionCard tipo="entrenamiento" titulo="Entrenamientos" />
-            <EvaluacionCard tipo="evaluacion" titulo="Evaluaciones" />
+            {/* Cajas apiladas a ancho completo (cada una con su color): en IMPULSA va
+                primero "Lección ##" (cuestionarios de la lección actual, oculta en
+                cursos MOSAICO), luego Entrenamientos → Evaluaciones → Nivelación. */}
+            {esImpulsa && (
+              <EvaluacionCard tipo="leccion" titulo={leccionTitulo} tono="violet" />
+            )}
+            <EvaluacionCard tipo="entrenamiento" titulo="Entrenamientos" tono="sky" />
+            <EvaluacionCard tipo="evaluacion" titulo="Evaluaciones" tono="rose" />
             {/* Nivelación Programada (ancho completo). Sólo cursos MOSAICO;
                 IMPULSA no tiene nivelaciones. Se habilita cuando el admin la aprueba
                 y la agenda (booking tipo=NIVELACION). */}
