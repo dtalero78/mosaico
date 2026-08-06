@@ -375,6 +375,28 @@ export default function ContenidoCursoPage() {
   const [loadingLec, setLoadingLec] = useState(false)
   const [savingMod, setSavingMod] = useState(false)
 
+  // Switch global: mostrar/ocultar la caja "Lección ##" en el panel del estudiante (IMPULSA).
+  const [leccionCardVisible, setLeccionCardVisible] = useState(true)
+  const [savingFlag, setSavingFlag] = useState(false)
+  useEffect(() => {
+    fetch('/api/postgres/config/panel-leccion', { cache: 'no-store' })
+      .then((r) => r.json()).then((d) => setLeccionCardVisible(d?.visible !== false)).catch(() => {})
+  }, [])
+  const toggleLeccionCard = async () => {
+    const nuevo = !leccionCardVisible
+    setLeccionCardVisible(nuevo); setSavingFlag(true)
+    try {
+      const r = await fetch('/api/postgres/config/panel-leccion', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visible: nuevo }),
+      }).then((x) => x.json())
+      if (r?.error) throw new Error(r.error)
+      toast.success(`Caja "Lección" ${nuevo ? 'visible' : 'oculta'} en el panel del estudiante`)
+    } catch (e: any) {
+      setLeccionCardVisible(!nuevo); toast.error(e?.message || 'No se pudo guardar')
+    } finally { setSavingFlag(false) }
+  }
+
   // Curso → módulos
   useEffect(() => {
     if (!curso) { setModulos([]); setCode(''); setLecciones([]); return }
@@ -430,9 +452,23 @@ export default function ContenidoCursoPage() {
     <PermissionGuard permission={AcademicoPermission.ACTUALIZAR_MATERIAL} showDefaultMessage>
       <div className="p-6 max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Gestión de Contenido</h1>
-        <p className="text-gray-500 mb-6">
+        <p className="text-gray-500 mb-4">
           Edita la descripción del módulo y el contenido/temario de cada lección. El contenido alimenta el quiz de actividades complementarias.
         </p>
+
+        {/* Switch global: la caja "Lección ##" (cuestionarios de la lección actual) en el panel del estudiante — solo IMPULSA. */}
+        <div className="flex items-center justify-between gap-3 mb-6 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
+          <div className="text-sm">
+            <div className="font-semibold text-violet-800">Caja «Lección» en el panel del estudiante</div>
+            <div className="text-xs text-violet-700/80">Muestra u oculta, para los alumnos de IMPULSA, la caja con los cuestionarios de su lección actual.</div>
+          </div>
+          <button type="button" onClick={toggleLeccionCard} disabled={savingFlag}
+            role="switch" aria-checked={leccionCardVisible}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${leccionCardVisible ? 'bg-violet-600' : 'bg-gray-300'}`}
+            title={leccionCardVisible ? 'Visible — clic para ocultar' : 'Oculta — clic para mostrar'}>
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${leccionCardVisible ? 'translate-x-5' : 'translate-x-1'}`} />
+          </button>
+        </div>
 
         <div className="flex flex-wrap gap-4 mb-6">
           <div>

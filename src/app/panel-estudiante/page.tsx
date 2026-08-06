@@ -80,6 +80,14 @@ function PanelEstudianteContent() {
   const tickerMessage = tickerQuery.data?.message ?? '📢 Usuarios Ecuador 🇪🇨 y Chile 🇨🇱: viernes 3 y sábado 4 de abril no habra sesiones por Semana Santa ✝️. ¡Disfruten su descanso! 🌿✨ | Usuarios Colombia 🇨🇴: sábado 4 de abril habrán sesiones normales 👍'
   const tickerColor = tickerQuery.data?.color ?? '#ffffff'
 
+  // Visibilidad (admin) de la caja "Lección ##" en el panel (IMPULSA). Default visible.
+  const leccionVisibleQuery = useQuery(
+    'panel-leccion-visible',
+    () => fetch('/api/postgres/config/panel-leccion').then(r => r.json()).catch(() => ({ visible: true })),
+    { staleTime: 60 * 1000 }
+  )
+  const leccionVisible = leccionVisibleQuery.data?.visible !== false
+
   // Queries
   const meQuery = useStudentMe()
   const eventsQuery = useStudentEvents()
@@ -519,7 +527,7 @@ function PanelEstudianteContent() {
             {/* Cajas apiladas a ancho completo (cada una con su color): en IMPULSA va
                 primero "Lección ##" (cuestionarios de la lección actual, oculta en
                 cursos MOSAICO), luego Entrenamientos → Evaluaciones → Nivelación. */}
-            {esImpulsa && (
+            {esImpulsa && leccionVisible && (
               <EvaluacionCard tipo="leccion" titulo={leccionTitulo} tono="violet" />
             )}
             <EvaluacionCard tipo="entrenamiento" titulo="Entrenamientos" tono="sky" />
