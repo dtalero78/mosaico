@@ -8,10 +8,15 @@ import 'server-only';
  *  - el contrato queda **Rechazado, Retractado o Contrato nulo** (estados que viven en
  *    el `aprobacion` del TITULAR — el beneficiario solo tiene Aprobado/Pendiente), o
  *  - el beneficiario está en **OnHold** (`fechaOnHold` seteada): se conserva su
- *    campaña/curso/salón pero deja de ocupar cupo hasta que se restablezca.
+ *    campaña/curso/salón pero deja de ocupar cupo hasta que se restablezca, o
+ *  - el beneficiario fue **INACTIVADO por un admin** (botón "Inactivar" de la ficha →
+ *    `estadoInactivo=true` + `suspenddata.accion='INACTIVACION'`): normalmente porque
+ *    el usuario NO tomará el curso, así que su cupo se libera.
  *
- * NO se usa `estadoInactivo` para los cupos: un beneficiario Pendiente nace inactivo
- * (aún no aprobado) pero SÍ ocupa cupo.
+ * ⚠ NO se usa `estadoInactivo` a secas: un beneficiario **Pendiente nace inactivo**
+ * (aún no aprobado) pero SÍ ocupa cupo. Sólo libera cuando además hay `suspenddata`
+ * de INACTIVACION (la misma señal del badge "SUSPENDIDA"), lo que distingue "inactivado
+ * a propósito por un admin" de "recién creado y pendiente de aprobar".
  */
 
 /** Estados del contrato (TITULAR.aprobacion, normalizados) que LIBERAN el cupo. */
@@ -23,7 +28,9 @@ export const ESTADOS_LIBERAN_CUPO = ['rechazado', 'retractado', 'contrato nulo']
  * `alias` es el alias de la fila PEOPLE (beneficiario) en la query que lo invoca.
  */
 export function cupoOcupadoSql(alias: string): string {
-  return `(${alias}."fechaOnHold" IS NULL AND NOT EXISTS (
+  return `(${alias}."fechaOnHold" IS NULL
+    AND NOT (${alias}."estadoInactivo" IS TRUE AND COALESCE(${alias}."suspenddata"->>'accion', '') = 'INACTIVACION')
+    AND NOT EXISTS (
     SELECT 1 FROM "PEOPLE" t_cupo
      WHERE t_cupo."contrato" = ${alias}."contrato"
        AND t_cupo."tipoUsuario" = 'TITULAR'
