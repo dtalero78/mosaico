@@ -1,23 +1,21 @@
 'use client'
 
-import { XMarkIcon } from '@heroicons/react/24/outline'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-
-const CANCEL_DEADLINE_MINUTES = 60
 
 interface MyEventsSectionProps {
   events: any[]
   isLoading: boolean
-  onCancel: (bookingId: string) => void
-  isCancelling: boolean
+  // Props conservadas por compatibilidad con el padre; la cancelación de
+  // sesiones/talleres desde el panel del estudiante está DESHABILITADA para
+  // todos los cursos (se quitó la columna "Cancelar").
+  onCancel?: (bookingId: string) => void
+  isCancelling?: boolean
 }
 
 export default function MyEventsSection({
   events,
   isLoading,
-  onCancel,
-  isCancelling,
 }: MyEventsSectionProps) {
   if (isLoading) {
     return (
@@ -47,15 +45,11 @@ export default function MyEventsSection({
                 <th className="text-left py-2 px-2 text-xs font-semibold text-gray-500 uppercase">Fecha</th>
                 <th className="text-left py-2 px-2 text-xs font-semibold text-gray-500 uppercase">Evento</th>
                 <th className="text-left py-2 px-2 text-xs font-semibold text-gray-500 uppercase">Guía</th>
-                <th className="text-center py-2 px-2 text-xs font-semibold text-gray-500 uppercase w-16">Cancelar</th>
               </tr>
             </thead>
             <tbody>
               {upcomingEvents.map((evt: any) => {
                 const eventDate = new Date(evt.fechaEvento)
-                const now = new Date()
-                const minutesUntil = (eventDate.getTime() - now.getTime()) / (1000 * 60)
-                const canCancel = minutesUntil >= CANCEL_DEADLINE_MINUTES
 
                 return (
                   <tr key={evt._id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -72,20 +66,6 @@ export default function MyEventsSection({
                     </td>
                     <td className="py-2.5 px-2 text-gray-600">
                       {evt.advisorNombre || '---'}
-                    </td>
-                    <td className="py-2.5 px-2 text-center">
-                      {canCancel ? (
-                        <button
-                          onClick={() => onCancel(evt._id)}
-                          disabled={isCancelling}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                          title="Cancelar"
-                        >
-                          <XMarkIcon className="h-5 w-5" />
-                        </button>
-                      ) : (
-                        <span className="text-gray-300">-</span>
-                      )}
                     </td>
                   </tr>
                 )
