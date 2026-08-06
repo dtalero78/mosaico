@@ -513,12 +513,12 @@ function PanelEstudianteContent() {
               ) : null}
             </div>
 
-            {/* Fila 1 — Evaluaciones (izq) + Entrenamientos (der): para TODOS los cursos. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-              <EvaluacionCard tipo="evaluacion" titulo="Evaluaciones" />
-              <EvaluacionCard tipo="entrenamiento" titulo="Entrenamientos" />
-            </div>
-            {/* Fila 2 — Nivelación Programada (ancho completo). Sólo cursos MOSAICO;
+            {/* Cajas apiladas a ancho completo, en orden Entrenamientos → Evaluaciones
+                → Nivelación (misma presentación que la caja de Nivelación). Aplica a
+                TODOS los cursos, IMPULSA incluido (IMPULSA no muestra Nivelación). */}
+            <EvaluacionCard tipo="entrenamiento" titulo="Entrenamientos" />
+            <EvaluacionCard tipo="evaluacion" titulo="Evaluaciones" />
+            {/* Nivelación Programada (ancho completo). Sólo cursos MOSAICO;
                 IMPULSA no tiene nivelaciones. Se habilita cuando el admin la aprueba
                 y la agenda (booking tipo=NIVELACION). */}
             {!esImpulsa && (
