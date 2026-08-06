@@ -47,10 +47,12 @@ function LeccionEditor({
   const [imgOpen, setImgOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
 
-  // La casilla "Evaluación" sólo se habilita en módulos/lecciones de Evaluación o
+  // La casilla "Evaluación" se habilita en módulos/lecciones de Evaluación o
   // Entrenamiento. "evaluac" ya matchea "Evaluación" (el acento va después), así
-  // que basta con minúsculas.
-  const esEvaluacion = /evaluac|entrenamiento/.test(`${code} ${leccion.step}`.toLowerCase())
+  // que basta con minúsculas. En IMPULSA CUALQUIER lección puede ser Evaluación
+  // (aunque su módulo sea "Modulo NN"), a pedido.
+  const esImpulsa = String(curso || '').trim().toUpperCase() === 'IMPULSA'
+  const esEvaluacion = esImpulsa || /evaluac|entrenamiento/.test(`${code} ${leccion.step}`.toLowerCase())
   // Solo los módulos EVALUACIÓN admiten VARIOS cuestionarios; Entrenamiento sigue con uno.
   const esModuloEvaluacion = /evaluac/.test(code.toLowerCase())
 
