@@ -144,7 +144,7 @@ export default function ReporteAcademicoPage() {
           <div className="no-print flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Guía</label>
-              <select value={f.guia} onChange={e => setF({ ...f, guia: e.target.value })} disabled={(data?.guias?.length || 0) <= 1}
+              <select value={f.guia} onChange={e => { const n = { ...f, guia: e.target.value, curso: '', salon: '' }; setF(n); setApplied(n) }} disabled={(data?.guias?.length || 0) <= 1}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px] disabled:bg-gray-100">
                 {(data?.guias?.length || 0) !== 1 && <option value="">Todas</option>}
                 {(data?.guias || []).map((g: any) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
@@ -152,13 +152,13 @@ export default function ReporteAcademicoPage() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Curso</label>
-              <select value={f.curso} onChange={e => setF({ ...f, curso: e.target.value, salon: '' })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[120px]">
+              <select value={f.curso} onChange={e => { const n = { ...f, curso: e.target.value, salon: '' }; setF(n); setApplied(n) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[120px]">
                 {(data?.cursos || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Salón</label>
-              <select value={f.salon} onChange={e => setF({ ...f, salon: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[110px]">
+              <select value={f.salon} onChange={e => { const n = { ...f, salon: e.target.value }; setF(n); setApplied(n) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[110px]">
                 {(data?.salones || []).map((s: string) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
