@@ -53,7 +53,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const titulo = String(body?.titulo || '').trim();
   const minRaw = Math.round(Number(body?.minutos));
   const minutos = Number.isFinite(minRaw) && minRaw >= 1 && minRaw <= 180 ? minRaw : null;
-  const esEvaluacion = /evaluac/i.test(code); // módulos "Evaluación NN" → varios cuestionarios
+  // Varios cuestionarios (agrega, no reemplaza): módulos "Evaluación NN" y, en
+  // IMPULSA, CUALQUIER lección (entrenamientos y evaluaciones por igual).
+  const esImpulsa = curso.toUpperCase() === 'IMPULSA';
+  const esEvaluacion = esImpulsa || /evaluac/i.test(code);
 
   if (!curso || !code || !step) throw new ValidationError('Falta curso, módulo o lección de destino.');
   if (!preguntas.length) throw new ValidationError('No hay preguntas para importar.');

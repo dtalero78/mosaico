@@ -158,7 +158,7 @@ export default function ImportarEvaluacionesPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Importar Evaluaciones desde CSV</h1>
-      <p className="text-gray-500 mb-6">Sube un CSV de preguntas (formato Tutor LMS). En módulos <strong>Evaluación</strong> se <strong>agrega como un cuestionario más</strong> (el alumno los presenta en orden); en <strong>Entrenamiento</strong> reemplaza las preguntas de la lección.</p>
+      <p className="text-gray-500 mb-6">Sube un CSV de preguntas (formato Tutor LMS). En módulos <strong>Evaluación</strong> y en <strong>todo el curso IMPULSA</strong> se <strong>agrega como un cuestionario más</strong> (el alumno los presenta en orden); en <strong>Entrenamiento</strong> de otros cursos reemplaza las preguntas de la lección.</p>
 
       {/* Carga de archivo */}
       <div

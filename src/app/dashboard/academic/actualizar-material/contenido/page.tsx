@@ -53,8 +53,9 @@ function LeccionEditor({
   // (aunque su módulo sea "Modulo NN"), a pedido.
   const esImpulsa = String(curso || '').trim().toUpperCase() === 'IMPULSA'
   const esEvaluacion = esImpulsa || /evaluac|entrenamiento/.test(`${code} ${leccion.step}`.toLowerCase())
-  // Solo los módulos EVALUACIÓN admiten VARIOS cuestionarios; Entrenamiento sigue con uno.
-  const esModuloEvaluacion = /evaluac/.test(code.toLowerCase())
+  // Admiten VARIOS cuestionarios: los módulos EVALUACIÓN y, en IMPULSA, CUALQUIER
+  // lección (entrenamientos y evaluaciones por igual — pedido del usuario).
+  const esModuloEvaluacion = esImpulsa || /evaluac/.test(code.toLowerCase())
 
   const buildCuestFromLeccion = (): CuestEdit[] => {
     const cs = Array.isArray(leccion.cuestionarios) ? leccion.cuestionarios : []
@@ -107,6 +108,27 @@ function LeccionEditor({
       onSaved()
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar la evaluación')
+    } finally {
+      setSavingEval(false)
+    }
+  }
+
+  // Borra por completo la evaluación de la lección: limpia cuestionarios +
+  // preguntas manuales y vuelve el modo a IA (sin evaluación manual).
+  const deleteEval = async () => {
+    if (!window.confirm(`¿Borrar la evaluación de ${leccion.step}? Se eliminarán todos los cuestionarios y preguntas de esta lección. Esta acción no se puede deshacer.`)) return
+    setSavingEval(true)
+    try {
+      const r = await fetch('/api/postgres/cursos-contenido', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curso, code, step: leccion.step, evaluacionModo: 'IA', preguntasManual: [], cuestionarios: [] }),
+      }).then((x) => x.json())
+      if (r.error) throw new Error(r.error)
+      setModo('IA'); setPreguntas([]); setCuestionarios([])
+      toast.success(`Evaluación de ${leccion.step} borrada`)
+      onSaved()
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al borrar la evaluación')
     } finally {
       setSavingEval(false)
     }
@@ -250,10 +272,16 @@ function LeccionEditor({
             <span className="font-medium text-gray-700">Evaluación</span>
           </label>
           {esEvaluacion && modo === 'MANUAL' && (
-            <button type="button" onClick={esModuloEvaluacion ? saveCuestionarios : saveEval} disabled={savingEval}
-              className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
-              {savingEval ? 'Guardando…' : 'Guardar evaluación'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={esModuloEvaluacion ? saveCuestionarios : saveEval} disabled={savingEval}
+                className="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
+                {savingEval ? 'Guardando…' : 'Guardar evaluación'}
+              </button>
+              <button type="button" onClick={deleteEval} disabled={savingEval}
+                className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg disabled:opacity-40 hover:opacity-90 transition-opacity">
+                Borrar evaluación
+              </button>
+            </div>
           )}
         </div>
 
