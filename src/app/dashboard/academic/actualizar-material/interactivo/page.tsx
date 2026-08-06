@@ -86,6 +86,7 @@ interface LibroAudio {
 
 interface NivelBinding {
   code: string
+  curso?: string | null
   libroInteractivoCode: string | null
   libroPaginaInicio: number | null
   libroPaginaFin: number | null
@@ -97,7 +98,8 @@ interface LibroAdmin {
   totalPaginas: number
   audios: LibroAudio[]
   activo: boolean
-  niveles: NivelBinding[]
+  niveles: NivelBinding[]   // módulos vinculados a ESTE libro (con rango)
+  modulos?: NivelBinding[]  // TODOS los módulos del curso (para el selector Agregar)
 }
 
 export default function ActualizarMaterialInteractivoPage() {
@@ -264,43 +266,100 @@ function SeccionRangos({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
   const [rows, setRows] = useState(libro.niveles)
   useEffect(() => { setRows(libro.niveles) }, [libro.niveles])
 
-  const save = async (n: NivelBinding) => {
-    try {
-      await jsonFetchRetry(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/binding`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nivelCode: n.code,
-          libroInteractivoCode: libro.codigo,
-          libroPaginaInicio: n.libroPaginaInicio,
-          libroPaginaFin: n.libroPaginaFin,
-        }),
-      })
-      onReload()
-    } catch (e: any) { alert(e?.message || 'Error') }
+  // Módulos del curso disponibles para agregar (todos menos los ya vinculados a este libro)
+  const boundCodes = new Set(rows.map(r => r.code))
+  const disponibles = (libro.modulos || []).filter(m => !boundCodes.has(m.code))
+
+  // Estado del selector "Agregar módulo"
+  const [nuevoCode, setNuevoCode] = useState('')
+  const [nuevoInicio, setNuevoInicio] = useState<number | ''>(1)
+  const [nuevoFin, setNuevoFin] = useState<number | ''>('')
+  const [agregando, setAgregando] = useState(false)
+
+  // PATCH del binding (curso = codigo del libro; scopea el módulo al curso correcto)
+  const patchBinding = async (code: string, libroCode: string | null, inicio: number | null, fin: number | null) => {
+    await jsonFetchRetry(`/api/admin/libros-interactivos/${encodeURIComponent(libro.codigo)}/binding`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nivelCode: code,
+        curso: libro.codigo,
+        libroInteractivoCode: libroCode,
+        libroPaginaInicio: inicio,
+        libroPaginaFin: fin,
+      }),
+    })
   }
 
-  if (rows.length === 0) {
-    return (
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Niveles vinculados</h3>
-        <p className="text-xs text-gray-500 italic">Ningún nivel apunta a este libro todavía.</p>
-      </div>
-    )
+  const save = async (n: NivelBinding) => {
+    try { await patchBinding(n.code, libro.codigo, n.libroPaginaInicio ?? 1, n.libroPaginaFin ?? null); onReload() }
+    catch (e: any) { alert(e?.message || 'Error') }
+  }
+
+  const quitar = async (code: string) => {
+    if (!confirm(`¿Quitar el módulo "${code}" de este libro?`)) return
+    try { await patchBinding(code, null, null, null); onReload() }
+    catch (e: any) { alert(e?.message || 'Error') }
+  }
+
+  const agregar = async () => {
+    if (!nuevoCode) { alert('Selecciona un módulo'); return }
+    setAgregando(true)
+    try {
+      await patchBinding(nuevoCode, libro.codigo, nuevoInicio === '' ? 1 : Number(nuevoInicio), nuevoFin === '' ? null : Number(nuevoFin))
+      setNuevoCode(''); setNuevoInicio(1); setNuevoFin('')
+      onReload()
+    } catch (e: any) { alert(e?.message || 'Error') } finally { setAgregando(false) }
   }
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-700 mb-2">Rangos por nivel</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">Módulos del libro</h3>
+
+      {/* Agregar módulo del curso */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded p-3 mb-3">
+        <p className="text-xs text-indigo-800 mb-2">Agrega un <strong>módulo del curso {libro.codigo}</strong> y su rango de páginas en este libro.</p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <label className="block text-[11px] text-gray-600 mb-1">Módulo</label>
+            <select value={nuevoCode} onChange={e => setNuevoCode(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1 text-sm min-w-[10rem]">
+              <option value="">-- Selecciona --</option>
+              {disponibles.map(m => <option key={m.code} value={m.code}>{m.code}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] text-gray-600 mb-1">Inicio</label>
+            <input type="number" min={1} max={libro.totalPaginas || undefined} value={nuevoInicio}
+              onChange={e => setNuevoInicio(e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 1))}
+              className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-right tabular-nums" />
+          </div>
+          <div>
+            <label className="block text-[11px] text-gray-600 mb-1">Fin</label>
+            <input type="number" min={1} max={libro.totalPaginas || undefined} value={nuevoFin} placeholder="(final)"
+              onChange={e => setNuevoFin(e.target.value === '' ? '' : (parseInt(e.target.value, 10) || 1))}
+              className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-right tabular-nums" />
+          </div>
+          <button onClick={agregar} disabled={agregando || !nuevoCode}
+            className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
+            {agregando ? 'Agregando…' : '+ Agregar módulo'}
+          </button>
+          {disponibles.length === 0 && <span className="text-xs text-gray-500">Todos los módulos del curso ya están vinculados.</span>}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-xs text-gray-500 italic">Ningún módulo vinculado a este libro todavía. Agrega uno arriba.</p>
+      ) : (
       <div className="bg-white border border-gray-200 rounded overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs text-gray-500">
             <tr>
-              <th className="text-left px-3 py-2">Nivel</th>
+              <th className="text-left px-3 py-2">Módulo</th>
               <th className="text-right px-3 py-2 w-28">Inicio</th>
               <th className="text-right px-3 py-2 w-28">Fin</th>
               <th className="text-right px-3 py-2 w-24">Páginas</th>
-              <th className="text-right px-3 py-2 w-20"></th>
+              <th className="text-right px-3 py-2 w-32"></th>
             </tr>
           </thead>
           <tbody>
@@ -344,12 +403,18 @@ function SeccionRangos({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
                     />
                   </td>
                   <td className="px-3 py-2 text-right text-xs text-gray-600 tabular-nums">{cantidad}</td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
                     <button
                       onClick={() => save(n)}
                       className="text-xs px-2 py-1 bg-emerald-600 text-white rounded hover:bg-emerald-700"
                     >
                       Guardar
+                    </button>
+                    <button
+                      onClick={() => quitar(n.code)}
+                      className="text-xs px-2 py-1 ml-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                    >
+                      Quitar
                     </button>
                   </td>
                 </tr>
@@ -358,6 +423,7 @@ function SeccionRangos({ libro, onReload }: { libro: LibroAdmin; onReload: () =>
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }

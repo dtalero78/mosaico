@@ -22,12 +22,17 @@ export const PATCH = handlerWithAuth(async (req, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.ACTUALIZAR_MATERIAL);
   const body = await req.json().catch(() => ({}));
 
-  const nivelCode = String(body?.nivelCode || '').toUpperCase().trim();
+  // NO uppercasear: los módulos MOSAICO son "Modulo 00" (mixto); NIVELES.code es exacto.
+  const nivelCode = String(body?.nivelCode || '').trim();
   if (!nivelCode) throw new ValidationError('nivelCode requerido');
 
   const libroInteractivoCode = body?.libroInteractivoCode
     ? String(body.libroInteractivoCode).toUpperCase().trim()
     : null;
+
+  // Curso al que pertenece el módulo (el code se repite entre cursos en MOSAICO).
+  // Sin curso, el binding se aplicaría a todos los cursos con ese code.
+  const curso = body?.curso ? String(body.curso).trim() : null;
 
   const inicio = body?.libroPaginaInicio != null ? Number(body.libroPaginaInicio) : null;
   const fin    = body?.libroPaginaFin    != null ? Number(body.libroPaginaFin)    : null;
@@ -44,6 +49,7 @@ export const PATCH = handlerWithAuth(async (req, _ctx, session) => {
 
   const affected = await NivelLibroBindingRepository.setBinding({
     code: nivelCode,
+    curso,
     libroInteractivoCode,
     libroPaginaInicio: inicio,
     libroPaginaFin: fin,

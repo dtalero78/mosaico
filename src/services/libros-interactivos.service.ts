@@ -230,23 +230,17 @@ class LibrosInteractivosServiceClass {
 
   /** Catálogo admin (no se cachea — el admin debe ver siempre fresh). */
   async listAllForAdmin() {
-    const [libros, bindings] = await Promise.all([
-      LibrosInteractivosRepository.findAll({ includeInactive: true }),
-      NivelLibroBindingRepository.findAll(),
-    ]);
-
-    const bindingsPorLibro = new Map<string, typeof bindings>();
-    for (const b of bindings) {
-      if (!b.libroInteractivoCode) continue;
-      const arr = bindingsPorLibro.get(b.libroInteractivoCode) ?? [];
-      arr.push(b);
-      bindingsPorLibro.set(b.libroInteractivoCode, arr);
-    }
-
-    return libros.map(libro => ({
-      ...libro,
-      niveles: bindingsPorLibro.get(libro.codigo) ?? [],
-    }));
+    const libros = await LibrosInteractivosRepository.findAll({ includeInactive: true });
+    // En MOSAICO libro.codigo = curso. Por cada libro traemos TODOS los módulos de su
+    // curso con su binding: `niveles` = los vinculados a ESTE libro (con rango), y
+    // `modulos` = todos los del curso (para el selector "Agregar módulo").
+    return Promise.all(
+      libros.map(async (libro) => {
+        const modulos = await NivelLibroBindingRepository.findModulosDeCurso(libro.codigo);
+        const niveles = modulos.filter((m) => m.libroInteractivoCode === libro.codigo);
+        return { ...libro, niveles, modulos };
+      })
+    );
   }
 
   /**

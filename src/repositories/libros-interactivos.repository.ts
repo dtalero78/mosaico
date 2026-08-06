@@ -34,7 +34,8 @@ export interface LibroInteractivoRow {
 }
 
 export interface NivelLibroBinding {
-  code: string;                          // NIVELES.code (ej. 'BN1')
+  code: string;                          // NIVELES.code = MÓDULO (ej. 'Modulo 00')
+  curso?: string | null;                 // NIVELES.curso (YOJI, OKINA, …) — en MOSAICO el code se repite entre cursos
   libroInteractivoCode: string | null;   // FK a LIBROS_INTERACTIVOS.codigo
   libroPaginaInicio: number | null;
   libroPaginaFin: number | null;
@@ -279,6 +280,26 @@ class NivelLibroBindingRepositoryClass {
     );
   }
 
+  /**
+   * Lista TODOS los módulos (code) de un CURSO con su binding (para el panel admin).
+   * En MOSAICO el libro codigo = curso, así que el admin trabaja por curso: muestra
+   * los módulos vinculados (con rango) y los disponibles para vincular.
+   */
+  async findModulosDeCurso(curso: string): Promise<NivelLibroBinding[]> {
+    return queryMany<NivelLibroBinding>(
+      `SELECT "code",
+              MAX("curso")                AS "curso",
+              MAX("libroInteractivoCode") AS "libroInteractivoCode",
+              MAX("libroPaginaInicio")    AS "libroPaginaInicio",
+              MAX("libroPaginaFin")       AS "libroPaginaFin"
+         FROM "NIVELES"
+        WHERE "curso" = $1
+        GROUP BY "code"
+        ORDER BY MIN("orden") ASC NULLS LAST, "code" ASC`,
+      [curso]
+    );
+  }
+
   /** Lista los niveles que apuntan a un libro específico. */
   async findByLibroCodigo(libroCodigo: string): Promise<NivelLibroBinding[]> {
     return queryMany<NivelLibroBinding>(
@@ -295,11 +316,14 @@ class NivelLibroBindingRepositoryClass {
   }
 
   /**
-   * Setea/actualiza el binding de un nivel.
-   * Afecta TODAS las filas de NIVELES con ese code (un nivel puede tener varias filas, una por step).
+   * Setea/actualiza el binding de un MÓDULO (code) hacia un libro + rango.
+   * Afecta TODAS las filas de NIVELES con ese code (una por lección/step).
+   * `curso` scopea el UPDATE: en MOSAICO el mismo code ("Modulo 00") existe en
+   * varios cursos, así que hay que fijar el binding solo en el curso del libro.
    */
   async setBinding(input: {
     code: string;
+    curso?: string | null;
     libroInteractivoCode: string | null;
     libroPaginaInicio: number | null;
     libroPaginaFin: number | null;
@@ -310,8 +334,9 @@ class NivelLibroBindingRepositoryClass {
               "libroPaginaInicio"    = $2,
               "libroPaginaFin"       = $3,
               "_updatedDate"         = NOW()
-        WHERE "code" = $4`,
-      [input.libroInteractivoCode, input.libroPaginaInicio, input.libroPaginaFin, input.code]
+        WHERE "code" = $4
+          AND ($5::text IS NULL OR "curso" = $5)`,
+      [input.libroInteractivoCode, input.libroPaginaInicio, input.libroPaginaFin, input.code, input.curso ?? null]
     );
     return r.rowCount ?? 0;
   }
