@@ -90,7 +90,7 @@ export function buildReporteIndividualHtml(row: ReporteIndividualRow, meta: Repo
       </div>
     </div>
 
-    ${row.comentarioIA ? `<div class="box"><h4>Comentario</h4><p>${esc(row.comentarioIA)}</p></div>` : ''}
-    ${row.notaGuia ? `<div class="box"><h4>Valoración del Guía</h4><p>${esc(row.notaGuia)}</p></div>` : ''}
+    ${row.comentarioIA ? `<div class="box"><h4>Comentario IA</h4><p>${esc(row.comentarioIA)}</p></div>` : ''}
+    ${row.notaGuia ? `<div class="box"><h4>Comentario del Docente</h4><p>${esc(row.notaGuia)}</p></div>` : ''}
   </div></body></html>`;
 }

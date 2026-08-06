@@ -293,8 +293,16 @@ export default function ReporteAcademicoPage() {
                       </div>
                     ))}
                   </div>
-                  {ov.comentarioIA && <div className="mb-3"><div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario IA</div><p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.comentarioIA}</p></div>}
-                  {ov.notaGuia && <div className="mb-3"><div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Valoración del Guía</div><p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.notaGuia}</p></div>}
+                  {/* Base del informe: SIEMPRE se muestran ambos comentarios (IA + Docente),
+                      con placeholder si aún no hay contenido. */}
+                  <div className="mb-3">
+                    <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario IA</div>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.comentarioIA || <span className="text-gray-400">— sin generar —</span>}</p>
+                  </div>
+                  <div className="mb-3">
+                    <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario del Docente</div>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.notaGuia || <span className="text-gray-400">— sin valoración —</span>}</p>
+                  </div>
                   <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
                     {ov.apoderadoTelefono ? <>Se enviará el PDF de este informe al apoderado <b>{ov.apoderado || ''}</b> (••••{String(ov.apoderadoTelefono).slice(-4)}).</> : <>⚠ El apoderado no tiene teléfono registrado; no se puede enviar por WhatsApp.</>}
                   </div>
