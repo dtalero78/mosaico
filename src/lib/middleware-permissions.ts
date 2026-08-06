@@ -330,6 +330,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/recaudos/aprobaciones': [
     'RECAUDOS.APROBACIONES.VER' as Permission,
   ],
+  '/dashboard/recaudos/bancos': [
+    'RECAUDOS.BANCOS.VER' as Permission,
+  ],
 
   // Aprobación
   '/dashboard/aprobacion': [

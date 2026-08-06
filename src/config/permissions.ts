@@ -89,6 +89,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Wizard de un solo paso para registrar un nuevo pago en PAGOS_TITULARES (fechaPago, valorPagado, descuento, medioPago, número referencia, número factura, documentación, etc.). Soporta auto-guardado en localStorage (TTL 72h)',
   },
   {
+    code: PersonPermission.PAGOS_EDITAR,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Editar Pago"',
+    description: 'Editar un pago aún NO validado (fechaPago, valorPagado, descuento, medioPago, número referencia, # cuota) desde el Centro de Validación / Bancos',
+  },
+  {
     code: PersonPermission.PAGOS_VALIDAR,
     module: Module.PERSON,
     section: 'Financiera',

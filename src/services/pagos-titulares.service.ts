@@ -242,14 +242,21 @@ export const pagosTitularesService = {
    * Aplica scope de plataforma del usuario logueado (RECAUDOS_JEFE) sobre
    * `PEOPLE.plataforma` del titular. SUPER_ADMIN/ADMIN bypassean.
    */
+  async listMediosPago(): Promise<string[]> {
+    return PagosTitularesRepository.findDistinctMediosPago();
+  },
+
   async listForGestion(
     session: { role: string; email?: string | null },
     opts: {
       estado?: 'validado' | 'pendiente';
+      cuotaTipo?: 'regular' | 'inscripcion';
       fechaDesde?: string | null;
       fechaHasta?: string | null;
       search?: string | null;
       gestorRecaudo?: string | null;
+      medioPago?: string | null;
+      plataforma?: string | null;
       page?: number;
       pageSize?: number;
     },
@@ -268,10 +275,13 @@ export const pagosTitularesService = {
 
     const { rows, total } = await PagosTitularesRepository.findAllWithTitular({
       estado: opts.estado,
+      cuotaTipo: opts.cuotaTipo ?? 'regular',
       fechaDesde: opts.fechaDesde ?? null,
       fechaHasta: opts.fechaHasta ?? null,
       search: opts.search ?? null,
       gestorRecaudo: opts.gestorRecaudo ?? null,
+      medioPago: opts.medioPago ?? null,
+      plataforma: opts.plataforma ?? null,
       plataformaScope,
       limit: pageSize,
       offset,
@@ -409,6 +419,44 @@ export const pagosTitularesService = {
     await syncFinancieroSaldo(existing.idPeople);
 
     return updated;
+  },
+
+  /**
+   * Validación MASIVA de pagos (Centro de Validación / Bancos). Valida cada id
+   * (omite los ya validados o inexistentes), y recalcula el saldo UNA vez por
+   * titular afectado. Devuelve conteo ok/fail + errores por id.
+   */
+  async validarMasivo(
+    ids: string[],
+    validadoPor: string,
+    numeroFactura: string,
+    fechaValidacion: string | null = null,
+  ): Promise<{ ok: number; fail: number; errores: { id: string; error: string }[] }> {
+    const factura = (numeroFactura || '').trim();
+    const idPeopleSet = new Set<string>();
+    const errores: { id: string; error: string }[] = [];
+    let ok = 0;
+
+    for (const id of ids) {
+      try {
+        const existing = await PagosTitularesRepository.findById(id);
+        if (!existing) { errores.push({ id, error: 'no existe' }); continue; }
+        if (existing.validado) { errores.push({ id, error: 'ya validado' }); continue; }
+        const updated = await PagosTitularesRepository.validar(id, validadoPor, factura, fechaValidacion);
+        if (!updated) { errores.push({ id, error: 'no se pudo validar' }); continue; }
+        idPeopleSet.add(existing.idPeople);
+        ok++;
+      } catch (e: any) {
+        errores.push({ id, error: e?.message || 'error' });
+      }
+    }
+
+    // Recalcular saldo una vez por titular afectado.
+    for (const idp of idPeopleSet) {
+      await syncFinancieroSaldo(idp).catch(() => { /* best-effort */ });
+    }
+
+    return { ok, fail: errores.length, errores };
   },
 
   /**

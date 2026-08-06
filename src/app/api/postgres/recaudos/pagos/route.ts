@@ -25,10 +25,16 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     : estadoParam === 'pendiente' ? 'pendiente'
     : undefined;
 
+  const cuotaTipoParam = searchParams.get('cuotaTipo');
+  const cuotaTipo: 'regular' | 'inscripcion' =
+    cuotaTipoParam === 'inscripcion' ? 'inscripcion' : 'regular';
+
   const fechaInicio    = searchParams.get('fechaInicio')   || null;
   const fechaFin       = searchParams.get('fechaFin')      || null;
   const search         = searchParams.get('search')        || null;
   const gestorRecaudo  = searchParams.get('gestorRecaudo') || null;
+  const medioPago      = searchParams.get('medioPago')     || null;
+  const plataforma     = searchParams.get('plataforma')    || null;
   const page           = parseInt(searchParams.get('page') || '1', 10) || 1;
   const pageSize       = parseInt(searchParams.get('pageSize') || '50', 10) || 50;
 
@@ -39,10 +45,13 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     },
     {
       estado,
+      cuotaTipo,
       fechaDesde: fechaInicio,
       fechaHasta: fechaFin,
       search,
       gestorRecaudo,
+      medioPago,
+      plataforma,
       page,
       pageSize,
     },

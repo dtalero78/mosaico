@@ -5,11 +5,11 @@ import { PermissionGuard } from '@/components/permissions'
 import { RecaudosPermission } from '@/types/permissions'
 import PagosValidacionPanel from '@/components/recaudos/PagosValidacionPanel'
 
-export default function GestionRecaudosPage() {
+export default function BancosRecaudosPage() {
   return (
     <DashboardLayout>
-      <PermissionGuard permission={RecaudosPermission.GESTION_VER} showDefaultMessage>
-        <PagosValidacionPanel variant="gestor" />
+      <PermissionGuard permission={RecaudosPermission.BANCOS_VER} showDefaultMessage>
+        <PagosValidacionPanel variant="medioPago" />
       </PermissionGuard>
     </DashboardLayout>
   )
