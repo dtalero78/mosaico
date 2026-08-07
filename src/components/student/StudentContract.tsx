@@ -121,28 +121,9 @@ export default function StudentContract({ student, contratoFinalizado = false }:
 
   const { hasPermission, isLoading: permLoading } = usePermissions()
   const canExtender = hasPermission(StudentPermission.EXTENDER_VIGENCIA)
-  // Tener el permiso EXTENDER_VIGENCIA permite extender aunque el contrato esté Finalizado
-
-  // Switch global: mostrar/ocultar la caja "Extensión de Vigencia".
-  const [extVisible, setExtVisible] = useState(true)
-  const [savingExtFlag, setSavingExtFlag] = useState(false)
-  useEffect(() => {
-    fetch('/api/postgres/config/extension-vigencia', { cache: 'no-store' })
-      .then((r) => r.json()).then((d) => setExtVisible(d?.visible !== false)).catch(() => {})
-  }, [])
-  const toggleExtVisible = async () => {
-    const nuevo = !extVisible
-    setExtVisible(nuevo); setSavingExtFlag(true)
-    try {
-      const r = await fetch('/api/postgres/config/extension-vigencia', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visible: nuevo }),
-      }).then((x) => x.json())
-      if (r?.error) throw new Error(r.error)
-    } catch {
-      setExtVisible(!nuevo)
-    } finally { setSavingExtFlag(false) }
-  }
+  // La caja "Extensión de Vigencia" se muestra SOLO si el rol tiene este permiso
+  // (asignable en /admin/permissions). Tenerlo también permite extender aunque el
+  // contrato esté Finalizado.
 
   useEffect(() => {
     const load = async () => {
@@ -261,9 +242,8 @@ export default function StudentContract({ student, contratoFinalizado = false }:
       {/* ── Fila 1: Extensión de Vigencia (arriba) + OnHold (debajo), ancho completo ── */}
       <div className="space-y-6">
 
-        {/* Extensión de Vigencia — con switch para ocultarla (global). Solo se
-            muestra si está visible o si el usuario puede togglearla. */}
-        {(extVisible || canExtender) && (
+        {/* Extensión de Vigencia — visible SOLO con permiso EXTENDER_VIGENCIA. */}
+        {canExtender && (
         <div className="flex flex-col bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -275,68 +255,49 @@ export default function StudentContract({ student, contratoFinalizado = false }:
                 <p className="text-xs text-gray-500">Cambiar la fecha final del estudiante</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {extVisible && !!student.extensionCount && student.extensionCount > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold bg-green-100 text-green-800 border border-green-300 px-2 py-0.5 rounded-full">
-                    {student.extensionCount} ext.
-                  </span>
-                  <button type="button" onClick={() => setShowExtensionHistory(true)}
-                    className="text-xs text-green-600 hover:text-green-800 underline font-medium">
-                    Ver historial
-                  </button>
-                </div>
-              )}
-              {canExtender && (
-                <button type="button" onClick={toggleExtVisible} disabled={savingExtFlag}
-                  role="switch" aria-checked={extVisible}
-                  title={extVisible ? 'Visible — clic para ocultar' : 'Oculta — clic para mostrar'}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${extVisible ? 'bg-green-600' : 'bg-gray-300'}`}>
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${extVisible ? 'translate-x-5' : 'translate-x-1'}`} />
+            {!!student.extensionCount && student.extensionCount > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold bg-green-100 text-green-800 border border-green-300 px-2 py-0.5 rounded-full">
+                  {student.extensionCount} ext.
+                </span>
+                <button type="button" onClick={() => setShowExtensionHistory(true)}
+                  className="text-xs text-green-600 hover:text-green-800 underline font-medium">
+                  Ver historial
                 </button>
-              )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 text-sm mb-4">
+            <div className="bg-white/60 rounded-lg p-3">
+              <p className="text-xs text-gray-500 font-medium mb-1">Vigencia actual</p>
+              <p className="font-semibold text-gray-900 text-xs leading-snug">
+                {student.finalContrato
+                  ? new Date(student.finalContrato).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+                  : '—'}
+              </p>
+            </div>
+            <div className="bg-white/60 rounded-lg p-3">
+              <p className="text-xs text-gray-500 font-medium mb-1">Días restantes</p>
+              <p className={`font-bold ${vigColor}`}>
+                {vigDays !== null ? `${vigDays} días` : '—'}
+              </p>
+            </div>
+            <div className="bg-white/60 rounded-lg p-3">
+              <p className="text-xs text-gray-500 font-medium mb-1">Extensiones</p>
+              <p className="font-semibold text-gray-900">{student.extensionCount ?? 0} veces</p>
             </div>
           </div>
 
-          {extVisible ? (
-            <>
-              <div className="grid grid-cols-3 gap-3 text-sm mb-4">
-                <div className="bg-white/60 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 font-medium mb-1">Vigencia actual</p>
-                  <p className="font-semibold text-gray-900 text-xs leading-snug">
-                    {student.finalContrato
-                      ? new Date(student.finalContrato).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
-                      : '—'}
-                  </p>
-                </div>
-                <div className="bg-white/60 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 font-medium mb-1">Días restantes</p>
-                  <p className={`font-bold ${vigColor}`}>
-                    {vigDays !== null ? `${vigDays} días` : '—'}
-                  </p>
-                </div>
-                <div className="bg-white/60 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 font-medium mb-1">Extensiones</p>
-                  <p className="font-semibold text-gray-900">{student.extensionCount ?? 0} veces</p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowExtensionModal(true)}
-                disabled={!canExtender || permLoading}
-                className="mt-auto w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <CalendarDaysIcon className="w-4 h-4" />
-                Extender Vigencia del Estudiante
-              </button>
-              {!permLoading && !canExtender && (
-                <p className="text-xs text-gray-400 text-center mt-1">Sin permiso para extender vigencia</p>
-              )}
-            </>
-          ) : (
-            <p className="text-xs text-gray-500">Caja desactivada — no visible en la ficha del estudiante. Actívala con el interruptor.</p>
-          )}
+          <button
+            type="button"
+            onClick={() => setShowExtensionModal(true)}
+            disabled={permLoading}
+            className="mt-auto w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <CalendarDaysIcon className="w-4 h-4" />
+            Extender Vigencia del Estudiante
+          </button>
         </div>
         )}
 
