@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
-import { AcademicoPermission } from '@/types/permissions'
+import { AcademicoPermission, Role } from '@/types/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
 
 const METRIC_COLS = [
   { key: 'asistio', label: 'Asistió', ico: '✅', grupo: 'HÁBITOS' },
@@ -32,6 +33,14 @@ export default function ReporteAcademicoPage() {
   const [individual, setIndividual] = useState<any>(null)
   const [enviando, setEnviando] = useState(false)
 
+  // Envío disponible para todos MENOS los guías.
+  const { isRole } = usePermissions()
+  const esGuia = isRole(Role.ADVISOR) // Role.ADVISOR = 'GUIA'
+
+  // Selección (individual/masivo) + estado de la acción en bloque.
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
+  const [bulk, setBulk] = useState<{ tipo: string; done: number; total: number } | null>(null)
+
   const fetchData = useCallback(async (fl: typeof f) => {
     setLoading(true)
     try {
@@ -54,7 +63,7 @@ export default function ReporteAcademicoPage() {
   const aplicar = () => setApplied({ ...f })
   const semanaActual = () => { const n = { ...f, startDate: '', endDate: '' }; setF(n); setApplied(n) }
 
-  const generarIA = async (r: any) => {
+  const generarIA = async (r: any, silent = false) => {
     setGenIA(r.academicaId)
     try {
       const res = await fetch('/api/postgres/reports/academico/reporte-academico/comentario-ia', {
@@ -67,11 +76,11 @@ export default function ReporteAcademicoPage() {
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
       setComentIA(prev => ({ ...prev, [r.academicaId]: res.comentarioIA }))
-      toast.success('Comentario IA generado')
-    } catch (e: any) { toast.error(e?.message || 'Error al generar comentario') } finally { setGenIA(null) }
+      if (!silent) toast.success('Comentario IA generado')
+    } catch (e: any) { if (!silent) toast.error(e?.message || 'Error al generar comentario'); throw e } finally { setGenIA(null) }
   }
 
-  const guardarNota = async (r: any) => {
+  const guardarNota = async (r: any, silent = false) => {
     setSavingNota(r.academicaId)
     try {
       const res = await fetch('/api/postgres/reports/academico/reporte-academico', {
@@ -79,11 +88,11 @@ export default function ReporteAcademicoPage() {
         body: JSON.stringify({ academicaId: r.academicaId, numeroId: r.numeroId, salon: data.salon, curso: data.curso, semanaInicio: data.semanaInicio, notaGuia: notas[r.academicaId] || '' }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
-      toast.success('Valoración guardada')
-    } catch (e: any) { toast.error(e?.message || 'Error al guardar') } finally { setSavingNota(null) }
+      if (!silent) toast.success('Valoración guardada')
+    } catch (e: any) { if (!silent) toast.error(e?.message || 'Error al guardar'); throw e } finally { setSavingNota(null) }
   }
 
-  const enviarWhatsapp = async (r: any) => {
+  const enviarWhatsapp = async (r: any, silent = false) => {
     setEnviando(true)
     try {
       const res = await fetch('/api/postgres/reports/academico/reporte-academico/enviar-whatsapp', {
@@ -91,11 +100,29 @@ export default function ReporteAcademicoPage() {
         body: JSON.stringify({ academicaId: r.academicaId, curso: data.curso, salon: data.salon, guia: applied.guia || undefined, startDate: applied.startDate || undefined, endDate: applied.endDate || undefined }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
-      toast.success(`Enviado al apoderado (${res.to})`)
-    } catch (e: any) { toast.error(e?.message || 'Error al enviar por WhatsApp') } finally { setEnviando(false) }
+      if (!silent) toast.success(`Enviado al apoderado (${res.to})`)
+    } catch (e: any) { if (!silent) toast.error(e?.message || 'Error al enviar por WhatsApp'); throw e } finally { setEnviando(false) }
   }
 
   const rows = data?.rows || []
+
+  // Helpers de selección + acción MASIVA (secuencial, con progreso).
+  const toggleSel = (id: string) => setSeleccion(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  const toggleAll = () => setSeleccion(prev => prev.size === rows.length && rows.length > 0 ? new Set() : new Set(rows.map((r: any) => r.academicaId)))
+  const allSelected = rows.length > 0 && seleccion.size === rows.length
+  const correrMasivo = async (tipo: string, fn: (r: any, silent?: boolean) => Promise<any>) => {
+    const sel = rows.filter((r: any) => seleccion.has(r.academicaId))
+    if (!sel.length) { toast.error('Selecciona al menos un estudiante'); return }
+    setBulk({ tipo, done: 0, total: sel.length })
+    let ok = 0, fail = 0
+    for (let i = 0; i < sel.length; i++) {
+      try { await fn(sel[i], true); ok++ } catch { fail++ }
+      setBulk({ tipo, done: i + 1, total: sel.length })
+    }
+    setBulk(null)
+    if (fail === 0) toast.success(`${tipo}: ${ok} completado(s)`)
+    else toast.error(`${tipo}: ${ok} ok, ${fail} con error`)
+  }
   const R = data?.resumen || {}
   const ov = individual ? individual : null
 
@@ -237,16 +264,40 @@ export default function ReporteAcademicoPage() {
           {/* Comentario IA + Valoración del Guía */}
           {rows.length > 0 && (
             <>
-              <div className="text-xs uppercase tracking-wide text-gray-500 font-bold mb-2">Comentario IA + Valoración del Guía</div>
+              <div className="no-print flex flex-wrap items-center justify-between gap-3 mb-2">
+                <div className="text-xs uppercase tracking-wide text-gray-500 font-bold">Comentario IA + Valoración del Guía</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-purple-600" />
+                    Seleccionar todos
+                  </label>
+                  <span className="text-xs text-gray-500">{seleccion.size} seleccionado(s)</span>
+                  <button type="button" onClick={() => correrMasivo('Generar IA', generarIA)} disabled={!!bulk || seleccion.size === 0}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-fuchsia-600 text-white hover:bg-fuchsia-700 disabled:opacity-40">✦ Generar IA</button>
+                  <button type="button" onClick={() => correrMasivo('Guardar', guardarNota)} disabled={!!bulk || seleccion.size === 0}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-40">Guardar valoración</button>
+                  {!esGuia && (
+                    <button type="button" onClick={() => correrMasivo('Enviar', enviarWhatsapp)} disabled={!!bulk || seleccion.size === 0}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-40">📲 Enviar</button>
+                  )}
+                  {bulk && <span className="text-xs text-purple-700 font-medium">{bulk.tipo}: {bulk.done}/{bulk.total}…</span>}
+                </div>
+              </div>
               <div className="bg-white border border-gray-200 rounded-xl shadow-sm divide-y divide-gray-100">
                 {rows.map((r: any) => (
                   <div key={r.academicaId} className="grid grid-cols-1 md:grid-cols-[170px_1fr_1fr]">
                     <div className="px-4 py-3 border-r border-gray-100">
-                      <div className="flex flex-col"><b className="text-[13.5px]">{r.nombre}</b><span className="text-[11.5px] text-gray-500">{r.sesSemana} sesión(es) · {r.asistenciaCursoPct}% curso</span></div>
-                      <PermissionGuard permission={AcademicoPermission.REPORTE_ACADEMICO_INDIVIDUAL}>
-                        <button onClick={() => setIndividual({ ...r, comentarioIA: comentIA[r.academicaId] || r.comentarioIA, notaGuia: notas[r.academicaId] ?? r.notaGuia })}
-                          className="no-print mt-2 text-xs font-semibold text-purple-700 hover:text-purple-900">📄 Informe individual</button>
-                      </PermissionGuard>
+                      <div className="flex items-start gap-2">
+                        <input type="checkbox" checked={seleccion.has(r.academicaId)} onChange={() => toggleSel(r.academicaId)}
+                          className="no-print mt-1 accent-purple-600 shrink-0" title="Seleccionar" />
+                        <div className="min-w-0">
+                          <div className="flex flex-col"><b className="text-[13.5px]">{r.nombre}</b><span className="text-[11.5px] text-gray-500">{r.sesSemana} sesión(es) · {r.asistenciaCursoPct}% curso</span></div>
+                          <PermissionGuard permission={AcademicoPermission.REPORTE_ACADEMICO_INDIVIDUAL}>
+                            <button onClick={() => setIndividual({ ...r, comentarioIA: comentIA[r.academicaId] || r.comentarioIA, notaGuia: notas[r.academicaId] ?? r.notaGuia })}
+                              className="no-print mt-2 text-xs font-semibold text-purple-700 hover:text-purple-900">📄 Informe individual</button>
+                          </PermissionGuard>
+                        </div>
+                      </div>
                     </div>
                     <div className="px-4 py-3 border-r border-gray-100">
                       <div className="flex items-center gap-2 mb-1"><span className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold">Comentario</span><span className="text-[9.5px] bg-fuchsia-50 text-fuchsia-600 rounded-full px-2 py-0.5 font-bold">✦ IA</span></div>
@@ -303,16 +354,20 @@ export default function ReporteAcademicoPage() {
                     <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario del Docente</div>
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.notaGuia || <span className="text-gray-400">— sin valoración —</span>}</p>
                   </div>
-                  <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
-                    {ov.apoderadoTelefono ? <>Se enviará el PDF de este informe al apoderado <b>{ov.apoderado || ''}</b> (••••{String(ov.apoderadoTelefono).slice(-4)}).</> : <>⚠ El apoderado no tiene teléfono registrado; no se puede enviar por WhatsApp.</>}
-                  </div>
+                  {!esGuia && (
+                    <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
+                      {ov.apoderadoTelefono ? <>Se enviará el PDF de este informe al apoderado <b>{ov.apoderado || ''}</b> (••••{String(ov.apoderadoTelefono).slice(-4)}).</> : <>⚠ El apoderado no tiene teléfono registrado; no se puede enviar por WhatsApp.</>}
+                    </div>
+                  )}
                 </div>
                 <div className="flex justify-end gap-3 px-5 py-3 border-t border-gray-100">
                   <button onClick={() => setIndividual(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cerrar</button>
-                  <button onClick={() => enviarWhatsapp(ov)} disabled={enviando || !ov.apoderadoTelefono}
-                    className="px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-                    {enviando ? 'Enviando…' : '📲 Enviar por WhatsApp'}
-                  </button>
+                  {!esGuia && (
+                    <button onClick={() => enviarWhatsapp(ov)} disabled={enviando || !ov.apoderadoTelefono}
+                      className="px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                      {enviando ? 'Enviando…' : '📲 Enviar por WhatsApp'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

@@ -2,7 +2,7 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
-import { ValidationError, NotFoundError } from '@/lib/errors';
+import { ValidationError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { getReporteAcademico } from '@/services/reporte-academico.service';
 import { buildReporteIndividualHtml } from '@/lib/reporte-academico-pdf';
 import { htmlToPdfBuffer } from '@/lib/pdf';
@@ -21,6 +21,10 @@ const WHAPI_TOKEN = process.env.WHAPI_TOKEN || 'h2vjBWeG8csEl45GIuKgOr5pvGwCVTbu
  */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.REPORTE_ACADEMICO_INDIVIDUAL);
+  // El envío del informe por WhatsApp NO está disponible para los guías.
+  if (String((session?.user as any)?.role || '') === 'GUIA') {
+    throw new ForbiddenError('Los guías no pueden enviar el informe por WhatsApp.');
+  }
   const b = await request.json().catch(() => ({}));
   const academicaId = String(b?.academicaId || '').trim();
   if (!academicaId) throw new ValidationError('Falta el estudiante.');
