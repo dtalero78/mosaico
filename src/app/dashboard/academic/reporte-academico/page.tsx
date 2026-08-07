@@ -33,9 +33,11 @@ export default function ReporteAcademicoPage() {
   const [individual, setIndividual] = useState<any>(null)
   const [enviando, setEnviando] = useState(false)
 
-  // Envío disponible para todos MENOS los guías.
-  const { isRole } = usePermissions()
+  // Envío disponible para todos MENOS los guías. `puedeEnviar` sólo es true cuando
+  // el rol YA cargó y NO es guía → evita que el botón parpadee mientras carga.
+  const { isRole, isLoading: permLoading } = usePermissions()
   const esGuia = isRole(Role.ADVISOR) // Role.ADVISOR = 'GUIA'
+  const puedeEnviar = !permLoading && !esGuia
 
   // Selección (individual/masivo) + estado de la acción en bloque.
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
@@ -276,7 +278,7 @@ export default function ReporteAcademicoPage() {
                     className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-fuchsia-600 text-white hover:bg-fuchsia-700 disabled:opacity-40">✦ Generar IA</button>
                   <button type="button" onClick={() => correrMasivo('Guardar', guardarNota)} disabled={!!bulk || seleccion.size === 0}
                     className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-40">Guardar valoración</button>
-                  {!esGuia && (
+                  {puedeEnviar && (
                     <button type="button" onClick={() => correrMasivo('Enviar', enviarWhatsapp)} disabled={!!bulk || seleccion.size === 0}
                       className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-40">📲 Enviar</button>
                   )}
@@ -354,7 +356,7 @@ export default function ReporteAcademicoPage() {
                     <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario del Docente</div>
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.notaGuia || <span className="text-gray-400">— sin valoración —</span>}</p>
                   </div>
-                  {!esGuia && (
+                  {puedeEnviar && (
                     <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
                       {ov.apoderadoTelefono ? <>Se enviará el PDF de este informe al apoderado <b>{ov.apoderado || ''}</b> (••••{String(ov.apoderadoTelefono).slice(-4)}).</> : <>⚠ El apoderado no tiene teléfono registrado; no se puede enviar por WhatsApp.</>}
                     </div>
@@ -362,7 +364,7 @@ export default function ReporteAcademicoPage() {
                 </div>
                 <div className="flex justify-end gap-3 px-5 py-3 border-t border-gray-100">
                   <button onClick={() => setIndividual(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cerrar</button>
-                  {!esGuia && (
+                  {puedeEnviar && (
                     <button onClick={() => enviarWhatsapp(ov)} disabled={enviando || !ov.apoderadoTelefono}
                       className="px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50">
                       {enviando ? 'Enviando…' : '📲 Enviar por WhatsApp'}
