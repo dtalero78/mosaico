@@ -61,7 +61,7 @@ export default function ImportarContratoPdfPage() {
   const setFin = (k: string, v: any) => setData((d: any) => ({ ...d, financial: set(d.financial, k, v) }))
   const setBen = (i: number, k: string, v: any) => setData((d: any) => ({ ...d, beneficiarios: d.beneficiarios.map((b: any, j: number) => j === i ? set(b, k, v) : b) }))
 
-  const crear = async () => {
+  const crear = async (permitirTitularDuplicado = false) => {
     if (!data?.contrato?.trim()) { toast.error('Falta el número de contrato'); return }
     if (!data?.titular?.numeroId) { toast.error('Falta el RUT del titular'); return }
     const needsCampaign = (data.beneficiarios || []).some((b: any) => b.tipoCurso)
@@ -86,8 +86,17 @@ export default function ImportarContratoPdfPage() {
         body: JSON.stringify({
           contrato: data.contrato.trim(), titular, financial: data.financial,
           beneficiarios, titularEsBeneficiario: data.titularEsBeneficiario === true,
+          permitirTitularDuplicado,
         }),
       }).then(r => r.json())
+      if (res.needsConfirmation) {
+        const te = res.titularExistente || {}
+        setSaving(false)
+        if (window.confirm(`⚠️ Ya existe un contrato con el ID ${te.numeroId}${te.nombre ? ` (${te.nombre})` : ''}${te.contratos?.length ? ` en ${te.contratos.join(', ')}` : ''}.\n\n¿Crear otro contrato para este mismo titular?`)) {
+          return crear(true)
+        }
+        return
+      }
       if (res.error) throw new Error(res.error)
       toast.success('Contrato creado. Abriendo para editar…')
       router.push(`/dashboard/comercial/contrato/${res.titularId}`)
@@ -240,7 +249,7 @@ export default function ImportarContratoPdfPage() {
               </div>
 
               <div className="flex justify-end">
-                <button type="button" onClick={crear} disabled={saving}
+                <button type="button" onClick={() => crear()} disabled={saving}
                   className="px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-40">
                   {saving ? 'Creando…' : 'Crear contrato y editar'}</button>
               </div>

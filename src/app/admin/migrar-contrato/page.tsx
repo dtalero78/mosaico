@@ -291,7 +291,7 @@ export default function MigrarContratoPage() {
 
   // ─── Submit ────────────────────────────────────────────────────────────────
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (permitirTitularDuplicado = false) => {
     setLoading(true)
     setError('')
     try {
@@ -314,10 +314,21 @@ export default function MigrarContratoPage() {
             celular: b.celular ? (prefix ? prefix + b.celular : b.celular) : null,
           })),
           titularEsBeneficiario,
+          permitirTitularDuplicado,
         }),
       })
 
       const data = await res.json()
+
+      // El titular ya existe: confirmar antes de crear otro contrato.
+      if (data.needsConfirmation) {
+        const te = data.titularExistente || {}
+        setLoading(false)
+        if (window.confirm(`⚠️ Ya existe un contrato con el ID ${te.numeroId}${te.nombre ? ` (${te.nombre})` : ''}${te.contratos?.length ? ` en ${te.contratos.join(', ')}` : ''}.\n\n¿Crear otro contrato para este mismo titular?`)) {
+          return handleSubmit(true)
+        }
+        return
+      }
       if (!res.ok) throw new Error(data.error || 'Error al migrar el contrato')
 
       setTitularId(data.titularId)
@@ -1036,7 +1047,7 @@ export default function MigrarContratoPage() {
             ) : (
               <button
                 type="button"
-                onClick={handleSubmit}
+                onClick={() => handleSubmit()}
                 disabled={loading}
                 className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-50"
               >

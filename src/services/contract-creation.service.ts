@@ -9,10 +9,12 @@ import { resolverLiderComercial, type LiderComercial } from '@/lib/crm';
 import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 
 /**
- * Regla numeroId MOSAICO: sólo el titular puede compartir numeroId con su propia
- * inscripción como beneficiario. Cualquier otro duplicado (repetido en el
- * formulario, o ya existente en PEOPLE) se rechaza. Compartida por Crear
- * Contrato y Migrar Contrato.
+ * Regla numeroId MOSAICO:
+ *  - Los **beneficiarios** (alumnos) NO pueden existir ya en PEOPLE (un alumno = un
+ *    contrato) ni repetirse en el formulario → se rechaza duro.
+ *  - El **titular** SÍ puede tener varios contratos (mismo numeroId). Eso NO se rechaza
+ *    aquí; la ruta lo detecta con `buscarTitularExistente` y pide confirmación (modal).
+ * Compartida por Crear Contrato y Migrar Contrato.
  */
 export async function validarNumeroIds(titular: any, beneficiarios: any[]) {
   const incomingIds: string[] = [titular.numeroId, ...((beneficiarios || []).map((b: any) => b?.numeroId))]
@@ -21,15 +23,38 @@ export async function validarNumeroIds(titular: any, beneficiarios: any[]) {
   if (dupEnFormulario) {
     throw new ValidationError(`numeroId duplicado en el formulario: ${dupEnFormulario}. Solo el titular puede ser su propio beneficiario (marque "¿Este titular será beneficiario?").`);
   }
-  if (incomingIds.length > 0) {
+  // Sólo los BENEFICIARIOS existentes bloquean (el titular se confirma aparte).
+  const benefIds: string[] = ((beneficiarios || []).map((b: any) => b?.numeroId))
+    .filter((x: any) => typeof x === 'string' && x.trim() !== '');
+  if (benefIds.length > 0) {
     const yaExiste = await query(
       `SELECT DISTINCT "numeroId" FROM "PEOPLE" WHERE "numeroId" = ANY($1)`,
-      [incomingIds]
+      [benefIds]
     );
     if (yaExiste.rows.length > 0) {
-      throw new ValidationError(`numeroId ya registrado: ${yaExiste.rows.map((r: any) => r.numeroId).join(', ')}. El numeroId solo puede compartirse entre un titular y su propia inscripción como beneficiario.`);
+      throw new ValidationError(`numeroId de beneficiario ya registrado: ${yaExiste.rows.map((r: any) => r.numeroId).join(', ')}. Un beneficiario no puede estar en dos contratos.`);
     }
   }
+}
+
+/**
+ * Devuelve los contratos donde el `numeroId` ya figura como TITULAR (o cualquier
+ * registro, priorizando TITULAR), o null si no existe. Lo usan Crear/Migrar Contrato
+ * para advertir "ya existe un contrato con este ID" antes de crear otro.
+ */
+export async function buscarTitularExistente(numeroId: string): Promise<{ numeroId: string; nombre: string; contratos: string[] } | null> {
+  const id = String(numeroId || '').trim();
+  if (!id) return null;
+  const r = await query(
+    `SELECT "primerNombre","primerApellido","contrato"
+       FROM "PEOPLE" WHERE "numeroId" = $1
+      ORDER BY ("tipoUsuario" = 'TITULAR') DESC, "_createdDate" DESC`,
+    [id]
+  );
+  if (!r.rows.length) return null;
+  const nombre = `${r.rows[0].primerNombre || ''} ${r.rows[0].primerApellido || ''}`.trim();
+  const contratos = Array.from(new Set(r.rows.map((x: any) => x.contrato).filter(Boolean)));
+  return { numeroId: id, nombre, contratos: contratos as string[] };
 }
 
 /**

@@ -167,6 +167,8 @@ function CrearContratoContent() {
   const [showResumenModal, setShowResumenModal] = useState(false);
   // Modal tras confirmar un beneficiario: agregar otro o crear contrato (con resumen)
   const [showPostConfirmModal, setShowPostConfirmModal] = useState(false);
+  // Modal de advertencia: el titular ya existe (permitir un 2º+ contrato con confirmación)
+  const [titularWarn, setTitularWarn] = useState<{ numeroId: string; nombre: string; contratos: string[] } | null>(null);
   const [contrato, setContrato] = useState('');
   const [loadingContrato, setLoadingContrato] = useState(false);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
@@ -552,7 +554,7 @@ function CrearContratoContent() {
     setShowResumenModal(true);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (permitirTitularDuplicado = false) => {
     setShowResumenModal(false);
     // Validación final (paso 7): cursos de beneficiarios
     const benefSinCurso = beneficiarios.some(
@@ -598,6 +600,7 @@ function CrearContratoContent() {
           titularEsBeneficiario,
           clientToday,
           esContratoPrueba,
+          permitirTitularDuplicado,
         })
       });
 
@@ -607,6 +610,14 @@ function CrearContratoContent() {
       }
 
       const data = await response.json();
+
+      // El titular ya existe: se pide confirmación (modal) antes de crear otro contrato.
+      if (data.needsConfirmation) {
+        setTitularWarn(data.titularExistente);
+        setLoading(false);
+        return;
+      }
+
       setContractNumber(data.contractNumber);
       setSuccess(`Contrato creado exitosamente. Número de contrato: ${data.contractNumber}`);
       localStorage.removeItem(DRAFT_KEY);
@@ -1614,6 +1625,29 @@ function CrearContratoContent() {
           )}
 
           {/* Modal resumen antes de crear el contrato */}
+          {titularWarn && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-center">
+                <div className="mx-auto mb-3 h-11 w-11 rounded-full bg-amber-100 flex items-center justify-center text-2xl">⚠️</div>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Ya existe un contrato con este ID</h3>
+                <p className="text-sm text-gray-600">
+                  El ID <b>{titularWarn.numeroId}</b> ya está registrado
+                  {titularWarn.nombre ? <> (<b>{titularWarn.nombre}</b>)</> : null}
+                  {titularWarn.contratos?.length
+                    ? <> en el contrato {titularWarn.contratos.length > 1 ? 'los contratos' : ''} <b>{titularWarn.contratos.join(', ')}</b></>
+                    : null}.
+                </p>
+                <p className="text-sm text-gray-700 mt-2">¿Deseas crear <b>otro contrato</b> para este mismo titular?</p>
+                <div className="mt-5 flex justify-center gap-3">
+                  <button type="button" onClick={() => setTitularWarn(null)}
+                    className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
+                  <button type="button" onClick={() => { setTitularWarn(null); handleSubmit(true); }}
+                    className="px-4 py-2 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-700">Sí, crear otro contrato</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {showResumenModal && (
             <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6">
@@ -1659,7 +1693,7 @@ function CrearContratoContent() {
                 <div className="mt-6 flex justify-end gap-2">
                   <button type="button" onClick={() => setShowResumenModal(false)}
                     className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
-                  <button type="button" onClick={handleSubmit} disabled={loading}
+                  <button type="button" onClick={() => handleSubmit()} disabled={loading}
                     className="px-4 py-2 text-sm rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50">
                     {loading ? 'Creando...' : 'Confirmar y crear contrato'}
                   </button>

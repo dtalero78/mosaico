@@ -2,7 +2,7 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { queryOne } from '@/lib/postgres';
 import { ValidationError, ConflictError } from '@/lib/errors';
-import { createFullContract, normalizeTipoPlan, validarNumeroIds } from '@/services/contract-creation.service';
+import { createFullContract, normalizeTipoPlan, validarNumeroIds, buscarTitularExistente } from '@/services/contract-creation.service';
 
 /**
  * POST /api/admin/migrar-contrato
@@ -14,7 +14,7 @@ import { createFullContract, normalizeTipoPlan, validarNumeroIds } from '@/servi
  * de contrato se DIGITA manualmente (aquí) en vez de auto-generarse.
  */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
-  const { contrato, titular, financial, beneficiarios, titularEsBeneficiario } = await request.json();
+  const { contrato, titular, financial, beneficiarios, titularEsBeneficiario, permitirTitularDuplicado } = await request.json();
 
   // Número de contrato manual — requerido y único.
   if (!contrato?.trim()) throw new ValidationError('El número de contrato es requerido');
@@ -37,6 +37,14 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   // Regla numeroId (misma que Crear Contrato).
   await validarNumeroIds(titular, beneficiarios || []);
+
+  // Titular con varios contratos: confirmar con modal si su numeroId ya existe.
+  if (permitirTitularDuplicado !== true) {
+    const titularExistente = await buscarTitularExistente(titular.numeroId);
+    if (titularExistente) {
+      return successResponse({ needsConfirmation: true, titularExistente });
+    }
+  }
 
   const created = await createFullContract({
     contrato: contratoTrimmed,

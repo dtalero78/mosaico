@@ -2,7 +2,7 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
-import { createFullContract, normalizeTipoPlan, validarNumeroIds } from '@/services/contract-creation.service';
+import { createFullContract, normalizeTipoPlan, validarNumeroIds, buscarTitularExistente } from '@/services/contract-creation.service';
 
 const CODIGOS_PAIS: Record<string, string> = {
   'Chile': '01',
@@ -39,7 +39,7 @@ async function generateContractNumber(plataforma: string, esPrueba: boolean, esI
 }
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
-  const { titular, financial, beneficiarios, titularEsBeneficiario, clientToday, esContratoPrueba } = await request.json();
+  const { titular, financial, beneficiarios, titularEsBeneficiario, clientToday, esContratoPrueba, permitirTitularDuplicado } = await request.json();
   const esPrueba = esContratoPrueba === true;
 
   // Plataforma sólo es obligatoria para contratos REALES; en pruebas se permite sin plataforma.
@@ -59,6 +59,16 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // server-side a partir del titular). Cualquier otro numeroId duplicado —
   // repetido en el formulario o ya existente en PEOPLE — se rechaza.
   await validarNumeroIds(titular, beneficiarios);
+
+  // El titular PUEDE tener varios contratos: si su numeroId ya existe y el usuario
+  // no lo ha confirmado, se devuelve `needsConfirmation` (sin crear) para mostrar el
+  // modal de advertencia. Al confirmar, el front reenvía con permitirTitularDuplicado=true.
+  if (permitirTitularDuplicado !== true) {
+    const titularExistente = await buscarTitularExistente(titular.numeroId);
+    if (titularExistente) {
+      return successResponse({ needsConfirmation: true, titularExistente });
+    }
+  }
 
   // Generate contract number server-side to avoid race conditions.
   const contrato = await generateContractNumber(titular.plataforma, esPrueba, titular?.esCursoImpulsa === true);
