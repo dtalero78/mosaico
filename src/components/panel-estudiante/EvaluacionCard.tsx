@@ -202,7 +202,9 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
         const q = activo.preguntas[qIdx]
         const key = String(q.id ?? qIdx)
         const opts = q.type === 'true_false' ? ['Verdadero', 'Falso'] : q.options
-        const respondida = answers[key] != null
+        const respondida = q.type === 'short_answer'
+          ? (answers[key] ?? '').trim().length > 0
+          : answers[key] != null
         const ultima = qIdx === activo.preguntas.length - 1
         return (
           <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto">
@@ -224,18 +226,28 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
               </div>
               <div className="px-5 pb-5">
                 <div className="text-[15px] font-medium text-gray-800 mb-4"><MathText block>{q.question}</MathText></div>
-                <div className="space-y-2.5">
-                  {opts.map((opt, oj) => {
-                    const sel = answers[key] === opt
-                    return (
-                      <label key={oj} className={`flex items-center gap-3 border rounded-xl px-3.5 py-3 cursor-pointer text-sm ${sel ? 'border-fuchsia-400 bg-fuchsia-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name={`q-${key}`} className="accent-fuchsia-600" checked={sel}
-                          onChange={() => setAnswers((a) => ({ ...a, [key]: opt }))} />
-                        <span className="text-gray-800"><MathText>{opt}</MathText></span>
-                      </label>
-                    )
-                  })}
-                </div>
+                {q.type === 'short_answer' ? (
+                  <textarea
+                    value={answers[key] ?? ''}
+                    onChange={(e) => setAnswers((a) => ({ ...a, [key]: e.target.value }))}
+                    rows={3}
+                    placeholder="Escribe tu respuesta…"
+                    className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm resize-y focus:border-fuchsia-400 focus:ring-1 focus:ring-fuchsia-300 outline-none"
+                  />
+                ) : (
+                  <div className="space-y-2.5">
+                    {opts.map((opt, oj) => {
+                      const sel = answers[key] === opt
+                      return (
+                        <label key={oj} className={`flex items-center gap-3 border rounded-xl px-3.5 py-3 cursor-pointer text-sm ${sel ? 'border-fuchsia-400 bg-fuchsia-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                          <input type="radio" name={`q-${key}`} className="accent-fuchsia-600" checked={sel}
+                            onChange={() => setAnswers((a) => ({ ...a, [key]: opt }))} />
+                          <span className="text-gray-800"><MathText>{opt}</MathText></span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
               <div className="bg-white border-t border-gray-100 rounded-b-2xl px-5 py-3 flex items-center justify-between">
                 <button type="button" onClick={() => setQIdx((i) => Math.max(0, i - 1))} disabled={qIdx === 0}

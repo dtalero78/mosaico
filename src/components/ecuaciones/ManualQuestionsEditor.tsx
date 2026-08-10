@@ -11,7 +11,8 @@ const isRich = (s: string) => /\$|!\[|\]\(/.test(s || '');
 
 export interface ManualQuestion {
   id: number;
-  type: 'multiple_choice' | 'true_false';
+  /** short_answer = respuesta escrita: `options` son las respuestas aceptadas. */
+  type: 'multiple_choice' | 'true_false' | 'short_answer';
   question: string;
   options: string[];
   correctAnswer: string;
@@ -67,6 +68,10 @@ export default function ManualQuestionsEditor({
   const setType = (qi: number, type: ManualQuestion['type']) => {
     if (type === 'true_false') {
       setQuestion(qi, { type, options: [...TF_OPTIONS], correctAnswer: '' });
+    } else if (type === 'short_answer') {
+      const q = value[qi];
+      const opts = q.options.filter((o) => o.trim()).length ? q.options : [''];
+      setQuestion(qi, { type, options: opts, correctAnswer: opts.find((o) => o.trim()) || '' });
     } else {
       const q = value[qi];
       const opts = q.options.length >= 2 ? q.options : ['', '', '', ''];
@@ -80,6 +85,25 @@ export default function ManualQuestionsEditor({
     // Si la opción marcada como correcta cambia de texto, sigue la referencia.
     const correctAnswer = q.correctAnswer === q.options[oj] ? val : q.correctAnswer;
     setQuestion(qi, { options, correctAnswer });
+  };
+
+  // ── Respuesta escrita (short_answer): las opciones son respuestas aceptadas;
+  //    correctAnswer = la primera no vacía (para el feedback). ──
+  const setAccepted = (qi: number, oj: number, val: string) => {
+    const q = value[qi];
+    const options = q.options.map((o, j) => (j === oj ? val : o));
+    setQuestion(qi, { options, correctAnswer: options.find((o) => o.trim()) || '' });
+  };
+  const addAccepted = (qi: number) => {
+    const q = value[qi];
+    if (q.options.length >= 6) return;
+    setQuestion(qi, { options: [...q.options, ''] });
+  };
+  const removeAccepted = (qi: number, oj: number) => {
+    const q = value[qi];
+    if (q.options.length <= 1) return;
+    const options = q.options.filter((_, j) => j !== oj);
+    setQuestion(qi, { options, correctAnswer: options.find((o) => o.trim()) || '' });
   };
 
   const addOption = (qi: number) => {
@@ -139,9 +163,9 @@ export default function ManualQuestionsEditor({
   return (
     <div className="space-y-4">
       <p className="text-xs text-gray-500">
-        {value.length} pregunta(s). Solo opción múltiple / verdadero-falso (se autocalifican). Cada pregunta tiene sus
-        propios botones <span className="text-gray-700 font-medium">∑ 🖼 🔗</span>: insertan en la opción/campo enfocado
-        de esa pregunta, o al final de su enunciado.
+        {value.length} pregunta(s). Opción múltiple / verdadero-falso / respuesta escrita (todas se autocalifican, sin IA).
+        Cada pregunta tiene sus propios botones <span className="text-gray-700 font-medium">∑ 🖼 🔗</span>: insertan en la
+        opción/campo enfocado de esa pregunta, o al final de su enunciado.
       </p>
 
       {value.map((q, qi) => (
@@ -153,6 +177,7 @@ export default function ManualQuestionsEditor({
                 className="text-xs border border-gray-300 rounded-md px-2 py-1">
                 <option value="multiple_choice">Opción múltiple</option>
                 <option value="true_false">Verdadero / Falso</option>
+                <option value="short_answer">Respuesta escrita</option>
               </select>
             </div>
             <div className="flex items-center gap-3">
@@ -186,40 +211,78 @@ export default function ManualQuestionsEditor({
             <div className="mt-1 text-sm text-gray-700"><MathText block>{q.question}</MathText></div>
           )}
 
-          <label className="block text-xs font-medium text-gray-500 mt-3 mb-1">
-            Opciones {q.type === 'multiple_choice' && '(marca la correcta)'}
-          </label>
-          <div className="space-y-2">
-            {q.options.map((opt, oj) => (
-              <div key={oj} className="flex items-center gap-2">
-                <input type="radio" name={`correct-${qi}`}
-                  checked={!!opt && q.correctAnswer === opt}
-                  onChange={() => setQuestion(qi, { correctAnswer: opt })}
-                  title="Marcar como correcta" />
-                {q.type === 'true_false' ? (
-                  <span className="text-sm text-gray-700 flex-1">{opt}</span>
-                ) : (
-                  <input
-                    value={opt}
-                    onFocus={(e) => trackFocus(e.currentTarget, qi, 'option', oj)}
-                    onChange={(e) => setOption(qi, oj, e.target.value)}
-                    placeholder={`Opción ${oj + 1}`}
-                    className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
-                  />
-                )}
-                {q.type === 'multiple_choice' && q.options.length > 2 && (
-                  <button type="button" onClick={() => removeOption(qi, oj)}
-                    className="text-gray-400 hover:text-red-500 text-sm px-1" title="Quitar opción">×</button>
-                )}
-                {isRich(opt) && (
-                  <span className="text-sm text-gray-600"><MathText>{opt}</MathText></span>
-                )}
+          {q.type === 'short_answer' ? (
+            <>
+              <label className="block text-xs font-medium text-gray-500 mt-3 mb-1">
+                Respuestas aceptadas <span className="text-gray-400 font-normal">(cualquiera se da por correcta)</span>
+              </label>
+              <div className="space-y-2">
+                {q.options.map((opt, oj) => (
+                  <div key={oj} className="flex items-center gap-2">
+                    <input
+                      value={opt}
+                      onFocus={(e) => trackFocus(e.currentTarget, qi, 'option', oj)}
+                      onChange={(e) => setAccepted(qi, oj, e.target.value)}
+                      placeholder={`Respuesta aceptada ${oj + 1} (ej. a^2+2a+1)`}
+                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+                    />
+                    {q.options.length > 1 && (
+                      <button type="button" onClick={() => removeAccepted(qi, oj)}
+                        className="text-gray-400 hover:text-red-500 text-sm px-1" title="Quitar respuesta">×</button>
+                    )}
+                    {isRich(opt) && (
+                      <span className="text-sm text-gray-600"><MathText>{opt}</MathText></span>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {q.type === 'multiple_choice' && q.options.length < 6 && (
-            <button type="button" onClick={() => addOption(qi)}
-              className="mt-2 text-xs text-indigo-600 hover:text-indigo-800">+ Agregar opción</button>
+              {q.options.length < 6 && (
+                <button type="button" onClick={() => addAccepted(qi)}
+                  className="mt-2 text-xs text-indigo-600 hover:text-indigo-800">+ Agregar respuesta aceptada</button>
+              )}
+              <p className="text-[11px] text-gray-400 mt-1">
+                El alumno escribe su respuesta; se compara ignorando mayúsculas, tildes y espacios. Agrega las formas
+                equivalentes que quieras aceptar (con ∑ puedes escribir la respuesta en LaTeX).
+              </p>
+            </>
+          ) : (
+            <>
+              <label className="block text-xs font-medium text-gray-500 mt-3 mb-1">
+                Opciones {q.type === 'multiple_choice' && '(marca la correcta)'}
+              </label>
+              <div className="space-y-2">
+                {q.options.map((opt, oj) => (
+                  <div key={oj} className="flex items-center gap-2">
+                    <input type="radio" name={`correct-${qi}`}
+                      checked={!!opt && q.correctAnswer === opt}
+                      onChange={() => setQuestion(qi, { correctAnswer: opt })}
+                      title="Marcar como correcta" />
+                    {q.type === 'true_false' ? (
+                      <span className="text-sm text-gray-700 flex-1">{opt}</span>
+                    ) : (
+                      <input
+                        value={opt}
+                        onFocus={(e) => trackFocus(e.currentTarget, qi, 'option', oj)}
+                        onChange={(e) => setOption(qi, oj, e.target.value)}
+                        placeholder={`Opción ${oj + 1}`}
+                        className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+                      />
+                    )}
+                    {q.type === 'multiple_choice' && q.options.length > 2 && (
+                      <button type="button" onClick={() => removeOption(qi, oj)}
+                        className="text-gray-400 hover:text-red-500 text-sm px-1" title="Quitar opción">×</button>
+                    )}
+                    {isRich(opt) && (
+                      <span className="text-sm text-gray-600"><MathText>{opt}</MathText></span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {q.type === 'multiple_choice' && q.options.length < 6 && (
+                <button type="button" onClick={() => addOption(qi)}
+                  className="mt-2 text-xs text-indigo-600 hover:text-indigo-800">+ Agregar opción</button>
+              )}
+            </>
           )}
 
           <label className="block text-xs font-medium text-gray-500 mt-3 mb-1">Explicación (opcional)</label>
@@ -250,25 +313,40 @@ export default function ManualQuestionsEditor({
             </div>
             <div className="p-5">
               <p className="text-xs font-semibold text-gray-500 mb-1">
-                Pregunta {previewQi + 1} · {value[previewQi].type === 'true_false' ? 'V/F' : 'opción múltiple'}
+                Pregunta {previewQi + 1} · {value[previewQi].type === 'true_false' ? 'V/F' : value[previewQi].type === 'short_answer' ? 'respuesta escrita' : 'opción múltiple'}
               </p>
               <div className="text-sm text-gray-800 mb-3">
                 <MathText block>{value[previewQi].question || '(sin enunciado)'}</MathText>
               </div>
-              <div className="space-y-2">
-                {(value[previewQi].type === 'true_false' ? TF_OPTIONS : value[previewQi].options).map((opt, oj) => {
-                  const esCorrecta = !!opt && value[previewQi!].correctAnswer === opt;
-                  return (
-                    <label key={oj} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 border ${esCorrecta ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100'}`}>
-                      <input type="radio" disabled checked={esCorrecta} readOnly className="mt-1" />
-                      <span className={`text-sm ${esCorrecta ? 'text-emerald-800 font-medium' : 'text-gray-700'}`}>
-                        <MathText>{opt || `Opción ${oj + 1}`}</MathText>
-                      </span>
-                      {esCorrecta && <span className="ml-auto text-[11px] text-emerald-700 font-semibold">✓ correcta</span>}
-                    </label>
-                  );
-                })}
-              </div>
+              {value[previewQi].type === 'short_answer' ? (
+                <div className="space-y-2">
+                  <textarea disabled rows={2} placeholder="El alumno escribe su respuesta aquí…"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400 resize-none" />
+                  <div className="text-xs text-gray-600 bg-emerald-50 border border-emerald-100 rounded-lg p-2">
+                    <span className="font-semibold text-emerald-700">Respuestas aceptadas: </span>
+                    {value[previewQi].options.filter((o) => o.trim()).length ? (
+                      value[previewQi].options.filter((o) => o.trim()).map((o, k, arr) => (
+                        <span key={k} className="text-emerald-800"><MathText>{o}</MathText>{k < arr.length - 1 ? ' · ' : ''}</span>
+                      ))
+                    ) : <span className="text-gray-400">(ninguna configurada)</span>}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(value[previewQi].type === 'true_false' ? TF_OPTIONS : value[previewQi].options).map((opt, oj) => {
+                    const esCorrecta = !!opt && value[previewQi!].correctAnswer === opt;
+                    return (
+                      <label key={oj} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 border ${esCorrecta ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100'}`}>
+                        <input type="radio" disabled checked={esCorrecta} readOnly className="mt-1" />
+                        <span className={`text-sm ${esCorrecta ? 'text-emerald-800 font-medium' : 'text-gray-700'}`}>
+                          <MathText>{opt || `Opción ${oj + 1}`}</MathText>
+                        </span>
+                        {esCorrecta && <span className="ml-auto text-[11px] text-emerald-700 font-semibold">✓ correcta</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
               {value[previewQi].explanation?.trim() && (
                 <div className="mt-3 text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg p-2">
                   <span className="font-semibold text-gray-500">Feedback: </span>
@@ -294,6 +372,11 @@ export function validateManualQuestions(qs: ManualQuestion[]): string | null {
   for (let i = 0; i < qs.length; i++) {
     const q = qs[i];
     if (!q.question.trim()) return `Pregunta ${i + 1}: falta el enunciado.`;
+    if (q.type === 'short_answer') {
+      const accepted = q.options.map((o) => o.trim()).filter(Boolean);
+      if (!accepted.length) return `Pregunta ${i + 1}: agrega al menos una respuesta aceptada.`;
+      continue;
+    }
     const opts = q.options.map((o) => o.trim()).filter(Boolean);
     if (opts.length < 2) return `Pregunta ${i + 1}: necesita al menos 2 opciones.`;
     if (!q.correctAnswer.trim() || !opts.includes(q.correctAnswer.trim())) {

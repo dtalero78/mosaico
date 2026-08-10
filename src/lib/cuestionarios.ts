@@ -74,9 +74,33 @@ export function sanitizeCuestionarios(cs: Cuestionario[]): Cuestionario[] {
       id: q?.id ?? i,
       type: q?.type || 'multiple_choice',
       question: q?.question || '',
-      options: Array.isArray(q?.options) ? q.options : [],
+      // short_answer: las `options` son las respuestas aceptadas → NO se envían al alumno.
+      options: q?.type === 'short_answer' ? [] : (Array.isArray(q?.options) ? q.options : []),
     })),
   }));
+}
+
+/** Normaliza un texto de respuesta para comparación: sin acentos, minúsculas y
+ *  SIN espacios (así `a^2 + 2a + 1` == `a^2+2a+1`, útil en matemáticas). */
+export function normRespuesta(s: any): string {
+  return String(s ?? '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, '');
+}
+
+/**
+ * ¿La respuesta del alumno es correcta? MC/VF: igualdad exacta con la opción
+ * correcta. short_answer: coincide (normalizada, sin acentos/mayúsculas/espacios)
+ * con CUALQUIERA de las respuestas aceptadas (options ∪ correctAnswer).
+ */
+export function esRespuestaCorrecta(q: any, selected: any): boolean {
+  if (selected == null) return false;
+  if (q?.type === 'short_answer') {
+    const aceptadas = [q?.correctAnswer, ...(Array.isArray(q?.options) ? q.options : [])]
+      .map((a: any) => normRespuesta(a)).filter((a: string) => a.length > 0);
+    return aceptadas.includes(normRespuesta(selected));
+  }
+  return String(selected) === String(q?.correctAnswer ?? '');
 }
 
 /** Normaliza + valida un cuestionario para guardar. Devuelve {limpio, errores}. */
@@ -86,12 +110,16 @@ export function normalizarCuestionario(c: any, idx: number): { limpio: Cuestiona
   const minutos = clampMin(c?.minutos);
   const preguntas = parseJsonArray(c?.preguntas).map((q: any, i: number) => {
     const n = i + 1;
-    const type = q?.type === 'true_false' ? 'true_false' : 'multiple_choice';
+    const type = q?.type === 'true_false' ? 'true_false' : q?.type === 'short_answer' ? 'short_answer' : 'multiple_choice';
     const question = String(q?.question ?? '').trim();
+    // short_answer: `options` = respuestas aceptadas.
     const options = Array.isArray(q?.options) ? q.options.map((o: any) => String(o ?? '').trim()).filter((o: string) => o.length) : [];
-    const correctAnswer = String(q?.correctAnswer ?? '').trim();
+    let correctAnswer = String(q?.correctAnswer ?? '').trim();
     if (!question) errores.push(`«${titulo}» P${n}: sin enunciado.`);
-    if (type === 'true_false') {
+    if (type === 'short_answer') {
+      if (!options.length) errores.push(`«${titulo}» P${n}: respuesta escrita sin respuestas aceptadas.`);
+      if (!correctAnswer) correctAnswer = options[0] || '';
+    } else if (type === 'true_false') {
       if (!['Verdadero', 'Falso'].includes(correctAnswer)) errores.push(`«${titulo}» P${n}: verdadero/falso sin correcta.`);
     } else {
       if (options.length < 2) errores.push(`«${titulo}» P${n}: necesita 2+ opciones.`);

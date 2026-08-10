@@ -3,7 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { resolveStudentFromSession } from '@/services/panel-estudiante.service'
 import { query, queryOne } from '@/lib/postgres'
 import { ValidationError } from '@/lib/errors'
-import { deriveCuestionarios } from '@/lib/cuestionarios'
+import { deriveCuestionarios, esRespuestaCorrecta } from '@/lib/cuestionarios'
 
 /**
  * POST /api/postgres/panel-estudiante/evaluacion/submit
@@ -62,7 +62,7 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
     const qId = q.id ?? i
     const found = respuestasIn.find((r) => String(r.qId) === String(qId))
     const selected = found ? found.selected : null
-    const ok = selected != null && String(selected) === String(q.correctAnswer ?? '')
+    const ok = esRespuestaCorrecta(q, selected)
     if (ok) score++
     return { qId, question: q.question ?? '', selected, correct: q.correctAnswer ?? '', ok }
   })

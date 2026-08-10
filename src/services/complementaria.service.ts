@@ -122,7 +122,7 @@ export async function generateQuestions(
   if (existing) {
     return {
       attemptId: existing._id,
-      questions: existing.questions,
+      questions: sanitizeQuestionsForClient(existing.questions),
       attemptNumber: existing.attemptNumber,
     };
   }
@@ -162,7 +162,7 @@ export async function generateQuestions(
     ...(plataforma ? { plataforma } : {}),
   });
 
-  return { attemptId, questions, attemptNumber };
+  return { attemptId, questions: sanitizeQuestionsForClient(questions), attemptNumber };
 }
 
 // ── Grade Answers ──
@@ -361,10 +361,17 @@ Return a JSON object with:
 
 // ── Fase 3: evaluación MANUAL (offline) ──
 
-/** Normaliza para el formato de quiz. Solo opción múltiple / verdadero-falso. */
+/**
+ * Normaliza para el formato de quiz. Tipos soportados (todos se autocalifican
+ * offline, sin OpenAI): opción múltiple, verdadero-falso y respuesta escrita
+ * (short_answer, cuyas `options` son las respuestas aceptadas).
+ */
 function normalizeManualQuestions(preguntas: any[]): any[] {
   return preguntas.map((q: any, i: number) => {
-    const type = q?.type === 'true_false' ? 'true_false' : 'multiple_choice';
+    const type =
+      q?.type === 'true_false' ? 'true_false'
+      : q?.type === 'short_answer' ? 'short_answer'
+      : 'multiple_choice';
     const options = Array.isArray(q?.options)
       ? q.options.map((o: any) => String(o ?? '')).filter((o: string) => o.length > 0)
       : [];
@@ -372,6 +379,7 @@ function normalizeManualQuestions(preguntas: any[]): any[] {
       id: Number(q?.id) || i + 1,
       type,
       question: String(q?.question ?? ''),
+      // short_answer: `options` = respuestas aceptadas (no se muestran al alumno).
       options: type === 'true_false' && options.length !== 2 ? ['Verdadero', 'Falso'] : options,
       correctAnswer: String(q?.correctAnswer ?? ''),
       explanation: String(q?.explanation ?? ''),
@@ -379,11 +387,29 @@ function normalizeManualQuestions(preguntas: any[]): any[] {
   });
 }
 
-/** Normaliza un texto de respuesta para comparación (sin acentos, minúsculas, espacios colapsados). */
+/**
+ * Quita del payload que va al NAVEGADOR las respuestas de las preguntas escritas
+ * (short_answer): el alumno escribe en un textarea, así que no necesita ver
+ * `options`/`correctAnswer`, y así no se filtran las respuestas aceptadas. La
+ * copia completa sigue guardada en el intento (BD) para calificar en el servidor.
+ * MC/VF quedan igual que antes (sus opciones sí son visibles).
+ */
+function sanitizeQuestionsForClient(questions: any[]): any[] {
+  return (Array.isArray(questions) ? questions : []).map((q: any) => {
+    if (q?.type === 'short_answer') {
+      const { correctAnswer, options, ...rest } = q;
+      return { ...rest, options: [] };
+    }
+    return q;
+  });
+}
+
+/** Normaliza un texto de respuesta para comparación: sin acentos, minúsculas y
+ *  SIN espacios (así `a^2 + 2a + 1` == `a^2+2a+1`, útil en matemáticas). */
 function normAnswer(s: string): string {
   return String(s ?? '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().replace(/\s+/g, ' ').trim();
+    .toLowerCase().replace(/\s+/g, '');
 }
 
 /**
@@ -398,14 +424,25 @@ function gradeDeterministic(
   let correct = 0;
   const results = questions.map((q: any, i: number) => {
     const student = typeof answers[i] === 'string' ? answers[i] : (answers[i]?.answer || '');
-    const ok = normAnswer(student) === normAnswer(q?.correctAnswer);
+    let ok: boolean;
+    if (q?.type === 'short_answer') {
+      // Respuesta escrita: correcta si coincide (normalizada) con CUALQUIERA de
+      // las respuestas aceptadas (options ∪ correctAnswer).
+      const aceptadas = [q?.correctAnswer, ...(Array.isArray(q?.options) ? q.options : [])]
+        .map((a: any) => normAnswer(String(a ?? '')))
+        .filter((a: string) => a.length > 0);
+      ok = aceptadas.includes(normAnswer(student));
+    } else {
+      ok = normAnswer(student) === normAnswer(q?.correctAnswer);
+    }
     if (ok) correct++;
+    const respCorrecta = q?.correctAnswer || (Array.isArray(q?.options) ? q.options.find((o: any) => String(o ?? '').trim()) : '') || '—';
     return {
       questionId: q?.id ?? i + 1,
       correct: ok,
       feedback: ok
         ? '¡Correcto!'
-        : `Respuesta correcta: ${q?.correctAnswer || '—'}${q?.explanation ? `. ${q.explanation}` : ''}`,
+        : `Respuesta correcta: ${respCorrecta}${q?.explanation ? `. ${q.explanation}` : ''}`,
     };
   });
   const score = questions.length ? Math.round((correct / questions.length) * 100) : 0;
