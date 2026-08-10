@@ -470,10 +470,10 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
             <label className="block text-sm font-medium text-gray-700">Inicio activación (plataforma)</label>
             <p className="mt-1 text-sm text-gray-900">
               {(student as any).inicioCurso
-                ? formatDate(new Date(new Date((student as any).inicioCurso).getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+                ? formatDate(new Date(new Date((student as any).inicioCurso).getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
                 : '—'}
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">Inicio del curso menos 1 semana</p>
+            <p className="text-xs text-gray-400 mt-0.5">Inicio del curso menos 10 días</p>
           </div>
         </div>
       </div>

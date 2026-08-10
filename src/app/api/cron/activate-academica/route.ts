@@ -16,7 +16,7 @@ const CRON_SECRET = process.env.CRON_SECRET
  *     y USUARIOS_ROLES.activo=false (login bloqueado).
  *   - Al aprobar, PEOPLE pasa a activo/Aprobado y se precargan los bookings, pero
  *     ACADEMICA y el login SIGUEN inactivos.
- *   - Este cron los enciende cuando faltan <= 7 días para `inicioCurso`, SÓLO si el
+ *   - Este cron los enciende cuando faltan <= 10 días para `inicioCurso`, SÓLO si el
  *     beneficiario está APROBADO (PEOPLE.aprobacion='Aprobado').
  *
  * Por cada ACADEMICA elegible:
@@ -32,14 +32,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await recordCronRun('activate-academica', async () => {
-      // ACADEMICA inactivos, aprobados, con inicioCurso a <= 7 días
+      // ACADEMICA inactivos, aprobados, con inicioCurso a <= 10 días
       const elegibles = await query(
         `SELECT a."_id", a."numeroId", a."email", a."primerNombre", a."primerApellido", a."inicioCurso"
            FROM "ACADEMICA" a
            JOIN "PEOPLE" p ON p."_id" = a."peopleId"
           WHERE a."estadoInactivo" = true
             AND a."inicioCurso" IS NOT NULL
-            AND (a."inicioCurso"::date - INTERVAL '7 days') <= CURRENT_DATE
+            AND (a."inicioCurso"::date - INTERVAL '10 days') <= CURRENT_DATE
             AND p."aprobacion" = 'Aprobado'
           ORDER BY a."inicioCurso" ASC`
       )
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: result.processedCount === 0
-        ? 'No hay beneficiarios para activar (ninguno a <=7 días del inicio del curso)'
+        ? 'No hay beneficiarios para activar (ninguno a <=10 días del inicio del curso)'
         : `Proceso completado. ${result.successCount} activados, ${result.failedCount} fallidos.`,
       processed: result.processedCount,
       successful: result.successCount,
