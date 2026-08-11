@@ -137,10 +137,12 @@ export default function NuevoUsuarioPage() {
       const presignData = await presignRes.json()
       if (!presignData.success) throw new Error(presignData.error || 'Error al generar URL')
 
-      // 2. Upload directly to Spaces
+      // 2. Upload directly to Spaces. El presign firma con ACL public-read, así
+      //    que el PUT debe mandar el header x-amz-acl para que la foto quede
+      //    pública (si no, el objeto se crea PRIVADO y la foto no carga → 403).
       const uploadRes = await fetch(presignData.presignedUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
+        headers: { 'Content-Type': file.type, 'x-amz-acl': 'public-read' },
         body: file,
       })
       if (!uploadRes.ok) throw new Error('Error al subir la foto')
