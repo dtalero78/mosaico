@@ -62,3 +62,55 @@ export async function sendWhatsAppMessage(toNumber: string, messageBody: string)
     return { response: responseText };
   }
 }
+
+export type WhatsAppMediaKind = 'image' | 'video' | 'document';
+
+const WHAPI_MEDIA_ENDPOINT: Record<WhatsAppMediaKind, string> = {
+  image: 'https://gate.whapi.cloud/messages/image',
+  video: 'https://gate.whapi.cloud/messages/video',
+  document: 'https://gate.whapi.cloud/messages/document',
+};
+
+/**
+ * Send a media message (image / video / document) via WhatsApp (Whapi.cloud).
+ * `mediaUrl` debe ser una URL accesible por Whapi (p.ej. presigned de Spaces).
+ * `caption` va como texto del mensaje. `filename` solo aplica a documentos.
+ * Throws on failure.
+ */
+export async function sendWhatsAppMedia(
+  toNumber: string,
+  mediaUrl: string,
+  kind: WhatsAppMediaKind,
+  caption?: string,
+  filename?: string,
+): Promise<any> {
+  const formattedNumber = formatPhoneNumber(toNumber);
+  const payload: Record<string, any> = { to: formattedNumber, media: mediaUrl };
+  if (caption && caption.trim()) payload.caption = caption;
+  if (kind === 'document' && filename) payload.filename = filename;
+
+  const response = await fetch(WHAPI_MEDIA_ENDPOINT[kind], {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'authorization': `Bearer ${WHAPI_TOKEN}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    let errorDetails = responseText;
+    try {
+      const errorJson = JSON.parse(responseText);
+      errorDetails = errorJson.message || errorJson.error || responseText;
+    } catch { /* keep raw text */ }
+    throw new Error(`WhatsApp media API error (${response.status}): ${errorDetails}`);
+  }
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    return { response: responseText };
+  }
+}

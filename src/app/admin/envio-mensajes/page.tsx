@@ -72,6 +72,18 @@ interface SendResult {
 }
 
 const MAX_RECIPIENTS = 300
+// Con adjunto (imagen/video/documento) el tope baja a 30 para no arriesgar el
+// bloqueo de la línea (WhatsApp marca los envíos masivos con media muy agresivamente).
+const MAX_RECIPIENTS_MEDIA = 30
+const MAX_FILE_MB = 16
+
+/** Deriva el tipo de media Whapi del archivo. */
+function mediaKindFromFile(f: File): 'image' | 'video' | 'document' {
+  const t = f.type || ''
+  if (t.startsWith('image/')) return 'image'
+  if (t.startsWith('video/')) return 'video'
+  return 'document'
+}
 
 type Mode = 'individual' | 'masivo' | 'apoderados-csv' | 'apoderados-filtro'
 
@@ -151,6 +163,10 @@ export default function EnvioMensajesPage() {
   // Send
   const [sending, setSending] = useState(false)
   const [results, setResults] = useState<SendResult[] | null>(null)
+
+  // Adjunto opcional (imagen/video/documento) — con tope de 30 destinatarios.
+  const [attachFile, setAttachFile] = useState<File | null>(null)
+  const [attachUploading, setAttachUploading] = useState(false)
 
   // Cargar plantillas activas al montar
   useEffect(() => {
@@ -366,16 +382,38 @@ export default function EnvioMensajesPage() {
       toast.error('No hay destinatarios válidos seleccionados')
       return
     }
-    if (destinatarios.length > MAX_RECIPIENTS) {
-      toast.error(`Máximo ${MAX_RECIPIENTS} destinatarios por envío`)
+    const effectiveMax = attachFile ? MAX_RECIPIENTS_MEDIA : MAX_RECIPIENTS
+    if (destinatarios.length > effectiveMax) {
+      toast.error(attachFile
+        ? `Con adjunto el máximo es ${MAX_RECIPIENTS_MEDIA} destinatarios (seleccionados ${destinatarios.length}). Deselecciona algunos.`
+        : `Máximo ${MAX_RECIPIENTS} destinatarios por envío`)
       return
     }
     setSending(true); setResults(null)
     try {
+      // Subir el adjunto (si hay) a Spaces vía presigned PUT.
+      let media: { key: string; kind: string; filename: string } | undefined
+      if (attachFile) {
+        setAttachUploading(true)
+        const pr = await fetch('/api/admin/envio-mensajes/presign', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: attachFile.name, contentType: attachFile.type || 'application/octet-stream', size: attachFile.size }),
+        })
+        const pj = await pr.json()
+        if (!pr.ok || !pj.success) throw new Error(pj?.error || 'No se pudo preparar la subida del adjunto')
+        const put = await fetch(pj.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': attachFile.type || 'application/octet-stream' },
+          body: attachFile,
+        })
+        if (!put.ok) throw new Error(`Error subiendo el adjunto (${put.status})`)
+        media = { key: pj.key, kind: mediaKindFromFile(attachFile), filename: attachFile.name }
+        setAttachUploading(false)
+      }
       const r = await fetch('/api/admin/envio-mensajes/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plantillaId: selectedTemplate._id, destinatarios }),
+        body: JSON.stringify({ plantillaId: selectedTemplate._id, destinatarios, media }),
       })
       const j = await r.json()
       if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
@@ -385,6 +423,7 @@ export default function EnvioMensajesPage() {
       toast.error(e?.message || 'Error en envío')
     } finally {
       setSending(false)
+      setAttachUploading(false)
     }
   }
 
@@ -397,6 +436,7 @@ export default function EnvioMensajesPage() {
     setLookupItems([])
     setSelectedNumeroIds(new Set())
     setResults(null)
+    setAttachFile(null)
     setFiltroCampaign(''); setFiltroCurso(''); setFiltroSalon(''); setFiltroExcede(null)
   }
 
@@ -541,6 +581,48 @@ export default function EnvioMensajesPage() {
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          )}
+
+          {/* Adjunto opcional (imagen / video / documento) */}
+          {mode && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Adjunto <span className="font-normal text-gray-400">(opcional — imagen, video o documento)</span>
+              </label>
+              {!attachFile ? (
+                <input
+                  type="file"
+                  accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                  onChange={e => {
+                    const f = e.target.files?.[0]
+                    if (!f) return
+                    if (f.size > MAX_FILE_MB * 1024 * 1024) {
+                      toast.error(`El archivo supera ${MAX_FILE_MB} MB (${(f.size / 1024 / 1024).toFixed(1)} MB). Reduce su tamaño.`)
+                      e.target.value = ''
+                      return
+                    }
+                    setAttachFile(f)
+                  }}
+                  className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                />
+              ) : (
+                <div className="flex items-center justify-between gap-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{attachFile.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {mediaKindFromFile(attachFile) === 'image' ? '🖼 Imagen' : mediaKindFromFile(attachFile) === 'video' ? '🎬 Video' : '📄 Documento'} · {(attachFile.size / 1024 / 1024).toFixed(1)} MB
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setAttachFile(null)} className="text-sm text-red-600 hover:text-red-800 shrink-0">Quitar</button>
+                </div>
+              )}
+              {attachFile && (
+                <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 space-y-1">
+                  <p>⚠️ <b>Con adjunto el envío se limita a {MAX_RECIPIENTS_MEDIA} destinatarios</b> para no arriesgar el bloqueo de la línea de WhatsApp.</p>
+                  <p>El texto de la plantilla se envía como <b>descripción (caption)</b> del archivo. Tamaño máximo {MAX_FILE_MB} MB — los <b>videos</b> grandes pueden fallar; usa archivos livianos.</p>
+                </div>
               )}
             </div>
           )}
@@ -825,7 +907,9 @@ export default function EnvioMensajesPage() {
           )}
 
           {/* Paso 5: Confirmación + envío */}
-          {lookupItems.length > 0 && !results && (
+          {lookupItems.length > 0 && !results && (() => {
+            const overMediaCap = !!attachFile && selectedNumeroIds.size > MAX_RECIPIENTS_MEDIA
+            return (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <p className="text-sm font-semibold text-gray-900">
@@ -833,19 +917,26 @@ export default function EnvioMensajesPage() {
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {selectedTemplate ? `Plantilla: "${selectedTemplate.nombre}"` : 'Selecciona una plantilla arriba'}
+                  {attachFile && <> · 📎 {attachFile.name}</>}
                 </p>
+                {overMediaCap && (
+                  <p className="text-xs text-amber-700 mt-1 font-medium">
+                    Con adjunto solo se envía a {MAX_RECIPIENTS_MEDIA}. Deselecciona {selectedNumeroIds.size - MAX_RECIPIENTS_MEDIA} destinatario(s).
+                  </p>
+                )}
               </div>
               <button
                 type="button"
                 onClick={handleSend}
-                disabled={!selectedTemplate || selectedNumeroIds.size === 0 || sending}
+                disabled={!selectedTemplate || selectedNumeroIds.size === 0 || sending || overMediaCap}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
               >
                 <PaperAirplaneIcon className="h-5 w-5" />
-                {sending ? 'Enviando…' : `Enviar ${selectedNumeroIds.size} mensajes`}
+                {attachUploading ? 'Subiendo adjunto…' : sending ? 'Enviando…' : `Enviar ${selectedNumeroIds.size} mensajes`}
               </button>
             </div>
-          )}
+            )
+          })()}
 
           {/* Paso 6: Resultados */}
           {results && (

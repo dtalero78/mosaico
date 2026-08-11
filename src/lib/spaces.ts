@@ -69,3 +69,16 @@ export async function getPresignedGetUrl(key: string, expiresInSeconds = 600): P
   const command = new GetObjectCommand({ Bucket: SPACES_BUCKET, Key: key });
   return getSignedUrl(spacesClient, command, { expiresIn: expiresInSeconds });
 }
+
+/**
+ * URL temporal de ESCRITURA (presigned PUT) para subir un objeto directo desde el
+ * navegador. El PUT del cliente debe mandar el mismo `Content-Type`. Objeto privado.
+ */
+export async function getPresignedPutUrl(
+  key: string,
+  contentType: string,
+  expiresInSeconds = 600,
+): Promise<string> {
+  const command = new PutObjectCommand({ Bucket: SPACES_BUCKET, Key: key, ContentType: contentType });
+  return getSignedUrl(spacesClient, command, { expiresIn: expiresInSeconds });
+}

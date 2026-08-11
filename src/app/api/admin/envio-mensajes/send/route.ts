@@ -29,9 +29,13 @@ import { MantenimientoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { MessageTemplatesRepository } from '@/repositories/message-templates.repository';
 import { fillTemplate } from '@/lib/message-template-filler';
-import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { sendWhatsAppMessage, sendWhatsAppMedia, type WhatsAppMediaKind } from '@/lib/whatsapp';
+import { getPresignedGetUrl } from '@/lib/spaces';
 
 const MAX_SEND = 300;
+// Con adjunto (imagen/video/documento) el tope baja para no arriesgar el bloqueo
+// de la línea: WhatsApp marca los envíos masivos con media mucho más agresivamente.
+const MAX_SEND_MEDIA = 30;
 
 interface Recipient {
   numeroId: string;
@@ -50,11 +54,20 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
   const plantillaId = String(body?.plantillaId || '').trim();
   const destinatarios: Recipient[] = Array.isArray(body?.destinatarios) ? body.destinatarios : [];
+  // Adjunto opcional (subido antes a Spaces vía /presign): { key, kind, filename }
+  const mediaIn = body?.media && body.media.key ? body.media : null;
+  const mediaKind: WhatsAppMediaKind = ['image', 'video', 'document'].includes(mediaIn?.kind)
+    ? mediaIn.kind : 'document';
 
   if (!plantillaId) throw new ValidationError('plantillaId requerido');
   if (destinatarios.length === 0) throw new ValidationError('destinatarios requerido (array no vacío)');
-  if (destinatarios.length > MAX_SEND) {
-    throw new ValidationError(`Máximo ${MAX_SEND} destinatarios por operación. Recibidos: ${destinatarios.length}`);
+  const cap = mediaIn ? MAX_SEND_MEDIA : MAX_SEND;
+  if (destinatarios.length > cap) {
+    throw new ValidationError(
+      mediaIn
+        ? `Con adjunto el máximo es ${MAX_SEND_MEDIA} destinatarios. Recibidos: ${destinatarios.length}`
+        : `Máximo ${MAX_SEND} destinatarios por operación. Recibidos: ${destinatarios.length}`
+    );
   }
 
   // Cargar plantilla y validar que está activa
@@ -79,6 +92,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     error?: string;
   }> = [];
 
+  // Si hay adjunto, generar UNA URL de lectura (Whapi la descarga). TTL holgado
+  // para los ≤30 envíos secuenciales.
+  const mediaUrl = mediaIn ? await getPresignedGetUrl(mediaIn.key, 1800) : null;
+
   for (const d of destinatarios) {
     const mensajeFinal = fillTemplate(tpl.contenido, {
       nombre: d.nombre, primerApellido: d.primerApellido,
@@ -88,7 +105,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     });
 
     try {
-      await sendWhatsAppMessage(d.celular, mensajeFinal);
+      if (mediaUrl) await sendWhatsAppMedia(d.celular, mediaUrl, mediaKind, mensajeFinal, mediaIn?.filename);
+      else await sendWhatsAppMessage(d.celular, mensajeFinal);
       resultados.push({
         numeroId: d.numeroId,
         nombre: `${d.nombre || ''} ${d.primerApellido || ''}`.trim() || '(sin nombre)',
