@@ -16,7 +16,7 @@ import SessionGeneralTab from '@/components/session/SessionGeneralTab'
 import SessionStudentsTab from '@/components/session/SessionStudentsTab'
 import SessionMaterialTab from '@/components/session/SessionMaterialTab'
 import SessionAdvisorMaterialTab from '@/components/session/SessionAdvisorMaterialTab'
-import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window'
+import { getSessionWindow, EXPIRED_MESSAGE, ATTENDANCE_WINDOW_MIN } from '@/lib/session-window'
 
 interface CalendarioEvent {
   _id: string
@@ -255,16 +255,16 @@ export default function SesionPage() {
 
   // Para mostrar banners coherentes:
   //   - Si la sesión ya está cerrada → no mostramos nada (badge ✓ del botón ya lo dice).
-  //   - Si está EN CURSO (0..+120) Y no cerrada → banner ámbar "Sesión en curso"
+  //   - Si está EN CURSO (0..+300) Y no cerrada → banner ámbar "Sesión en curso"
   //     (con countdown del momento límite para registrar).
   //   - Si expiró Y advisor (no coordinator) → banner ámbar bloqueante.
   //   - Si es coordinator entrando a una sesión vencida → banner azul informativo.
   const sesionCerrada = evento.sesionCerrada === true
   const showInProgressBanner = !sesionCerrada
     && windowState.minutesElapsed >= 0
-    && windowState.minutesElapsed <= 120
+    && windowState.minutesElapsed <= ATTENDANCE_WINDOW_MIN
   const showExpiredAdvisorBanner = !sesionCerrada && windowState.isExpired
-  const showCoordinatorBanner = !sesionCerrada && windowState.isCoordinator && windowState.minutesElapsed > 120
+  const showCoordinatorBanner = !sesionCerrada && windowState.isCoordinator && windowState.minutesElapsed > ATTENDANCE_WINDOW_MIN
 
   // Info del grupo compartido. El siguiente hermano para el flujo guiado
   // es el primero (alfabético por nivel) que NO sea el actual Y aún esté

@@ -28,7 +28,7 @@ const UPDATABLE_FIELDS = [
  * Used by the session detail page (SessionStudentsTab).
  *
  * Ventana temporal: el advisor solo puede marcar asistencia/evaluación
- * desde el inicio del evento hasta +120 min después. Pasado eso, debe
+ * desde el inicio del evento hasta +5h después. Pasado eso, debe
  * pasar por el Coordinador Académico. Bypass por rol:
  * COORDINADOR_ACADEMICO / SUPER_ADMIN / ADMIN.
  */
@@ -43,7 +43,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   }
 
   // Validación de ventana temporal: si el evento existe en CALENDARIO,
-  // verificar que estamos dentro de [0..+120min] o que el rol es coordinador.
+  // verificar que estamos dentro de [0..+300min] o que el rol es coordinador.
   // Si el evento no está en CALENDARIO (datos legacy de Wix sin link), no
   // bloqueamos — comportamiento previo.
   const evt = await queryOne<{ dia: Date | null; tipo: string | null }>(

@@ -11,6 +11,7 @@ import { PeopleRepository } from '@/repositories/people.repository';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { query, queryOne, queryMany } from '@/lib/postgres';
+import { inicioProximaSemanaUTC } from '@/lib/semana';
 
 // Ensure ACADEMICA.fechaPromocionEspecial column exists (idempotent, once per server start).
 // Written when student is promoted from F3 Step 45 to MASTER/IELS/B2FIRST/TOEFL;
@@ -215,7 +216,13 @@ export async function getAcademicHistory(id: string, limit: number = 100) {
   if (!academicRecord) throw new NotFoundError('Academic record', id);
 
   // Get class history using the student's _id
-  const rawClasses = await BookingRepository.findByStudentId(academicRecord._id, limit);
+  const rawAll = await BookingRepository.findByStudentId(academicRecord._id, limit);
+  // Historial: solo clases pasadas + de la semana corriente; se ocultan las de
+  // semanas FUTURAS (fechaEvento < inicio de la próxima semana).
+  const cutoff = await inicioProximaSemanaUTC();
+  const rawClasses = rawAll.filter((c: any) =>
+    !c.fechaEvento || new Date(c.fechaEvento).getTime() < cutoff
+  );
 
   // Target de la nivelación (las sesiones NIVELACION no traen sesionModulo/Leccion;
   // su módulo/lección reforzada vive en ACADEMICA.detalleNivelacion).

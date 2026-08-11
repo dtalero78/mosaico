@@ -22,6 +22,7 @@ import { ForbiddenError, NotFoundError } from '@/lib/errors';
 import { generateReport } from '@/services/progress.service';
 import { getEffectiveStepNumber } from '@/services/student-booking.service';
 import { isContractExpired } from '@/lib/contract-expiry';
+import { inicioProximaSemanaUTC } from '@/lib/semana';
 
 // One-time migration: ensure fechaInicioESS column exists in ACADEMICA and PEOPLE
 let essMigrationDone = false;
@@ -402,11 +403,19 @@ export async function getStudentProgress(academicaId: string) {
  */
 export async function getStudentHistory(academicaId: string) {
   const bookings = await BookingRepository.findByStudentId(academicaId, 500);
+  // El historial muestra SOLO las clases pasadas + las de la semana corriente; se
+  // ocultan las sesiones de semanas FUTURAS (fechaEvento < inicio de la próxima semana).
+  const cutoff = await inicioProximaSemanaUTC();
   // Las sesiones de NIVELACIÓN no están mapeadas a una lección (sesionModulo/Leccion
   // = null); su target vive en ACADEMICA.detalleNivelacion. Se rellena para que la
   // tabla muestre el módulo/lección que se está reforzando.
   const niv = await getDetalleNivelacion(academicaId);
-  return bookings.map((b: any) => {
+  return bookings
+    .filter((b: any) => {
+      if (!b.fechaEvento) return true; // sin fecha (raro) → conservar
+      return new Date(b.fechaEvento).getTime() < cutoff;
+    })
+    .map((b: any) => {
     const esNiv = b.tipo === 'NIVELACION';
     return {
       ...b,

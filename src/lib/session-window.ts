@@ -6,15 +6,17 @@
  * inclusivos):
  *
  *   ┌──────────────────────────────────────────────────────────────┐
- *   │ 0min          +30min                +120min                  │
- *   │  │              │                      │                     │
- *   │  ├── Marcar asistencia (ADVISOR) ─────┤                     │
- *   │  │                                    │                     │
- *   │  │            ├── Registrar Sesión ──┤                      │
- *   │  │                                    │                     │
+ *   │ 0min          +30min                       +300min (5h)      │
+ *   │  │              │                              │             │
+ *   │  ├── Marcar asistencia (ADVISOR) ─────────────┤             │
+ *   │  │                                            │             │
+ *   │  │            ├── Registrar Sesión ──────────┤              │
+ *   │  │                                            │             │
  *   │  ├──── COORDINADOR / ADMIN: siempre ───────────────────────┤
  *   └──────────────────────────────────────────────────────────────┘
  *
+ * El advisor puede marcar asistencia y registrar (cerrar) la sesión hasta 5h
+ * después del inicio; el botón "Registrar Sesión" se habilita a partir de +30min.
  * Bypass total (sin ventanas): COORDINADOR_ACADEMICO, SUPER_ADMIN, ADMIN.
  * Mismo helper se importa en cliente y servidor → la UI muestra lo mismo
  * que el endpoint permite.
@@ -22,9 +24,9 @@
  * NO importar `'server-only'` — esto vive en ambos lados.
  */
 
-export const ATTENDANCE_WINDOW_MIN = 120;  // 0 .. +120 min
-export const REGISTER_OPEN_MIN     = 30;   // +30 .. +120 min
-export const REGISTER_CLOSE_MIN    = 120;
+export const ATTENDANCE_WINDOW_MIN = 300;  // 0 .. +300 min (5h)
+export const REGISTER_OPEN_MIN     = 30;   // +30 .. +300 min
+export const REGISTER_CLOSE_MIN    = 300;  // 5 horas
 
 /** Roles que NO están atados a ventanas temporales. */
 const BYPASS_ROLES = new Set(['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN']);

@@ -25,7 +25,7 @@ import { query, queryOne, queryMany } from '@/lib/postgres';
 import { ValidationError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { AdvisorEventLogRepository, AdvisorEventLogRow } from '@/repositories/advisor-event-log.repository';
 import { AdvisorNotesAuditRepository } from '@/repositories/advisor-notes-audit.repository';
-import { getSessionWindow } from '@/lib/session-window';
+import { getSessionWindow, REGISTER_CLOSE_MIN } from '@/lib/session-window';
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const EDIT_WINDOW_MIN_MINUTES = 30;
@@ -508,10 +508,10 @@ export async function closeSession(
     // pasa role distinto, queda consistente.
     motivoCierre = 'GESTION_COORDINADOR';
   } else if (roleUpper && isCoordinatorRole) {
-    // Coordinador cerrando fuera de la ventana del advisor (es decir, después
-    // de +120 min). Mismo motivo.
+    // Coordinador cerrando fuera de la ventana del advisor (después del tope de
+    // registro, +5h). Mismo motivo.
     const minutesElapsed = (Date.now() - new Date(evt.dia).getTime()) / 60_000;
-    if (minutesElapsed > 120) motivoCierre = 'GESTION_COORDINADOR';
+    if (minutesElapsed > REGISTER_CLOSE_MIN) motivoCierre = 'GESTION_COORDINADOR';
   }
 
   const notas = (evt.notasadvisor && evt.notasadvisor.trim().length > 0)
