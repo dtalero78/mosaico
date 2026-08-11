@@ -103,7 +103,16 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
   const advisor = (curso.guia || '').trim();
   const nivel = curso.tipoCurso;
   const limite = Number(curso.numeroUsuarios) || 0;
-  const linkZoom = curso.linkZoom || null;
+  // El link de la sesión es la sala Zoom de la GUÍA asignada (ella dicta la clase
+  // en su sala). Si el curso trae un linkZoom explícito, ese manda; si no, se
+  // resuelve el zoom de la guía. Sin guía / sin zoom → null (queda sin link).
+  let linkZoom = curso.linkZoom || null;
+  if (!linkZoom && advisor) {
+    const gz = await query<{ zoom: string | null }>(
+      `SELECT "zoom" FROM "GUIAS" WHERE "_id" = $1 LIMIT 1`, [advisor]
+    ).catch(() => ({ rows: [] as { zoom: string | null }[] }));
+    linkZoom = (gz.rows[0]?.zoom || '').trim() || null;
+  }
 
   // INSERT multi-fila. Columnas parametrizadas por evento (14); el resto literales.
   const cols = '"_id","tipo","evento","fecha","hora","dia","advisor","nivel","titulo","tituloONivel","nombreEvento","linkZoom","limiteUsuarios","cursoCampaignId","inscritos","origen","sesionCerrada","_createdDate","_updatedDate"';

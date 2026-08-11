@@ -68,19 +68,28 @@ export async function materializarCalendarioImpulsa(
   await query(`DELETE FROM "CALENDARIO" WHERE "cursoCampaignId" = $1`, [curso._id]);
 
   if (eventos.length) {
-    const cols = '"_id","tipo","evento","fecha","hora","dia","advisor","nivel","titulo","tituloONivel","nombreEvento","limiteUsuarios","cursoCampaignId","inscritos","origen","sesionCerrada","campaign","curso","salon","_createdDate","_updatedDate"';
+    const cols = '"_id","tipo","evento","fecha","hora","dia","advisor","nivel","titulo","tituloONivel","nombreEvento","linkZoom","limiteUsuarios","cursoCampaignId","inscritos","origen","sesionCerrada","campaign","curso","salon","_createdDate","_updatedDate"';
     const titulo = [curso.campaign, curso.tipoCurso, (curso.salon || '').trim()].filter(Boolean).join(' - ');
     const advisor = (curso.guia || '').trim();
     const limite = Number(curso.numeroUsuarios) || 0;
-    // $1,$2,$3 = campaign, curso, salon (constantes del curso). Luego 12 params por evento.
-    const params: any[] = [curso.campaign, curso.tipoCurso, (curso.salon || '').trim()];
+    // El link de la sesión es la sala Zoom de la GUÍA asignada (igual para todos
+    // los eventos del curso). Sin guía / sin zoom → null (queda sin link).
+    let linkZoom: string | null = null;
+    if (advisor) {
+      const gz = await query<{ zoom: string | null }>(
+        `SELECT "zoom" FROM "GUIAS" WHERE "_id" = $1 LIMIT 1`, [advisor]
+      ).catch(() => ({ rows: [] as { zoom: string | null }[] }));
+      linkZoom = (gz.rows[0]?.zoom || '').trim() || null;
+    }
+    // $1,$2,$3,$4 = campaign, curso, salon, linkZoom (constantes del curso). Luego 12 params por evento.
+    const params: any[] = [curso.campaign, curso.tipoCurso, (curso.salon || '').trim(), linkZoom];
     const rows: string[] = [];
     eventos.forEach((ev, r) => {
-      const b = 3 + r * 12;
+      const b = 4 + r * 12;
       rows.push(
         `($${b + 1},$${b + 2},$${b + 2},$${b + 3},$${b + 4},` +
         `($${b + 5}::timestamp AT TIME ZONE $${b + 6}),` +
-        `$${b + 7},$${b + 8},$${b + 9},$${b + 9},$${b + 10},$${b + 11},$${b + 12},` +
+        `$${b + 7},$${b + 8},$${b + 9},$${b + 9},$${b + 10},$4,$${b + 11},$${b + 12},` +
         `0,'POSTGRES',false,$1,$2,$3,NOW(),NOW())`
       );
       params.push(
