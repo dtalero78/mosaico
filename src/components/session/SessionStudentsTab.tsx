@@ -144,6 +144,8 @@ export default function SessionStudentsTab({
 
   // Cierre de nivelación cuando el EVENTO es tipo NIVELACION
   const esNivelacionEvent = (evento?.tipo || evento?.evento) === 'NIVELACION'
+  // Curso IMPULSA (cualquier salón): oculta la casilla de Nivelación.
+  const esImpulsa = String(evento?.nivel || (evento as any)?.curso || '').trim().toUpperCase() === 'IMPULSA'
   const [showNivelComentario, setShowNivelComentario] = useState(false)
   const [nivelComentarioText, setNivelComentarioText] = useState('')
   const [showNivelReminder, setShowNivelReminder] = useState(false)
@@ -516,8 +518,9 @@ export default function SessionStudentsTab({
                   </div>
                   {/* Nivelación — casilla + dropdown de lecciones del curso.
                       Se OCULTA cuando el evento es tipo NIVELACION (el evento ya
-                      es la nivelación; marcar asistencia la cierra). */}
-                  {!esNivelacionEvent && (
+                      es la nivelación; marcar asistencia la cierra) o cuando el
+                      curso es IMPULSA (no usa nivelación). */}
+                  {!esNivelacionEvent && !esImpulsa && (
                   <div>
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input

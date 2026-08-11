@@ -8,14 +8,14 @@ import { queryMany } from '@/lib/postgres';
  */
 export const GET = handlerWithAuth(async () => {
   const rows = await queryMany(
-    `SELECT "code", "step", "materialUsuario"
+    `SELECT "curso", "code", "step", "materialUsuario"
      FROM "NIVELES"
      WHERE "materialUsuario" IS NOT NULL
-     ORDER BY "code" ASC, "step" ASC`
+     ORDER BY "curso" ASC, "code" ASC, "step" ASC`
   );
 
   const seen = new Set<string>();
-  const books: { name: string; url: string; nivel: string; step: string }[] = [];
+  const books: { name: string; url: string; curso: string; nivel: string; step: string }[] = [];
 
   for (const row of rows) {
     const userMats = row.materialUsuario || [];
@@ -27,6 +27,7 @@ export const GET = handlerWithAuth(async () => {
           books.push({
             name: filename.replace(/\.pdf$/i, ''),
             url: `/api/postgres/niveles/material?key=${encodeURIComponent(key)}`,
+            curso: row.curso || 'Sin curso',
             nivel: row.code || '',
             step: row.step || '',
           });

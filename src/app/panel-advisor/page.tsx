@@ -53,6 +53,7 @@ interface CalendarioEvent {
 interface BookItem {
   name: string
   url: string
+  curso: string
   nivel: string
   step: string
 }
@@ -707,28 +708,51 @@ function PanelAdvisorContent() {
                 No hay libros disponibles
               </div>
             ) : (
-              <div className="space-y-3">
-                {books.map((book, idx) => (
-                  <a
-                    key={idx}
-                    href={book.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors group"
-                  >
-                    <div className="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200">
-                      <ArrowDownTrayIcon className="h-5 w-5 text-indigo-600" />
+              <div className="space-y-5">
+                {(() => {
+                  // Agrupa los libros por CURSO para diferenciarlos visualmente
+                  // (en MOSAICO el módulo/lección se repite entre cursos). El
+                  // endpoint ya viene ordenado por curso → code → step.
+                  const grupos: Record<string, BookItem[]> = {}
+                  for (const b of books) {
+                    const c = b.curso || 'Sin curso'
+                    if (!grupos[c]) grupos[c] = []
+                    grupos[c].push(b)
+                  }
+                  return Object.entries(grupos).map(([curso, items]) => (
+                    <div key={curso}>
+                      <div className="flex items-center justify-between mb-2 pb-1.5 border-b-2 border-indigo-200 sticky top-0 bg-white z-10">
+                        <span className="text-sm font-bold text-indigo-700 uppercase tracking-wide">{curso}</span>
+                        <span className="text-xs font-medium text-gray-400">
+                          {items.length} {items.length === 1 ? 'libro' : 'libros'}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {items.map((book, idx) => (
+                          <a
+                            key={`${curso}-${idx}`}
+                            href={book.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors group"
+                          >
+                            <div className="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200">
+                              <ArrowDownTrayIcon className="h-5 w-5 text-indigo-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {book.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {book.nivel} - {book.step}
+                              </p>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {book.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {book.nivel} - {book.step}
-                      </p>
-                    </div>
-                  </a>
-                ))}
+                  ))
+                })()}
               </div>
             )}
 

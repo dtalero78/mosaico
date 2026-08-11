@@ -260,6 +260,8 @@ export default function SesionPage() {
   //   - Si expiró Y advisor (no coordinator) → banner ámbar bloqueante.
   //   - Si es coordinator entrando a una sesión vencida → banner azul informativo.
   const sesionCerrada = evento.sesionCerrada === true
+  // Curso IMPULSA (cualquier salón): oculta "Repetir Lección" y la casilla de Nivelación.
+  const esImpulsa = String(evento.nivel || (evento as any).curso || '').trim().toUpperCase() === 'IMPULSA'
   const showInProgressBanner = !sesionCerrada
     && windowState.minutesElapsed >= 0
     && windowState.minutesElapsed <= ATTENDANCE_WINDOW_MIN
@@ -414,7 +416,7 @@ export default function SesionPage() {
                     nextSibling={nextSibling}
                     groupSize={groupSiblings.length}
                   />
-                  <RepetirLeccionButton eventoId={evento._id} onMarked={() => loadEventoData()} />
+                  {!esImpulsa && <RepetirLeccionButton eventoId={evento._id} onMarked={() => loadEventoData()} />}
                   <RevisarEvaluacionButton evento={evento} />
                 </div>
               </div>
