@@ -21,6 +21,11 @@ export const POST = handler(async (_request, { params }) => {
     [titularId]
   );
   if (!titular) throw new NotFoundError('Titular', titularId);
+  // Contrato de prueba (PRB-): no se envía PDF al cliente (defensa server-side
+  // además de ocultar el botón en la UI).
+  if (/^PRB-/i.test(String(titular.contrato || ''))) {
+    throw new ValidationError('Es un contrato de prueba: no se puede enviar el PDF.');
+  }
   if (!titular.celular) throw new ValidationError('El titular no tiene celular registrado');
   if (!titular.plataforma) throw new ValidationError('El titular no tiene plataforma asignada');
 

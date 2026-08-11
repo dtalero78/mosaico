@@ -6,6 +6,7 @@ import { autoApproveConsent } from '@/services/consent.service';
 import { generateAndArchiveContractPdf } from '@/services/contract-archive.service';
 import { query, queryOne } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
+import { ValidationError } from '@/lib/errors';
 
 // One-time migration: ensure auditautoaprov table exists
 let auditTableReady = false;
@@ -30,6 +31,15 @@ async function ensureAuditTable() {
 export const POST = handlerWithAuth(async (request, { params }, session) => {
   // "Acción Administrativa": por perfil; SUPER_ADMIN/ADMIN bypassean.
   await requirePermission(session, ComercialPermission.APROBACION_AUTONOMA);
+
+  // Contrato de prueba (PRB-): no se puede auto-aprobar (defensa server-side
+  // además de ocultar el botón en la UI). Se verifica ANTES de guardar el consentimiento.
+  const prb = await queryOne<{ contrato: string | null }>(
+    `SELECT "contrato" FROM "PEOPLE" WHERE "_id" = $1`, [params.id]
+  );
+  if (/^PRB-/i.test(String(prb?.contrato || ''))) {
+    throw new ValidationError('Es un contrato de prueba: no se puede aprobar.');
+  }
 
   const ip =
     request.headers.get('x-forwarded-for') ||

@@ -27,6 +27,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { fillContractTemplate, type ConsentDisplay } from '@/lib/contract-template-filler'
 import { templatePlataformaFor } from '@/lib/contract-template'
+import { isContratoPrueba } from '@/components/common/ContratoPruebaBadge'
 
 // ── Field definitions ──
 
@@ -729,7 +730,7 @@ export default function ContratoDetailPage() {
                   Contrato Para Aprobación
                 </button>
               )}
-              {!consentStatus?.hasConsent && (
+              {!consentStatus?.hasConsent && !isContratoPrueba(titular?.contrato) && (
                 <PermissionGuard permission={ComercialPermission.APROBACION_AUTONOMA}>
                   <button
                     type="button"
@@ -1061,6 +1062,7 @@ export default function ContratoDetailPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                      {!isContratoPrueba(titular?.contrato) ? (<>
                       <button
                         onClick={sendContractWhatsApp}
                         disabled={sendingWhatsApp || !titular?.celular}
@@ -1110,6 +1112,11 @@ export default function ContratoDetailPage() {
                       >
                         Imprimir
                       </button>
+                      </>) : (
+                        <span className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                          🧪 Contrato de prueba — firma, envío de PDF e impresión deshabilitados.
+                        </span>
+                      )}
                       <button
                         onClick={() => setShowCloseConfirm(true)}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium"
