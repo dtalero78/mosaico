@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/postgres'
 import { recordCronRun } from '@/lib/cron-runs'
+import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service'
 
 const CRON_SECRET = process.env.CRON_SECRET
 
@@ -34,7 +35,9 @@ export async function GET(request: NextRequest) {
     const result = await recordCronRun('activate-academica', async () => {
       // ACADEMICA inactivos, aprobados, con inicioCurso a <= 10 días
       const elegibles = await query(
-        `SELECT a."_id", a."numeroId", a."userLogin", a."email", a."primerNombre", a."primerApellido", a."inicioCurso"
+        `SELECT a."_id", a."numeroId", a."userLogin", a."email", a."primerNombre", a."primerApellido", a."inicioCurso",
+                p."campaign" AS "pcampaign", p."tipoCurso" AS "ptipoCurso", p."horarioCurso" AS "phorarioCurso",
+                p."celular" AS "pcelular", p."plataforma" AS "pplataforma"
            FROM "ACADEMICA" a
            JOIN "PEOPLE" p ON p."_id" = a."peopleId"
           WHERE a."estadoInactivo" = true
@@ -49,7 +52,7 @@ export async function GET(request: NextRequest) {
         return { processedCount: 0, successCount: 0, failedCount: 0, metadata: { details: [] } }
       }
 
-      const details: Array<{ academicId: string; nombre: string; success: boolean; loginActivado: boolean; error?: string }> = []
+      const details: Array<{ academicId: string; nombre: string; success: boolean; loginActivado: boolean; bookingsCreados?: number; error?: string }> = []
 
       for (const a of rows) {
         try {
@@ -70,11 +73,34 @@ export async function GET(request: NextRequest) {
             [a.numeroId, a.userLogin || '']
           )
           loginActivado = (up.rowCount ?? 0) > 0
+
+          // Red de seguridad: asegurar los agendamientos del curso (idempotente —
+          // sólo crea los que falten). Cubre el caso en que el beneficiario se
+          // aprobó ANTES de materializarse los eventos del curso → quedó con 0
+          // bookings y nada los reintentaba. A ≤10 días del inicio los eventos ya
+          // existen. Best-effort: no rompe la activación.
+          let bookingsCreados = 0
+          try {
+            bookingsCreados = await generarBookingsBeneficiario(a._id, {
+              campaign: a.pcampaign,
+              tipoCurso: a.ptipoCurso,
+              horarioCurso: a.phorarioCurso,
+              numeroId: a.numeroId,
+              primerNombre: a.primerNombre,
+              primerApellido: a.primerApellido,
+              celular: a.pcelular,
+              plataforma: a.pplataforma,
+            })
+          } catch (e) {
+            console.warn(`activate-academica: generarBookings falló para ${a._id}:`, e instanceof Error ? e.message : e)
+          }
+
           details.push({
             academicId: a._id,
             nombre: `${a.primerNombre || ''} ${a.primerApellido || ''}`.trim(),
             success: true,
             loginActivado,
+            bookingsCreados,
           })
         } catch (err) {
           details.push({

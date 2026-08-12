@@ -145,12 +145,13 @@ export async function promoteFromWelcome(
   if (!academic) throw new NotFoundError('Registro académico', academicId);
 
   // PEOPLE del beneficiario: por peopleId; fallback por numeroId (BENEFICIARIO).
+  const PEOPLE_COLS = `"campaign", "tipoCurso", "horarioCurso", "salon", "nivel", "step", "primerNombre", "primerApellido", "celular", "plataforma"`;
   let people = academic.peopleId
-    ? await queryOne<any>(`SELECT "campaign", "tipoCurso", "salon", "nivel", "step" FROM "PEOPLE" WHERE "_id" = $1`, [academic.peopleId])
+    ? await queryOne<any>(`SELECT ${PEOPLE_COLS} FROM "PEOPLE" WHERE "_id" = $1`, [academic.peopleId])
     : null;
   if (!people) {
     people = await queryOne<any>(
-      `SELECT "campaign", "tipoCurso", "salon", "nivel", "step" FROM "PEOPLE"
+      `SELECT ${PEOPLE_COLS} FROM "PEOPLE"
        WHERE "numeroId" = $1 AND "tipoUsuario" = 'BENEFICIARIO'
        ORDER BY "_createdDate" DESC NULLS LAST LIMIT 1`,
       [academic.numeroId]
@@ -195,7 +196,28 @@ export async function promoteFromWelcome(
     ]
   );
 
-  return { promoted: true, before, after };
+  // Generar los agendamientos del curso REAL (idempotente — sólo crea los que
+  // falten). Cierra el hueco de que promover desde WELCOME —por auto-avance al
+  // marcar asistencia (autoAdvanceStep) o por el botón "Aprobar Welcome"— dejaba
+  // al alumno sin bookings. Best-effort: nunca debe romper la promoción.
+  let bookingsCreados = 0;
+  try {
+    const { generarBookingsBeneficiario } = await import('@/services/cursos-campaign-eventos.service');
+    bookingsCreados = await generarBookingsBeneficiario(academicId, {
+      campaign: people.campaign,
+      tipoCurso: people.tipoCurso,
+      horarioCurso: people.horarioCurso,
+      numeroId: academic.numeroId,
+      primerNombre: people.primerNombre,
+      primerApellido: people.primerApellido,
+      celular: people.celular,
+      plataforma: people.plataforma,
+    });
+  } catch (err: any) {
+    console.warn(`[promoteFromWelcome] generarBookings falló para ${academicId}:`, err?.message || err);
+  }
+
+  return { promoted: true, before, after, bookingsCreados };
 }
 
 /**
