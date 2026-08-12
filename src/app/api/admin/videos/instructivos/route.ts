@@ -18,10 +18,9 @@ import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 
 const CONFIG_KEY = 'instructivos_config'
 
-const DEFAULT_INSTRUCTIVOS: Instructivo[] = [
-  { id: 1, title: 'Instructivo 1', description: 'Cómo agendar tus clases',      videoKey: null },
-  { id: 2, title: 'Instructivo 2', description: 'Cómo funciona la plataforma', videoKey: null },
-]
+// Sin placeholders: cada instructivo se crea con su título propio ("Agregar
+// Instructivo"). Así el nombre lo pone quien lo sube, no un "Instructivo N".
+const DEFAULT_INSTRUCTIVOS: Instructivo[] = []
 
 interface Instructivo {
   id: number

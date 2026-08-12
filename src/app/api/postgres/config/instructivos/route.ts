@@ -8,10 +8,7 @@ import { queryOne } from '@/lib/postgres'
 
 const CONFIG_KEY = 'instructivos_config'
 
-const DEFAULT_INSTRUCTIVOS = [
-  { id: 1, title: 'Instructivo 1', description: 'Cómo agendar tus clases',      videoKey: null },
-  { id: 2, title: 'Instructivo 2', description: 'Cómo funciona la plataforma', videoKey: null },
-]
+const DEFAULT_INSTRUCTIVOS: { id: number; title: string; description: string; videoKey: string | null }[] = []
 
 export const GET = handlerWithAuth(async () => {
   const row = await queryOne<{ value: string }>(
