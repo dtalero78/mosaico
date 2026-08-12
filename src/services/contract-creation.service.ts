@@ -218,22 +218,36 @@ export async function insertBeneficiarioTx(
     );
   }
 
-  // 3. USUARIOS_ROLES — login BLOQUEADO (activo=false), clave placeholder=numeroId.
-  //    El cron `activate-academica` lo enciende 1 semana antes de inicioCurso.
-  if (b.email) {
-    const exU = await client.query(
-      `SELECT "_id" FROM "USUARIOS_ROLES" WHERE LOWER("email")=LOWER($1) LIMIT 1`,
-      [b.email]
-    );
-    if (exU.rows.length === 0) {
-      await client.query(
-        `INSERT INTO "USUARIOS_ROLES" ("_id","email","password","nombre","apellido","celular",
-          "numberid","contrato","plataforma","userLogin","rol","activo","origen",
-          "fechaCreacion","fechaActualizacion","_createdDate","_updatedDate")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ESTUDIANTE',false,'POSTGRES',NOW(),NOW(),NOW(),NOW())`,
-        [randomUUID(), b.email, b.numeroId, b.primerNombre, b.primerApellido || null,
-         b.celular || null, b.numeroId, contrato, plataforma || null, userLogin]
+  // 3. USUARIOS_ROLES — SIEMPRE una cuenta por beneficiario, identificada por
+  //    `userLogin` (NUNCA se salta un hermano). Login BLOQUEADO (activo=false),
+  //    clave placeholder=numeroId; el cron `activate-academica` lo enciende.
+  //    El email es SOLO contacto (del apoderado): si el real ya lo usa OTRA cuenta
+  //    (hermanos que comparten email), se usa uno sintético <userLogin>@est.mosaico.cl
+  //    (email es UNIQUE en USUARIOS_ROLES). Así ningún hermano queda sin cuenta.
+  const yaTieneCuenta = await client.query(
+    `SELECT 1 FROM "USUARIOS_ROLES" WHERE "userLogin"=$1 LIMIT 1`, [userLogin]
+  );
+  if (yaTieneCuenta.rows.length === 0) {
+    const emailReal = (b.email || '').trim();
+    let email = emailReal || `${userLogin}@est.mosaico.cl`;
+    if (emailReal) {
+      const emailTaken = await client.query(
+        `SELECT 1 FROM "USUARIOS_ROLES" WHERE LOWER("email")=LOWER($1) LIMIT 1`, [emailReal]
       );
+      if (emailTaken.rows.length > 0) email = `${userLogin}@est.mosaico.cl`;
+    }
+    await client.query(
+      `INSERT INTO "USUARIOS_ROLES" ("_id","email","password","nombre","apellido","celular",
+        "numberid","contrato","plataforma","userLogin","rol","activo","origen",
+        "fechaCreacion","fechaActualizacion","_createdDate","_updatedDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ESTUDIANTE',false,'POSTGRES',NOW(),NOW(),NOW(),NOW())`,
+      [randomUUID(), email, b.numeroId, b.primerNombre, b.primerApellido || null,
+       b.celular || null, b.numeroId, contrato, plataforma || null, userLogin]
+    );
+    // Si el email del login es sintético, alinear ACADEMICA.email para que el
+    // panel/recuperación resuelvan a ESTE alumno por ese email (no al hermano).
+    if (email !== emailReal) {
+      await client.query(`UPDATE "ACADEMICA" SET "email"=$2 WHERE "numeroId"=$1`, [b.numeroId, email]);
     }
   }
 
