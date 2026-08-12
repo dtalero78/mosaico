@@ -54,22 +54,9 @@ function PanelEstudianteContent() {
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [videoTitle, setVideoTitle] = useState<string>('')
   const [videoErr, setVideoErr] = useState(false)
-  const [showInstructivos, setShowInstructivos] = useState(false)
   const [showPerfil, setShowPerfil] = useState(false)
   const [showActividades, setShowActividades] = useState(false)
   const [showRecursos, setShowRecursos] = useState(false)
-
-  // Instructivos from API
-  const instructivosQuery = useQuery(
-    'instructivos-config',
-    () => fetch('/api/postgres/config/instructivos').then(r => r.json()),
-    { staleTime: 10 * 60 * 1000 }
-  )
-  const instructivosData: { id: number; title: string; description: string; videoKey: string | null }[] =
-    instructivosQuery.data?.instructivos ?? [
-      { id: 1, title: 'Instructivo 1', description: 'Cómo agendar tus clases',      videoKey: null },
-      { id: 2, title: 'Instructivo 2', description: 'Cómo funciona la plataforma', videoKey: null },
-    ]
 
   // Ticker
   const tickerQuery = useQuery(
@@ -330,13 +317,6 @@ function PanelEstudianteContent() {
             Como voy?
           </button>
           <button
-            onClick={() => setShowInstructivos(true)}
-            className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1.5"
-          >
-            <VideoCameraIcon className="h-4 w-4" />
-            Instructivos
-          </button>
-          <button
             onClick={() => setShowPerfil(true)}
             className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1.5"
           >
@@ -565,56 +545,6 @@ function PanelEstudianteContent() {
         {/* 5. Let's Go assistance */}
         <WhatsAppContacts />
       </div>
-
-      {/* Instructivos Selection Modal */}
-      {showInstructivos && (
-        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[85vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between rounded-t-2xl">
-              <h2 className="text-lg font-semibold text-gray-900">Instructivos</h2>
-              <button
-                onClick={() => setShowInstructivos(false)}
-                className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
-            <div className="p-4 space-y-3">
-              <p className="text-sm text-gray-500 mb-2">Selecciona un instructivo para ver:</p>
-              {instructivosData.map((inst, idx) => {
-                const bgColors = ['bg-blue-100','bg-purple-100','bg-green-100','bg-amber-100']
-                const iconColors = ['text-blue-600','text-purple-600','text-green-600','text-amber-600']
-                const hoverColors = ['hover:bg-blue-50 hover:border-blue-300','hover:bg-purple-50 hover:border-purple-300','hover:bg-green-50 hover:border-green-300','hover:bg-amber-50 hover:border-amber-300']
-                const ci = idx % 4
-                const src = inst.videoKey
-                  ? `/api/postgres/niveles/video?key=${encodeURIComponent(inst.videoKey)}`
-                  : `/instructivo${inst.id}.mp4`  // fallback to static file
-                return (
-                  <button
-                    type="button"
-                    key={inst.id}
-                    onClick={() => {
-                      setShowInstructivos(false)
-                      setVideoSrc(src)
-                      setVideoTitle(`${inst.title} — ${inst.description}`)
-                      setVideoOpen(true)
-                    }}
-                    className={`w-full flex items-center gap-4 p-4 border border-gray-200 rounded-xl ${hoverColors[ci]} transition-colors text-left`}
-                  >
-                    <div className={`flex-shrink-0 h-12 w-12 ${bgColors[ci]} rounded-lg flex items-center justify-center`}>
-                      <VideoCameraIcon className={`h-6 w-6 ${iconColors[ci]}`} />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{inst.title}</p>
-                      <p className="text-sm text-gray-500">{inst.description}</p>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Video Modal */}
       {videoOpen && (
