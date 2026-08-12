@@ -123,12 +123,14 @@ export async function promoteToDoneAndBlock(
     ).catch(err => console.warn('[special-nivel] PEOPLE update failed:', err.message));
   }
 
-  // 3. USUARIOS_ROLES: block login
-  if (student.email) {
+  // 3. USUARIOS_ROLES: block login — por numberid (= numeroId, único por persona).
+  // NO por email: los hermanos comparten el email del apoderado (Fase 2).
+  if (student.numeroId) {
     await query(
       `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-       WHERE LOWER("email") = LOWER($1)`,
-      [student.email]
+       WHERE REPLACE(REPLACE(REPLACE("numberid",'.',''),'-',''),' ','')
+             = REPLACE(REPLACE(REPLACE($1,'.',''),'-',''),' ','')`,
+      [student.numeroId]
     ).catch(err => console.warn('[special-nivel] USUARIOS_ROLES block failed:', err.message));
   }
 
@@ -184,12 +186,14 @@ export async function blockInCurrentSpecialStep(
     ).catch(err => console.warn('[special-nivel] PEOPLE block failed:', err.message));
   }
 
-  // 3. USUARIOS_ROLES: block login
-  if (student.email) {
+  // 3. USUARIOS_ROLES: block login — por numberid (= numeroId, único por persona).
+  // NO por email: los hermanos comparten el email del apoderado (Fase 2).
+  if (student.numeroId) {
     await query(
       `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-       WHERE LOWER("email") = LOWER($1)`,
-      [student.email]
+       WHERE REPLACE(REPLACE(REPLACE("numberid",'.',''),'-',''),' ','')
+             = REPLACE(REPLACE(REPLACE($1,'.',''),'-',''),' ','')`,
+      [student.numeroId]
     ).catch(err => console.warn('[special-nivel] USUARIOS_ROLES block failed:', err.message));
   }
 

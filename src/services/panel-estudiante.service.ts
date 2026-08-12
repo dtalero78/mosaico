@@ -57,16 +57,37 @@ export async function resolveStudentFromSession(session: Session) {
     throw new ForbiddenError('Solo estudiantes pueden acceder a este panel');
   }
 
-  const email = session.user?.email;
-  if (!email) {
-    throw new ForbiddenError('No se encontró email en la sesión');
+  // ─── Fase 2: la IDENTIDAD del alumno es su `userLogin`, no el email ───
+  // Los hermanos comparten el email del apoderado, así que el email NO identifica
+  // a una persona. Resolvemos la cuenta por `USUARIOS_ROLES._id` (único, = token.sub
+  // de la sesión) → userLogin/numberid → ACADEMICA por userLogin. El email queda
+  // solo como dato de contacto.
+  const urId: string | null = (session.user as any)?.id ?? null;
+  const email: string | null = session.user?.email ?? null;
+  if (!urId && !email) {
+    throw new ForbiddenError('No se encontró identidad en la sesión');
   }
 
-  // Lookup chain (ACADEMICA-first to avoid TITULAR/BENEFICIARIO email collision):
-  // 1. ACADEMICA by email → PEOPLE by ACADEMICA.numeroId (with BENEFICIARIO preference)
-  // 2. Fallback: PEOPLE by email → ACADEMICA by PEOPLE.numeroId
+  let userLogin: string | null = null;
+  let numberid: string | null = null;
+  if (urId) {
+    const ur = await queryOne(
+      `SELECT "userLogin", "numberid", "email" FROM "USUARIOS_ROLES" WHERE "_id" = $1 LIMIT 1`,
+      [urId]
+    );
+    userLogin = (ur as any)?.userLogin ?? null;
+    numberid = (ur as any)?.numberid ?? null;
+  }
+
+  // Lookup chain (por identidad única, con fallbacks para cuentas legacy):
+  //   1. ACADEMICA por userLogin (identidad)
+  //   2. ACADEMICA por numberid (= numeroId de la cuenta)
+  //   3. ACADEMICA por email (último recurso; ambiguo si el email está compartido)
   let person = null;
-  let academica = await AcademicaRepository.findByEmail(email);
+  let academica = null;
+  if (userLogin) academica = await AcademicaRepository.findByUserLogin(userLogin);
+  if (!academica && numberid) academica = await AcademicaRepository.findByNumeroId(numberid);
+  if (!academica && email) academica = await AcademicaRepository.findByEmail(email);
 
   if (academica) {
     // Found academic record — find the matching PEOPLE (BENEFICIARIO) via numeroId
@@ -78,20 +99,26 @@ export async function resolveStudentFromSession(session: Session) {
       }
     }
   } else {
-    // ACADEMICA not found by email — try PEOPLE first, then ACADEMICA by numeroId
-    person = await PeopleRepository.findByEmail(email);
+    // Sin ACADEMICA: resolver PEOPLE por numberid (preferido), luego por email.
+    if (numberid) {
+      person = await PeopleRepository.findBeneficiarioByNumeroId(numberid);
+      if (!person) person = await PeopleRepository.findByIdOrNumeroId(numberid);
+    }
+    if (!person && email) {
+      person = await PeopleRepository.findByEmail(email);
+    }
     if (person && person.numeroId) {
       academica = await AcademicaRepository.findByNumeroId(person.numeroId);
     }
     if (!person && !academica) {
-      throw new NotFoundError('Estudiante', email);
+      throw new NotFoundError('Estudiante', userLogin || email || urId || 'sesión');
     }
   }
 
   // Build a base object from whichever source we have
   const base = person ?? academica;
   if (!base) {
-    throw new NotFoundError('Estudiante', email);
+    throw new NotFoundError('Estudiante', userLogin || email || 'sesión');
   }
 
   const academicaId: string | null = academica?._id ?? null;
@@ -172,12 +199,15 @@ export async function resolveStudentFromSession(session: Session) {
         (base as any).vigencia = newVigencia;
       }
 
-      // Restore login access in USUARIOS_ROLES
-      if ((base as any).email) {
+      // Restore login access in USUARIOS_ROLES — key by the student's OWN account
+      // (_id / userLogin), NOT by email (shared among siblings in Fase 2).
+      if (urId || userLogin) {
         try {
           await query(
-            `UPDATE "USUARIOS_ROLES" SET "activo" = true, "_updatedDate" = NOW() WHERE LOWER("email") = LOWER($1)`,
-            [(base as any).email]
+            `UPDATE "USUARIOS_ROLES" SET "activo" = true, "_updatedDate" = NOW()
+             WHERE ($1::text IS NOT NULL AND "_id" = $1)
+                OR ($2::text <> '' AND "userLogin" = $2)`,
+            [urId, userLogin ?? '']
           );
         } catch (err) {
           console.warn('⚠️ Could not sync USUARIOS_ROLES on OnHold auto-reactivation:', err);
@@ -309,19 +339,24 @@ export async function resolveStudentFromSession(session: Session) {
     // Block login in USUARIOS_ROLES for this student and all contract members
     const contrato = (base as any).contrato;
     try {
-      // Block this student's login
-      if ((base as any).email) {
+      // Block this student's OWN login (by account _id / userLogin, not shared email)
+      if (urId || userLogin) {
         await query(
-          `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW() WHERE LOWER("email") = LOWER($1)`,
-          [(base as any).email]
+          `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
+           WHERE ($1::text IS NOT NULL AND "_id" = $1)
+              OR ($2::text <> '' AND "userLogin" = $2)`,
+          [urId, userLogin ?? '']
         );
       }
-      // Block all contract members' login
+      // Block all contract members' login — match beneficiary numeroId ↔ USUARIOS_ROLES.numberid
+      // (los alumnos tienen cuenta; el titular no). Normalizado (RUT con puntos/guiones).
       if (contrato) {
         await query(
           `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-           WHERE LOWER("email") IN (
-             SELECT LOWER("email") FROM "PEOPLE" WHERE "contrato" = $1 AND "email" IS NOT NULL
+           WHERE REPLACE(REPLACE(REPLACE("numberid",'.',''),'-',''),' ','') IN (
+             SELECT REPLACE(REPLACE(REPLACE("numeroId",'.',''),'-',''),' ','')
+               FROM "PEOPLE"
+              WHERE "contrato" = $1 AND "tipoUsuario" = 'BENEFICIARIO' AND "numeroId" IS NOT NULL
            )`,
           [contrato]
         );

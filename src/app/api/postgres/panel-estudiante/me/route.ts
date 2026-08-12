@@ -7,14 +7,21 @@ import { getPresignedVideoUrl } from '@/lib/spaces';
 export const GET = handlerWithAuth(async (request, context, session) => {
   const student = await resolveStudentFromSession(session);
 
-  // Fetch perfilActualizado from USUARIOS_ROLES to drive the "Actualizar" button in Perfil modal
+  // Fetch perfilActualizado from USUARIOS_ROLES to drive the "Actualizar" button in Perfil modal.
+  // Fase 2: por `_id` de la cuenta (session.user.id, único), no por email compartido.
+  const urId = (session.user as any)?.id ?? null;
   const email = session.user?.email;
-  const urRow = email
+  const urRow = urId
     ? await queryOne<{ perfilActualizado: string | null }>(
-        `SELECT "perfilActualizado" FROM "USUARIOS_ROLES" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
-        [email]
+        `SELECT "perfilActualizado" FROM "USUARIOS_ROLES" WHERE "_id" = $1 LIMIT 1`,
+        [urId]
       ).catch(() => null)
-    : null;
+    : email
+      ? await queryOne<{ perfilActualizado: string | null }>(
+          `SELECT "perfilActualizado" FROM "USUARIOS_ROLES" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
+          [email]
+        ).catch(() => null)
+      : null;
 
   // Imagen del curso (MOSAICO): tipoCurso del estudiante → CURSOS_IMAGENES → URL firmada
   const tipoCurso = (student as any)?.tipoCurso as string | null;

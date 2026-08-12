@@ -79,6 +79,20 @@ class AcademicaRepositoryClass extends BaseRepository {
   }
 
   /**
+   * Find by userLogin — IDENTIDAD ÚNICA del alumno (Fase 2). Preferido sobre
+   * `findByEmail`, porque varios hermanos comparten el email del apoderado y el
+   * email dejaría de identificar a una persona.
+   */
+  async findByUserLogin(userLogin: string) {
+    if (!userLogin) return null;
+    const row = await queryOne(
+      `SELECT * FROM "ACADEMICA" WHERE "userLogin" = $1 LIMIT 1`,
+      [userLogin]
+    );
+    return this.parse(row);
+  }
+
+  /**
    * Check if a student has an academic record
    */
   async existsByNumeroId(numeroId: string): Promise<boolean> {

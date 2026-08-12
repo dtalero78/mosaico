@@ -30,8 +30,8 @@ async function verifyUserPostgres(email: string, password: string) {
 
     // El identificador puede ser el email (titulares/staff) o el userLogin
     // (estudiantes MOSAICO). Se busca por cualquiera de los dos.
-    const user = await queryOne<UserRole>(
-      `SELECT "_id", "email", "password", "nombre", "rol", "activo"
+    const user = await queryOne<UserRole & { userLogin?: string | null; numberid?: string | null }>(
+      `SELECT "_id", "email", "password", "nombre", "rol", "activo", "userLogin", "numberid"
        FROM "USUARIOS_ROLES"
        WHERE "email" = $1 OR "userLogin" = $1`,
       [email]
@@ -42,13 +42,23 @@ async function verifyUserPostgres(email: string, password: string) {
       return null;
     }
 
-    // Look up the user's finalContrato from PEOPLE (TITULAR or BENEFICIARIO,
-    // whichever has it). Match by email O userLogin (estudiantes entran por userLogin).
-    const peopleRecord = await queryOne<{ finalContrato: string | null; rol?: string }>(
+    // Look up THIS user's finalContrato from PEOPLE. Fase 2: los hermanos comparten
+    // el email del apoderado, así que acotamos al registro PROPIO del alumno por
+    // `userLogin` / `numeroId` (= numberid). Antes el `ORDER BY finalContrato DESC`
+    // sobre `LOWER(email)=...` podía tomar el contrato de OTRO hermano y decidir
+    // vencimiento sobre el equivocado. Staff/titulares (sin userLogin/numberid) caen
+    // al email — su finalContrato no aplica (no son ESTUDIANTE).
+    const uLogin = (user.userLogin || '').trim();
+    const uNum = (user.numberid || '').trim();
+    const peopleRecord = await queryOne<{ finalContrato: string | null }>(
       `SELECT "finalContrato" FROM "PEOPLE"
-       WHERE (LOWER("email") = LOWER($1) OR "userLogin" = $1) AND "finalContrato" IS NOT NULL
+       WHERE (
+         ($2 <> '' AND "userLogin" = $2)
+         OR ($3 <> '' AND REPLACE(REPLACE(REPLACE("numeroId",'.',''),'-',''),' ','') = REPLACE(REPLACE(REPLACE($3,'.',''),'-',''),' ',''))
+         OR ($2 = '' AND $3 = '' AND LOWER("email") = LOWER($1))
+       ) AND "finalContrato" IS NOT NULL
        ORDER BY "finalContrato" DESC LIMIT 1`,
-      [email]
+      [email, uLogin, uNum]
     );
     const contractExpired = isContractExpired(peopleRecord?.finalContrato);
 

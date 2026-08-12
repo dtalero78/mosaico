@@ -325,15 +325,20 @@ export async function toggleStatus(id: string, active: boolean, opts: ToggleStat
     }
   }
 
-  // Sync login access in USUARIOS_ROLES
-  if (person.email) {
+  // Sync login access in USUARIOS_ROLES — por IDENTIDAD del alumno (Fase 2):
+  // userLogin / numberid (= numeroId). NO por email: los hermanos comparten el
+  // email del apoderado y el email del TITULAR puede matchear la cuenta de un hijo.
+  if (person.numeroId || (person as any).userLogin) {
     try {
       await query(
-        `UPDATE "USUARIOS_ROLES" SET "activo" = $1, "_updatedDate" = NOW() WHERE LOWER("email") = LOWER($2)`,
-        [!wantInactive, person.email]
+        `UPDATE "USUARIOS_ROLES" SET "activo" = $1, "_updatedDate" = NOW()
+         WHERE ($3 <> '' AND "userLogin" = $3)
+            OR ($2 <> '' AND REPLACE(REPLACE(REPLACE("numberid",'.',''),'-',''),' ','')
+                  = REPLACE(REPLACE(REPLACE($2,'.',''),'-',''),' ',''))`,
+        [!wantInactive, person.numeroId || '', (person as any).userLogin || '']
       );
     } catch (err) {
-      console.warn('⚠️ Could not sync USUARIOS_ROLES.activo for', person.email, err);
+      console.warn('⚠️ Could not sync USUARIOS_ROLES.activo for', person.numeroId, err);
     }
   }
 
@@ -605,10 +610,15 @@ export async function autoAdvanceStep(bookingId: string) {
   if (!nextNivelInfo) {
     // No next step — student has completed the entire program (e.g., Step 45).
     // Block platform access by removing their login credentials from USUARIOS_ROLES.
-    if (student.email) {
-      await queryOne(
-        `DELETE FROM "USUARIOS_ROLES" WHERE "email" = $1 RETURNING "email"`,
-        [student.email]
+    // Fase 2: por IDENTIDAD (userLogin / numberid). NO por email: los hermanos
+    // comparten el email del apoderado y borraría la cuenta equivocada.
+    if (student.numeroId || (student as any).userLogin) {
+      await query(
+        `DELETE FROM "USUARIOS_ROLES"
+          WHERE ($2 <> '' AND "userLogin" = $2)
+             OR ($1 <> '' AND REPLACE(REPLACE(REPLACE("numberid",'.',''),'-',''),' ','')
+                   = REPLACE(REPLACE(REPLACE($1,'.',''),'-',''),' ',''))`,
+        [student.numeroId || '', (student as any).userLogin || '']
       );
     }
     return {

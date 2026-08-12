@@ -74,11 +74,15 @@ export async function GET(request: NextRequest) {
             ).catch(() => {})
           }
 
-          if (student.email) {
+          // Bloquear login por IDENTIDAD del alumno (Fase 2): userLogin / numberid.
+          // NO por email (compartido entre hermanos → bloquearía la cuenta equivocada).
+          if (student.userLogin || student.numeroId) {
             await query(
               `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-               WHERE LOWER("email") = LOWER($1)`,
-              [student.email]
+               WHERE ($1 <> '' AND "userLogin" = $1)
+                  OR ($2 <> '' AND REPLACE(REPLACE(REPLACE("numberid",'.',''),'-',''),' ','')
+                        = REPLACE(REPLACE(REPLACE($2,'.',''),'-',''),' ',''))`,
+              [student.userLogin || '', student.numeroId || '']
             ).catch(() => {})
           }
 

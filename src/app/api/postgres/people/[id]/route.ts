@@ -408,12 +408,19 @@ export const PATCH = handlerWithAuth(async (
     console.log('🔄 [PostgreSQL People] Synced to ACADEMICA');
   }
 
-  if (syncingEmail && currentPerson.email) {
+  // Sync email a USUARIOS_ROLES — por IDENTIDAD de la persona editada (Fase 2):
+  // userLogin / numberid (= numeroId). NO por email viejo: los hermanos comparten
+  // el email del apoderado y pisaría la cuenta de otro hijo (o de todos, ya sin
+  // UNIQUE). El titular no tiene cuenta → no matchea (no-op).
+  if (syncingEmail && (currentPerson.numeroId || (currentPerson as any).userLogin)) {
     await query(
-      `UPDATE "USUARIOS_ROLES" SET "email" = $1 WHERE LOWER("email") = LOWER($2)`,
-      [body.email, currentPerson.email]
+      `UPDATE "USUARIOS_ROLES" SET "email" = $1, "_updatedDate" = NOW()
+       WHERE ($3 <> '' AND "userLogin" = $3)
+          OR ($2 <> '' AND REPLACE(REPLACE(REPLACE("numberid",'.',''),'-',''),' ','')
+                = REPLACE(REPLACE(REPLACE($2,'.',''),'-',''),' ',''))`,
+      [body.email, currentPerson.numeroId || '', (currentPerson as any).userLogin || '']
     );
-    console.log('🔄 [PostgreSQL People] Synced email to USUARIOS_ROLES');
+    console.log('🔄 [PostgreSQL People] Synced email to USUARIOS_ROLES (by identity)');
   }
 
   // If estado changed to Contrato nulo / Devuelto / Rechazado → inactivate titular + beneficiaries
