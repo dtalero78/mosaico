@@ -190,7 +190,7 @@ export const POST = handler(async (
   // Get ACADEMICA record
   const student = await queryOne(
     `SELECT a."_id", a."numeroId", a."primerNombre", a."primerApellido", a."celular",
-            a."nivel", a."step", a."plataforma", a."usuarioId", a."contrato"
+            a."nivel", a."step", a."plataforma", a."usuarioId", a."contrato", a."userLogin"
      FROM "ACADEMICA" a WHERE a."_id" = $1`,
     [academicId]
   );
@@ -240,30 +240,97 @@ export const POST = handler(async (
     console.log(`✅ [NuevoUsuario] PEOPLE actualizado (email propagado)`);
   }
 
-  // 3. Create/update USUARIOS_ROLES
-  const nombreCompleto = [student.primerNombre, student.primerApellido].filter(Boolean).join(' ');
-  const usuarioId = ids.person();
-  await query(
-    `INSERT INTO "USUARIOS_ROLES"
-       ("_id", "email", "password", "nombre", "rol", "activo",
-        "numberid", "contrato", "celular", "perfilActualizado", "_createdDate", "_updatedDate")
-     VALUES ($1, $2, $3, $4, 'ESTUDIANTE', true, $5, $6, $7, NOW(), NOW(), NOW())
-     ON CONFLICT ("email") DO UPDATE
-       SET "password"         = $3,
-           "nombre"           = $4,
-           "numberid"         = $5,
-           "contrato"         = $6,
-           "celular"          = $7,
-           "perfilActualizado" = NOW(),
-           "_updatedDate"     = NOW()`,
-    [
-      usuarioId, normalizedEmail, clave.trim(), nombreCompleto,
-      (student as any).numeroId || null,
-      (student as any).contrato  || null,
-      (student as any).celular   || null,
-    ]
-  );
-  console.log(`✅ [NuevoUsuario] USUARIOS_ROLES actualizado (email=${normalizedEmail})`);
+  // 3. Crear/actualizar la cuenta de login (USUARIOS_ROLES).
+  //
+  // La IDENTIDAD del alumno es su `userLogin`, NO el email (Fase 2): los hermanos
+  // comparten el correo del apoderado, así que `USUARIOS_ROLES.email` dejó de ser
+  // UNIQUE. Por eso el `ON CONFLICT ("email")` que había aquí reventaba con
+  // 42P10 ("no unique or exclusion constraint matching…") → el usuario veía
+  // "Database error". Y aun cuando ese UNIQUE existía, el upsert por email
+  // resolvía a la fila del HERMANO y le pisaba clave/numberid/contrato.
+  // Se resuelve la cuenta por identidad y se actualiza por su `_id`.
+  const nombreCompleto = [student.primerNombre, student.primerApellido]
+    .map(s => (s ? String(s).trim() : ''))
+    .filter(Boolean)
+    .join(' ');
+  const userLogin = ((student as any).userLogin || '').trim() || null;
+  const numeroId  = (student as any).numeroId || null;
+
+  let cuenta: { _id: string } | null = null;
+
+  // (a) userLogin — único por índice, es la identidad.
+  if (userLogin) {
+    cuenta = await queryOne<{ _id: string }>(
+      `SELECT "_id" FROM "USUARIOS_ROLES"
+        WHERE LOWER(TRIM("userLogin")) = LOWER(TRIM($1)) LIMIT 1`,
+      [userLogin]
+    );
+  }
+  // (b) numberid (= numeroId, único por persona) para cuentas legacy sin userLogin.
+  if (!cuenta && numeroId) {
+    cuenta = await queryOne<{ _id: string }>(
+      `SELECT "_id" FROM "USUARIOS_ROLES"
+        WHERE UPPER(TRIM("numberid")) = UPPER(TRIM($1)) AND "rol" = 'ESTUDIANTE'
+        LIMIT 1`,
+      [numeroId]
+    );
+  }
+  // (c) Último recurso: por email, y SÓLO si ese correo apunta a UNA sola cuenta.
+  // Si lo comparten hermanos es ambiguo → se prefiere crear la cuenta que falta
+  // antes que arriesgarse a pisar la del otro.
+  if (!cuenta) {
+    cuenta = await queryOne<{ _id: string }>(
+      `SELECT "_id" FROM "USUARIOS_ROLES"
+        WHERE LOWER(TRIM("email")) = $1
+          AND (SELECT COUNT(*) FROM "USUARIOS_ROLES" WHERE LOWER(TRIM("email")) = $1) = 1
+        LIMIT 1`,
+      [normalizedEmail]
+    );
+  }
+
+  if (cuenta) {
+    // `activo` NO se toca: quien habilita el login es el cron activate-academica
+    // (≤7 días antes del inicio del curso), y una cuenta inactivada por OnHold o
+    // contrato vencido no debe reactivarse por completar el perfil.
+    await query(
+      `UPDATE "USUARIOS_ROLES"
+          SET "email"             = $1,
+              "password"          = $2,
+              "nombre"            = COALESCE(NULLIF($3, ''), "nombre"),
+              "numberid"          = COALESCE($4, "numberid"),
+              "contrato"          = COALESCE($5, "contrato"),
+              "celular"           = COALESCE($6, "celular"),
+              "userLogin"         = COALESCE("userLogin", $7),
+              "perfilActualizado" = NOW(),
+              "_updatedDate"      = NOW()
+        WHERE "_id" = $8`,
+      [
+        normalizedEmail, clave.trim(), nombreCompleto,
+        numeroId,
+        (student as any).contrato || null,
+        (student as any).celular  || null,
+        userLogin,
+        cuenta._id,
+      ]
+    );
+    console.log(`✅ [NuevoUsuario] USUARIOS_ROLES actualizado (_id=${cuenta._id}, userLogin=${userLogin || '—'})`);
+  } else {
+    await query(
+      `INSERT INTO "USUARIOS_ROLES"
+         ("_id", "email", "password", "nombre", "rol", "activo",
+          "numberid", "contrato", "celular", "userLogin",
+          "perfilActualizado", "_createdDate", "_updatedDate")
+       VALUES ($1, $2, $3, $4, 'ESTUDIANTE', true, $5, $6, $7, $8, NOW(), NOW(), NOW())`,
+      [
+        ids.person(), normalizedEmail, clave.trim(), nombreCompleto,
+        numeroId,
+        (student as any).contrato || null,
+        (student as any).celular  || null,
+        userLogin,
+      ]
+    );
+    console.log(`✅ [NuevoUsuario] USUARIOS_ROLES creado (userLogin=${userLogin || '—'})`);
+  }
 
   // Create WELCOME booking if event selected
   let bookingCreated = false;

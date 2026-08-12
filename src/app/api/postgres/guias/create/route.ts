@@ -94,10 +94,13 @@ export const POST = handler(async (request: Request) => {
   // perfilActualizado=NOW(): el wizard /nuevo-guia ya captura email/ID/celular/
   // domicilio/fecha/foto/clave, así que la pantalla "Actualización de Datos"
   // (/advisor-setup) sería redundante — el guía entra directo a su panel.
+  // Sin `ON CONFLICT ("email")`: desde Fase 2 el email ya no es UNIQUE en
+  // USUARIOS_ROLES (los hermanos comparten el correo del apoderado), y esa
+  // cláusula fallaba con 42P10 → "Database error" al crear un guía. El correo
+  // duplicado ya se rechazó arriba con ConflictError, así que el INSERT es plano.
   const inserted = await queryOne<{ _id: string }>(
     `INSERT INTO "USUARIOS_ROLES" ("_id", "email", "password", "nombre", "rol", "activo", "numberid", "perfilActualizado", "_createdDate", "_updatedDate")
      VALUES ($1, $2, $3, $4, 'GUIA', true, $5, NOW(), NOW(), NOW())
-     ON CONFLICT ("email") DO NOTHING
      RETURNING "_id"`,
     [ids.advisor(), emailLower, password, nombreCompleto, numeroIdNorm]
   );
