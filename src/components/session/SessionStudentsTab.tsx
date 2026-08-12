@@ -8,13 +8,7 @@ import {
   ChatBubbleLeftRightIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
-  ClockIcon,
-  ClipboardDocumentCheckIcon,
-  AcademicCapIcon,
   HandRaisedIcon,
-  TrophyIcon,
-  BoltIcon,
-  VideoCameraIcon,
 } from '@heroicons/react/24/outline'
 
 interface CalendarioEvent {
@@ -144,8 +138,17 @@ export default function SessionStudentsTab({
 
   // Cierre de nivelación cuando el EVENTO es tipo NIVELACION
   const esNivelacionEvent = (evento?.tipo || evento?.evento) === 'NIVELACION'
+  // Curso del evento (en MOSAICO evento.nivel = tipoCurso: YOJI/OKINA/…).
+  const cursoUpper = String(evento?.nivel || (evento as any)?.curso || '').trim().toUpperCase()
   // Curso IMPULSA (cualquier salón): oculta la casilla de Nivelación.
-  const esImpulsa = String(evento?.nivel || (evento as any)?.curso || '').trim().toUpperCase() === 'IMPULSA'
+  const esImpulsa = cursoUpper === 'IMPULSA'
+  // Cursos MOSAICO soroban: ocultan la "Actividad Propuesta (IA)" y la casilla
+  // "Participó en la Sesión". IMPULSA las conserva.
+  const esCursoMosaico = ['YOJI', 'OKINA', 'KODOMO', 'DANSHI', 'SENPAI'].includes(cursoUpper)
+  // Excepción: en un evento tipo NIVELACION el cierre EXIGE marcar asistencia Y
+  // participación (ver handleSaveClassRecord), así que ahí la casilla se mantiene
+  // aunque el curso sea MOSAICO — si no, la nivelación no se podría cerrar.
+  const mostrarParticipacion = !esCursoMosaico || esNivelacionEvent
   const [showNivelComentario, setShowNivelComentario] = useState(false)
   const [nivelComentarioText, setNivelComentarioText] = useState('')
   const [showNivelReminder, setShowNivelReminder] = useState(false)
@@ -485,36 +488,13 @@ export default function SessionStudentsTab({
             {/* Asistencia y Participación */}
             <div>
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Evaluación de la Sesión</h3>
+                <h3 className="font-semibold text-gray-900 mb-4">Asistencia</h3>
                 <div className="space-y-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
-                  {/* Hábitos */}
-                  <div>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Hábitos</p>
-                    <div className="space-y-3">
-                      <CritRow Icon={CheckCircleIcon} checked={asistencia} onChange={setAsistencia} disabled={isLocked} label="Asistió a la clase" />
-                      <CritRow Icon={ClockIcon} checked={hePuntualidad} onChange={setHePuntualidad} disabled={isLocked} label="Llegó puntual" />
-                      <CritRow Icon={ClipboardDocumentCheckIcon} checked={heAsignacion} onChange={setHeAsignacion} disabled={isLocked} label="Cumplió la asignación anterior" />
-                    </div>
-                  </div>
-                  {/* Desempeño */}
-                  <div>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Desempeño</p>
-                    <div className="space-y-3">
-                      <CritRow Icon={AcademicCapIcon} checked={daDominio} onChange={setDaDominio} disabled={isLocked} label="Demostró dominio del tema" />
-                      <CritRow Icon={HandRaisedIcon} checked={participacion} onChange={setParticipacion} disabled={isLocked} label="Participó activamente" />
-                      <CritRow Icon={TrophyIcon} checked={daDesafio} onChange={setDaDesafio} disabled={isLocked} label="Completó el Desafío Mosaico" />
-                    </div>
-                  </div>
-                  {/* Actitudes */}
-                  <div>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Actitudes</p>
-                    <div className="space-y-3">
-                      <CritRow Icon={BoltIcon} checked={acPermanencia} onChange={setAcPermanencia} disabled={isLocked} label="Permaneció activo toda la sesión" />
-                      <CritRow Icon={UserGroupIcon} checked={acRespeto} onChange={setAcRespeto} disabled={isLocked} label="Respetó turnos y a sus compañeros" />
-                      <CritRow Icon={VideoCameraIcon} checked={acDisposicion} onChange={setAcDisposicion} disabled={isLocked} label="Uso adecuado de cámara y micrófono" />
-                    </div>
-                  </div>
+                  <div className="space-y-3">
+                    <CritRow Icon={CheckCircleIcon} checked={asistencia} onChange={setAsistencia} disabled={isLocked} label="Asistió a la sesión" />
+                    {mostrarParticipacion && (
+                      <CritRow Icon={HandRaisedIcon} checked={participacion} onChange={setParticipacion} disabled={isLocked} label="Participó en la Sesión" />
+                    )}
                   </div>
                   {/* Nivelación — casilla + dropdown de lecciones del curso.
                       Se OCULTA cuando el evento es tipo NIVELACION (el evento ya
@@ -623,7 +603,9 @@ export default function SessionStudentsTab({
               />
             </div>
 
-            {/* Actividad Propuesta por IA */}
+            {/* Actividad Propuesta por IA — OCULTA en cursos MOSAICO
+                (YOJI/OKINA/KODOMO/DANSHI/SENPAI); visible en IMPULSA y demás. */}
+            {!esCursoMosaico && (
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -665,6 +647,7 @@ export default function SessionStudentsTab({
                 La IA genera una actividad personalizada basada en el perfil del estudiante y su nivel
               </p>
             </div>
+            )}
 
             {/* Botón Guardar */}
             <div className="bg-white rounded-lg shadow-sm p-6">
@@ -720,7 +703,7 @@ export default function SessionStudentsTab({
             <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">⚠️ Asistencia incompleta</h3>
             <p className="text-sm text-gray-700 mb-4">
               La asistencia de la Nivelación requiere marcar <strong>ambas</strong> opciones:
-              <strong> Asistió a la clase</strong> y <strong>Participó activamente</strong>.
+              <strong> Asistió a la sesión</strong> y <strong>Participó en la Sesión</strong>.
               Si el estudiante no asistió, deja las dos sin marcar.
             </p>
             <div className="flex justify-end">
