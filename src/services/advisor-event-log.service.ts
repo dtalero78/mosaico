@@ -509,7 +509,7 @@ export async function closeSession(
     motivoCierre = 'GESTION_COORDINADOR';
   } else if (roleUpper && isCoordinatorRole) {
     // Coordinador cerrando fuera de la ventana del advisor (después del tope de
-    // registro, +5h). Mismo motivo.
+    // registro, +18h). Mismo motivo.
     const minutesElapsed = (Date.now() - new Date(evt.dia).getTime()) / 60_000;
     if (minutesElapsed > REGISTER_CLOSE_MIN) motivoCierre = 'GESTION_COORDINADOR';
   }

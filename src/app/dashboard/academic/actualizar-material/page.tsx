@@ -63,6 +63,24 @@ export default function ActualizarMaterialPage() {
           </div>
         </button>
 
+        {/* Instructivos (videos generales del panel del estudiante) */}
+        <button
+          type="button"
+          onClick={() => openTab('/admin/actualizar-videos/instructivos')}
+          className="flex flex-col items-center justify-center gap-4 p-10 bg-white border-2 border-gray-200 rounded-2xl shadow-sm hover:border-sky-500 hover:shadow-md transition-all text-left group"
+        >
+          <div className="w-16 h-16 bg-sky-50 rounded-full flex items-center justify-center group-hover:bg-sky-100 transition-colors">
+            <svg className="w-8 h-8 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-semibold text-gray-900 group-hover:text-sky-600 transition-colors">Instructivos</div>
+            <div className="text-sm text-gray-500 mt-1">Subir, descargar, reemplazar o borrar</div>
+          </div>
+        </button>
+
         {/* Contenido */}
         <button
           type="button"
