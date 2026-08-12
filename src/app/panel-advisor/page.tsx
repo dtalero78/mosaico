@@ -260,7 +260,11 @@ function PanelAdvisorContent() {
   const loadBooks = async () => {
     try {
       setBooksLoading(true)
-      const response = await fetch('/api/postgres/materials/books')
+      // Sólo los libros de los cursos que dicta el guía; MOSAICO → Modulo 00,
+      // IMPULSA → todas sus lecciones (sólo si el guía dicta IMPULSA).
+      const qs = new URLSearchParams({ modulo00: '1' })
+      if (advisor?._id) qs.set('guiaId', advisor._id)
+      const response = await fetch(`/api/postgres/materials/books?${qs.toString()}`)
 
       if (!response.ok) {
         throw new Error('Error al cargar libros')

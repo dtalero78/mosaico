@@ -28,37 +28,45 @@ export default function SessionMaterialTab({ step, nivel, curso, eventoNombre }:
   // Step efectivo: la lección del evento; fallback al nombre del evento (legacy).
   const effStep = (step && step.trim()) ? step.trim() : (eventoNombre || '')
 
+  const cursoTrim = (curso || '').trim()
+  const esImpulsa = cursoTrim.toUpperCase() === 'IMPULSA'
+  // Cursos MOSAICO con curso definido → se muestran los libros del **Modulo 00**
+  // del curso (sin importar la lección del evento). IMPULSA (o legacy sin curso)
+  // conserva el material de la lección del evento, como hoy.
+  const usarModulo00 = Boolean(cursoTrim) && !esImpulsa
+  const tituloCaja = usarModulo00 ? `Libros del curso - Modulo 00` : `Material del Step - ${effStep}`
+
   useEffect(() => {
     loadMaterials()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effStep, nivel, curso])
 
   const loadMaterials = async () => {
-    if (!effStep) {
-      console.warn('⚠️ No hay step/lección definido para cargar material')
-      return
-    }
-
     try {
       setLoading(true)
       setError(null)
-      const params = new URLSearchParams({ step: effStep, tipo: 'usuario' })
-      if (nivel) params.set('nivel', nivel)
-      if (curso) params.set('curso', curso)
-      console.log('📚 Cargando libros para lección:', effStep, { nivel, curso })
 
-      const response = await fetch(`/api/postgres/materials/nivel?${params.toString()}`)
-
-      if (!response.ok) throw new Error('Error al cargar material')
-
-      const data = await response.json()
-
-      if (data.success) {
-        setMaterials(data.materials || [])
-        console.log('✅ Material cargado:', data.materials?.length || 0, 'archivos')
+      let items: Material[] = []
+      if (usarModulo00) {
+        // MOSAICO: libros del Modulo 00 del curso de la sesión.
+        const response = await fetch(`/api/postgres/materials/books?curso=${encodeURIComponent(cursoTrim)}&modulo00=1`)
+        if (!response.ok) throw new Error('Error al cargar material')
+        const data = await response.json()
+        if (!data.success) throw new Error(data.error || 'Error al cargar material')
+        items = (data.books || []).map((b: any, i: number) => ({ index: i + 1, name: b.name, url: b.url }))
       } else {
-        throw new Error(data.error || 'Error al cargar material')
+        // IMPULSA o legacy sin curso → material de la lección del evento (como hoy).
+        if (!effStep) { console.warn('⚠️ No hay step/lección definido para cargar material'); setMaterials([]); return }
+        const params = new URLSearchParams({ step: effStep, tipo: 'usuario' })
+        if (nivel) params.set('nivel', nivel)
+        if (curso) params.set('curso', curso)
+        const response = await fetch(`/api/postgres/materials/nivel?${params.toString()}`)
+        if (!response.ok) throw new Error('Error al cargar material')
+        const data = await response.json()
+        if (!data.success) throw new Error(data.error || 'Error al cargar material')
+        items = data.materials || []
       }
+      setMaterials(items)
     } catch (err) {
       console.error('❌ Error loading materials:', err)
       setError(err instanceof Error ? err.message : 'Error desconocido')
@@ -104,8 +112,8 @@ export default function SessionMaterialTab({ step, nivel, curso, eventoNombre }:
       <div className="bg-white rounded-lg shadow-sm p-8">
         <div className="text-center">
           <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600">No hay material disponible para este step</p>
-          <p className="text-sm text-gray-500 mt-2">Step: {effStep}</p>
+          <p className="text-gray-600">No hay material disponible</p>
+          <p className="text-sm text-gray-500 mt-2">{usarModulo00 ? `${cursoTrim} · Modulo 00` : `Step: ${effStep}`}</p>
         </div>
       </div>
     )
@@ -116,7 +124,7 @@ export default function SessionMaterialTab({ step, nivel, curso, eventoNombre }:
       <div className="bg-emerald-600 px-6 py-4">
         <div className="flex items-center gap-3">
           <DocumentTextIcon className="h-6 w-6 text-white" />
-          <h3 className="text-lg font-bold text-white">Material del Step - {effStep}</h3>
+          <h3 className="text-lg font-bold text-white">{tituloCaja}</h3>
           <span className="ml-auto px-3 py-1 bg-white text-emerald-600 rounded-full text-sm font-semibold">
             {materials.length} {materials.length === 1 ? 'archivo' : 'archivos'}
           </span>

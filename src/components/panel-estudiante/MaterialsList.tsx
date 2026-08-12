@@ -19,6 +19,9 @@ interface MaterialsListProps {
 export default function MaterialsList({ data, isLoading }: MaterialsListProps) {
   const materials = data?.materials || []
   const nivel = data?.nivel || ''
+  // Módulo del que provienen los libros descargables (Modulo 00 para cursos MOSAICO;
+  // módulo actual para IMPULSA). El interactivo sigue usando `nivel` (módulo actual).
+  const materialModulo = data?.materialModulo || nivel
   const nivelNormalizado = normalizeNivelCode(nivel)
   // El material interactivo es un LIBRO POR CURSO; se resuelve por el curso del
   // alumno (YOJI, OKINA, …) y se RECORTA al rango del módulo actual (`nivel`) para
@@ -80,7 +83,7 @@ export default function MaterialsList({ data, isLoading }: MaterialsListProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
       <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-        Material - {nivel}
+        Material - {materialModulo}
       </h3>
 
       {/* Material interactivo del curso — si el libro tiene páginas cargadas */}
