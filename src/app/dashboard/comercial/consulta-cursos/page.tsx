@@ -36,12 +36,12 @@ function ConsultaCursosContent() {
 
   // Filtros: inputs (draft) + snapshot aplicado
   const [fCampana, setFCampana] = useState('')
-  const [fEstado, setFEstado] = useState<'todos' | Estado>('todos')
+  const [fEstado, setFEstado] = useState<'todos' | Estado>('matricula')
   const [fCurso, setFCurso] = useState('')
   const [fDesde, setFDesde] = useState('')
   const [fHasta, setFHasta] = useState('')
   const [applied, setApplied] = useState<{ campana: string; estado: 'todos' | Estado; curso: string; desde: string; hasta: string }>(
-    { campana: '', estado: 'todos', curso: '', desde: '', hasta: '' }
+    { campana: '', estado: 'matricula', curso: '', desde: '', hasta: '' }
   )
 
   useEffect(() => {
@@ -85,7 +85,7 @@ function ConsultaCursosContent() {
   }), [rows, applied, guias])
 
   const aplicar = () => setApplied({ campana: fCampana, estado: fEstado, curso: fCurso, desde: fDesde, hasta: fHasta })
-  const limpiar = () => { setFCampana(''); setFEstado('todos'); setFCurso(''); setFDesde(''); setFHasta(''); setApplied({ campana: '', estado: 'todos', curso: '', desde: '', hasta: '' }) }
+  const limpiar = () => { setFCampana(''); setFEstado('matricula'); setFCurso(''); setFDesde(''); setFHasta(''); setApplied({ campana: '', estado: 'matricula', curso: '', desde: '', hasta: '' }) }
 
   const d = (v: any) => (v ? String(v).slice(0, 10) : '—')
 
