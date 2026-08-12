@@ -16,18 +16,50 @@ export interface ReporteFiltros {
   startDate?: string; endDate?: string;
 }
 
-// key ↔ columna(s) ↔ label. Orden = orden en la tabla (3 grupos de 3).
-export const METRICAS = [
-  { key: 'asistio', label: 'Asistió', grupo: 'HÁBITOS', expr: '(COALESCE(b."asistio",false) OR COALESCE(b."asistencia",false))' },
-  { key: 'puntual', label: 'Puntual', grupo: 'HÁBITOS', expr: 'COALESCE(b."hePuntualidad",false)' },
-  { key: 'asignacion', label: 'Asignación', grupo: 'HÁBITOS', expr: 'COALESCE(b."heAsignacion",false)' },
-  { key: 'dominio', label: 'Dominio', grupo: 'DESEMPEÑO', expr: 'COALESCE(b."daDominio",false)' },
-  { key: 'participo', label: 'Participó', grupo: 'DESEMPEÑO', expr: 'COALESCE(b."participacion",false)' },
-  { key: 'desafio', label: 'Desafío', grupo: 'DESEMPEÑO', expr: 'COALESCE(b."daDesafio",false)' },
-  { key: 'activo', label: 'Activo', grupo: 'ACTITUDES', expr: 'COALESCE(b."acPermanencia",false)' },
-  { key: 'respeto', label: 'Respeto', grupo: 'ACTITUDES', expr: 'COALESCE(b."acRespeto",false)' },
-  { key: 'camara', label: 'Cámara', grupo: 'ACTITUDES', expr: 'COALESCE(b."acDisposicion",false)' },
+/**
+ * "Asistió" es la ÚNICA métrica automática: se calcula con la asistencia que el
+ * Guía marca en cada sesión de la semana (2/2 → full, 1/2 → half, 0/2 → empty).
+ */
+export const METRICA_ASISTIO = {
+  key: 'asistio', label: 'Asistió', grupo: 'HÁBITOS',
+  expr: '(COALESCE(b."asistio",false) OR COALESCE(b."asistencia",false))',
+} as const;
+
+/**
+ * Los 8 criterios restantes se capturan A MANO en este reporte y se guardan en
+ * REPORTE_ACADEMICO_NOTAS."criterios" (JSONB) por (estudiante, salón, semana).
+ * Antes salían de ACADEMICA_BOOKINGS, pero esos campos se retiraron del panel de
+ * /sesion/[id], así que ya no tienen quien los alimente.
+ * Estados: 'full' (cumplió todas) | 'half' (algunas) | 'empty' (no cumplió);
+ * clave ausente = sin marcar.
+ */
+export const METRICAS_MANUALES = [
+  { key: 'puntual', label: 'Puntual', grupo: 'HÁBITOS' },
+  { key: 'asignacion', label: 'Asignación', grupo: 'HÁBITOS' },
+  { key: 'dominio', label: 'Dominio', grupo: 'DESEMPEÑO' },
+  { key: 'participo', label: 'Participó', grupo: 'DESEMPEÑO' },
+  { key: 'desafio', label: 'Desafío', grupo: 'DESEMPEÑO' },
+  { key: 'activo', label: 'Activo', grupo: 'ACTITUDES' },
+  { key: 'respeto', label: 'Respeto', grupo: 'ACTITUDES' },
+  { key: 'camara', label: 'Cámara', grupo: 'ACTITUDES' },
 ] as const;
+
+/** Orden de las columnas en la tabla (3 grupos de 3). */
+export const METRICAS = [METRICA_ASISTIO, ...METRICAS_MANUALES] as const;
+
+export const ESTADOS_CRITERIO = ['full', 'half', 'empty'] as const;
+export type EstadoCriterio = typeof ESTADOS_CRITERIO[number];
+
+/** Deja sólo las claves conocidas con estado válido (defensa del JSONB). */
+export function sanitizeCriterios(input: any): Record<string, EstadoCriterio> {
+  const out: Record<string, EstadoCriterio> = {};
+  if (!input || typeof input !== 'object') return out;
+  for (const m of METRICAS_MANUALES) {
+    const v = input[m.key];
+    if (ESTADOS_CRITERIO.includes(v)) out[m.key] = v;
+  }
+  return out;
+}
 
 // Tipos que NO cuentan como "sesión" para las métricas semanales / asistencia del curso.
 const NO_SESION = `UPPER(COALESCE(b."tipo", b."tipoEvento", 'SESSION')) NOT IN ('CLUB','NIVELACION','COMPLEMENTARIA','WELCOME','OLIMPIADA')`;
@@ -74,7 +106,10 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
   }
 
   // Catálogo de cursos (para dropdowns), acotado al guía si aplica.
-  const cwhere: string[] = [`"activa" = true`]; const cparams: any[] = [];
+  // IMPULSA queda FUERA: este reporte no aplica a ese curso (no usa la rúbrica
+  // semanal de Hábitos/Desempeño/Actitudes), así que no debe ni poder elegirse.
+  const cwhere: string[] = [`"activa" = true`, `UPPER(COALESCE("tipoCurso",'')) <> 'IMPULSA'`];
+  const cparams: any[] = [];
   if (guiaScope) { cwhere.push(`"guia" = $${cparams.length + 1}`); cparams.push(guiaScope); }
   const cursosCampaign = (await query<{ campaign: string; tipoCurso: string; salon: string; guia: string }>(
     `SELECT DISTINCT "campaign","tipoCurso","salon","guia" FROM "CURSOS_CAMPAIGN"
@@ -85,13 +120,16 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
   const guias = (await query<{ id: string; nombre: string }>(
     esGuia
       ? `SELECT g."_id" AS id, g."nombreCompleto" AS nombre FROM "GUIAS" g WHERE g."_id" = $1`
-      : `SELECT DISTINCT g."_id" AS id, g."nombreCompleto" AS nombre FROM "CURSOS_CAMPAIGN" cc JOIN "GUIAS" g ON g."_id"=cc."guia" WHERE cc."activa"=true AND cc."guia" IS NOT NULL ORDER BY nombre`,
+      : `SELECT DISTINCT g."_id" AS id, g."nombreCompleto" AS nombre FROM "CURSOS_CAMPAIGN" cc JOIN "GUIAS" g ON g."_id"=cc."guia"
+          WHERE cc."activa"=true AND cc."guia" IS NOT NULL AND UPPER(COALESCE(cc."tipoCurso",'')) <> 'IMPULSA' ORDER BY nombre`,
     esGuia ? [guiaScope] : []
   )).rows;
 
   const cursos = Array.from(new Set(cursosCampaign.map(c => c.tipoCurso)));
   // Curso/salón objetivo: de los filtros, o el primero disponible del scope.
-  const curso = filtros.curso || cursos[0] || '';
+  // Si piden IMPULSA por URL se ignora (el reporte no aplica a ese curso).
+  const cursoPedido = (filtros.curso || '').trim();
+  const curso = (cursoPedido && cursoPedido.toUpperCase() !== 'IMPULSA' ? cursoPedido : '') || cursos[0] || '';
   const salones = Array.from(new Set(cursosCampaign.filter(c => !curso || c.tipoCurso === curso).map(c => c.salon)));
   const salon = filtros.salon || salones[0] || '';
   const guiaCurso = cursosCampaign.find(c => c.tipoCurso === curso && c.salon === salon)?.guia
@@ -107,9 +145,9 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
     return { available: true, rows: [], guias, cursos, salones, curso, salon, guiaNombre, semanaInicio: inicio, semanaFin: finExcl, sinCurso: true };
   }
 
-  // Agregados por métrica (cumplidas en la semana).
-  const metricAgg = METRICAS.map(m =>
-    `COUNT(*) FILTER (WHERE ${m.expr}) AS "c_${m.key}"`).join(',\n            ');
+  // Único agregado desde las sesiones: la asistencia. Los otros 8 criterios son
+  // manuales y se leen de REPORTE_ACADEMICO_NOTAS."criterios".
+  const metricAgg = `COUNT(*) FILTER (WHERE ${METRICA_ASISTIO.expr}) AS "c_asistio"`;
 
   const sql = `
     SELECT
@@ -117,11 +155,11 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
       TRIM(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido")) AS "nombre",
       p."plataforma", p."apoderado", p."apoderadoTelefono",
       acad."academicaId", acad."nivel", acad."step",
-      sem."sesSemana", ${METRICAS.map(m => `sem."c_${m.key}"`).join(', ')},
+      sem."sesSemana", sem."c_asistio",
       sem."comentariosSemana",
       cur."totalCurso", cur."asistidasCurso",
       prog."ordenActual", prog."ordenMax",
-      nota."comentarioIA", nota."notaGuia"
+      nota."comentarioIA", nota."notaGuia", nota."criterios"
     FROM "PEOPLE" p
     LEFT JOIN LATERAL (
       SELECT a."_id" AS "academicaId", a."nivel", a."step"
@@ -161,9 +199,18 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
   const out = rows.map((r) => {
     const ses = Number(r.sesSemana) || 0;
     const metricas: Record<string, { cumplidas: number; sesiones: number; estado: string }> = {};
-    for (const m of METRICAS) {
-      const c = Number(r[`c_${m.key}`]) || 0;
-      metricas[m.key] = { cumplidas: c, sesiones: ses, estado: ovalo(c, ses) };
+
+    // Asistió: automático, según las sesiones asistidas de la semana.
+    const cAsistio = Number(r.c_asistio) || 0;
+    metricas.asistio = { cumplidas: cAsistio, sesiones: ses, estado: ovalo(cAsistio, ses) };
+
+    // Los 8 restantes: lo que el Guía guardó a mano. Sin marcar → 'none' (igual
+    // que "sin sesión" a la vista, pero editable mientras haya sesiones).
+    const criterios = sanitizeCriterios(
+      typeof r.criterios === 'string' ? (() => { try { return JSON.parse(r.criterios); } catch { return {}; } })() : r.criterios
+    );
+    for (const m of METRICAS_MANUALES) {
+      metricas[m.key] = { cumplidas: 0, sesiones: ses, estado: criterios[m.key] || 'none' };
     }
     const totalCurso = Number(r.totalCurso) || 0;
     const asistidasCurso = Number(r.asistidasCurso) || 0;
@@ -174,7 +221,7 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
       nombre: r.nombre || '(sin nombre)', plataforma: r.plataforma || '',
       apoderado: r.apoderado || '', apoderadoTelefono: r.apoderadoTelefono || '',
       nivel: r.nivel || '', step: r.step || '',
-      sesSemana: ses, metricas,
+      sesSemana: ses, metricas, criterios,
       asistidasCurso, totalCurso,
       asistenciaCursoPct: totalCurso ? Math.round((asistidasCurso / totalCurso) * 100) : 0,
       progresoPct: ordenMax ? Math.round((ordenActual / ordenMax) * 100) : 0,

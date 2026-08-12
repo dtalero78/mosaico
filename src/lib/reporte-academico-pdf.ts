@@ -17,6 +17,11 @@ export interface ReporteIndividualMeta {
 const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const fecha = (iso: string) => { try { return new Date(iso + 'T12:00:00Z').toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }); } catch { return iso; } }
 
+/** Texto del estado de un criterio manual (no tiene conteo de sesiones). */
+const ESTADO_TEXTO: Record<string, string> = {
+  full: 'Cumplió todas', half: 'Cumplió algunas', empty: 'No cumplió', none: 'Sin marcar',
+};
+
 function oval(estado: string): string {
   const base = 'display:inline-block;width:30px;height:19px;border-radius:99px;vertical-align:middle;border:2px solid transparent;';
   if (estado === 'full') return `<span style="${base}background:linear-gradient(120deg,#6d28d9,#c026d3)"></span>`;
@@ -36,10 +41,15 @@ export function buildReporteIndividualHtml(row: ReporteIndividualRow, meta: Repo
     <tr><td colspan="3" style="padding:10px 8px 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:${colorGrupo[g]};font-weight:700">${g}</td></tr>
     ${ms.map((m) => {
       const x = row.metricas[m.key] || { cumplidas: 0, sesiones: row.sesSemana, estado: 'none' };
+      // Sólo "Asistió" es un conteo de sesiones. Los criterios que marca el Guía
+      // no tienen "cumplidas": se describe su estado (si no, saldría 0/2 siempre).
+      const detalle = m.key === 'asistio'
+        ? `${x.cumplidas}/${row.sesSemana}`
+        : ESTADO_TEXTO[x.estado] || '';
       return `<tr>
         <td style="padding:6px 8px;font-size:13px;border-bottom:1px solid #eee">${esc(m.label)}</td>
         <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #eee">${oval(x.estado)}</td>
-        <td style="padding:6px 8px;text-align:right;font-size:12px;color:#6b6480;border-bottom:1px solid #eee">${x.cumplidas}/${row.sesSemana}</td>
+        <td style="padding:6px 8px;text-align:right;font-size:12px;color:#6b6480;border-bottom:1px solid #eee">${esc(detalle)}</td>
       </tr>`;
     }).join('')}`).join('');
 
@@ -91,6 +101,6 @@ export function buildReporteIndividualHtml(row: ReporteIndividualRow, meta: Repo
     </div>
 
     ${row.comentarioIA ? `<div class="box"><h4>Comentario IA</h4><p>${esc(row.comentarioIA)}</p></div>` : ''}
-    ${row.notaGuia ? `<div class="box"><h4>Comentario del Docente</h4><p>${esc(row.notaGuia)}</p></div>` : ''}
+    ${row.notaGuia ? `<div class="box"><h4>Actividad Individual</h4><p>${esc(row.notaGuia)}</p></div>` : ''}
   </div></body></html>`;
 }

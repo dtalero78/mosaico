@@ -5,7 +5,7 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
-import { METRICAS } from '@/services/reporte-academico.service';
+import { METRICA_ASISTIO, METRICAS_MANUALES } from '@/services/reporte-academico.service';
 
 /**
  * POST /api/postgres/reports/academico/reporte-academico/comentario-ia
@@ -29,10 +29,23 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   const ses = Number(b?.sesSemana) || 0;
   const met = b?.metricas || {};
-  const lineas = METRICAS.map((m) => {
-    const x = met[m.key] || {}; const c = Number(x.cumplidas) || 0;
-    return `- ${m.label} (${m.grupo}): ${c}/${ses}`;
-  }).join('\n');
+  // "Asistió" es un conteo real de sesiones; los otros 8 son criterios que el Guía
+  // marca a mano, así que se le pasan a la IA como texto y NO como "0/2" (si no,
+  // interpretaría que el estudiante no cumplió nada).
+  const ESTADO_TEXTO: Record<string, string> = {
+    full: 'cumplió en todas las sesiones', half: 'cumplió en algunas sesiones',
+    empty: 'no cumplió', none: 'sin evaluar',
+  };
+  const lineaAsistio = (() => {
+    const x = met[METRICA_ASISTIO.key] || {};
+    return `- ${METRICA_ASISTIO.label} (${METRICA_ASISTIO.grupo}): ${Number(x.cumplidas) || 0}/${ses} sesiones`;
+  })();
+  const lineasManuales = METRICAS_MANUALES
+    .map((m) => ({ m, estado: (met[m.key] || {}).estado || 'none' }))
+    // Lo que el Guía no marcó no se le menciona a la IA: no hay dato que reportar.
+    .filter(({ estado }) => estado !== 'none')
+    .map(({ m, estado }) => `- ${m.label} (${m.grupo}): ${ESTADO_TEXTO[estado] || 'sin evaluar'}`);
+  const lineas = [lineaAsistio, ...lineasManuales].join('\n');
   const comentariosSemana = String(b?.comentariosSemana || '').trim();
 
   const system = `Eres un asistente pedagógico de MOSAICO, un programa de cálculo mental con ábaco Soroban para niños. Redactas un comentario para el apoderado sobre el desempeño de la semana del estudiante.

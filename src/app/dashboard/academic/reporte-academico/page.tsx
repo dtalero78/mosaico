@@ -7,17 +7,26 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission, Role } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 
+// `manual: false` = "Asistió", que se calcula solo con la asistencia marcada en
+// cada sesión de la semana. Los otros 8 los marca el Guía aquí mismo.
 const METRIC_COLS = [
-  { key: 'asistio', label: 'Asistió', ico: '✅', grupo: 'HÁBITOS' },
-  { key: 'puntual', label: 'Puntual', ico: '⏰', grupo: 'HÁBITOS' },
-  { key: 'asignacion', label: 'Asignación', ico: '📋', grupo: 'HÁBITOS' },
-  { key: 'dominio', label: 'Dominio', ico: '🎯', grupo: 'DESEMPEÑO' },
-  { key: 'participo', label: 'Participó', ico: '🙌', grupo: 'DESEMPEÑO' },
-  { key: 'desafio', label: 'Desafío', ico: '🏆', grupo: 'DESEMPEÑO' },
-  { key: 'activo', label: 'Activo', ico: '⚡', grupo: 'ACTITUDES' },
-  { key: 'respeto', label: 'Respeto', ico: '🤝', grupo: 'ACTITUDES' },
-  { key: 'camara', label: 'Cámara', ico: '🎥', grupo: 'ACTITUDES' },
+  { key: 'asistio', label: 'Asistió', ico: '✅', grupo: 'HÁBITOS', manual: false },
+  { key: 'puntual', label: 'Puntual', ico: '⏰', grupo: 'HÁBITOS', manual: true },
+  { key: 'asignacion', label: 'Asignación', ico: '📋', grupo: 'HÁBITOS', manual: true },
+  { key: 'dominio', label: 'Dominio', ico: '🎯', grupo: 'DESEMPEÑO', manual: true },
+  { key: 'participo', label: 'Participó', ico: '🙌', grupo: 'DESEMPEÑO', manual: true },
+  { key: 'desafio', label: 'Desafío', ico: '🏆', grupo: 'DESEMPEÑO', manual: true },
+  { key: 'activo', label: 'Activo', ico: '⚡', grupo: 'ACTITUDES', manual: true },
+  { key: 'respeto', label: 'Respeto', ico: '🤝', grupo: 'ACTITUDES', manual: true },
+  { key: 'camara', label: 'Cámara', ico: '🎥', grupo: 'ACTITUDES', manual: true },
 ]
+
+// Ciclo del óvalo al hacer clic: sin marcar → cumplió todas → algunas → no cumplió → sin marcar.
+const CICLO = ['none', 'full', 'half', 'empty'] as const
+const siguienteEstado = (actual?: string) => CICLO[(CICLO.indexOf((actual || 'none') as any) + 1) % CICLO.length]
+const TITULO_ESTADO: Record<string, string> = {
+  full: 'Cumplió todas', half: 'Cumplió algunas', empty: 'No cumplió', none: 'Sin marcar',
+}
 
 const fmtFecha = (iso: string) => { try { return new Date(iso + 'T12:00:00Z').toLocaleDateString('es', { day: '2-digit', month: 'short' }) } catch { return iso } }
 
@@ -32,6 +41,10 @@ export default function ReporteAcademicoPage() {
   const [comentIA, setComentIA] = useState<Record<string, string>>({})
   const [individual, setIndividual] = useState<any>(null)
   const [enviando, setEnviando] = useState(false)
+  // Criterios manuales por estudiante: { academicaId: { puntual: 'full', … } }
+  const [criterios, setCriterios] = useState<Record<string, Record<string, string>>>({})
+  const [dirty, setDirty] = useState(false)
+  const [guardandoInforme, setGuardandoInforme] = useState(false)
 
   // Envío disponible para todos MENOS los guías. `puedeEnviar` sólo es true cuando
   // el rol YA cargó y NO es guía → evita que el botón parpadee mientras carga.
@@ -52,15 +65,27 @@ export default function ReporteAcademicoPage() {
       if (res.error) throw new Error(res.error)
       setData(res)
       // sincroniza estados editables
-      const nt: Record<string, string> = {}, ci: Record<string, string> = {}
-      ;(res.rows || []).forEach((r: any) => { nt[r.academicaId] = r.notaGuia || ''; ci[r.academicaId] = r.comentarioIA || '' })
-      setNotas(nt); setComentIA(ci)
+      const nt: Record<string, string> = {}, ci: Record<string, string> = {}, cr: Record<string, Record<string, string>> = {}
+      ;(res.rows || []).forEach((r: any) => {
+        nt[r.academicaId] = r.notaGuia || ''
+        ci[r.academicaId] = r.comentarioIA || ''
+        cr[r.academicaId] = { ...(r.criterios || {}) }
+      })
+      setNotas(nt); setComentIA(ci); setCriterios(cr); setDirty(false)
       // refleja filtros resueltos por el server
       setF(prev => ({ ...prev, guia: res.guias?.length === 1 ? res.guias[0].id : prev.guia, curso: res.curso || prev.curso, salon: res.salon || prev.salon }))
     } catch (e: any) { toast.error(e?.message || 'Error al cargar el reporte') } finally { setLoading(false) }
   }, [])
 
   useEffect(() => { fetchData(applied) }, [applied, fetchData])
+
+  // Aviso al salir con marcas sin guardar (el informe se guarda con el botón).
+  useEffect(() => {
+    if (!dirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
 
   const aplicar = () => setApplied({ ...f })
   const semanaActual = () => { const n = { ...f, startDate: '', endDate: '' }; setF(n); setApplied(n) }
@@ -87,11 +112,52 @@ export default function ReporteAcademicoPage() {
     try {
       const res = await fetch('/api/postgres/reports/academico/reporte-academico', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ academicaId: r.academicaId, numeroId: r.numeroId, salon: data.salon, curso: data.curso, semanaInicio: data.semanaInicio, notaGuia: notas[r.academicaId] || '' }),
+        body: JSON.stringify({
+          academicaId: r.academicaId, numeroId: r.numeroId, salon: data.salon, curso: data.curso,
+          semanaInicio: data.semanaInicio,
+          notaGuia: notas[r.academicaId] || '',
+          comentarioIA: comentIA[r.academicaId] || '',
+        }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
-      if (!silent) toast.success('Valoración guardada')
+      if (!silent) toast.success('Guardado')
     } catch (e: any) { if (!silent) toast.error(e?.message || 'Error al guardar'); throw e } finally { setSavingNota(null) }
+  }
+
+  // Clic en un óvalo manual: avanza al siguiente estado del ciclo. Sólo se permite
+  // si el estudiante tuvo sesiones esa semana (si no, no hay clase que evaluar).
+  const ciclarCriterio = (academicaId: string, key: string) => {
+    setCriterios(prev => {
+      const fila = { ...(prev[academicaId] || {}) }
+      const next = siguienteEstado(fila[key])
+      if (next === 'none') delete fila[key]; else fila[key] = next
+      return { ...prev, [academicaId]: fila }
+    })
+    setDirty(true)
+  }
+
+  // Guarda TODO el informe de la semana (criterios + comentario IA + actividad
+  // individual) de todas las filas del salón en una sola petición.
+  const guardarInforme = async () => {
+    if (!data?.salon || !data?.semanaInicio || rows.length === 0) return
+    setGuardandoInforme(true)
+    try {
+      const res = await fetch('/api/postgres/reports/academico/reporte-academico', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          salon: data.salon, semanaInicio: data.semanaInicio,
+          items: rows.map((r: any) => ({
+            academicaId: r.academicaId, numeroId: r.numeroId, curso: data.curso, campaign: data.campaign || undefined,
+            criterios: criterios[r.academicaId] || {},
+            comentarioIA: comentIA[r.academicaId] || '',
+            notaGuia: notas[r.academicaId] || '',
+          })),
+        }),
+      }).then(x => x.json())
+      if (res.error) throw new Error(res.error)
+      setDirty(false)
+      toast.success(`Informe guardado (${res.guardados} estudiante(s))`)
+    } catch (e: any) { toast.error(e?.message || 'Error al guardar el informe') } finally { setGuardandoInforme(false) }
   }
 
   const enviarWhatsapp = async (r: any, silent = false) => {
@@ -137,8 +203,13 @@ export default function ReporteAcademicoPage() {
           .oval.half{background:linear-gradient(90deg,#6d28d9 0 50%,transparent 50% 100%);border-color:#c026d3}
           .oval.empty{background:transparent;border-color:#dc2626}
           .oval.none{background:transparent;border:2px dashed #c9c2d6}
+          .oval-btn{padding:4px;border-radius:99px;line-height:0;cursor:pointer;transition:background .12s}
+          .oval-btn:hover:not(.is-disabled){background:#f3e8ff}
+          .oval-btn:focus-visible{outline:2px solid #7e22ce;outline-offset:1px}
+          .oval-btn.is-disabled{cursor:not-allowed;opacity:.55}
+          @media screen{.only-print{display:none}}
           @media print{
-            nav,aside,.no-print,button{display:none !important}
+            nav,aside,.no-print,button,textarea{display:none !important}
             .print-header{display:flex !important}
             body{background:#fff}
             @page{size:landscape;margin:10mm}
@@ -167,7 +238,7 @@ export default function ReporteAcademicoPage() {
               <button onClick={() => window.print()} className="px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">🖨 Imprimir / PDF</button>
             </PermissionGuard>
           </div>
-          <p className="text-gray-500 mb-4 text-sm no-print">Consolidado semanal de métricas por salón. Óvalo por métrica según las sesiones de la semana. El Guía ve solo sus cursos.</p>
+          <p className="text-gray-500 mb-4 text-sm no-print">Consolidado semanal por salón. <b>Asistió</b> se calcula con la asistencia de las sesiones de la semana; los demás criterios los marca el Guía con clic (cumplió todas → algunas → no cumplió). Recuerda <b>Guardar informe</b>. No aplica a IMPULSA.</p>
 
           {/* Filtros */}
           <div className="no-print flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
@@ -192,7 +263,7 @@ export default function ReporteAcademicoPage() {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase">Desde</label>
+              <label className="text-xs font-medium text-gray-500 uppercase">Semana desde</label>
               <input type="date" value={f.startDate} onChange={e => setF({ ...f, startDate: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
             </div>
             <div className="flex flex-col gap-1">
@@ -214,9 +285,18 @@ export default function ReporteAcademicoPage() {
 
           {/* Tabla */}
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mb-6">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
               <h3 className="font-semibold text-sm">Métricas de la semana</h3>
-              <span className="text-xs text-gray-500">Óvalo por métrica según las sesiones de la semana</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">Asistió es automático; los demás se marcan con clic</span>
+                {dirty && <span className="no-print text-xs font-semibold text-amber-600">● Cambios sin guardar</span>}
+                <button
+                  type="button" onClick={guardarInforme} disabled={guardandoInforme || rows.length === 0}
+                  className="no-print px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-40"
+                >
+                  {guardandoInforme ? 'Guardando…' : '💾 Guardar informe'}
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[860px] border-collapse">
@@ -246,9 +326,32 @@ export default function ReporteAcademicoPage() {
                       <td className="sticky left-0 bg-white px-4 py-3 border-b border-gray-100">
                         <div className="flex flex-col"><b className="text-[13.5px] text-gray-900">{r.nombre}</b><span className="text-[11.5px] text-gray-500">ID {r.numeroId} · {r.plataforma}</span></div>
                       </td>
-                      {METRIC_COLS.map(m => (
-                        <td key={m.key} className="text-center py-3 border-b border-gray-100"><span className={`oval ${r.metricas[m.key]?.estado || 'none'}`} title={`${r.metricas[m.key]?.cumplidas || 0}/${r.sesSemana}`}></span></td>
-                      ))}
+                      {METRIC_COLS.map(m => {
+                        // Asistió: automático (viene de las sesiones), no se toca.
+                        if (!m.manual) return (
+                          <td key={m.key} className="text-center py-3 border-b border-gray-100">
+                            <span className={`oval ${r.metricas[m.key]?.estado || 'none'}`} title={`${r.metricas[m.key]?.cumplidas || 0}/${r.sesSemana} sesiones asistidas`}></span>
+                          </td>
+                        )
+                        // Los 8 restantes: los marca el Guía. Sin sesiones esa semana
+                        // no hay clase que evaluar → queda punteado y deshabilitado.
+                        const estado = criterios[r.academicaId]?.[m.key] || 'none'
+                        const sinSesion = r.sesSemana === 0
+                        return (
+                          <td key={m.key} className="text-center py-3 border-b border-gray-100">
+                            <button
+                              type="button"
+                              disabled={sinSesion}
+                              onClick={() => ciclarCriterio(r.academicaId, m.key)}
+                              title={sinSesion ? 'Sin sesión esta semana' : `${m.label}: ${TITULO_ESTADO[estado]} — clic para cambiar`}
+                              aria-label={`${m.label} de ${r.nombre}: ${TITULO_ESTADO[estado]}`}
+                              className={`oval-btn ${sinSesion ? 'is-disabled' : ''}`}
+                            >
+                              <span className={`oval ${estado}`}></span>
+                            </button>
+                          </td>
+                        )
+                      })}
                       <td className="text-center py-3 border-b border-gray-100"><span className={`font-extrabold text-[15px] ${r.sesSemana === 0 ? 'text-red-600' : ''}`}>{r.sesSemana}<small className="text-gray-500 font-semibold text-[11px]">/{r.sesSemana || 2}</small></span></td>
                     </tr>
                   ))}
@@ -259,15 +362,15 @@ export default function ReporteAcademicoPage() {
               <span className="inline-flex items-center gap-2"><span className="oval full"></span> Cumplió todas</span>
               <span className="inline-flex items-center gap-2"><span className="oval half"></span> Cumplió algunas</span>
               <span className="inline-flex items-center gap-2"><span className="oval empty"></span> No cumplió</span>
-              <span className="inline-flex items-center gap-2"><span className="oval none"></span> Sin sesión</span>
+              <span className="inline-flex items-center gap-2"><span className="oval none"></span> Sin marcar / sin sesión</span>
             </div>
           </div>
 
-          {/* Comentario IA + Valoración del Guía */}
+          {/* Valoración Guía — comentario IA (editable) + actividad individual */}
           {rows.length > 0 && (
             <>
               <div className="no-print flex flex-wrap items-center justify-between gap-3 mb-2">
-                <div className="text-xs uppercase tracking-wide text-gray-500 font-bold">Comentario IA + Valoración del Guía</div>
+                <div className="text-xs uppercase tracking-wide text-gray-500 font-bold">Valoración Guía</div>
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
                     <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-purple-600" />
@@ -303,17 +406,26 @@ export default function ReporteAcademicoPage() {
                     </div>
                     <div className="px-4 py-3 border-r border-gray-100">
                       <div className="flex items-center gap-2 mb-1"><span className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold">Comentario</span><span className="text-[9.5px] bg-fuchsia-50 text-fuchsia-600 rounded-full px-2 py-0.5 font-bold">✦ IA</span></div>
-                      <p className="text-[13px] text-gray-800 whitespace-pre-wrap min-h-[20px]">{comentIA[r.academicaId] || <span className="text-gray-400">— sin generar —</span>}</p>
+                      {/* Editable: se genera con IA y el Guía puede ajustarlo o completarlo. */}
+                      <textarea
+                        value={comentIA[r.academicaId] ?? ''}
+                        onChange={e => { setComentIA(p => ({ ...p, [r.academicaId]: e.target.value })); setDirty(true) }}
+                        placeholder="— sin generar — - genéralo con IA o escríbelo aquí…"
+                        className="w-full min-h-[76px] resize-y border border-gray-300 rounded-lg px-3 py-2 text-[13px]"
+                      />
+                      {/* En impresión el textarea no se ve bien: se imprime el texto. */}
+                      <p className="only-print text-[13px] text-gray-800 whitespace-pre-wrap">{comentIA[r.academicaId]}</p>
                       <button onClick={() => generarIA(r)} disabled={genIA === r.academicaId} className="no-print mt-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-50">
                         {genIA === r.academicaId ? 'Generando…' : (comentIA[r.academicaId] ? '✦ Regenerar' : '✦ Generar con IA')}
                       </button>
                     </div>
                     <div className="px-4 py-3">
-                      <div className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold mb-1">Valoración del Guía</div>
-                      <textarea value={notas[r.academicaId] ?? ''} onChange={e => setNotas(p => ({ ...p, [r.academicaId]: e.target.value }))}
-                        placeholder="Escribe tu valoración de la semana…" className="w-full min-h-[64px] resize-y border border-gray-300 rounded-lg px-3 py-2 text-[13px]" />
+                      <div className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold mb-1">Actividad Individual</div>
+                      <textarea value={notas[r.academicaId] ?? ''} onChange={e => { setNotas(p => ({ ...p, [r.academicaId]: e.target.value })); setDirty(true) }}
+                        placeholder="Escribe la actividad individual de la semana…" className="w-full min-h-[76px] resize-y border border-gray-300 rounded-lg px-3 py-2 text-[13px]" />
+                      <p className="only-print text-[13px] text-gray-800 whitespace-pre-wrap">{notas[r.academicaId]}</p>
                       <button onClick={() => guardarNota(r)} disabled={savingNota === r.academicaId} className="no-print mt-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-50">
-                        {savingNota === r.academicaId ? 'Guardando…' : 'Guardar valoración'}
+                        {savingNota === r.academicaId ? 'Guardando…' : 'Guardar'}
                       </button>
                     </div>
                   </div>

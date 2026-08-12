@@ -3,7 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
-import { getReporteAcademico } from '@/services/reporte-academico.service';
+import { getReporteAcademico, sanitizeCriterios } from '@/services/reporte-academico.service';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 
@@ -29,22 +29,58 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   return successResponse(data);
 });
 
+/**
+ * Guarda una fila del reporte por (estudiante, salón, semana). Cada campo se
+ * actualiza SÓLO si viene en el body, para que guardar los criterios no borre el
+ * comentario IA ni la actividad individual (y viceversa).
+ */
+async function guardarFila(item: any, salon: string, semanaInicio: string, email: string) {
+  const academicaId = String(item?.academicaId || '').trim();
+  if (!academicaId) throw new ValidationError('Falta academicaId.');
+
+  const tieneCriterios = item?.criterios !== undefined;
+  const tieneNota = item?.notaGuia !== undefined;
+  const tieneIA = item?.comentarioIA !== undefined;
+
+  const criterios = tieneCriterios ? sanitizeCriterios(item.criterios) : {};
+  const notaGuia = tieneNota ? String(item.notaGuia ?? '') : null;
+  const comentarioIA = tieneIA ? String(item.comentarioIA ?? '') : null;
+
+  await query(
+    `INSERT INTO "REPORTE_ACADEMICO_NOTAS"
+       ("_id","academicaId","numeroId","curso","salon","campaign","semanaInicio","notaGuia","comentarioIA","criterios","updatedBy")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11)
+     ON CONFLICT ("academicaId","salon","semanaInicio") DO UPDATE SET
+       "notaGuia"     = CASE WHEN $12 THEN EXCLUDED."notaGuia"     ELSE "REPORTE_ACADEMICO_NOTAS"."notaGuia"     END,
+       "comentarioIA" = CASE WHEN $13 THEN EXCLUDED."comentarioIA" ELSE "REPORTE_ACADEMICO_NOTAS"."comentarioIA" END,
+       "criterios"    = CASE WHEN $14 THEN EXCLUDED."criterios"    ELSE "REPORTE_ACADEMICO_NOTAS"."criterios"    END,
+       "updatedBy"    = EXCLUDED."updatedBy",
+       "_updatedDate" = NOW()`,
+    [
+      generateId('rep'), academicaId, item?.numeroId || null, item?.curso || null,
+      salon, item?.campaign || null, semanaInicio,
+      notaGuia, comentarioIA, JSON.stringify(criterios), email,
+      tieneNota, tieneIA, tieneCriterios,
+    ]
+  );
+}
+
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.REPORTE_ACADEMICO_VER);
   const b = await request.json().catch(() => ({}));
-  const academicaId = String(b?.academicaId || '').trim();
   const salon = String(b?.salon || '').trim();
   const semanaInicio = String(b?.semanaInicio || '').trim();
-  if (!academicaId || !salon || !semanaInicio) throw new ValidationError('Falta academicaId, salon o semanaInicio.');
-  const notaGuia = String(b?.notaGuia ?? '');
+  if (!salon || !semanaInicio) throw new ValidationError('Falta salon o semanaInicio.');
   const email = (session as any)?.user?.email || 'desconocido';
 
-  await query(
-    `INSERT INTO "REPORTE_ACADEMICO_NOTAS" ("_id","academicaId","numeroId","curso","salon","campaign","semanaInicio","notaGuia","updatedBy")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-     ON CONFLICT ("academicaId","salon","semanaInicio") DO UPDATE SET
-       "notaGuia" = EXCLUDED."notaGuia", "updatedBy" = EXCLUDED."updatedBy", "_updatedDate" = NOW()`,
-    [generateId('rep'), academicaId, b?.numeroId || null, b?.curso || null, salon, b?.campaign || null, semanaInicio, notaGuia, email]
-  );
-  return successResponse({ ok: true });
+  // Guardado del informe completo: un solo POST con todas las filas del salón.
+  if (Array.isArray(b?.items)) {
+    if (!b.items.length) throw new ValidationError('No hay filas para guardar.');
+    for (const item of b.items) await guardarFila(item, salon, semanaInicio, email);
+    return successResponse({ ok: true, guardados: b.items.length });
+  }
+
+  // Guardado de un solo estudiante (compatibilidad con los botones por fila).
+  await guardarFila(b, salon, semanaInicio, email);
+  return successResponse({ ok: true, guardados: 1 });
 });
