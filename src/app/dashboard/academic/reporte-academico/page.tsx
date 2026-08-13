@@ -206,7 +206,6 @@ export default function ReporteAcademicoPage() {
           .oval-btn{padding:4px;border-radius:99px;line-height:0;cursor:pointer;transition:background .12s}
           .oval-btn:hover:not(.is-disabled){background:#f3e8ff}
           .oval-btn:focus-visible{outline:2px solid #7e22ce;outline-offset:1px}
-          .oval-btn.is-disabled{cursor:not-allowed;opacity:.55}
           @media screen{.only-print{display:none}}
           @media print{
             nav,aside,.no-print,button,textarea{display:none !important}
@@ -333,19 +332,18 @@ export default function ReporteAcademicoPage() {
                             <span className={`oval ${r.metricas[m.key]?.estado || 'none'}`} title={`${r.metricas[m.key]?.cumplidas || 0}/${r.sesSemana} sesiones asistidas`}></span>
                           </td>
                         )
-                        // Los 8 restantes: los marca el Guía. Sin sesiones esa semana
-                        // no hay clase que evaluar → queda punteado y deshabilitado.
+                        // Los 8 restantes los marca SIEMPRE el Guía, haya o no
+                        // sesiones registradas esa semana: es su valoración, no un
+                        // derivado de la asistencia.
                         const estado = criterios[r.academicaId]?.[m.key] || 'none'
-                        const sinSesion = r.sesSemana === 0
                         return (
                           <td key={m.key} className="text-center py-3 border-b border-gray-100">
                             <button
                               type="button"
-                              disabled={sinSesion}
                               onClick={() => ciclarCriterio(r.academicaId, m.key)}
-                              title={sinSesion ? 'Sin sesión esta semana' : `${m.label}: ${TITULO_ESTADO[estado]} — clic para cambiar`}
+                              title={`${m.label}: ${TITULO_ESTADO[estado]} — clic para cambiar`}
                               aria-label={`${m.label} de ${r.nombre}: ${TITULO_ESTADO[estado]}`}
-                              className={`oval-btn ${sinSesion ? 'is-disabled' : ''}`}
+                              className="oval-btn"
                             >
                               <span className={`oval ${estado}`}></span>
                             </button>
