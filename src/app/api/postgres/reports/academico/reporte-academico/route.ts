@@ -2,8 +2,8 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
-import { ValidationError } from '@/lib/errors';
-import { getReporteAcademico, sanitizeCriterios } from '@/services/reporte-academico.service';
+import { ValidationError, ForbiddenError } from '@/lib/errors';
+import { getReporteAcademico, sanitizeCriterios, getCierre } from '@/services/reporte-academico.service';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 
@@ -65,6 +65,30 @@ async function guardarFila(item: any, salon: string, semanaInicio: string, email
   );
 }
 
+/**
+ * Comprueba que quien guarda pueda hacerlo según el estado del informe del salón.
+ * Es la validación REAL (el front sólo oculta botones):
+ *   BORRADOR     → cualquiera con acceso al reporte.
+ *   CERRADO_GUIA → sólo con ACADEMICO.REPORTE_ACADEMICO.REVISAR (o admin).
+ *   DEFINITIVO   → sólo SUPER_ADMIN.
+ */
+async function assertPuedeEscribir(session: any, curso: string, salon: string, campaign: string, semanaInicio: string) {
+  if (!curso || !campaign) return; // sin curso/campaña no hay cierre que consultar
+  const { estado } = await getCierre(curso, salon, campaign, semanaInicio);
+  const rol = String((session as any)?.user?.role || '');
+
+  if (estado === 'DEFINITIVO') {
+    if (rol !== 'SUPER_ADMIN') {
+      throw new ForbiddenError('El informe de esta semana ya tiene cierre definitivo y no se puede modificar.');
+    }
+    return;
+  }
+  if (estado === 'CERRADO_GUIA') {
+    // requirePermission ya deja pasar a SUPER_ADMIN/ADMIN.
+    await requirePermission(session, AcademicoPermission.REPORTE_ACADEMICO_REVISAR);
+  }
+}
+
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.REPORTE_ACADEMICO_VER);
   const b = await request.json().catch(() => ({}));
@@ -72,6 +96,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const semanaInicio = String(b?.semanaInicio || '').trim();
   if (!salon || !semanaInicio) throw new ValidationError('Falta salon o semanaInicio.');
   const email = (session as any)?.user?.email || 'desconocido';
+
+  // El informe cerrado no se puede seguir editando.
+  const cursoBody = String(b?.curso || b?.items?.[0]?.curso || '').trim();
+  const campaignBody = String(b?.campaign || b?.items?.[0]?.campaign || '').trim();
+  await assertPuedeEscribir(session, cursoBody, salon, campaignBody, semanaInicio);
 
   // Guardado del informe completo: un solo POST con todas las filas del salón.
   if (Array.isArray(b?.items)) {

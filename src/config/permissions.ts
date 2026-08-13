@@ -623,6 +623,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Permite abrir el informe individual de un estudiante y enviar su PDF por WhatsApp al apoderado.',
   },
   {
+    code: AcademicoPermission.REPORTE_ACADEMICO_REVISAR,
+    module: Module.ACADEMICO,
+    section: 'Reporte Académico',
+    name: 'Revisar y cerrar definitivo',
+    description: 'Permite modificar el informe semanal que el Guía ya cerró y darle el cierre DEFINITIVO. Tras ese cierre nadie más puede editarlo (salvo SUPER_ADMIN). Pensado para ADMIN y COORDINADOR_ACADEMICO.',
+  },
+  {
     code: AcademicoPermission.LISTA_USUARIOS_VER,
     module: Module.ACADEMICO,
     section: 'Lista de Usuarios',

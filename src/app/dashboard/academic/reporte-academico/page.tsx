@@ -31,7 +31,7 @@ const TITULO_ESTADO: Record<string, string> = {
 const fmtFecha = (iso: string) => { try { return new Date(iso + 'T12:00:00Z').toLocaleDateString('es', { day: '2-digit', month: 'short' }) } catch { return iso } }
 
 export default function ReporteAcademicoPage() {
-  const [f, setF] = useState({ guia: '', curso: '', salon: '', startDate: '', endDate: '' })
+  const [f, setF] = useState({ guia: '', curso: '', salon: '', campaign: '', startDate: '', endDate: '' })
   const [applied, setApplied] = useState(f)
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
@@ -45,12 +45,16 @@ export default function ReporteAcademicoPage() {
   const [criterios, setCriterios] = useState<Record<string, Record<string, string>>>({})
   const [dirty, setDirty] = useState(false)
   const [guardandoInforme, setGuardandoInforme] = useState(false)
+  const [cerrando, setCerrando] = useState<'GUIA' | 'DEFINITIVO' | null>(null)
+  const [confirmarCierre, setConfirmarCierre] = useState<'GUIA' | 'DEFINITIVO' | null>(null)
 
   // Envío disponible para todos MENOS los guías. `puedeEnviar` sólo es true cuando
   // el rol YA cargó y NO es guía → evita que el botón parpadee mientras carga.
-  const { isRole, isLoading: permLoading } = usePermissions()
+  const { isRole, hasPermission, isLoading: permLoading } = usePermissions()
   const esGuia = isRole(Role.ADVISOR) // Role.ADVISOR = 'GUIA'
   const puedeEnviar = !permLoading && !esGuia
+  const puedeRevisar = hasPermission(AcademicoPermission.REPORTE_ACADEMICO_REVISAR as any)
+  const esSuperAdmin = isRole(Role.SUPER_ADMIN)
 
   // Selección (individual/masivo) + estado de la acción en bloque.
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
@@ -73,7 +77,15 @@ export default function ReporteAcademicoPage() {
       })
       setNotas(nt); setComentIA(ci); setCriterios(cr); setDirty(false)
       // refleja filtros resueltos por el server
-      setF(prev => ({ ...prev, guia: res.guias?.length === 1 ? res.guias[0].id : prev.guia, curso: res.curso || prev.curso, salon: res.salon || prev.salon }))
+      // Se refleja lo que resolvió el servidor (incluida la campaña elegida por
+      // defecto: la más reciente del curso/salón dentro del alcance del guía).
+      setF(prev => ({
+        ...prev,
+        guia: res.guias?.length === 1 ? res.guias[0].id : prev.guia,
+        curso: res.curso || prev.curso,
+        salon: res.salon || prev.salon,
+        campaign: res.campaign || '',
+      }))
     } catch (e: any) { toast.error(e?.message || 'Error al cargar el reporte') } finally { setLoading(false) }
   }, [])
 
@@ -124,8 +136,8 @@ export default function ReporteAcademicoPage() {
     } catch (e: any) { if (!silent) toast.error(e?.message || 'Error al guardar'); throw e } finally { setSavingNota(null) }
   }
 
-  // Clic en un óvalo manual: avanza al siguiente estado del ciclo. Sólo se permite
-  // si el estudiante tuvo sesiones esa semana (si no, no hay clase que evaluar).
+  // Clic en un óvalo manual: avanza al siguiente estado del ciclo. Siempre editable,
+  // haya o no sesiones esa semana (es la valoración del Guía, no un derivado).
   const ciclarCriterio = (academicaId: string, key: string) => {
     setCriterios(prev => {
       const fila = { ...(prev[academicaId] || {}) }
@@ -138,7 +150,7 @@ export default function ReporteAcademicoPage() {
 
   // Guarda TODO el informe de la semana (criterios + comentario IA + actividad
   // individual) de todas las filas del salón en una sola petición.
-  const guardarInforme = async () => {
+  const guardarInforme = async (silent = false) => {
     if (!data?.salon || !data?.semanaInicio || rows.length === 0) return
     setGuardandoInforme(true)
     try {
@@ -156,8 +168,11 @@ export default function ReporteAcademicoPage() {
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
       setDirty(false)
-      toast.success(`Informe guardado (${res.guardados} estudiante(s))`)
-    } catch (e: any) { toast.error(e?.message || 'Error al guardar el informe') } finally { setGuardandoInforme(false) }
+      if (!silent) toast.success(`Informe guardado (${res.guardados} estudiante(s))`)
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al guardar el informe')
+      if (silent) throw e // al cerrar, si el guardado falla no se debe cerrar
+    } finally { setGuardandoInforme(false) }
   }
 
   const enviarWhatsapp = async (r: any, silent = false) => {
@@ -173,6 +188,41 @@ export default function ReporteAcademicoPage() {
   }
 
   const rows = data?.rows || []
+
+  // Estado del informe del salón. El backend valida lo mismo: esto sólo evita
+  // mostrar controles que igualmente serían rechazados.
+  //   BORRADOR     → el Guía edita y guarda las veces que quiera.
+  //   CERRADO_GUIA → sólo quien tenga el permiso de revisar.
+  //   DEFINITIVO   → sólo SUPER_ADMIN.
+  const estadoCierre: 'BORRADOR' | 'CERRADO_GUIA' | 'DEFINITIVO' = data?.cierre?.estado || 'BORRADOR'
+  const puedeEditar =
+    estadoCierre === 'BORRADOR' ? true
+      : estadoCierre === 'CERRADO_GUIA' ? puedeRevisar
+        : esSuperAdmin
+  const puedeCerrarGuia = estadoCierre === 'BORRADOR' && rows.length > 0
+  const puedeCerrarDefinitivo = estadoCierre === 'CERRADO_GUIA' && puedeRevisar && rows.length > 0
+
+  const cerrarInforme = async (accion: 'GUIA' | 'DEFINITIVO') => {
+    if (!data?.curso || !data?.salon || !data?.campaign || !data?.semanaInicio) return
+    setCerrando(accion)
+    try {
+      // Lo que esté sin guardar se guarda antes de cerrar, para no perder marcas.
+      if (dirty) await guardarInforme(true)
+      const res = await fetch('/api/postgres/reports/academico/reporte-academico/cerrar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          curso: data.curso, salon: data.salon, campaign: data.campaign,
+          semanaInicio: data.semanaInicio, accion,
+        }),
+      }).then(x => x.json())
+      if (res.error) throw new Error(res.error)
+      toast.success(accion === 'GUIA' ? 'Informe cerrado y enviado a revisión' : 'Cierre definitivo aplicado')
+      setConfirmarCierre(null)
+      fetchData(applied)
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo cerrar el informe')
+    } finally { setCerrando(null) }
+  }
 
   // Helpers de selección + acción MASIVA (secuencial, con progreso).
   const toggleSel = (id: string) => setSeleccion(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
@@ -206,6 +256,8 @@ export default function ReporteAcademicoPage() {
           .oval-btn{padding:4px;border-radius:99px;line-height:0;cursor:pointer;transition:background .12s}
           .oval-btn:hover:not(.is-disabled){background:#f3e8ff}
           .oval-btn:focus-visible{outline:2px solid #7e22ce;outline-offset:1px}
+          .oval-btn.is-locked{cursor:not-allowed}
+          .oval-btn.is-locked:hover{background:transparent}
           @media screen{.only-print{display:none}}
           @media print{
             nav,aside,.no-print,button,textarea{display:none !important}
@@ -243,7 +295,7 @@ export default function ReporteAcademicoPage() {
           <div className="no-print flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Guía</label>
-              <select value={f.guia} onChange={e => { const n = { ...f, guia: e.target.value, curso: '', salon: '' }; setF(n); setApplied(n) }} disabled={(data?.guias?.length || 0) <= 1}
+              <select value={f.guia} onChange={e => { const n = { ...f, guia: e.target.value, curso: '', salon: '', campaign: '' }; setF(n); setApplied(n) }} disabled={(data?.guias?.length || 0) <= 1}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px] disabled:bg-gray-100">
                 {(data?.guias?.length || 0) !== 1 && <option value="">Todas</option>}
                 {(data?.guias || []).map((g: any) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
@@ -251,14 +303,22 @@ export default function ReporteAcademicoPage() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Curso</label>
-              <select value={f.curso} onChange={e => { const n = { ...f, curso: e.target.value, salon: '' }; setF(n); setApplied(n) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[120px]">
+              <select value={f.curso} onChange={e => { const n = { ...f, curso: e.target.value, salon: '', campaign: '' }; setF(n); setApplied(n) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[120px]">
                 {(data?.cursos || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Salón</label>
-              <select value={f.salon} onChange={e => { const n = { ...f, salon: e.target.value }; setF(n); setApplied(n) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[110px]">
+              <select value={f.salon} onChange={e => { const n = { ...f, salon: e.target.value, campaign: '' }; setF(n); setApplied(n) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[110px]">
                 {(data?.salones || []).map((s: string) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            {/* El mismo salón existe en varias campañas, cada una con su Guía y sus
+                alumnos: sin este filtro se mezclaban todas. */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase">Campaña</label>
+              <select value={f.campaign} onChange={e => { const n = { ...f, campaign: e.target.value }; setF(n); setApplied(n) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[160px]">
+                {(data?.campaigns || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -286,15 +346,51 @@ export default function ReporteAcademicoPage() {
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mb-6">
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
               <h3 className="font-semibold text-sm">Métricas de la semana</h3>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500">Asistió es automático; los demás se marcan con clic</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Estado del informe de la semana */}
+                {estadoCierre === 'CERRADO_GUIA' && (
+                  <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-amber-100 text-amber-700"
+                    title={data?.cierre?.cerradoGuiaPor ? `Cerrado por ${data.cierre.cerradoGuiaPor}` : ''}>
+                    🔒 Cerrado por el Guía — en revisión
+                  </span>
+                )}
+                {estadoCierre === 'DEFINITIVO' && (
+                  <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-gray-200 text-gray-700"
+                    title={data?.cierre?.cerradoAdminPor ? `Cierre definitivo por ${data.cierre.cerradoAdminPor}` : ''}>
+                    ✅ Cierre definitivo
+                  </span>
+                )}
+                {estadoCierre === 'BORRADOR' && (
+                  <span className="text-xs text-gray-500">Asistió es automático; los demás se marcan con clic</span>
+                )}
                 {dirty && <span className="no-print text-xs font-semibold text-amber-600">● Cambios sin guardar</span>}
-                <button
-                  type="button" onClick={guardarInforme} disabled={guardandoInforme || rows.length === 0}
-                  className="no-print px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-40"
-                >
-                  {guardandoInforme ? 'Guardando…' : '💾 Guardar informe'}
-                </button>
+
+                {puedeEditar && (
+                  <button
+                    type="button" onClick={() => guardarInforme()} disabled={guardandoInforme || rows.length === 0}
+                    className="no-print px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-40"
+                  >
+                    {guardandoInforme ? 'Guardando…' : '💾 Guardar informe'}
+                  </button>
+                )}
+                {puedeCerrarGuia && (
+                  <button
+                    type="button" onClick={() => setConfirmarCierre('GUIA')} disabled={!!cerrando}
+                    title="Al cerrar ya no podrás modificar el informe de esta semana"
+                    className="no-print px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40"
+                  >
+                    🔒 Cerrar y enviar a revisión
+                  </button>
+                )}
+                {puedeCerrarDefinitivo && (
+                  <button
+                    type="button" onClick={() => setConfirmarCierre('DEFINITIVO')} disabled={!!cerrando}
+                    title="Cierre definitivo: después nadie podrá modificarlo"
+                    className="no-print px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
+                  >
+                    ✅ Guardar definitivo
+                  </button>
+                )}
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -340,10 +436,13 @@ export default function ReporteAcademicoPage() {
                           <td key={m.key} className="text-center py-3 border-b border-gray-100">
                             <button
                               type="button"
+                              disabled={!puedeEditar}
                               onClick={() => ciclarCriterio(r.academicaId, m.key)}
-                              title={`${m.label}: ${TITULO_ESTADO[estado]} — clic para cambiar`}
+                              title={puedeEditar
+                                ? `${m.label}: ${TITULO_ESTADO[estado]} — clic para cambiar`
+                                : `${m.label}: ${TITULO_ESTADO[estado]} (informe cerrado)`}
                               aria-label={`${m.label} de ${r.nombre}: ${TITULO_ESTADO[estado]}`}
-                              className="oval-btn"
+                              className={`oval-btn ${puedeEditar ? '' : 'is-locked'}`}
                             >
                               <span className={`oval ${estado}`}></span>
                             </button>
@@ -408,6 +507,7 @@ export default function ReporteAcademicoPage() {
                       <textarea
                         value={comentIA[r.academicaId] ?? ''}
                         onChange={e => { setComentIA(p => ({ ...p, [r.academicaId]: e.target.value })); setDirty(true) }}
+                        readOnly={!puedeEditar}
                         placeholder="— sin generar — - genéralo con IA o escríbelo aquí…"
                         className="w-full min-h-[76px] resize-y border border-gray-300 rounded-lg px-3 py-2 text-[13px]"
                       />
@@ -420,6 +520,7 @@ export default function ReporteAcademicoPage() {
                     <div className="px-4 py-3">
                       <div className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold mb-1">Actividad Individual</div>
                       <textarea value={notas[r.academicaId] ?? ''} onChange={e => { setNotas(p => ({ ...p, [r.academicaId]: e.target.value })); setDirty(true) }}
+                        readOnly={!puedeEditar}
                         placeholder="Escribe la actividad individual de la semana…" className="w-full min-h-[76px] resize-y border border-gray-300 rounded-lg px-3 py-2 text-[13px]" />
                       <p className="only-print text-[13px] text-gray-800 whitespace-pre-wrap">{notas[r.academicaId]}</p>
                       <button onClick={() => guardarNota(r)} disabled={savingNota === r.academicaId} className="no-print mt-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-50">
@@ -430,6 +531,40 @@ export default function ReporteAcademicoPage() {
                 ))}
               </div>
             </>
+          )}
+
+          {/* Confirmación del cierre — es irreversible para quien lo hace */}
+          {confirmarCierre && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 no-print" onClick={() => !cerrando && setConfirmarCierre(null)}>
+              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  {confirmarCierre === 'GUIA' ? 'Cerrar informe y enviar a revisión' : 'Aplicar cierre definitivo'}
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  {data?.curso} · Salón {data?.salon} · {data?.campaign} · semana del {data?.semanaInicio ? fmtFecha(data.semanaInicio) : ''}
+                </p>
+                <div className={`rounded-lg p-3 mb-4 text-sm border ${
+                  confirmarCierre === 'GUIA' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}>
+                  {confirmarCierre === 'GUIA' ? (
+                    <>Después de cerrarlo <b>ya no podrás modificar</b> el informe de esta semana. Quedará a la espera de la revisión.</>
+                  ) : (
+                    <>Este es el <b>cierre definitivo</b>. Después nadie podrá modificar el informe de esta semana.</>
+                  )}
+                  {dirty && <span className="block mt-1">Los cambios sin guardar se guardarán antes de cerrar.</span>}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setConfirmarCierre(null)} disabled={!!cerrando}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+                  <button type="button" onClick={() => cerrarInforme(confirmarCierre)} disabled={!!cerrando}
+                    className={`px-4 py-2 text-sm text-white rounded-lg disabled:opacity-50 font-medium ${
+                      confirmarCierre === 'GUIA' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}>
+                    {cerrando ? 'Cerrando…' : confirmarCierre === 'GUIA' ? 'Cerrar informe' : 'Cerrar definitivo'}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Modal informe individual */}

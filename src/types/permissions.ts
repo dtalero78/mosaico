@@ -196,6 +196,7 @@ export enum AcademicoPermission {
   REPORTE_ACADEMICO_VER = 'ACADEMICO.REPORTE_ACADEMICO.VER',
   REPORTE_ACADEMICO_PDF = 'ACADEMICO.REPORTE_ACADEMICO.PDF',             // imprimir / generar PDF del salón
   REPORTE_ACADEMICO_INDIVIDUAL = 'ACADEMICO.REPORTE_ACADEMICO.INDIVIDUAL', // informe por estudiante + enviar WhatsApp
+  REPORTE_ACADEMICO_REVISAR = 'ACADEMICO.REPORTE_ACADEMICO.REVISAR',       // revisar el informe que cerró el Guía y darle el cierre definitivo
 
   // Refuerzo de Sesiones (antes "Solicitud de Sesiones" / Repetir Lección).
   // Los códigos NO se renombran: sólo cambió la etiqueta del menú, y renombrarlos

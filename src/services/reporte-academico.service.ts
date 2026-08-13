@@ -81,6 +81,40 @@ export function ovalo(cumplidas: number, sesiones: number): 'full' | 'half' | 'e
   return 'empty';
 }
 
+/**
+ * Estado del informe semanal de un SALÓN (REPORTE_ACADEMICO_CIERRE).
+ *  - BORRADOR     : sin fila; el Guía edita y guarda libremente.
+ *  - CERRADO_GUIA : el Guía ya lo cerró; sólo lo modifica quien tenga el permiso
+ *                   ACADEMICO.REPORTE_ACADEMICO.REVISAR.
+ *  - DEFINITIVO   : cerrado tras la revisión; sólo SUPER_ADMIN.
+ */
+export type EstadoCierre = 'BORRADOR' | 'CERRADO_GUIA' | 'DEFINITIVO';
+
+export interface CierreInfo {
+  estado: EstadoCierre;
+  cerradoGuiaPor?: string | null;
+  cerradoGuiaEn?: string | null;
+  cerradoAdminPor?: string | null;
+  cerradoAdminEn?: string | null;
+}
+
+export async function getCierre(
+  curso: string, salon: string, campaign: string, semanaInicio: string
+): Promise<CierreInfo> {
+  const row = await queryOne<any>(
+    `SELECT "estado","cerradoGuiaPor","cerradoGuiaEn","cerradoAdminPor","cerradoAdminEn"
+       FROM "REPORTE_ACADEMICO_CIERRE"
+      WHERE "curso"=$1 AND "salon"=$2 AND "campaign"=$3 AND "semanaInicio"=$4`,
+    [curso, salon, campaign, semanaInicio]
+  ).catch(() => null); // si la tabla aún no existe, se trata como BORRADOR
+  if (!row) return { estado: 'BORRADOR' };
+  return {
+    estado: (row.estado as EstadoCierre) || 'BORRADOR',
+    cerradoGuiaPor: row.cerradoGuiaPor, cerradoGuiaEn: row.cerradoGuiaEn,
+    cerradoAdminPor: row.cerradoAdminPor, cerradoAdminEn: row.cerradoAdminEn,
+  };
+}
+
 async function resolverGuiaDeSesion(session: any): Promise<string | null> {
   const email = session?.user?.email;
   if (!email) return null;
@@ -111,8 +145,10 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
   const cwhere: string[] = [`"activa" = true`, `UPPER(COALESCE("tipoCurso",'')) <> 'IMPULSA'`];
   const cparams: any[] = [];
   if (guiaScope) { cwhere.push(`"guia" = $${cparams.length + 1}`); cparams.push(guiaScope); }
-  const cursosCampaign = (await query<{ campaign: string; tipoCurso: string; salon: string; guia: string }>(
-    `SELECT DISTINCT "campaign","tipoCurso","salon","guia" FROM "CURSOS_CAMPAIGN"
+  // `inicioCurso` se trae para poder ofrecer primero la campaña más reciente.
+  const cursosCampaign = (await query<{ campaign: string; tipoCurso: string; salon: string; guia: string; inicioCurso: string | null }>(
+    `SELECT DISTINCT "campaign","tipoCurso","salon","guia", "inicioCurso"::text AS "inicioCurso"
+       FROM "CURSOS_CAMPAIGN"
       WHERE ${cwhere.join(' AND ')} ORDER BY "campaign","tipoCurso","salon"`, cparams
   )).rows;
 
@@ -132,7 +168,31 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
   const curso = (cursoPedido && cursoPedido.toUpperCase() !== 'IMPULSA' ? cursoPedido : '') || cursos[0] || '';
   const salones = Array.from(new Set(cursosCampaign.filter(c => !curso || c.tipoCurso === curso).map(c => c.salon)));
   const salon = filtros.salon || salones[0] || '';
-  const guiaCurso = cursosCampaign.find(c => c.tipoCurso === curso && c.salon === salon)?.guia
+
+  // CAMPAÑA — imprescindible para acotar el curso: el mismo "Salón 06" de KODOMO
+  // existe en varias campañas, cada una con SU guía y SUS alumnos. Sin este filtro
+  // el reporte sumaba los estudiantes de todas (27 en vez de 11) y un Guía veía —
+  // y podía valorar — alumnos de otro Guía.
+  // El catálogo sale de `cursosCampaign`, que ya viene acotado al guía: un GUIA
+  // sólo puede elegir entre SUS campañas, incluso forzando el parámetro por URL.
+  const campaignsDisponibles = Array.from(
+    new Map(
+      cursosCampaign
+        .filter(c => (!curso || c.tipoCurso === curso) && (!salon || c.salon === salon))
+        .map(c => [c.campaign, c.inicioCurso || ''])
+    ).entries()
+  )
+    .sort((a, b) => String(b[1]).localeCompare(String(a[1]))) // la más reciente primero
+    .map(([nombre]) => nombre)
+    .filter(Boolean);
+
+  const campaignPedida = (filtros.campaign || '').trim();
+  const campaign = campaignsDisponibles.includes(campaignPedida)
+    ? campaignPedida
+    : campaignsDisponibles[0] || '';
+
+  const guiaCurso = cursosCampaign.find(c => c.tipoCurso === curso && c.salon === salon && (!campaign || c.campaign === campaign))?.guia
+    || cursosCampaign.find(c => c.tipoCurso === curso && c.salon === salon)?.guia
     || cursosCampaign.find(c => c.tipoCurso === curso)?.guia || guiaScope || null;
   const guiaNombre = guias.find(g => g.id === guiaCurso)?.nombre || guias[0]?.nombre || '';
 
@@ -141,8 +201,11 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
     : filtros.startDate ? new Date(filtros.startDate + 'T12:00:00Z') : new Date();
   const { inicio, finExcl } = semanaDe(base);
 
-  if (!curso || !salon) {
-    return { available: true, rows: [], guias, cursos, salones, curso, salon, guiaNombre, semanaInicio: inicio, semanaFin: finExcl, sinCurso: true };
+  if (!curso || !salon || !campaign) {
+    return {
+      available: true, rows: [], guias, cursos, salones, campaigns: campaignsDisponibles,
+      curso, salon, campaign, guiaNombre, semanaInicio: inicio, semanaFin: finExcl, sinCurso: true,
+    };
   }
 
   // Único agregado desde las sesiones: la asistencia. Los otros 8 criterios son
@@ -189,11 +252,12 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
       ON nota."academicaId" = acad."academicaId" AND nota."salon" = $4 AND nota."semanaInicio" = $2
     WHERE p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
       AND UPPER(p."tipoCurso") = UPPER($1) AND p."salon" = $4
-      ${filtros.campaign ? 'AND p."campaign" = $5' : ''}
+      -- La campaña SIEMPRE acota: (campaña, curso, salón) identifica el curso real
+      -- y con él a su Guía. Sin ella se mezclaban los alumnos de todas las campañas.
+      AND p."campaign" = $5
     ORDER BY p."primerApellido" NULLS LAST, p."primerNombre" NULLS LAST`;
 
-  const params: any[] = [curso, inicio, finExcl, salon];
-  if (filtros.campaign) params.push(filtros.campaign);
+  const params: any[] = [curso, inicio, finExcl, salon, campaign];
   const rows = (await query<any>(sql, params)).rows;
 
   const out = rows.map((r) => {
@@ -235,9 +299,11 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
   const totalSesSemana = out.reduce((a, r) => a + r.sesSemana, 0);
   const asistidasSemana = out.reduce((a, r) => a + (r.metricas.asistio?.cumplidas || 0), 0);
 
+  const cierre = await getCierre(curso, salon, campaign, inicio);
+
   return {
-    available: true, rows: out, guias, cursos, salones,
-    curso, salon, campaign: filtros.campaign || '', guiaNombre,
+    available: true, rows: out, guias, cursos, salones, campaigns: campaignsDisponibles,
+    curso, salon, campaign, guiaNombre, cierre,
     semanaInicio: inicio, semanaFin: finExcl,
     resumen: {
       estudiantes: out.length,
