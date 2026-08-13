@@ -67,6 +67,12 @@ interface Guia { id: string; nombre: string }
 
 const fmtFecha = (f: string | null) => (f ? new Date(f).toLocaleDateString('es-CL') : '—')
 
+// Las 2 últimas columnas de Asistencia van fijas a la derecha para que el botón de
+// enviar no quede fuera de pantalla. El ancho de la última se fija para que el
+// desplazamiento de la penúltima calce exacto y no queden solapadas.
+const ACCION_W = 'w-[112px] min-w-[112px]'
+const ACCION_RIGHT = 'right-[112px]'
+
 function CasosAtencionContent() {
   const { hasPermission } = usePermissions()
   const canGestion = hasPermission(ServicioPermission.CASOS_ATENCION_GESTION as any)
@@ -318,9 +324,23 @@ function CasosAtencionContent() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {columnas.map(h => (
-                  <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                ))}
+                {columnas.map((h, ci) => {
+                  // Las 2 columnas de acción de Asistencia se fijan a la derecha
+                  // para que el botón de enviar no quede fuera de pantalla.
+                  const esAccion = tab === 'asistencia' && ci >= columnas.length - 2
+                  const esUltima = ci === columnas.length - 1
+                  return (
+                    <th key={h}
+                      className={`px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide ${
+                        esAccion
+                          ? `sticky bg-gray-50 z-20 ${esUltima ? `right-0 ${ACCION_W}` : `${ACCION_RIGHT} border-l border-gray-200`}`
+                          : 'whitespace-nowrap'
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
@@ -368,7 +388,7 @@ function CasosAtencionContent() {
                   </Fragment>
                 ))
               ) : rows.map((r) => (
-                <tr key={r.bookingId} className="border-b border-gray-100 hover:bg-gray-50 align-top">
+                <tr key={r.bookingId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
                   <td className="px-3 py-2 font-medium whitespace-nowrap">
                     {r.nombre ? (
@@ -388,7 +408,11 @@ function CasosAtencionContent() {
                     <span className="font-medium text-gray-800">{r.leccion || '—'}</span>
                     {r.tema && <span className="block text-xs text-gray-400">{r.tema}</span>}
                   </td>
-                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
+                  {/* El nombre del guía es largo y empujaba las acciones fuera de
+                      pantalla: se acota y el completo queda en el tooltip. */}
+                  <td className="px-3 py-2 text-gray-600">
+                    <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
+                  </td>
 
                   {tab === 'casos' ? (
                     <>
@@ -411,7 +435,9 @@ function CasosAtencionContent() {
                   ) : (
                     <>
                       <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
-                      <td className="px-3 py-2">
+                      {/* Fijas a la derecha: el botón de enviar debe verse siempre,
+                          sin depender del scroll horizontal de la tabla. */}
+                      <td className={`px-3 py-2 sticky ${ACCION_RIGHT} bg-white group-hover:bg-gray-50 z-10 border-l border-gray-200`}>
                         <label className={`inline-flex items-center gap-2 ${canGestion ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
                           <input
                             type="checkbox"
@@ -420,18 +446,20 @@ function CasosAtencionContent() {
                             onChange={e => marcarContactado(r, e.target.checked)}
                             className="h-4 w-4 accent-emerald-600"
                           />
-                          <span className="text-xs text-gray-600">
+                          <span className="text-xs text-gray-600 whitespace-nowrap">
                             {r.contactadoApoderado ? 'Contactado' : 'Pendiente'}
                           </span>
                         </label>
-                        {r.apoderado && <span className="block text-xs text-gray-400 mt-0.5">{r.apoderado}</span>}
+                        {r.apoderado && (
+                          <span className="block max-w-[130px] truncate text-xs text-gray-400 mt-0.5" title={r.apoderado}>{r.apoderado}</span>
+                        )}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className={`px-3 py-2 sticky right-0 bg-white group-hover:bg-gray-50 z-10 ${ACCION_W}`}>
                         <button type="button"
                           title={r.recordatorioEnviado ? 'Ya se envió — puedes volver a enviarlo' : 'Enviar recordatorio por WhatsApp'}
                           onClick={() => setRecordar(r)}
                           disabled={!canGestion}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed ${
                             r.recordatorioEnviado
                               ? 'text-gray-600 bg-gray-100 hover:bg-gray-200'
                               : 'text-green-700 bg-green-50 hover:bg-green-100'

@@ -71,7 +71,11 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Mantenimiento Cursos', href: '/dashboard/academic/actualizar-material', newTab: true },
       { name: 'Campañas', href: '/dashboard/academic/crear-campana', newTab: true },
       { name: 'Crear IMPULSA', href: '/dashboard/academic/crear-impulsa', newTab: true },
-      { name: 'Evaluaciones Jump', href: '/dashboard/academic/jump-evaluaciones' },
+      // "Evaluaciones Jump" (/dashboard/academic/jump-evaluaciones) se retiró del
+      // menú: es del motor de Jumps de LGS, que MOSAICO no usa (JUMP_EVALUATIONS
+      // está vacía). La página y su permiso ACADEMICO.JUMP_EVAL.REVISAR siguen
+      // existiendo y la ruta sigue gateada en el middleware, así que sólo deja de
+      // verse; reponerla es volver a añadir esta línea.
     ],
   },
   {
