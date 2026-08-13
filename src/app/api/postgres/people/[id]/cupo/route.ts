@@ -19,6 +19,13 @@ import { query, queryOne } from '@/lib/postgres';
  * La validación vive aquí, no sólo en la interfaz.
  */
 const APROBADOS = ['aprobado', 'aprobada'];
+/**
+ * Únicos estados del contrato en los que se puede volver a asignar un cupo.
+ * Con el contrato Rechazado/Retractado/Contrato nulo NO se reasigna: habría que
+ * revivir un contrato anulado por la puerta de atrás. Aprobado tampoco entra
+ * aquí, porque ahí el cupo ya está tomado y bloqueado.
+ */
+const PERMITEN_ASIGNAR = ['pendiente', 'devuelto'];
 
 export const POST = handlerWithAuth(async (request, ctx, session) => {
   // Mismo permiso que "Inactivar" del beneficiario, que es la otra vía de liberar
@@ -31,7 +38,7 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
   if (!id) throw new ValidationError('Falta el beneficiario.');
 
   const persona = await queryOne<any>(
-    `SELECT "_id","tipoUsuario","aprobacion","campaign","tipoCurso","horarioCurso","salon",
+    `SELECT "_id","tipoUsuario","aprobacion","contrato","campaign","tipoCurso","horarioCurso","salon",
             "cupoLiberado",
             TRIM(CONCAT_WS(' ', "primerNombre", "primerApellido")) AS nombre
        FROM "PEOPLE" WHERE "_id" = $1`,
@@ -50,34 +57,86 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
   }
 
   const email = (session as any)?.user?.email || 'desconocido';
-  await query(
-    `UPDATE "PEOPLE"
-        SET "cupoLiberado"    = $1,
-            "cupoLiberadoPor" = CASE WHEN $1 THEN $2 ELSE NULL END,
-            "cupoLiberadoEn"  = CASE WHEN $1 THEN NOW() ELSE NULL END,
-            "_updatedDate"    = NOW()
-      WHERE "_id" = $3`,
-    [liberar, email, id]
-  );
 
-  // Aviso (no bloquea) si al retomarlo el curso ya no tiene espacio.
-  let avisoLleno = false;
-  if (!liberar && persona.campaign && persona.tipoCurso && persona.horarioCurso) {
-    const cupo = await queryOne<{ cupos: number; ocupados: number }>(
-      `SELECT COALESCE(cc."numeroUsuarios",0)::int AS cupos,
-              (SELECT COUNT(*)::int FROM "PEOPLE" p
-                WHERE p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
-                  AND p."campaign" = cc."campaign"
-                  AND UPPER(p."tipoCurso") = UPPER(cc."tipoCurso")
-                  AND p."horarioCurso" = cc."horarioCurso"
-                  AND p."cupoLiberado" IS NOT TRUE) AS ocupados
-         FROM "CURSOS_CAMPAIGN" cc
-        WHERE cc."campaign" = $1 AND UPPER(cc."tipoCurso") = UPPER($2) AND cc."horarioCurso" = $3
-        LIMIT 1`,
-      [persona.campaign, persona.tipoCurso, persona.horarioCurso]
-    ).catch(() => null);
-    if (cupo && cupo.cupos > 0 && cupo.ocupados > cupo.cupos) avisoLleno = true;
+  // --- LIBERAR: sólo apaga la marca ------------------------------------------
+  if (liberar) {
+    await query(
+      `UPDATE "PEOPLE"
+          SET "cupoLiberado" = true, "cupoLiberadoPor" = $1, "cupoLiberadoEn" = NOW(), "_updatedDate" = NOW()
+        WHERE "_id" = $2`,
+      [email, id]
+    );
+    return successResponse({ ok: true, cupoLiberado: true, nombre: persona.nombre });
   }
 
-  return successResponse({ ok: true, cupoLiberado: liberar, avisoLleno, nombre: persona.nombre });
+  // --- ASIGNAR: exige contrato en un estado que lo permita y destino con cupo --
+  const titular = await queryOne<{ aprobacion: string | null }>(
+    `SELECT "aprobacion" FROM "PEOPLE"
+      WHERE "contrato" = $1 AND "tipoUsuario" = 'TITULAR' LIMIT 1`,
+    [persona.contrato]
+  );
+  const estadoContrato = String(titular?.aprobacion || '').trim().toLowerCase() || 'pendiente';
+  if (!PERMITEN_ASIGNAR.includes(estadoContrato)) {
+    throw new ForbiddenError(
+      `No está permitido asignar cupo con el contrato en estado "${titular?.aprobacion || 'Pendiente'}". Consulte al administrador.`
+    );
+  }
+
+  // Destino: el curso donde se le asigna el cupo. Si no se envía, se conserva el suyo.
+  const destino = {
+    campaign: String(b?.destino?.campaign || persona.campaign || '').trim(),
+    tipoCurso: String(b?.destino?.tipoCurso || persona.tipoCurso || '').trim(),
+    horarioCurso: String(b?.destino?.horarioCurso || persona.horarioCurso || '').trim(),
+    salon: String(b?.destino?.salon ?? persona.salon ?? '').trim(),
+  };
+  if (!destino.campaign || !destino.tipoCurso || !destino.horarioCurso) {
+    throw new ValidationError('Falta la campaña, el curso o el horario del salón destino.');
+  }
+
+  // El curso destino debe existir, estar activo y TENER cupo disponible.
+  const curso = await queryOne<{ cupos: number; ocupados: number }>(
+    `SELECT COALESCE(cc."numeroUsuarios",0)::int AS cupos,
+            (SELECT COUNT(*)::int FROM "PEOPLE" p
+              WHERE p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
+                AND p."campaign" = cc."campaign"
+                AND UPPER(p."tipoCurso") = UPPER(cc."tipoCurso")
+                AND p."horarioCurso" = cc."horarioCurso"
+                AND p."_id" <> $4
+                AND p."cupoLiberado" IS NOT TRUE
+                AND p."fechaOnHold" IS NULL) AS ocupados
+       FROM "CURSOS_CAMPAIGN" cc
+      WHERE cc."campaign" = $1 AND UPPER(cc."tipoCurso") = UPPER($2)
+        AND cc."horarioCurso" = $3 AND cc."activa" = true
+      LIMIT 1`,
+    [destino.campaign, destino.tipoCurso, destino.horarioCurso, id]
+  );
+  if (!curso) throw new ValidationError('El curso/salón destino no existe o no está activo.');
+  if (curso.cupos > 0 && curso.ocupados >= curso.cupos) {
+    throw new ValidationError(
+      `El salón destino ya está lleno (${curso.ocupados}/${curso.cupos}). Elige otro con disponibilidad.`
+    );
+  }
+
+  // Se mueve al beneficiario al destino y se le devuelve el cupo. Queda PENDIENTE:
+  // el paso siguiente es aprobarlo (el cupo ya cuenta, como cualquier pendiente).
+  await query(
+    `UPDATE "PEOPLE"
+        SET "campaign" = $1, "tipoCurso" = $2, "horarioCurso" = $3, "salon" = $4,
+            "cupoLiberado" = false, "cupoLiberadoPor" = NULL, "cupoLiberadoEn" = NULL,
+            "_updatedDate" = NOW()
+      WHERE "_id" = $5`,
+    [destino.campaign, destino.tipoCurso, destino.horarioCurso, destino.salon || null, id]
+  );
+  // ACADEMICA sigue al beneficiario (si ya tiene ficha académica).
+  await query(
+    `UPDATE "ACADEMICA" SET "campaign" = $1, "salon" = $2, "_updatedDate" = NOW()
+      WHERE "numeroId" = (SELECT "numeroId" FROM "PEOPLE" WHERE "_id" = $3)`,
+    [destino.campaign, destino.salon || null, id]
+  ).catch(() => { /* best-effort: puede no tener ficha aún */ });
+
+  return successResponse({
+    ok: true, cupoLiberado: false, nombre: persona.nombre,
+    destino, cupos: curso.cupos, ocupados: curso.ocupados + 1,
+    requiereAprobacion: true,
+  });
 });

@@ -127,6 +127,9 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   // Cupo del beneficiario: cambio optimista sobre lo que vino del servidor.
   const [cupoLocal, setCupoLocal] = useState<Record<string, boolean>>({})
   const [cupoBusy, setCupoBusy] = useState<string | null>(null)
+  // Modal de asignación (cascada de destino) y aviso de "no permitido".
+  const [cupoTarget, setCupoTarget] = useState<Beneficiary | null>(null)
+  const [cupoDenegado, setCupoDenegado] = useState<{ beneficiary: Beneficiary; estado: string } | null>(null)
   const [beneficiaryToDelete, setBeneficiaryToDelete] = useState<Beneficiary | null>(null)
   const [isDeletingBeneficiary, setIsDeletingBeneficiary] = useState(false)
   const [showEstadoModal, setShowEstadoModal] = useState(false)
@@ -361,24 +364,67 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
    * Con el contrato APROBADO el cupo queda bloqueado: el backend rechaza la
    * liberación (aquí sólo se deshabilita el botón).
    */
-  const handleToggleCupo = async (beneficiary: Beneficiary, liberar: boolean) => {
+  /** Liberar el cupo: acción directa (sólo se ofrece si el contrato no está aprobado). */
+  const handleLiberarCupo = async (beneficiary: Beneficiary) => {
     setCupoBusy(beneficiary._id)
     try {
       const res = await fetch(`/api/postgres/people/${beneficiary._id}/cupo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ liberar }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liberar: true }),
       }).then(r => r.json())
       if (res.error) throw new Error(res.error)
-      setCupoLocal(prev => ({ ...prev, [beneficiary._id]: liberar }))
-      if (res.avisoLleno) {
-        alert('⚠️ El cupo se asignó, pero el curso quedó por encima de su número de cupos.')
-      }
+      setCupoLocal(prev => ({ ...prev, [beneficiary._id]: true }))
     } catch (e: any) {
-      alert(`No se pudo actualizar el cupo: ${e?.message || e}`)
-    } finally {
-      setCupoBusy(null)
+      alert(`No se pudo liberar el cupo: ${e?.message || e}`)
+    } finally { setCupoBusy(null) }
+  }
+
+  /**
+   * Asignar cupo: sólo con el contrato en Pendiente o Devuelto. En cualquier otro
+   * estado se avisa que no está permitido. Si procede, se abre la cascada
+   * Campaña → Curso → Salón (con cupos) para elegir un destino con disponibilidad;
+   * después hay que APROBAR al beneficiario.
+   */
+  const handleAsignarCupo = (beneficiary: Beneficiary) => {
+    const estado = String(person?.aprobacion || 'Pendiente').trim().toLowerCase()
+    if (!['pendiente', 'devuelto'].includes(estado)) {
+      setCupoDenegado({ beneficiary, estado: person?.aprobacion || 'Pendiente' })
+      return
     }
+    const b: any = beneficiary
+    setRcCampaign(b.campaign || '')
+    setRcTipoCurso(beneficiary.curso || b.tipoCurso || '')
+    setRcRowKey(`${b.horarioCurso || ''}||${beneficiary.salon || ''}`)
+    setCupoTarget(beneficiary)
+  }
+
+  const confirmarAsignarCupo = async () => {
+    if (!cupoTarget) return
+    const [horarioCurso, salon] = (rcRowKey || '').split('||')
+    if (!rcCampaign || !rcTipoCurso || !horarioCurso) {
+      alert('Elige campaña, curso y salón destino.')
+      return
+    }
+    setCupoBusy(cupoTarget._id)
+    try {
+      const res = await fetch(`/api/postgres/people/${cupoTarget._id}/cupo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          liberar: false,
+          destino: { campaign: rcCampaign, tipoCurso: rcTipoCurso, horarioCurso, salon },
+        }),
+      }).then(r => r.json())
+      if (res.error) throw new Error(res.error)
+      setCupoLocal(prev => ({ ...prev, [cupoTarget._id]: false }))
+      setCupoTarget(null)
+      alert(
+        `✅ Cupo asignado en ${res.destino.tipoCurso} · Salón ${res.destino.salon || res.destino.horarioCurso} (${res.destino.campaign}).\n\n` +
+        `Ahora debes APROBAR al beneficiario para completar el proceso.`
+      )
+      window.location.reload()
+    } catch (e: any) {
+      alert(`No se pudo asignar el cupo: ${e?.message || e}`)
+    } finally { setCupoBusy(null) }
   }
 
   const handleInactivateBeneficiary = (beneficiary: Beneficiary) => {
@@ -932,8 +978,89 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
 
   console.log('🔍 currentBeneficiaries antes del render:', currentBeneficiaries)
 
+  // Modales del cupo: elegir destino con disponibilidad, y aviso de estado no permitido.
+  const modalesCupo = (
+    <>
+      {cupoDenegado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setCupoDenegado(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">No está permitido asignar cupo</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {cupoDenegado.beneficiary.nombre} {cupoDenegado.beneficiary.apellido}
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+              El contrato está en estado <strong>{cupoDenegado.estado}</strong>. Sólo se puede asignar
+              cupo con el contrato en <strong>Pendiente</strong> o <strong>Devuelto</strong>.
+              <span className="block mt-1 font-semibold">Consulte al administrador.</span>
+            </div>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setCupoDenegado(null)}
+                className="px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700">Entendido</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cupoTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !cupoBusy && setCupoTarget(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Asignar cupo</h3>
+            <p className="text-sm text-gray-500 mb-3">{cupoTarget.nombre} {cupoTarget.apellido}</p>
+            <p className="text-xs text-gray-600 mb-3">
+              Elige la <strong>campaña, curso y salón</strong> donde tendrá su cupo. Los salones
+              llenos aparecen deshabilitados. Después deberás <strong>aprobar</strong> al beneficiario.
+            </p>
+            <div className="space-y-2 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Campaña</label>
+                <select value={rcCampaign} onChange={(e) => { setRcCampaign(e.target.value); setRcTipoCurso(''); setRcRowKey('') }}
+                  disabled={!!cupoBusy} className="input-field">
+                  <option value="">Selecciona…</option>
+                  {rcCampanias.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Curso</label>
+                <select value={rcTipoCurso} onChange={(e) => { setRcTipoCurso(e.target.value); setRcRowKey('') }}
+                  disabled={!!cupoBusy || !rcCampaign} className="input-field">
+                  <option value="">Selecciona…</option>
+                  {rcTipos.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Salón</label>
+                <select value={rcRowKey} onChange={(e) => setRcRowKey(e.target.value)}
+                  disabled={!!cupoBusy || !rcTipoCurso} className="input-field">
+                  <option value="">Selecciona…</option>
+                  {rcSalones.map((r) => {
+                    const full = (r.numeroUsuarios ?? 0) > 0 && (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0)
+                    const key = `${r.horarioCurso}||${r.salon || ''}`
+                    return (
+                      <option key={key} value={key} disabled={full}>
+                        {r.salon || '—'} · {r.horarioCurso} · {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}{full ? ' (LLENO)' : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setCupoTarget(null)} disabled={!!cupoBusy}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={confirmarAsignarCupo} disabled={!!cupoBusy || !rcRowKey}
+                className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 font-medium">
+                {cupoBusy ? 'Asignando…' : 'Asignar cupo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
   return (
     <div className="space-y-8">
+      {modalesCupo}
       {/* Acciones (Contract-wide Actions) */}
       <div>
         <h3 className="text-lg font-medium text-gray-900 mb-4">⚙️ Acciones</h3>
@@ -1119,11 +1246,11 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                       const bloqueado = aprobado && !liberado
                       return (
                         <button
-                          onClick={() => handleToggleCupo(beneficiary, !liberado)}
+                          onClick={() => liberado ? handleAsignarCupo(beneficiary) : handleLiberarCupo(beneficiary)}
                           disabled={bloqueado || cupoBusy === beneficiary._id}
                           title={bloqueado
                             ? 'Contrato aprobado: el cupo queda asignado. Cambia primero el estado del contrato para liberarlo.'
-                            : liberado ? 'Volver a asignarle el cupo' : 'Liberar el cupo de este alumno'}
+                            : liberado ? 'Asignar cupo: elige campaña, curso y salón con disponibilidad' : 'Liberar el cupo de este alumno'}
                           className={`inline-flex items-center px-4 py-1.5 border text-sm font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             liberado
                               ? 'border-emerald-600 text-emerald-600 bg-white hover:bg-emerald-600 hover:text-white'
