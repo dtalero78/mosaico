@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, Suspense } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
 import {
   CalendarDaysIcon,
   BookOpenIcon,
@@ -49,8 +49,14 @@ import { StudentPermission } from '@/types/permissions'
 // inicio y se cierra 15 min después. Fuera de ella el ícono queda bloqueado.
 const ZOOM_ABRE_MIN_ANTES = 5
 const ZOOM_CIERRA_MIN_DESPUES = 15
+// Tope de una espera de setTimeout (desborda pasados ~24 días): si al próximo
+// cambio le falta más, se despierta a las 6 h y se reprograma el resto.
+const ZOOM_MAX_ESPERA_MS = 6 * 60 * 60 * 1000
 
 function PanelEstudianteContent() {
+  // Contador que sólo sirve para re-evaluar la ventana de Zoom cuando llega la
+  // hora (ver el efecto más abajo).
+  const [zoomTick, setZoomTick] = useState(0)
   const [showBookingFlow, setShowBookingFlow] = useState(false)
   const [bookingTipo, setBookingTipo] = useState<string | undefined>(undefined)
   const [showProgress, setShowProgress] = useState(false)
@@ -197,6 +203,9 @@ function PanelEstudianteContent() {
   }
 
   const nextEventDate = nextClass ? new Date(nextClass.fechaEvento) : null
+  // `zoomTick` sólo existe para volver a evaluar la ventana cuando llega la hora
+  // (ver el efecto de abajo): sin él, `now` queda congelado en el instante en que
+  // cargó la página y el ícono no cambiaría hasta recargar.
   const now = new Date()
   // Ventana de conexión: se abre 5 min ANTES del inicio y se cierra 15 min DESPUÉS.
   // Fuera de ella el ícono queda bloqueado y avisa que no es la hora.
@@ -205,6 +214,27 @@ function PanelEstudianteContent() {
     && minutosAlInicio <= ZOOM_ABRE_MIN_ANTES
     && -minutosAlInicio <= ZOOM_CIERRA_MIN_DESPUES
   const zoomLink = nextClass?.eventLinkZoom || nextClass?.linkZoom
+
+  // El ícono de Zoom se activa/desactiva SOLO, sin recargar: se programa un aviso
+  // para el instante exacto del próximo cambio (apertura y luego cierre) en vez de
+  // despertar cada pocos segundos sin necesidad. Al dispararse, el efecto vuelve a
+  // correr y programa el siguiente. La hora es la del dispositivo del alumno, igual
+  // que el resto del cálculo.
+  const inicioMs = nextEventDate ? nextEventDate.getTime() : null
+  useEffect(() => {
+    if (inicioMs == null) return
+    const abre = inicioMs - ZOOM_ABRE_MIN_ANTES * 60_000
+    const cierra = inicioMs + ZOOM_CIERRA_MIN_DESPUES * 60_000
+    const ahora = Date.now()
+    const proximoCambio = ahora < abre ? abre : ahora < cierra ? cierra : null
+    if (proximoCambio == null) return // la ventana ya se cerró: nada que programar
+
+    // Se acota la espera: setTimeout desborda pasados ~24 días y dispararía al
+    // instante. Si falta más, se despierta antes y se reprograma el resto.
+    const espera = Math.min(proximoCambio - ahora + 1_000, ZOOM_MAX_ESPERA_MS)
+    const id = setTimeout(() => setZoomTick(t => t + 1), espera)
+    return () => clearTimeout(id)
+  }, [inicioMs, zoomTick])
 
   return (
     <div className="min-h-screen bg-gray-50">
