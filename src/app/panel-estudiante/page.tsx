@@ -26,6 +26,7 @@ import {
 } from '@/hooks/use-panel-estudiante'
 
 import StudentHeader from '@/components/panel-estudiante/StudentHeader'
+import ZoomAccessButton from '@/components/panel-estudiante/ZoomAccessButton'
 import MyEventsSection from '@/components/panel-estudiante/MyEventsSection'
 import NivelacionProgramadaCard from '@/components/panel-estudiante/NivelacionProgramadaCard'
 import EvaluacionCard from '@/components/panel-estudiante/EvaluacionCard'
@@ -43,6 +44,11 @@ import ClassHistory from '@/components/panel-estudiante/ClassHistory'
 import JumpExamBanner from '@/components/panel-estudiante/JumpExamBanner'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission } from '@/types/permissions'
+
+// Ventana de conexión a Zoom de la "Sesión próxima": se habilita 5 min antes del
+// inicio y se cierra 15 min después. Fuera de ella el ícono queda bloqueado.
+const ZOOM_ABRE_MIN_ANTES = 5
+const ZOOM_CIERRA_MIN_DESPUES = 15
 
 function PanelEstudianteContent() {
   const [showBookingFlow, setShowBookingFlow] = useState(false)
@@ -192,10 +198,12 @@ function PanelEstudianteContent() {
 
   const nextEventDate = nextClass ? new Date(nextClass.fechaEvento) : null
   const now = new Date()
-  const showZoom = nextClass && nextEventDate
-    ? (nextEventDate.getTime() - now.getTime()) / (1000 * 60) <= 5
-      && (now.getTime() - nextEventDate.getTime()) / (1000 * 60) <= 10
-    : false
+  // Ventana de conexión: se abre 5 min ANTES del inicio y se cierra 15 min DESPUÉS.
+  // Fuera de ella el ícono queda bloqueado y avisa que no es la hora.
+  const minutosAlInicio = nextEventDate ? (nextEventDate.getTime() - now.getTime()) / (1000 * 60) : Infinity
+  const showZoom = !!nextClass && !!nextEventDate
+    && minutosAlInicio <= ZOOM_ABRE_MIN_ANTES
+    && -minutosAlInicio <= ZOOM_CIERRA_MIN_DESPUES
   const zoomLink = nextClass?.eventLinkZoom || nextClass?.linkZoom
 
   return (
@@ -430,20 +438,16 @@ function PanelEstudianteContent() {
                 </div>
                 <div>
                   <span className="text-xs text-gray-400 uppercase tracking-wide">Link de Ingreso</span>
-                  {showZoom && zoomLink ? (
-                    <a
-                      href={zoomLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-                    >
-                      <VideoCameraIcon className="h-4 w-4" />
-                      Entrar a Zoom
-                    </a>
+                  {zoomLink ? (
+                    <div className="mt-1 flex items-center gap-3">
+                      <ZoomAccessButton zoomLink={zoomLink} disponible={showZoom} />
+                      {/* El aviso se mantiene visible en los dos estados. */}
+                      <p className="text-sm text-gray-600">
+                        Enlace disponible 5 min antes, recuerda refrescar el navegador
+                      </p>
+                    </div>
                   ) : (
-                    <p className="text-sm text-gray-600">
-                      {zoomLink ? 'Enlace disponible 5 min antes, recuerda refrescar el navegador' : '---'}
-                    </p>
+                    <p className="text-sm text-gray-600">---</p>
                   )}
                 </div>
                 {canVerVideo && (
