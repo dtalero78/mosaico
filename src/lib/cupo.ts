@@ -11,7 +11,10 @@ import 'server-only';
  *    campaña/curso/salón pero deja de ocupar cupo hasta que se restablezca, o
  *  - el beneficiario fue **INACTIVADO por un admin** (botón "Inactivar" de la ficha →
  *    `estadoInactivo=true` + `suspenddata.accion='INACTIVACION'`): normalmente porque
- *    el usuario NO tomará el curso, así que su cupo se libera.
+ *    el usuario NO tomará el curso, así que su cupo se libera, o
+ *  - un admin **liberó el cupo a mano** (`cupoLiberado=true`, botón "Cupo asignado"
+ *    de la ficha): abre el cupo sin inactivar al beneficiario ni tocar el contrato.
+ *    Con el contrato APROBADO esa liberación no se permite (se valida en el endpoint).
  *
  * ⚠ NO se usa `estadoInactivo` a secas: un beneficiario **Pendiente nace inactivo**
  * (aún no aprobado) pero SÍ ocupa cupo. Sólo libera cuando además hay `suspenddata`
@@ -29,6 +32,7 @@ export const ESTADOS_LIBERAN_CUPO = ['rechazado', 'retractado', 'contrato nulo']
  */
 export function cupoOcupadoSql(alias: string): string {
   return `(${alias}."fechaOnHold" IS NULL
+    AND ${alias}."cupoLiberado" IS NOT TRUE
     AND NOT (${alias}."estadoInactivo" IS TRUE AND COALESCE(${alias}."suspenddata"->>'accion', '') = 'INACTIVACION')
     AND NOT EXISTS (
     SELECT 1 FROM "PEOPLE" t_cupo

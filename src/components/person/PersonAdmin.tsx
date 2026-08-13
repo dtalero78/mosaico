@@ -124,6 +124,9 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   const [approvingBeneficiaries, setApprovingBeneficiaries] = useState<Set<string>>(new Set())
   const [processStatus, setProcessStatus] = useState<Record<string, string>>({})
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  // Cupo del beneficiario: cambio optimista sobre lo que vino del servidor.
+  const [cupoLocal, setCupoLocal] = useState<Record<string, boolean>>({})
+  const [cupoBusy, setCupoBusy] = useState<string | null>(null)
   const [beneficiaryToDelete, setBeneficiaryToDelete] = useState<Beneficiary | null>(null)
   const [isDeletingBeneficiary, setIsDeletingBeneficiary] = useState(false)
   const [showEstadoModal, setShowEstadoModal] = useState(false)
@@ -351,6 +354,31 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   const handleDeleteBeneficiary = (beneficiary: Beneficiary) => {
     setBeneficiaryToDelete(beneficiary)
     setShowDeleteModal(true)
+  }
+
+  /**
+   * Libera o vuelve a tomar el cupo del beneficiario en su salón.
+   * Con el contrato APROBADO el cupo queda bloqueado: el backend rechaza la
+   * liberación (aquí sólo se deshabilita el botón).
+   */
+  const handleToggleCupo = async (beneficiary: Beneficiary, liberar: boolean) => {
+    setCupoBusy(beneficiary._id)
+    try {
+      const res = await fetch(`/api/postgres/people/${beneficiary._id}/cupo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liberar }),
+      }).then(r => r.json())
+      if (res.error) throw new Error(res.error)
+      setCupoLocal(prev => ({ ...prev, [beneficiary._id]: liberar }))
+      if (res.avisoLleno) {
+        alert('⚠️ El cupo se asignó, pero el curso quedó por encima de su número de cupos.')
+      }
+    } catch (e: any) {
+      alert(`No se pudo actualizar el cupo: ${e?.message || e}`)
+    } finally {
+      setCupoBusy(null)
+    }
   }
 
   const handleInactivateBeneficiary = (beneficiary: Beneficiary) => {
@@ -1055,6 +1083,18 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                         SIN REGISTRO ACADÉMICO
                       </span>
                     )}
+                    {/* Cupo del alumno en su salón. Se reserva al crear el contrato
+                        y se libera al cambiar el estado, al inactivarlo, en OnHold
+                        o a mano con el botón de abajo. */}
+                    {(cupoLocal[beneficiary._id] ?? (beneficiary as any).cupoLiberado === true) ? (
+                      <span className="badge bg-gray-200 text-gray-700" title="No ocupa cupo en el salón">
+                        Cupo liberado
+                      </span>
+                    ) : (
+                      <span className="badge bg-emerald-100 text-emerald-700" title="Ocupa un cupo en el salón">
+                        Cupo asignado
+                      </span>
+                    )}
                     {beneficiary.estado === 'Aprobado' && whatsappSent && (
                       <div className="flex items-center space-x-1 text-green-600 bg-green-100 px-2 py-1 rounded" title="WhatsApp enviado">
                         <span className="text-sm">📱✅ WhatsApp Enviado</span>
@@ -1070,6 +1110,31 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
+                  {/* Liberar / volver a asignar el cupo. Con el contrato APROBADO el
+                      cupo queda bloqueado (el backend también lo rechaza). */}
+                  <PermissionGuard permission={PersonPermission.ACTIVAR_DESACTIVAR}>
+                    {(() => {
+                      const liberado = cupoLocal[beneficiary._id] ?? (beneficiary as any).cupoLiberado === true
+                      const aprobado = isBeneficiaryApproved(beneficiary)
+                      const bloqueado = aprobado && !liberado
+                      return (
+                        <button
+                          onClick={() => handleToggleCupo(beneficiary, !liberado)}
+                          disabled={bloqueado || cupoBusy === beneficiary._id}
+                          title={bloqueado
+                            ? 'Contrato aprobado: el cupo queda asignado. Cambia primero el estado del contrato para liberarlo.'
+                            : liberado ? 'Volver a asignarle el cupo' : 'Liberar el cupo de este alumno'}
+                          className={`inline-flex items-center px-4 py-1.5 border text-sm font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                            liberado
+                              ? 'border-emerald-600 text-emerald-600 bg-white hover:bg-emerald-600 hover:text-white'
+                              : 'border-gray-500 text-gray-600 bg-white hover:bg-gray-600 hover:text-white'
+                          }`}
+                        >
+                          {cupoBusy === beneficiary._id ? '…' : liberado ? 'Asignar cupo' : 'Liberar cupo'}
+                        </button>
+                      )
+                    })()}
+                  </PermissionGuard>
                   <PermissionGuard permission={PersonPermission.MODIFICAR}>
                     <button
                       onClick={() => handleEditBeneficiary(beneficiary._id)}

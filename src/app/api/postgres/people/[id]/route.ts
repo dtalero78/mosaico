@@ -110,6 +110,7 @@ export const GET = handler(async (
           "salon",
           "horarioCurso",
           "campaign",
+          "cupoLiberado",
           "_createdDate"
         FROM "PEOPLE"
         WHERE "contrato" = $1
@@ -158,6 +159,8 @@ export const GET = handler(async (
           salon: ben.salon,
           horarioCurso: ben.horarioCurso,
           campaign: ben.campaign,
+          // Cupo del alumno en su salón: false = lo ocupa; true = lo liberó un admin.
+          cupoLiberado: ben.cupoLiberado === true,
           existeEnAcademica: !!academicCheck,
           _createdDate: ben._createdDate,
         });
