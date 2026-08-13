@@ -41,11 +41,18 @@ export const GET = handlerWithAuth(async (request) => {
     conds.push(`(UPPER("curso") = 'IMPULSA' OR "code" = 'Modulo 00')`);
   }
 
+  // Orden por LECCIÓN (01 → 75), no por módulo: en IMPULSA el material vive por
+  // lección y agrupar antes por `code` las descolocaba ("Entrenamiento 01 ·
+  // Leccion 06" salía antes que "Modulo 01 · Leccion 01").
+  // La clave es `NIVELES."orden"`, que es el nº de lección y define el avance del
+  // curso: está poblado al 100% y es editable desde el visor si hay que recolocar
+  // una lección sin renombrarla. `step` sólo desempata (hay órdenes repetidos en
+  // WELCOME/SENPAI/DANSHI).
   const rows = await queryMany(
     `SELECT "curso", "code", "step", "materialUsuario"
      FROM "NIVELES"
      WHERE ${conds.join(' AND ')}
-     ORDER BY "curso" ASC, "code" ASC, "step" ASC`,
+     ORDER BY "curso" ASC, "orden" ASC NULLS LAST, "step" ASC`,
     params
   );
 
