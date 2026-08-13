@@ -43,11 +43,22 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     where.push(`p."salon"=$${params.length + 1}`); params.push(salon);
   }
 
+  // ARRAY_AGG(... ORDER BY intento DESC)[1] = el ÚLTIMO intento del estudiante en
+  // ese cuestionario (hasta 3). Se devuelven sus aciertos/fallos para que el
+  // reporte muestre "X correctas · Y incorrectas · Z%" sin otra consulta.
+  const ult = (col: string) => `(ARRAY_AGG(er."${col}" ORDER BY er."intento" DESC NULLS LAST, er."enviadaEn" DESC NULLS LAST))[1]`;
+
   const raw = (await query<any>(
     `SELECT er."academicaId", er."numeroId", MAX(er."nombre") AS nombre, er."code", er."step",
             er."cuestionarioId", MAX(er."cuestionarioTitulo") AS titulo,
             COUNT(*)::int AS intentos, MAX(COALESCE(er."porcentaje",0))::int AS mejor,
-            BOOL_OR(COALESCE(er."aprobado",false)) AS aprobado
+            BOOL_OR(COALESCE(er."aprobado",false)) AS aprobado,
+            ${ult('score')}      AS "ultScore",
+            ${ult('total')}      AS "ultTotal",
+            ${ult('porcentaje')} AS "ultPorcentaje",
+            ${ult('aprobado')}   AS "ultAprobado",
+            ${ult('intento')}    AS "ultIntento",
+            ${ult('enviadaEn')}  AS "ultEnviadaEn"
        FROM "EVALUACION_RESPUESTAS" er ${join}
       WHERE ${where.join(' AND ')}
       GROUP BY er."academicaId", er."numeroId", er."code", er."step", er."cuestionarioId"
@@ -59,10 +70,22 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     const intentos = Number(r.intentos) || 0;
     const aprobado = !!r.aprobado;
     const estado = aprobado ? 'aprobado' : (intentos >= 3 ? 'no_aprobado' : 'en_curso');
+    // Último intento: correctas / incorrectas / %.
+    const correctas = Number(r.ultScore) || 0;
+    const totalPreg = Number(r.ultTotal) || 0;
     return {
       academicaId: r.academicaId, numeroId: r.numeroId, nombre: r.nombre || '(sin nombre)',
       code: r.code, step: r.step, cuestionarioId: r.cuestionarioId, titulo: r.titulo || 'Cuestionario',
       intentos, mejor: Number(r.mejor) || 0, aprobado, estado,
+      ultimo: {
+        intento: Number(r.ultIntento) || intentos,
+        correctas,
+        incorrectas: Math.max(0, totalPreg - correctas),
+        total: totalPreg,
+        porcentaje: Number(r.ultPorcentaje) || 0,
+        aprobado: !!r.ultAprobado,
+        enviadaEn: r.ultEnviadaEn || null,
+      },
     };
   });
 
