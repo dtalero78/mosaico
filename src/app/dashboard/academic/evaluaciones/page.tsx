@@ -26,6 +26,10 @@ export default function EvaluacionesPage() {
   // Modal del último intento (clic sobre el estudiante).
   const [detalle, setDetalle] = useState<any>(null)
   const [cargandoDetalle, setCargandoDetalle] = useState(false)
+  // Pestañas: resultados por estudiante | análisis por pregunta.
+  const [tab, setTab] = useState<'resultados' | 'preguntas'>('resultados')
+  const [preg, setPreg] = useState<any>(null)
+  const [cargandoPreg, setCargandoPreg] = useState(false)
 
   const verDetalle = async (r: any) => {
     setCargandoDetalle(true)
@@ -53,11 +57,32 @@ export default function EvaluacionesPage() {
       const res = await fetch(`/api/postgres/reports/academico/evaluaciones?${qs}`, { cache: 'no-store' }).then(r => r.json())
       if (res.error) throw new Error(res.error)
       setData(res)
-      if (!curso && res.cursos?.length) setCurso(res.cursos[0])
+      // Primera carga sin curso: se elige el primero y se consulta, para no
+      // dejar la pantalla en blanco esperando que el usuario pulse Aplicar.
+      if (!f.curso && res.cursos?.length) {
+        setCurso(res.cursos[0])
+        setApplied({ curso: res.cursos[0], salon: '' })
+      }
     } catch (e: any) { toast.error(e?.message || 'Error al cargar evaluaciones') } finally { setLoading(false) }
-  }, [curso])
+  }, [])
 
   useEffect(() => { fetchData(applied) }, [applied, fetchData])
+
+  // El análisis por pregunta se carga sólo al abrir su pestaña (consulta pesada:
+  // expande el JSONB de todas las respuestas del curso).
+  useEffect(() => {
+    if (tab !== 'preguntas' || !applied.curso) return
+    let cancelado = false
+    setCargandoPreg(true)
+    const qs = new URLSearchParams({ curso: applied.curso })
+    if (applied.salon) qs.set('salon', applied.salon)
+    fetch(`/api/postgres/reports/academico/evaluaciones/preguntas?${qs}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(r => { if (cancelado) return; if (r.error) throw new Error(r.error); setPreg(r) })
+      .catch(e => { if (!cancelado) toast.error(e?.message || 'Error al cargar el análisis de preguntas') })
+      .finally(() => { if (!cancelado) setCargandoPreg(false) })
+    return () => { cancelado = true }
+  }, [tab, applied])
 
   const rows = data?.rows || []
   const R = data?.resumen || {}
@@ -88,6 +113,20 @@ export default function EvaluacionesPage() {
             <button onClick={() => setApplied({ curso, salon })} className="px-4 py-2 rounded-lg bg-purple-700 text-white text-sm font-medium hover:bg-purple-800">Aplicar</button>
           </div>
 
+          {/* Pestañas */}
+          <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-4">
+            {([['resultados', 'Resultados'], ['preguntas', 'Preguntas']] as const).map(([id, label]) => (
+              <button
+                key={id} type="button" onClick={() => setTab(id)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  tab === id ? 'border-purple-700 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
             <div className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm"><div className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Estudiantes</div><div className="text-2xl font-extrabold">{R.estudiantes ?? 0}</div></div>
             <div className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm"><div className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Cuestionarios aprobados</div><div className="text-2xl font-extrabold text-fuchsia-600">{R.cuestionariosAprobados ?? 0} / {R.cuestionariosTotal ?? 0}</div></div>
@@ -95,6 +134,73 @@ export default function EvaluacionesPage() {
             <div className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm"><div className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Promedio intentos</div><div className="text-2xl font-extrabold">{R.promedioIntentos ?? 0}</div></div>
           </div>
 
+          {tab === 'preguntas' ? (
+            /* --- Análisis por pregunta: las 3 más falladas y las 3 más acertadas --- */
+            <div className="space-y-4">
+              <p className="text-xs text-gray-500">
+                Se cuentan <b>todos los intentos</b> enviados, no sólo el último: si una pregunta se falla dos veces, cuenta dos veces.
+              </p>
+              {cargandoPreg ? (
+                <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-sm text-gray-400">Cargando análisis…</div>
+              ) : !(preg?.evaluaciones || []).length ? (
+                <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-sm text-gray-400">
+                  Sin respuestas para analizar en este curso todavía.
+                </div>
+              ) : preg.evaluaciones.map((ev: any, i: number) => (
+                <div key={i} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 border-b border-gray-100">
+                    <h3 className="font-semibold text-sm">
+                      {ev.titulo}
+                      <span className="ml-2 text-xs font-normal text-gray-500">{ev.code}{ev.step ? ` · ${ev.step}` : ''}</span>
+                    </h3>
+                    <div className="text-xs text-gray-500 tabular-nums">
+                      {ev.estudiantes} estudiante(s) · {ev.totalPreguntas} pregunta(s) · <b className="text-gray-700">{ev.pctAciertoGlobal}%</b> de acierto general
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                    <div className="p-4">
+                      <div className="text-[10.5px] uppercase tracking-wide text-red-600 font-bold mb-2">Las 3 que más erraron</div>
+                      {ev.masErradas.length === 0 ? (
+                        <p className="text-sm text-gray-400">Nadie falló ninguna pregunta.</p>
+                      ) : (
+                        <ol className="space-y-2">
+                          {ev.masErradas.map((p: any, k: number) => (
+                            <li key={k} className="rounded-lg border border-red-200 bg-red-50/50 p-2.5">
+                              <p className="text-[13px] text-gray-900">{k + 1}. {p.pregunta}</p>
+                              <p className="text-[12.5px] mt-1 tabular-nums">
+                                <b className="text-red-700">{p.errores} error(es)</b>
+                                <span className="text-gray-500"> de {p.respuestas} respuesta(s) · </span>
+                                <b className="text-red-700">{p.pctError}%</b>
+                              </p>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <div className="text-[10.5px] uppercase tracking-wide text-emerald-700 font-bold mb-2">Las 3 de mayor acertividad</div>
+                      {ev.masAcertadas.length === 0 ? (
+                        <p className="text-sm text-gray-400">Nadie acertó ninguna pregunta.</p>
+                      ) : (
+                        <ol className="space-y-2">
+                          {ev.masAcertadas.map((p: any, k: number) => (
+                            <li key={k} className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5">
+                              <p className="text-[13px] text-gray-900">{k + 1}. {p.pregunta}</p>
+                              <p className="text-[12.5px] mt-1 tabular-nums">
+                                <b className="text-emerald-700">{p.aciertos} acierto(s)</b>
+                                <span className="text-gray-500"> de {p.respuestas} respuesta(s) · </span>
+                                <b className="text-emerald-700">{p.pctAcierto}%</b>
+                              </p>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] border-collapse">
@@ -147,6 +253,7 @@ export default function EvaluacionesPage() {
               </table>
             </div>
           </div>
+          )}
 
           {/* Modal: último intento del cuestionario */}
           {detalle && (

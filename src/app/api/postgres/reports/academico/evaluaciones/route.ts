@@ -19,17 +19,30 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const code = (sp.get('code') || '').trim();
   const step = (sp.get('step') || '').trim();
 
-  // Catálogos para los dropdowns.
+  // Catálogo de cursos: los de la plataforma, NO sólo los que ya tienen
+  // resultados — si no, mientras nadie haya rendido una evaluación el selector
+  // sale vacío y la pantalla no se puede usar. Se unen con los cursos que sí
+  // tengan respuestas, por si alguno quedó fuera del catálogo activo.
   const cursos = (await query<{ curso: string }>(
-    `SELECT DISTINCT "curso" FROM "EVALUACION_RESPUESTAS" WHERE "curso" IS NOT NULL AND "curso"<>'' ORDER BY "curso"`
+    `SELECT DISTINCT curso FROM (
+       SELECT "tipoCurso" AS curso FROM "CURSOS_CAMPAIGN" WHERE "activa" = true AND "tipoCurso" IS NOT NULL AND "tipoCurso" <> ''
+       UNION
+       SELECT "curso" FROM "EVALUACION_RESPUESTAS" WHERE "curso" IS NOT NULL AND "curso" <> ''
+     ) x ORDER BY curso`
   )).rows.map(r => r.curso);
 
   if (!curso) return successResponse({ available: true, rows: [], cuestionarios: [], cursos, salones: [], curso: '', salon: '' });
 
+  // Salones del curso elegido (del catálogo + los que tengan resultados).
   const salones = (await query<{ salon: string }>(
-    `SELECT DISTINCT p."salon" FROM "EVALUACION_RESPUESTAS" er
-       JOIN "PEOPLE" p ON UPPER(p."numeroId")=UPPER(er."numeroId") AND p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
-      WHERE UPPER(er."curso")=UPPER($1) AND p."salon" IS NOT NULL AND p."salon"<>'' ORDER BY p."salon"`,
+    `SELECT DISTINCT salon FROM (
+       SELECT cc."salon" FROM "CURSOS_CAMPAIGN" cc
+        WHERE cc."activa" = true AND UPPER(cc."tipoCurso") = UPPER($1) AND cc."salon" IS NOT NULL AND cc."salon" <> ''
+       UNION
+       SELECT p."salon" FROM "EVALUACION_RESPUESTAS" er
+         JOIN "PEOPLE" p ON UPPER(p."numeroId") = UPPER(er."numeroId") AND p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
+        WHERE UPPER(er."curso") = UPPER($1) AND p."salon" IS NOT NULL AND p."salon" <> ''
+     ) x ORDER BY salon`,
     [curso]
   )).rows.map(r => r.salon);
 
