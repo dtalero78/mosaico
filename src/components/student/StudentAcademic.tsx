@@ -33,6 +33,11 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [advisorName, setAdvisorName] = useState<string>('No asignado')
   const [advisorNames, setAdvisorNames] = useState<{[key: string]: string}>({})
   const [classes, setClasses] = useState<Class[]>(initialClasses)
+  // El historial oculta por defecto las clases de semanas futuras. En la ficha
+  // admin hace falta poder verlas para auditar que la aprobación sí agendó.
+  const [verFuturas, setVerFuturas] = useState(false)
+  const [ocultasFuturas, setOcultasFuturas] = useState(0)
+  const [primeraFutura, setPrimeraFutura] = useState<string | null>(null)
 
   // Permisos para el modal de detalles de clase.
   //
@@ -125,9 +130,13 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const refreshStudentData = async () => {
     try {
       console.log('🔄 Recargando datos del estudiante...')
-      const response = await fetch(`/api/postgres/students/${student._id}/academic?_t=${Date.now()}`)
+      const response = await fetch(`/api/postgres/students/${student._id}/academic?_t=${Date.now()}${verFuturas ? '&futuras=1' : ''}`)
       if (response.ok) {
         const data = await response.json()
+        if (data.success && data.data) {
+          setOcultasFuturas(Number(data.data.ocultasFuturas) || 0)
+          setPrimeraFutura(data.data.primeraFutura ?? null)
+        }
         if (data.success && data.data?.classes) {
           console.log('✅ Datos frescos recibidos:', data.data.classes.length, 'clases')
           console.log('📅 Fechas de eventos:', data.data.classes.map((c: any) => ({
@@ -142,6 +151,13 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       console.error('❌ Error recargando datos:', error)
     }
   }
+
+  // Trae el conteo de clases futuras ocultas (para el aviso) y recarga al
+  // marcar/desmarcar "Incluir clases futuras".
+  useEffect(() => {
+    if (student._id) refreshStudentData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student._id, verFuturas])
 
   // Step management functions
   const loadLevelSteps = async () => {
@@ -691,7 +707,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   // Filter classes based on filter states
   const filteredClasses = classes.filter(classItem => {
     // MOSAICO: pasado completo + sólo pendientes hasta el fin de la semana siguiente.
-    if (!visibleEnHistorial((classItem as any).fechaEvento)) return false
+    if (!verFuturas && !visibleEnHistorial((classItem as any).fechaEvento)) return false
     // Date filter
     if (startDate) {
       const classDate = new Date((classItem as any).fechaEvento)
@@ -798,7 +814,21 @@ export default function StudentAcademic({ student, classes: initialClasses, view
         </div>
 
         {/* Clear Filters Button */}
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={verFuturas}
+              onChange={(e) => setVerFuturas(e.target.checked)}
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span>
+              Incluir clases futuras
+              {ocultasFuturas > 0 && !verFuturas && (
+                <span className="ml-1 text-gray-500">({ocultasFuturas} sin mostrar)</span>
+              )}
+            </span>
+          </label>
           <button
             onClick={() => {
               setStartDate('')
@@ -902,10 +932,23 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                 <td colSpan={9} className="table-cell text-center py-8">
                   <div className="text-gray-500">
                     {classes.length === 0 ? (
-                      <>
-                        <p>No hay clases registradas</p>
-                        <p className="text-sm mt-1">Las clases aparecerán aquí una vez que se programen</p>
-                      </>
+                      ocultasFuturas > 0 ? (
+                        // Sí tiene agendamiento: son todas de semanas futuras.
+                        <>
+                          <p className="text-gray-700 font-medium">
+                            {ocultasFuturas} clase(s) agendada(s), todas en semanas futuras
+                          </p>
+                          <p className="text-sm mt-1">
+                            {primeraFutura && <>La primera es el {formatDateTime(primeraFutura)}. </>}
+                            Marca <span className="font-medium">&quot;Incluir clases futuras&quot;</span> para verlas.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p>No hay clases registradas</p>
+                          <p className="text-sm mt-1">Las clases aparecerán aquí una vez que se programen</p>
+                        </>
+                      )
                     ) : (
                       <>
                         <p>No hay clases que coincidan con los filtros</p>

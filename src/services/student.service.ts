@@ -266,7 +266,17 @@ export async function promoteFromWelcome(
 /**
  * Get academic history: academic record + class list.
  */
-export async function getAcademicHistory(id: string, limit: number = 100) {
+/**
+ * Historial de clases del estudiante.
+ *
+ * Por defecto oculta las clases de semanas FUTURAS (se ven las pasadas + la
+ * semana en curso). En la ficha admin eso es engañoso justo después de aprobar
+ * un contrato: el alumno queda con todos sus agendamientos creados pero, si su
+ * curso arranca la semana siguiente, la tabla sale vacía y se lee como "no se
+ * agendó". Por eso se devuelve `ocultasFuturas`/`primeraFutura` (para avisarlo)
+ * y `incluirFuturas` permite verlas.
+ */
+export async function getAcademicHistory(id: string, limit: number = 100, incluirFuturas = false) {
   // Try ACADEMICA by any ID field
   let academicRecord = await AcademicaRepository.findByAnyId(id);
 
@@ -285,9 +295,17 @@ export async function getAcademicHistory(id: string, limit: number = 100) {
   // Historial: solo clases pasadas + de la semana corriente; se ocultan las de
   // semanas FUTURAS (fechaEvento < inicio de la próxima semana).
   const cutoff = await inicioProximaSemanaUTC();
-  const rawClasses = rawAll.filter((c: any) =>
-    !c.fechaEvento || new Date(c.fechaEvento).getTime() < cutoff
-  );
+  const esFutura = (c: any) => !!c.fechaEvento && new Date(c.fechaEvento).getTime() >= cutoff;
+  const futuras = rawAll.filter(esFutura);
+  const rawClasses = incluirFuturas ? rawAll : rawAll.filter((c: any) => !esFutura(c));
+  // Se informan aunque se estén mostrando, para que la UI pueda decir "N de M son futuras".
+  // Comparar por timestamp: `fechaEvento` llega como Date de pg y ordenarlas como
+  // texto daría el orden alfabético del nombre del mes ("Apr 2027" < "Aug 2026").
+  const primeraFuturaMs = futuras.reduce<number | null>((min, c: any) => {
+    const t = new Date(c.fechaEvento).getTime();
+    return Number.isFinite(t) && (min === null || t < min) ? t : min;
+  }, null);
+  const primeraFutura = primeraFuturaMs === null ? null : new Date(primeraFuturaMs).toISOString();
 
   // Target de la nivelación (las sesiones NIVELACION no traen sesionModulo/Leccion;
   // su módulo/lección reforzada vive en ACADEMICA.detalleNivelacion).
@@ -317,6 +335,9 @@ export async function getAcademicHistory(id: string, limit: number = 100) {
     academicRecord,
     classes,
     totalClasses: classes.length,
+    ocultasFuturas: futuras.length,
+    primeraFutura,
+    incluyeFuturas: incluirFuturas,
   };
 }
 

@@ -12,8 +12,10 @@ export const GET = handler(async (request, { params }) => {
 
   const { searchParams } = new URL(request.url);
   const limit = parseInt(searchParams.get('limit') || '100');
+  // ?futuras=1 incluye las clases de semanas futuras (ocultas por defecto).
+  const incluirFuturas = searchParams.get('futuras') === '1';
 
-  const data = await getAcademicHistory(params.id, limit);
+  const data = await getAcademicHistory(params.id, limit, incluirFuturas);
 
   return successResponse({ data });
 });
