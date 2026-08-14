@@ -335,7 +335,7 @@ export default function SesionPage() {
               <div className="flex-shrink-0 text-2xl" aria-hidden>🔗</div>
               <div className="flex-1 min-w-[200px]">
                 <p className="text-sm font-semibold text-indigo-900">
-                  Sesión compartida entre {groupSiblings.length} niveles
+                  Sesión compartida entre {groupSiblings.length} cursos
                   {indexInGroup >= 0 && <> · paso {indexInGroup + 1} de {groupSiblings.length}</>}
                 </p>
                 <p className="text-xs text-indigo-800 mt-0.5">
@@ -877,7 +877,7 @@ function RegistrarSesionButton({
             </h3>
             <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-4 text-sm">
               <p className="font-medium text-indigo-900 mb-1">
-                🔗 Esta clase es compartida entre {groupSize} niveles.
+                🔗 Esta clase es compartida entre {groupSize} cursos.
               </p>
               <p className="text-xs text-indigo-800">
                 Continúa con el siguiente nivel —{' '}

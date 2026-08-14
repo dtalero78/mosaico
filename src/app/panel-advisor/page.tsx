@@ -552,7 +552,7 @@ function PanelAdvisorContent() {
                           <div
                             key={event._id}
                             className={`text-xs px-1 py-0.5 rounded text-white truncate ${getEventColor(event.evento || event.tipo || '')} cursor-pointer hover:opacity-80`}
-                            title={`${event.evento || event.tipo || ''} - ${event.tituloONivel} ${event.nombreEvento || ''}${isShared ? ' (compartido entre niveles)' : ''}`}
+                            title={`${event.evento || event.tipo || ''} - ${event.tituloONivel} ${event.nombreEvento || ''}${isShared ? ' (compartido entre cursos)' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation()
                               handleEventClick(event)

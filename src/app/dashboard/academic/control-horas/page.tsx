@@ -514,7 +514,7 @@ export function ControlHorasContent({
                         key={c.kind === 'vigente' ? c.eventoId : `${c.eventoId}_${c.logId}`}
                         type="button"
                         onClick={() => setSelectedCard(c)}
-                        title={`${c.tipo ?? ''} ${c.nivel ?? ''} ${c.step ?? ''} · ${stateLabel(c)}${isShared ? ' · 🔗 compartido entre niveles' : ''}`}
+                        title={`${c.tipo ?? ''} ${c.nivel ?? ''} ${c.step ?? ''} · ${stateLabel(c)}${isShared ? ' · 🔗 compartido entre cursos' : ''}`}
                         className={`block w-full text-left px-1.5 py-1 rounded text-[11px] font-medium ${colorClass(c)} hover:opacity-90 transition`}
                       >
                         <div className="truncate">

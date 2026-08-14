@@ -510,9 +510,9 @@ export default function EventModal({
   const compartibleHabilitado = !isEditMode && !esWelcome
     && isEventoCompartible(formData.evento, formData.nombreEvento)
   const compartibleMotivo = isEditMode
-    ? 'Para compartir entre niveles crea un evento nuevo desde 0 — al editar uno existente sólo cambian sus campos.'
+    ? 'Para compartir entre cursos crea un evento nuevo desde 0 — al editar uno existente sólo cambian sus campos.'
     : esWelcome
-      ? 'Los eventos WELCOME no se comparten entre niveles.'
+      ? 'Los eventos WELCOME no se comparten entre cursos.'
       : reasonNotCompartible(formData.evento, formData.nombreEvento)
 
   // Si el toggle queda activo pero el step deja de ser compartible (ej. admin
@@ -1085,11 +1085,11 @@ export default function EventModal({
                         disabled={!compartibleHabilitado}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
-                      Evento compartido entre niveles
+                      Evento compartido entre cursos
                     </label>
                     <p className="text-xs text-gray-500 mt-1">
                       {compartibleHabilitado
-                        ? `Crea el mismo evento en hasta ${MAX_NIVELES_COMPARTIDOS - 1} niveles adicionales (misma hora/advisor/zoom). Para el advisor cuenta como 1 sola hora.`
+                        ? `Crea el mismo evento en hasta ${MAX_NIVELES_COMPARTIDOS - 1} cursos adicionales (misma hora/guía/zoom). Para el guía cuenta como 1 sola hora.`
                         : (compartibleMotivo || 'Selecciona primero un nivel y step compartible.')}
                     </p>
                   </div>
@@ -1155,9 +1155,9 @@ export default function EventModal({
             {/* Banner informativo en EDIT de evento compartido */}
             {isEditMode && (editingEvent as any)?.eventoCompartidoId && (
               <div className="border-l-4 border-indigo-500 bg-indigo-50 rounded-r-lg p-3 text-sm text-indigo-900">
-                <strong>🔗 Evento compartido entre niveles.</strong> Los cambios en
+                <strong>🔗 Evento compartido entre cursos.</strong> Los cambios en
                 advisor, hora, link de Zoom u observaciones se propagarán a los demás
-                eventos del grupo. Nivel y step se mantienen por evento.
+                eventos del grupo. Curso y lección se mantienen por evento.
               </div>
             )}
 

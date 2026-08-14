@@ -1034,7 +1034,7 @@ export default function AgendaSesionesPage() {
                 {deleteGroupSiblings.length > 1 && (
                   <div className="mb-4 border-l-4 border-indigo-500 bg-indigo-50 rounded-r-lg p-3 text-sm">
                     <p className="text-indigo-900 mb-2">
-                      🔗 <strong>Evento compartido entre {deleteGroupSiblings.length} niveles.</strong>
+                      🔗 <strong>Evento compartido entre {deleteGroupSiblings.length} cursos.</strong>
                     </p>
                     <ul className="text-xs text-indigo-800 mb-2 list-disc list-inside">
                       {deleteGroupSiblings.map((s: any) => (

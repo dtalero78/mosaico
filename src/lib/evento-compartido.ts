@@ -82,7 +82,7 @@ export function extractClubPrefix(step: string | null | undefined): string | nul
 export function reasonNotCompartible(tipo: string | null | undefined, step: string | null | undefined): string | null {
   if (isEventoCompartible(tipo, step)) return null;
   const t = (tipo || '').toUpperCase();
-  if (t === 'WELCOME') return 'Los eventos WELCOME no se comparten entre niveles.';
+  if (t === 'WELCOME') return 'Los eventos WELCOME no se comparten entre cursos.';
   if (t === 'SESSION') {
     const n = extractStepNumber(step);
     if (n != null && n >= 1 && n <= 44 && n % 5 !== 0) {
@@ -92,7 +92,7 @@ export function reasonNotCompartible(tipo: string | null | undefined, step: stri
   }
   if (t === 'CLUB') {
     const prefix = String(step || '').trim().toUpperCase().split('-')[0].trim();
-    if (prefix === 'TRAINING') return 'Los clubs TRAINING son por step específico y no se comparten entre niveles.';
+    if (prefix === 'TRAINING') return 'Los clubs TRAINING son por step específico y no se comparten entre cursos.';
     return 'Este club no se puede compartir.';
   }
   return 'Tipo no compartible.';
