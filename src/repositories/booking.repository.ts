@@ -5,6 +5,7 @@
  */
 
 import 'server-only';
+import { cupoOcupadoSql } from '@/lib/cupo';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { BaseRepository } from './base.repository';
 import { buildDynamicUpdate } from '@/lib/query-builder';
@@ -82,6 +83,19 @@ class BookingRepositoryClass extends BaseRepository {
        LEFT JOIN "PEOPLE" p ON a."numeroId" = p."numeroId"
        WHERE (b."eventoId" = $1 OR b."idEvento" = $1)
          AND (b."cancelo" IS NULL OR b."cancelo" = false)
+         -- El roster del Guía = los que OCUPAN cupo. Si el contrato se retractó
+         -- (o el alumno está en OnHold / con el cupo liberado) ya no es del salón
+         -- y no debe aparecer para tomarle asistencia.
+         -- Se busca la ficha de BENEFICIARIO aparte, no por el LEFT JOIN de
+         -- arriba: ese puede resolver al TITULAR cuando comparten numeroId, y se
+         -- estaría evaluando el cupo sobre la persona equivocada. Si no hay ficha
+         -- de beneficiario, el booking se conserva (comportamiento previo).
+         AND NOT EXISTS (
+           SELECT 1 FROM "PEOPLE" pb
+            WHERE pb."numeroId" = a."numeroId"
+              AND pb."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
+              AND NOT (${cupoOcupadoSql('pb')})
+         )
        ORDER BY b."_id", b."primerApellido", b."primerNombre"`,
       [eventId]
     );

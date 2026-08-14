@@ -2,6 +2,7 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
+import { cupoOcupadoSql } from '@/lib/cupo'
 import { ServicioPermission } from '@/types/permissions'
 
 /**
@@ -29,6 +30,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const where: string[] = [
     `b."casoAtencion" = true`,
     `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
+    // Sólo los que ocupan cupo (ver lib/cupo): un contrato retractado ya no es
+    // alumno del salón, así que su caso no debe seguir en la bandeja.
+    cupoOcupadoSql('p'),
   ]
   const params: any[] = []
   let i = 1
@@ -77,7 +81,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
        LEFT JOIN "CURSOS_CAMPAIGN" cc ON cc."campaign"=p."campaign" AND cc."tipoCurso"=p."tipoCurso" AND cc."horarioCurso"=p."horarioCurso"
        LEFT JOIN "GUIAS" g ON g."_id"=cc."guia"
-      WHERE b."casoAtencion" = true AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`
+      WHERE b."casoAtencion" = true AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
+        AND ${cupoOcupadoSql('p')}`
   )).rows
   const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean)))
   const cursos = uniq(opts.map((o: any) => o.curso)).sort()

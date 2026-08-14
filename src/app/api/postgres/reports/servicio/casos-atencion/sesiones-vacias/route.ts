@@ -2,6 +2,7 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
+import { cupoOcupadoSql } from '@/lib/cupo'
 import { ServicioPermission } from '@/types/permissions'
 
 /**
@@ -82,7 +83,16 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
                 COUNT(*) FILTER (WHERE (COALESCE(b."asistio",false) OR COALESCE(b."asistencia",false))
                                    AND COALESCE(b."cancelo",false) = false) AS "asistieron"
            FROM "ACADEMICA_BOOKINGS" b
-          WHERE b."eventoId" = c."_id" OR b."idEvento" = c."_id"
+           JOIN "ACADEMICA" ab ON ab."_id" = COALESCE(b."idEstudiante", b."studentId")
+          WHERE (b."eventoId" = c."_id" OR b."idEvento" = c."_id")
+            -- "Inscritos" = los que OCUPAN cupo, para no contar como inscrito a
+            -- quien ya soltó el salón (retractado, OnHold o cupo liberado).
+            AND NOT EXISTS (
+              SELECT 1 FROM "PEOPLE" pb
+               WHERE pb."numeroId" = ab."numeroId"
+                 AND pb."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
+                 AND NOT (${cupoOcupadoSql('pb')})
+            )
        ) ins ON true
       WHERE ${where.join(' AND ')}
         AND ins."asistieron" = 0

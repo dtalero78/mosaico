@@ -2,6 +2,7 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
+import { cupoOcupadoSql } from '@/lib/cupo'
 import { ServicioPermission } from '@/types/permissions'
 
 /**
@@ -47,6 +48,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `COALESCE(c."dia", b."fechaEvento") < NOW()`,
     ES_SESION,
     `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
+    // Sólo los que ocupan cupo (ver lib/cupo): a quien ya soltó el salón no se le
+    // reclama la inasistencia.
+    cupoOcupadoSql('p'),
   ]
   const params: any[] = []
   let i = 1

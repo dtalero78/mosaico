@@ -1,4 +1,5 @@
 import 'server-only';
+import { cupoOcupadoSql } from '@/lib/cupo';
 import { query, queryOne } from '@/lib/postgres';
 
 /**
@@ -251,6 +252,10 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
     LEFT JOIN "REPORTE_ACADEMICO_NOTAS" nota
       ON nota."academicaId" = acad."academicaId" AND nota."salon" = $4 AND nota."semanaInicio" = $2
     WHERE p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
+      -- Sólo quienes OCUPAN cupo: si el contrato se retractó (o el alumno está en
+      -- OnHold / con el cupo liberado a mano) ya no pertenece al salón y el Guía
+      -- no debe valorarlo. Misma regla que los cupos del resto de la plataforma.
+      AND ${cupoOcupadoSql('p')}
       AND UPPER(p."tipoCurso") = UPPER($1) AND p."salon" = $4
       -- La campaña SIEMPRE acota: (campaña, curso, salón) identifica el curso real
       -- y con él a su Guía. Sin ella se mezclaban los alumnos de todas las campañas.
