@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { AcademicoPermission } from '@/types/permissions'
+import { cupoOcupadoSql } from '@/lib/cupo'
 
 /**
  * GET /api/postgres/reports/academico/lista-usuarios?campaign&curso&salon&startDate&endDate
@@ -32,6 +33,12 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const where: string[] = [
     `p."tipoUsuario" = 'BENEFICIARIO'`,
     `COALESCE(p."contrato", '') NOT LIKE 'PRB-%'`,
+    // La lista del curso/salón es la de quienes OCUPAN cupo: si el contrato pasó a
+    // Devuelto/Rechazado/Retractado/Contrato nulo, el alumno soltó el cupo y ya no
+    // pertenece al salón, así que tampoco debe aparecer aquí. Misma regla que los
+    // cupos de todas las demás pantallas (lib/cupo) — también saca a los que están
+    // en OnHold o con el cupo liberado a mano.
+    cupoOcupadoSql('p'),
   ]
   const params: any[] = []
   let i = 1
