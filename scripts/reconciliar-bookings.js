@@ -11,14 +11,22 @@
  * (idempotente: dedupe por eventoId; NO toca asistencia/estado de los existentes).
  * Replica exactamente el INSERT de `generarBookingsBeneficiario`.
  *
+ * ⚠ Crear un booking sobre una sesión YA DICTADA la deja marcada como AUSENCIA
+ * retroactiva de alguien que nunca estuvo inscrito. Por eso existe
+ * `--solo-futuros`: crea únicamente los de sesiones que aún no han ocurrido, que
+ * es lo que deja al alumno operativo de hoy en adelante sin ensuciar su historial.
+ *
  * Uso:
  *   node scripts/reconciliar-bookings.js --campaign=AGOSTO172026M [--apply]
+ *   node scripts/reconciliar-bookings.js --solo-futuros [--apply]
  *   node scripts/reconciliar-bookings.js                 (todas las campañas, dry-run)
  */
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; require('dotenv').config({ path: '.env.local' });
 const { Pool } = require('pg');
 const APPLY = process.argv.includes('--apply');
 const campArg = (process.argv.find(a => a.startsWith('--campaign=')) || '').split('=')[1] || null;
+// Sólo sesiones futuras: evita marcar ausencias retroactivas en cursos en marcha.
+const SOLO_FUTUROS = process.argv.includes('--solo-futuros');
 const NORM = (c) => `REPLACE(REPLACE(REPLACE(${c},'.',''),'-',''),' ','')`;
 let seq = 0;
 const bkgId = () => `bkg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}${(seq++).toString(36)}`;
@@ -70,6 +78,7 @@ const bkgId = () => `bkg_${Date.now()}_${Math.random().toString(36).substr(2, 9)
   for (const c of cand) { const k = `${c.campaign} / ${c.tipoCurso}`; porCampaign[k] = porCampaign[k] || { n: 0, falt: 0 }; porCampaign[k].n++; porCampaign[k].falt += (c.n_ev - c.n_bk); }
   console.log(`── Reconciliación${campArg ? ' ('+campArg+')' : ''} ──`);
   console.log(`Beneficiarios con bookings faltantes: ${cand.length}`);
+  if (SOLO_FUTUROS) console.log('⚠ modo --solo-futuros: los totales de abajo son el hueco COMPLETO; sólo se crearán los de sesiones futuras.');
   for (const [k, v] of Object.entries(porCampaign)) console.log(`  ${k.padEnd(24)} alumnos=${v.n}  bookings_a_crear≈${v.falt}`);
 
   if (!APPLY) { console.log('\n(dry-run) — nada escrito. --apply para crear los bookings faltantes.'); await pool.end(); return; }
@@ -81,7 +90,8 @@ const bkgId = () => `bkg_${Date.now()}_${Math.random().toString(36).substr(2, 9)
     try {
       const ev = (await pool.query(
         `SELECT "_id","advisor","dia","hora","tipo","evento","nivel","step","tituloONivel","nombreEvento","titulo","linkZoom"
-           FROM "CALENDARIO" WHERE "cursoCampaignId"=$1`, [c.ccid]
+           FROM "CALENDARIO" WHERE "cursoCampaignId"=$1
+           ${SOLO_FUTUROS ? 'AND "dia" >= NOW()' : ''}`, [c.ccid]
       )).rows;
       const existing = (await pool.query(
         `SELECT "eventoId","idEvento" FROM "ACADEMICA_BOOKINGS" WHERE ("idEstudiante"=$1 OR "studentId"=$1)`, [c.acaid]
