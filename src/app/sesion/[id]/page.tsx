@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions'
 import { AcademicoPermission } from '@/types/permissions'
 import SessionTabs from '@/components/session/SessionTabs'
+import SessionActividadIA from '@/components/session/SessionActividadIA'
 import SessionGeneralTab from '@/components/session/SessionGeneralTab'
 import SessionStudentsTab from '@/components/session/SessionStudentsTab'
 import SessionMaterialTab from '@/components/session/SessionMaterialTab'
@@ -394,37 +395,38 @@ export default function SesionPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              {/* Acciones del evento — TODAS en la misma línea, misma altura
+                  (px-4 py-2 · text-sm) y alineadas a la derecha; si no caben,
+                  bajan de fila en bloque en vez de descolgarse en columna. */}
+              <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                 {evento.linkZoom && (
                   <a
                     href={evento.linkZoom}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     Ir a Zoom
                   </a>
                 )}
-                <div className="flex flex-col items-end gap-2">
-                  <RegistrarSesionButton
-                    evento={evento}
-                    windowState={windowState}
-                    totalInscritos={students.length}
-                    totalConAsistencia={totalConAsistencia}
-                    onClosed={() => loadEventoData()}
-                    isShared={isShared}
-                    nextSibling={nextSibling}
-                    groupSize={groupSiblings.length}
-                  />
-                  {!esImpulsa && <RepetirLeccionButton eventoId={evento._id} onMarked={() => loadEventoData()} />}
-                  <RevisarEvaluacionButton evento={evento} />
-                </div>
+                {!esImpulsa && <RepetirLeccionButton eventoId={evento._id} onMarked={() => loadEventoData()} />}
+                <RevisarEvaluacionButton evento={evento} />
+                <RegistrarSesionButton
+                  evento={evento}
+                  windowState={windowState}
+                  totalInscritos={students.length}
+                  totalConAsistencia={totalConAsistencia}
+                  onClosed={() => loadEventoData()}
+                  isShared={isShared}
+                  nextSibling={nextSibling}
+                  groupSize={groupSiblings.length}
+                />
               </div>
             </div>
           </div>
 
-          {/* Tabs */}
-          <SessionTabs>
+          {/* Tabs — "Actividad IA" va al extremo derecho de la misma línea. */}
+          <SessionTabs rightSlot={<SessionActividadIA eventoId={evento._id} />}>
             {{
               general: (
                 <SessionGeneralTab
@@ -607,7 +609,7 @@ function RegistrarSesionButton({
     const cerradaPorCoord = evento.motivoCierre === 'GESTION_COORDINADOR'
     return (
       <span
-        className={`px-3 py-2 text-sm font-medium rounded-lg ${
+        className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap ${
           cerradaPorCoord
             ? 'text-white bg-red-600'
             : 'text-gray-600 bg-gray-100'
@@ -626,7 +628,7 @@ function RegistrarSesionButton({
   if (!windowState.canRegister && !windowState.isCoordinator) {
     if (windowState.isExpired) {
       return (
-        <span className="px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg" title={EXPIRED_MESSAGE}>
+        <span className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg whitespace-nowrap" title={EXPIRED_MESSAGE}>
           ⚠ Período vencido — Coordinador
         </span>
       )
@@ -637,7 +639,7 @@ function RegistrarSesionButton({
       const yaEmpezo = windowState.minutesElapsed >= 0
       return (
         <span
-          className={`px-3 py-2 text-xs italic rounded ${
+          className={`px-4 py-2 text-sm italic rounded-lg whitespace-nowrap ${
             yaEmpezo ? 'text-amber-700 bg-amber-50 border border-amber-200' : 'text-gray-500'
           }`}
           title={yaEmpezo ? 'Marca asistencia ahora; el botón Registrar se habilitará a los 30 min.' : 'Disponible 30 min después del inicio'}
@@ -754,7 +756,7 @@ function RegistrarSesionButton({
       <button
         type="button"
         onClick={handleClick}
-        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-semibold"
+        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-semibold whitespace-nowrap"
       >
         Registrar Sesión
       </button>
@@ -947,7 +949,7 @@ function RepetirLeccionButton({ eventoId, onMarked }: { eventoId: string; onMark
   return (
     <>
       <button type="button" onClick={abrir}
-        className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium">
+        className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-sm font-medium whitespace-nowrap">
         🔁 Repetir Lección
       </button>
       {open && (
@@ -1023,7 +1025,7 @@ function RevisarEvaluacionButton({ evento }: { evento: CalendarioEvent }) {
   return (
     <>
       <button type="button" onClick={abrir}
-        className="inline-flex items-center gap-1.5 px-4 py-2 bg-fuchsia-600 text-white text-sm font-medium rounded-lg hover:bg-fuchsia-700">
+        className="inline-flex items-center gap-1.5 px-4 py-2 bg-fuchsia-600 text-white text-sm font-medium rounded-lg hover:bg-fuchsia-700 whitespace-nowrap">
         🧾 Revisar Evaluación
       </button>
 

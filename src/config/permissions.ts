@@ -609,6 +609,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/evaluaciones. Resultados de las evaluaciones y cuestionarios por curso: por estudiante, mejor nota, intentos y aprobó/no aprobó. También alimenta el botón "Revisar Evaluación" del panel del evento.',
   },
   {
+    code: AcademicoPermission.SESION_ACTIVIDAD_IA,
+    module: Module.ACADEMICO,
+    section: 'Sesión',
+    name: 'Botón "Actividad IA" de la sesión',
+    description: 'En /sesion/[id], muestra el botón "Actividad IA": redacta (a mano o con IA) UNA actividad para todo el grupo y la envía por WhatsApp a los apoderados de los inscritos. El envío también se valida con este permiso en el servidor.',
+  },
+  {
     code: AcademicoPermission.ENTRENAMIENTOS_VER,
     module: Module.ACADEMICO,
     section: 'Entrenamientos',

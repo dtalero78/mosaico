@@ -145,6 +145,9 @@ export enum AcademicoPermission {
   CREAR_EVENTO = 'ACADEMICO.AGENDA.CREAR_EVENTO',
   VER_AGENDA_ACADEMICA = 'ACADEMICO.AGENDA.VER_AGENDA_ACADEMICA',
   IR_A_SESION = 'ACADEMICO.SESION.IR_A_SESION',
+  // Botón "Actividad IA" de /sesion/[id]: genera la actividad del grupo y la
+  // envía por WhatsApp a los apoderados de los inscritos.
+  SESION_ACTIVIDAD_IA = 'ACADEMICO.SESION.ACTIVIDAD_IA',
 
   // Agenda Académica
   VER = 'ACADEMICO.ACADEMICA.VER',

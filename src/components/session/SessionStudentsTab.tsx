@@ -126,8 +126,11 @@ export default function SessionStudentsTab({
   const [calificacion, setCalificacion] = useState('')
   const [comentarios, setComentarios] = useState('')
   const [advisorAnotaciones, setAdvisorAnotaciones] = useState('')
+  // La caja "Actividad Propuesta (IA)" se movió al botón "Actividad IA" de la
+  // barra de pestañas: ahora es UNA actividad para todo el grupo. El valor ya
+  // guardado en el booking se conserva y se reenvía tal cual al guardar, así que
+  // ningún texto escrito antes se pierde ni se pisa con vacío.
   const [actividadPropuesta, setActividadPropuesta] = useState('')
-  const [isGeneratingActivity, setIsGeneratingActivity] = useState(false)
 
   // Nivelación (ACADEMICA.nivelacion / detalleNivelacion) — casilla + dropdown de lecciones
   const [nivelacion, setNivelacion] = useState(false)
@@ -142,8 +145,9 @@ export default function SessionStudentsTab({
   const cursoUpper = String(evento?.nivel || (evento as any)?.curso || '').trim().toUpperCase()
   // Curso IMPULSA (cualquier salón): oculta la casilla de Nivelación.
   const esImpulsa = cursoUpper === 'IMPULSA'
-  // Cursos MOSAICO soroban: ocultan la "Actividad Propuesta (IA)" y la casilla
-  // "Participó en la Sesión". IMPULSA las conserva.
+  // Cursos MOSAICO soroban: ocultan la casilla "Participó en la Sesión".
+  // IMPULSA la conserva. (La "Actividad Propuesta (IA)" ya no vive aquí: se
+  // movió al botón "Actividad IA" de la barra de pestañas, para todo el grupo.)
   const esCursoMosaico = ['YOJI', 'OKINA', 'KODOMO', 'DANSHI', 'SENPAI'].includes(cursoUpper)
   // Excepción: en un evento tipo NIVELACION el cierre EXIGE marcar asistencia Y
   // participación (ver handleSaveClassRecord), así que ahí la casilla se mantiene
@@ -245,41 +249,6 @@ export default function SessionStudentsTab({
     const stepNumber = parseInt(stepMatch[1])
     const JUMP_STEPS = [5, 10, 15, 20, 25, 30, 35, 40, 45]
     return JUMP_STEPS.includes(stepNumber)
-  }
-
-  const handleGenerateActivity = async () => {
-    if (!selectedStudent || !evento?.tituloONivel) {
-      alert('Selecciona un estudiante primero')
-      return
-    }
-
-    try {
-      setIsGeneratingActivity(true)
-
-      const response = await fetch('/api/postgres/academic/activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: selectedStudent._id,
-          nivel: evento.tituloONivel
-        })
-      })
-
-      if (!response.ok) throw new Error('Error al generar actividad')
-
-      const data = await response.json()
-
-      if (data.success && data.activity) {
-        setActividadPropuesta(data.activity)
-      } else {
-        throw new Error(data.error || 'No se pudo generar la actividad')
-      }
-    } catch (err) {
-      console.error('Error generating activity:', err)
-      alert('Error al generar actividad personalizada')
-    } finally {
-      setIsGeneratingActivity(false)
-    }
   }
 
   const doSaveClassRecord = async (comentarioNivel?: string) => {
@@ -602,52 +571,6 @@ export default function SessionStudentsTab({
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
-
-            {/* Actividad Propuesta por IA — OCULTA en cursos MOSAICO
-                (YOJI/OKINA/KODOMO/DANSHI/SENPAI); visible en IMPULSA y demás. */}
-            {!esCursoMosaico && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <svg className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  Actividad Propuesta (IA)
-                </h3>
-                <button
-                  type="button"
-                  onClick={handleGenerateActivity}
-                  disabled={isGeneratingActivity || !selectedStudent || isLocked}
-                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isGeneratingActivity ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Generando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span>Generar con IA</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              <textarea
-                value={actividadPropuesta}
-                onChange={(e) => setActividadPropuesta(e.target.value)}
-                disabled={isLocked}
-                rows={6}
-                placeholder="Haz clic en 'Generar con IA' para crear una actividad personalizada para este estudiante..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                La IA genera una actividad personalizada basada en el perfil del estudiante y su nivel
-              </p>
-            </div>
-            )}
 
             {/* Botón Guardar */}
             <div className="bg-white rounded-lg shadow-sm p-6">

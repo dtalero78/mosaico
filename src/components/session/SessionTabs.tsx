@@ -16,6 +16,8 @@ interface SessionTabsProps {
     material: React.ReactNode
     advisorMaterial: React.ReactNode
   }
+  /** Acción al extremo derecho de la línea de pestañas (p. ej. "Actividad IA"). */
+  rightSlot?: React.ReactNode
 }
 
 const tabs = [
@@ -49,7 +51,7 @@ const tabs = [
   },
 ]
 
-export default function SessionTabs({ children }: SessionTabsProps) {
+export default function SessionTabs({ children, rightSlot }: SessionTabsProps) {
   const [activeTab, setActiveTab] = useState('students')
 
   const renderTabContent = () => {
@@ -71,8 +73,8 @@ export default function SessionTabs({ children }: SessionTabsProps) {
     <div className="space-y-6">
       {/* Tab Navigation */}
       <div className="bg-white rounded-lg shadow-sm">
-        <div className="border-b border-gray-200 px-6">
-          <nav className="-mb-px flex space-x-8">
+        <div className="border-b border-gray-200 px-6 flex items-center justify-between gap-4">
+          <nav className="-mb-px flex space-x-8 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (
@@ -92,6 +94,7 @@ export default function SessionTabs({ children }: SessionTabsProps) {
               )
             })}
           </nav>
+          {rightSlot}
         </div>
       </div>
 

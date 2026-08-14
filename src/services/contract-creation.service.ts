@@ -7,6 +7,7 @@ import { generateUserLogin } from '@/lib/user-login';
 import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
 import { resolverLiderComercial, type LiderComercial } from '@/lib/crm';
 import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
+import { apoderadoPorDefectoEsTitular, resolverApoderado } from '@/lib/apoderado';
 
 /**
  * Regla numeroId MOSAICO:
@@ -183,6 +184,28 @@ export async function insertBeneficiarioTx(
   // Módulo del curso puente WELCOME según el curso real: IMPULSA → IMPULSA, resto → MOSAICO.
   const welcomeModulo = welcomeModuloForCurso(b.tipoCurso);
 
+  // Apoderado: en SENPAI el alumno suele ser adulto y firma su propio contrato,
+  // así que la ficha nace sin apoderado. Si el TITULAR es el propio beneficiario,
+  // el apoderado por defecto es él mismo (es la misma persona, no se inventa
+  // contacto). El titular ya está insertado en esta misma transacción.
+  let apoderado = b.apoderado || null;
+  let apoderadoTelefono = b.apoderadoTelefono || null;
+  let apoderadoMail = b.apoderadoMail || null;
+  if (!apoderadoTelefono && apoderadoPorDefectoEsTitular(b.tipoCurso)) {
+    const tr = await client.query(
+      `SELECT "numeroId","primerNombre","segundoNombre","primerApellido","segundoApellido","celular","email"
+         FROM "PEOPLE" WHERE "_id" = $1`,
+      [titularId]
+    );
+    const tit = tr.rows[0];
+    const resuelto = resolverApoderado({ ...b, tipoCurso: b.tipoCurso, apoderadoTelefono: null }, tit);
+    if (resuelto.origen === 'titular') {
+      apoderado = apoderado || resuelto.nombre;
+      apoderadoTelefono = resuelto.telefono;
+      apoderadoMail = apoderadoMail || resuelto.email || null;
+    }
+  }
+
   // 1. PEOPLE beneficiario — nace INACTIVO. Guarda el CURSO REAL.
   const benefResult = await client.query(
     `INSERT INTO "PEOPLE" ("_id", "numeroId", "primerNombre", "segundoNombre", "primerApellido", "segundoApellido",
@@ -196,7 +219,7 @@ export async function insertBeneficiarioTx(
      b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
      contrato, plataforma || null, vigencia || null, finalContrato,
      b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon, realNivel, realStep, userLogin,
-     b.apoderado || null, b.apoderadoTelefono || null, b.apoderadoMail || null,
+     apoderado, apoderadoTelefono, apoderadoMail,
      b.domicilio || null, b.ciudad || null]
   );
 
