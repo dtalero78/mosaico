@@ -1,5 +1,7 @@
 'use client'
 
+import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
+
 /**
  * Cascada Campaña → Curso → Horario (+ Salón / Final del curso / userLogin) sobre
  * CURSOS_CAMPAIGN. Componente compartido por Crear Contrato y Migrar Contrato.
@@ -36,6 +38,12 @@ export default function CursoCampaignFields({
   ));
   const horarioRows = rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso);
   const selectedRow = horarioRows.find(r => r.horarioCurso === horarioCurso);
+  // ¿Algún salón de este curso está sin cupo? Se avisa debajo del dropdown para
+  // que se entienda por qué hay opciones deshabilitadas.
+  const hayLlenos = horarioRows.some(r => {
+    const cap = r.numeroUsuarios ?? 0;
+    return cap > 0 && cap - (r.usuInscritos ?? 0) <= 0;
+  });
   const fmtDate = (d?: string | null) => (d ? String(d).slice(0, 10) : '—');
   const sel = 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed';
   const lbl = 'block text-sm font-medium text-gray-700 mb-1';
@@ -66,13 +74,19 @@ export default function CursoCampaignFields({
             const cap = r.numeroUsuarios ?? 0;
             const cupos = cap - (r.usuInscritos ?? 0);
             const full = cap > 0 && cupos <= 0;
+            // El cupo es POR SALÓN (cada fila de CURSOS_CAMPAIGN es un salón).
+            // Sin cupo no se puede seleccionar: para meter otro alumno hay que
+            // AMPLIAR el salón desde Académico › Campañas.
             return (
               <option key={r.horarioCurso} value={r.horarioCurso} disabled={full}>
-                {r.horarioCurso} — {full ? 'FULL' : `${cupos} cupos`}
+                {r.horarioCurso}{r.salon ? ` · Salón ${r.salon}` : ''} — {full ? 'SIN CUPO' : `${cupos} cupos`}
               </option>
             );
           })}
         </select>
+        {hayLlenos && (
+          <p className="mt-1 text-xs text-red-600">{MENSAJE_SIN_CUPO}</p>
+        )}
       </div>
       {selectedRow && (
         <>

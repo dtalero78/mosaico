@@ -3,6 +3,13 @@
  * Sin 'server-only' — lo usan el wizard de contratos y el admin Crea Campaña.
  */
 
+/**
+ * Mensaje único cuando un salón ya no tiene cupo. Vive aquí (cliente+servidor)
+ * para que el wizard y el backend digan exactamente lo mismo: sin sobrecupo, el
+ * curso se amplía desde Académico antes de meter más alumnos.
+ */
+export const MENSAJE_SIN_CUPO = 'Salón sin cupo, consulte al área académica.';
+
 // Tipos de curso en ORDEN de visualización (menores → adultos).
 export const TIPOS_CURSO = ['YOJI', 'OKINA', 'KODOMO', 'DANSHI', 'SENPAI', 'IMPULSA'] as const;
 export type TipoCurso = typeof TIPOS_CURSO[number];

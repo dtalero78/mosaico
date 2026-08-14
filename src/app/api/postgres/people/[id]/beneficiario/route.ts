@@ -5,6 +5,7 @@ import { PersonPermission } from '@/types/permissions';
 import { query, queryOne, transaction } from '@/lib/postgres';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
 import { cupoOcupadoSql } from '@/lib/cupo';
+import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
 import {
   insertBeneficiarioTx,
   incrementarCupoCurso,
@@ -83,7 +84,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     throw new ValidationError(`El curso ${body.tipoCurso} ${body.horarioCurso} no existe en la campaña ${body.campaign}`);
   }
   if (curso.cupos > 0 && curso.inscritos >= curso.cupos) {
-    throw new ValidationError(`El curso ${body.tipoCurso} ${body.horarioCurso} está lleno (${curso.inscritos}/${curso.cupos})`);
+    throw new ValidationError(`${MENSAJE_SIN_CUPO} (${body.tipoCurso} ${body.horarioCurso}${curso.salon ? ` · Salón ${curso.salon}` : ''}: ${curso.inscritos}/${curso.cupos})`);
   }
 
   const b: BeneficiarioInput = {

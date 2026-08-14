@@ -8,6 +8,8 @@ import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
 import { resolverLiderComercial, type LiderComercial } from '@/lib/crm';
 import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 import { apoderadoPorDefectoEsTitular, resolverApoderado } from '@/lib/apoderado';
+import { cupoOcupadoSql } from '@/lib/cupo';
+import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
 
 /**
  * Regla numeroId MOSAICO:
@@ -138,17 +140,42 @@ export async function insertBeneficiarioTx(
   const { b, titularId, contrato, plataforma, vigencia, finalContrato } = args;
   const benefId = ids.person();
 
-  // Resolver el curso desde CURSOS_CAMPAIGN: salón + inicioCurso
+  // Resolver el curso desde CURSOS_CAMPAIGN: salón + inicioCurso + cupos
   let salon: string | null = null;
   let inicioCurso: string | null = null;
   if (b.campaign && b.tipoCurso && b.horarioCurso) {
     const cr = await client.query(
-      `SELECT "_id", "salon", "inicioCurso" FROM "CURSOS_CAMPAIGN"
-       WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
+      `SELECT "_id", "salon", "inicioCurso", COALESCE("numeroUsuarios", 0) AS cupos
+         FROM "CURSOS_CAMPAIGN"
+        WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
       [b.campaign, b.tipoCurso, b.horarioCurso]
     );
     salon = cr.rows[0]?.salon || null;
     inicioCurso = cr.rows[0]?.inicioCurso || null;
+
+    // ── Cupo: NO hay sobrecupo. Para meter más alumnos hay que AMPLIAR el curso ──
+    // Se valida aquí y no en cada endpoint porque por esta función pasan TODOS los
+    // caminos que crean un beneficiario (Crear Contrato, Migrar Contrato, importar
+    // PDF, bulk y el alta sobre un contrato existente). Antes sólo lo frenaba el
+    // dropdown del wizard, y por eso hay cursos con sobrecupo en la base.
+    // El conteo corre dentro de la MISMA transacción, así que dos hermanos del
+    // mismo contrato al mismo curso se cuentan uno tras otro.
+    const cupos = Number(cr.rows[0]?.cupos ?? 0);
+    if (cupos > 0) {
+      const oc = await client.query(
+        `SELECT COUNT(*)::int AS n FROM "PEOPLE" pe
+          WHERE pe."tipoUsuario" = 'BENEFICIARIO'
+            AND pe."campaign" = $1 AND pe."tipoCurso" = $2 AND pe."horarioCurso" = $3
+            AND ${cupoOcupadoSql('pe')}`,
+        [b.campaign, b.tipoCurso, b.horarioCurso]
+      );
+      const inscritos = Number(oc.rows[0]?.n ?? 0);
+      if (inscritos >= cupos) {
+        throw new ValidationError(
+          `${MENSAJE_SIN_CUPO} (${b.tipoCurso} ${b.horarioCurso}${salon ? ` · Salón ${salon}` : ''}: ${inscritos}/${cupos})`
+        );
+      }
+    }
   }
 
   // userLogin del estudiante (viene del wizard; fallback server-side). 10 chars,
