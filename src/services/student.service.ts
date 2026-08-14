@@ -145,6 +145,15 @@ export async function promoteFromWelcome(
   );
   if (!academic) throw new NotFoundError('Registro académico', academicId);
 
+  // Sólo se promueve a quien ESTÁ en el curso puente WELCOME. Sin esta guarda,
+  // ejecutarlo sobre un alumno ya promovido le copiaba encima el módulo/lección de
+  // PEOPLE —normalmente Modulo 00 / Leccion 00— y le BORRABA el avance del curso.
+  if (String(academic.curso || '').trim().toUpperCase() !== 'WELCOME') {
+    throw new ValidationError(
+      `Sólo se puede promover a un alumno que esté en el curso WELCOME. Éste ya está en "${academic.curso || '(sin curso)'}".`
+    );
+  }
+
   // PEOPLE del beneficiario: por peopleId; fallback por numeroId (BENEFICIARIO).
   // `fechaOnHold` y `finalContrato` se traen para decidir si el alumno queda
   // operativo al promoverlo (ver más abajo).
