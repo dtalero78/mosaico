@@ -3,6 +3,44 @@ import { createEvent } from '@/services/calendar.service';
 import { ValidationError } from '@/lib/errors';
 
 /**
+ * Deriva, de lo que manda el modal, los campos que se guardan en CALENDARIO.
+ *
+ * Existe como función porque la usan el evento PADRE y cada CURSO HIJO de un
+ * grupo compartido: si el hijo no pasara por aquí quedaría con el título y la
+ * lección del padre, que son de otro curso.
+ *
+ * TALLER/OLIMPIADA van a nivel de CURSO (nivel=curso, step=Lección,
+ * nombreEvento=Tipo de club); el resto usa nivel=Módulo y step=Lección.
+ */
+function derivarCamposEvento(v: {
+  esTaller: boolean;
+  curso?: string | null;
+  modulo?: string | null;
+  leccion?: string | null;
+  club?: string | null;
+  titulo?: string | null;
+}) {
+  const curso = String(v.curso || '').trim();
+  if (v.esTaller) {
+    const nombreEvento = v.club || undefined;
+    const tituloONivel = curso && curso !== 'Todos'
+      ? `${curso}${v.club ? ` - ${v.club}` : ''}`
+      : (v.club || curso || '');
+    return { nivel: curso || undefined, step: v.leccion || undefined, nombreEvento, tituloONivel };
+  }
+  const nivel = v.modulo || undefined;
+  const step = v.leccion || undefined;
+  let tituloONivel = v.titulo || v.leccion || '';
+  if (nivel) tituloONivel = nivel + (step ? ` - ${step}` : '');
+  // Display "Curso - Módulo - Lección" cuando hay un curso real.
+  if (curso && curso !== 'Todos') {
+    const extras = [nivel, step].filter((x) => x && x !== 'Todos').join(' - ');
+    tituloONivel = extras ? `${curso} - ${extras}` : curso;
+  }
+  return { nivel, step, nombreEvento: step, tituloONivel };
+}
+
+/**
  * POST /api/postgres/events
  *
  * Create a new event in the calendar.
@@ -25,53 +63,50 @@ export const POST = handlerWithAuth(async (request) => {
   // guardado, para poder filtrarlas y pintarlas aparte.
   const esTaller = eventTipoRaw === 'CLUB' || eventTipoRaw === 'OLIMPIADA';
 
-  let nivel: string | undefined;
-  let step: string | undefined;
-  let nombreEventoFinal: string | undefined;
-  let tituloONivel: string;
-
-  if (esTaller) {
-    // TALLER (CLUB): a nivel de CURSO. body.club = Tipo (club de NIVELES.clubs),
-    // body.leccion = Lección ('Todos' = todo el curso accede). nivel=curso,
-    // step=Lección, nombreEvento=Tipo, display="Curso - Tipo".
-    nivel = body.curso || undefined;
-    step = body.leccion || undefined;
-    nombreEventoFinal = body.club || undefined;
-    tituloONivel = body.curso && body.curso !== 'Todos'
-      ? `${body.curso}${body.club ? ` - ${body.club}` : ''}`
-      : (body.club || body.curso || '');
-  } else {
-    nivel = body.nivel || body.tituloONivel || undefined;
-    step = body.nombreEvento || body.step || undefined;
-    nombreEventoFinal = body.nombreEvento || step;
-    tituloONivel = body.titulo || body.nombreEvento || '';
-    if (nivel) {
-      tituloONivel = nivel + (step ? ` - ${step}` : '');
-    }
-    // Nombre de display = "Curso - Módulo - Lección" cuando hay un curso real.
-    //  - WELCOME: "WELCOME - MOSAICO - Leccion 00"; Sesión/Nivelación YOJI:
-    //  "YOJI - Modulo 01 - Leccion 01" (o "YOJI" si módulo/lección = Todos).
-    if (body.curso && body.curso !== 'Todos') {
-      const extras = [nivel, step].filter((x: string | undefined) => x && x !== 'Todos').join(' - ');
-      tituloONivel = extras ? `${body.curso} - ${extras}` : body.curso;
-    }
-  }
+  // Módulo y Lección del padre: el modal los manda en tituloONivel/nombreEvento
+  // (nombres heredados) o, para Taller, en curso/club/leccion.
+  const base = derivarCamposEvento({
+    esTaller,
+    curso: body.curso,
+    modulo: body.nivel || body.tituloONivel,
+    leccion: esTaller ? body.leccion : (body.nombreEvento || body.step),
+    club: body.club,
+    titulo: body.titulo,
+  });
+  const nivel = base.nivel;
+  const step = base.step;
+  const nombreEventoFinal = base.nombreEvento;
+  const tituloONivel = base.tituloONivel;
 
   // WELCOME es un CURSO en el modal (no un tipo) → tipo='WELCOME' (morado).
   const tipoFinal = body.curso === 'WELCOME' ? 'WELCOME' : (eventTipoRaw || 'SESSION');
 
-  // body.compartidoCon (opcional): array de niveles adicionales para crear
-  // un grupo compartido (1-2 elementos). Cada elemento puede traer su propio
-  // step / nombreEvento / tituloONivel; si no, se reutilizan los del base.
+  // body.compartidoCon (opcional): los CURSOS ADICIONALES del grupo compartido
+  // (1-2). Cada uno trae su propio alcance —campaña, curso, salón— y su propia
+  // lección; los campos de CALENDARIO se derivan con la MISMA regla que el
+  // padre, para que ningún hijo herede el título ni la lección de otro curso.
   const compartidoCon = Array.isArray(body.compartidoCon)
     ? body.compartidoCon
-        .filter((c: any) => c && typeof c.nivel === 'string' && c.nivel.trim())
-        .map((c: any) => ({
-          nivel: c.nivel.trim(),
-          step: typeof c.step === 'string' ? c.step.trim() : undefined,
-          nombreEvento: typeof c.nombreEvento === 'string' ? c.nombreEvento.trim() : undefined,
-          tituloONivel: typeof c.tituloONivel === 'string' ? c.tituloONivel.trim() : undefined,
-        }))
+        .filter((c: any) => c && typeof c.curso === 'string' && c.curso.trim())
+        .map((c: any) => {
+          const d = derivarCamposEvento({
+            esTaller,
+            curso: c.curso,
+            modulo: c.modulo ?? c.nivel,
+            leccion: c.leccion ?? c.step,
+            club: c.club ?? body.club,
+            titulo: c.titulo,
+          });
+          return {
+            campaign: typeof c.campaign === 'string' && c.campaign.trim() ? c.campaign.trim() : null,
+            curso: c.curso.trim(),
+            salon: typeof c.salon === 'string' && c.salon.trim() ? c.salon.trim() : null,
+            nivel: d.nivel,
+            step: d.step,
+            nombreEvento: d.nombreEvento,
+            tituloONivel: d.tituloONivel,
+          };
+        })
     : undefined;
 
   const event = await createEvent({

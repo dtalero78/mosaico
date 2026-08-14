@@ -12,7 +12,7 @@ import { AdvisorEventLogRepository } from '@/repositories/advisor-event-log.repo
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { withTransaction } from '@/lib/postgres';
-import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS, extractClubPrefix } from '@/lib/evento-compartido';
+import { MAX_CURSOS_COMPARTIDOS, claveCursoCompartido } from '@/lib/evento-compartido';
 import { eventDurationMin } from '@/lib/event-duration';
 
 const MAX_ADVISOR_REASSIGNMENTS = 2;
@@ -61,13 +61,16 @@ export async function getEventById(eventId: string) {
 /**
  * Create a new calendar event.
  *
- * Si `data.compartidoCon` viene con 1-2 elementos, se crea un grupo compartido:
- *   - El evento base + las filas adicionales reciben el MISMO `eventoCompartidoId` (UUID).
- *   - Cada fila adicional tiene su propio nivel + step pero comparte advisor,
- *     hora, tipo, zoom, límite.
- *   - Solo se permite si `isEventoCompartible(tipo, step)` es true.
- *   - Devuelve el evento base; los hermanos quedan en BD para que cada nivel
- *     los vea normalmente.
+ * Si `data.compartidoCon` viene con 1-2 elementos, se crea un grupo compartido
+ * ENTRE CURSOS — una misma clase del guía replicada en 2-3 filas:
+ *   - Todas las filas reciben el MISMO `eventoCompartidoId` (UUID), y por eso
+ *     los KPIs del guía la cuentan como 1 sola hora.
+ *   - Cada hermano lleva su propia **campaña, curso, salón, módulo y lección**;
+ *     comparten guía, fecha/hora, tipo, zoom y límite.
+ *   - Cualquier tipo de evento es compartible (la regla de Jumps/MASTER era del
+ *     motor de Steps de LGS, que MOSAICO no usa).
+ *   - Devuelve el evento base; los hermanos quedan en BD para que los alumnos
+ *     de cada curso lo vean desde su panel.
  */
 export async function createEvent(data: {
   dia: string;
@@ -88,8 +91,15 @@ export async function createEvent(data: {
   campaign?: string;
   curso?: string;
   salon?: string;
-  /** Niveles adicionales para evento compartido (max MAX_NIVELES_COMPARTIDOS-1). */
-  compartidoCon?: Array<{ nivel: string; step?: string; nombreEvento?: string; tituloONivel?: string }>;
+  /**
+   * Cursos adicionales del evento compartido (máx MAX_CURSOS_COMPARTIDOS-1).
+   * El route ya deriva nivel/step/nombreEvento/tituloONivel de cada hermano con
+   * la misma regla que el base, así que aquí llegan listos para insertar.
+   */
+  compartidoCon?: Array<{
+    campaign?: string | null; curso?: string | null; salon?: string | null;
+    nivel?: string; step?: string; nombreEvento?: string; tituloONivel?: string;
+  }>;
 }) {
   if (!data.dia) throw new ValidationError('dia is required');
   if (!data.hora) throw new ValidationError('hora is required');
@@ -97,42 +107,29 @@ export async function createEvent(data: {
 
   const tipo = data.tipo;
 
-  // Validación de compartibilidad: si vienen niveles adicionales,
-  // verificamos que el evento base sea compartible y que los niveles
-  // adicionales sean distintos al base + únicos entre sí.
+  // Grupo compartido entre cursos: el padre + hasta 2 hijos, cada uno con su
+  // propia campaña/curso/salón. Lo único que se exige es que el destino de cada
+  // fila sea distinto — el resto lo comparten por definición.
   const compartidoCon = Array.isArray(data.compartidoCon) ? data.compartidoCon : [];
   const isCompartido = compartidoCon.length > 0;
   let eventoCompartidoId: string | null = null;
 
   if (isCompartido) {
-    if (compartidoCon.length > MAX_NIVELES_COMPARTIDOS - 1) {
-      throw new ValidationError(`Máximo ${MAX_NIVELES_COMPARTIDOS - 1} niveles adicionales (total ${MAX_NIVELES_COMPARTIDOS}).`);
+    if (compartidoCon.length > MAX_CURSOS_COMPARTIDOS - 1) {
+      throw new ValidationError(`Máximo ${MAX_CURSOS_COMPARTIDOS - 1} cursos adicionales (total ${MAX_CURSOS_COMPARTIDOS}).`);
     }
-    if (!isEventoCompartible(tipo, data.step)) {
-      throw new ValidationError(reasonNotCompartible(tipo, data.step) || 'Este evento no se puede compartir.');
+    // Cada hijo necesita curso: es lo que lo distingue del padre.
+    if (compartidoCon.some(c => !String(c.curso || '').trim())) {
+      throw new ValidationError('Cada curso adicional del grupo debe indicar su curso.');
     }
-    const baseNivel = (data.nivel || '').trim().toUpperCase();
-    const todosNiveles = [baseNivel, ...compartidoCon.map(c => (c.nivel || '').trim().toUpperCase())];
-    const uniqueLevels = new Set(todosNiveles.filter(Boolean));
-    if (uniqueLevels.size !== todosNiveles.length) {
-      throw new ValidationError('Los niveles del grupo compartido deben ser distintos.');
-    }
-    // Si el evento base es CLUB, los hermanos deben ser del MISMO tipo de club
-    // (no mezclar KARAOKE con LISTENING, etc.). Para SESSION Jumps no aplica
-    // porque cada nivel tiene su step numérico distinto.
-    if ((tipo || '').toUpperCase() === 'CLUB') {
-      const basePrefix = extractClubPrefix(data.step);
-      if (!basePrefix) {
-        throw new ValidationError('No se pudo determinar el tipo de club del step base.');
-      }
-      for (const adic of compartidoCon) {
-        const adicPrefix = extractClubPrefix(adic.step);
-        if (adicPrefix !== basePrefix) {
-          throw new ValidationError(
-            `Todos los niveles del grupo deben ser del mismo tipo de club. Base = ${basePrefix}, nivel ${adic.nivel} = ${adicPrefix || 'desconocido'}.`,
-          );
-        }
-      }
+    // El destino de una fila es (campaña, curso, salón). Repetirlo sería crear
+    // dos veces el mismo evento para el mismo grupo de alumnos.
+    const claves = [
+      claveCursoCompartido({ campaign: data.campaign, curso: data.curso, salon: data.salon }),
+      ...compartidoCon.map(claveCursoCompartido),
+    ];
+    if (new Set(claves).size !== claves.length) {
+      throw new ValidationError('Los cursos del grupo compartido deben ser distintos (campaña + curso + salón).');
     }
     eventoCompartidoId = randomUUID();
   }
@@ -140,7 +137,7 @@ export async function createEvent(data: {
   // ── Regla MOSAICO: un guía NO puede tener dos eventos que se solapen ──
   // La duración del evento nuevo se deriva del tipo (NIVELACION=30, resto=60).
   // Se chequea contra los eventos que YA existen en la BD para ese guía. La
-  // única excepción son los eventos compartidos entre niveles (mismo guía/hora),
+  // única excepción son los eventos compartidos entre cursos (mismo guía/hora),
   // que se crean como un grupo — sus hermanos se insertan en la misma
   // transacción y comparten `eventoCompartidoId` (se excluyen del chequeo).
   // NOTA: en MOSAICO aún no se ha definido el uso de eventos compartidos.
@@ -191,21 +188,23 @@ export async function createEvent(data: {
   return withTransaction(async (client) => {
     const baseRow = await CalendarioRepository.create(baseEventData, client);
     for (const adic of compartidoCon) {
+      // Cada hijo pisa su ALCANCE (campaña/curso/salón) y su lección; hereda del
+      // padre lo que por definición comparten: guía, fecha/hora, tipo, zoom y
+      // límite. El route ya derivó nivel/step/nombreEvento/tituloONivel de este
+      // hijo con la misma regla que el padre (Taller vs Sesión), así que aquí
+      // sólo se cae al valor del padre si algo viniera vacío.
       const adicNivel = (adic.nivel || '').trim();
-      const adicStep  = (adic.step  || data.step || '').trim();
-      // El `step` y el `nombreEvento` son lo mismo para CLUB ("KARAOKE - Step 18")
-      // y SESSION ("Step 5") — son la opción que el admin eligió en el dropdown.
-      // Si el frontend no manda nombreEvento explícito, lo derivamos del step
-      // del ADICIONAL (no del base). Esto fixea el bug donde los 3 hermanos
-      // del grupo quedaban con el mismo nombre del base aunque tuvieran steps
-      // distintos en BD.
+      const adicStep  = (adic.step  || '').trim();
       const adicNombreEvento = (adic.nombreEvento || adicStep || data.nombreEvento || data.titulo || '').trim();
-      const adicTituloONivel = adic.tituloONivel
-        || (adicNivel ? `${adicNivel} - ${adicNombreEvento || adicStep}`.trim() : '');
+      const adicTituloONivel = (adic.tituloONivel || '').trim()
+        || [adic.curso, adicNivel, adicNombreEvento].filter(Boolean).join(' - ');
       const siblingData = {
         ...baseEventData,
         _id: ids.event(),
-        nivel: adicNivel,
+        campaign: adic.campaign ?? baseEventData.campaign,
+        curso: adic.curso ?? baseEventData.curso,
+        salon: adic.salon ?? baseEventData.salon,
+        nivel: adicNivel || baseEventData.nivel,
         step: adicStep || null,
         nombreEvento: adicNombreEvento,
         tituloONivel: adicTituloONivel,

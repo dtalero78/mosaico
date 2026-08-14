@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { XMarkIcon } from '@heroicons/react/24/outline'
-import { isEventoCompartible, reasonNotCompartible, MAX_NIVELES_COMPARTIDOS, extractClubPrefix } from '@/lib/evento-compartido'
+import { MAX_CURSOS_COMPARTIDOS, claveCursoCompartido, extractClubPrefix } from '@/lib/evento-compartido'
 
 interface CalendarEvent {
   _id: string
@@ -103,7 +103,11 @@ export default function EventModal({
   // la composición del grupo, sólo los campos comunes que se propagan).
   // Cada entrada del array es un nivel adicional con su propio step.
   const [compartidoActivo, setCompartidoActivo] = useState(false)
-  const [compartidoCon, setCompartidoCon] = useState<Array<{ nivel: string; step: string; options: StepOption[] }>>([])
+  // Cada hijo del grupo lleva su PROPIO alcance (campaña, curso, salón) y su
+  // propia lección — es justo lo que lo distingue del padre.
+  const [compartidoCon, setCompartidoCon] = useState<Array<{
+    campaign: string; curso: string; salon: string; modulo: string; leccion: string
+  }>>([])
 
   // Cargar códigos únicos al montar el componente
   useEffect(() => {
@@ -506,17 +510,14 @@ export default function EventModal({
   // que el admin "convierta" un evento existente en compartido (eso requiere
   // crear los hermanos desde 0).
   // Los eventos WELCOME (curso WELCOME) NO se comparten entre niveles.
-  const esWelcome = formData.curso === 'WELCOME'
-  const compartibleHabilitado = !isEditMode && !esWelcome
-    && isEventoCompartible(formData.evento, formData.nombreEvento)
+  // En MOSAICO cualquier tipo de evento se puede compartir: lo único que lo
+  // impide es estar EDITANDO (la composición del grupo se define al crear).
+  const compartibleHabilitado = !isEditMode
   const compartibleMotivo = isEditMode
     ? 'Para compartir entre cursos crea un evento nuevo desde 0 — al editar uno existente sólo cambian sus campos.'
-    : esWelcome
-      ? 'Los eventos WELCOME no se comparten entre cursos.'
-      : reasonNotCompartible(formData.evento, formData.nombreEvento)
+    : null
 
-  // Si el toggle queda activo pero el step deja de ser compartible (ej. admin
-  // cambió de SESSION Step 5 a Step 6), apagamos el toggle automáticamente.
+  // Si se entra a modo edición con el toggle activo, se apaga.
   useEffect(() => {
     if (!compartibleHabilitado && compartidoActivo) {
       setCompartidoActivo(false)
@@ -524,9 +525,11 @@ export default function EventModal({
     }
   }, [compartibleHabilitado, compartidoActivo])
 
-  // Niveles disponibles para agregar al grupo: cualquiera distinto al base y
-  // que no esté ya elegido por otra entrada del array.
-  const nivelesUsados = new Set<string>([formData.tituloONivel, ...compartidoCon.map(c => c.nivel)])
+  // Destinos ya usados (padre + hijos): no se puede repetir campaña+curso+salón.
+  const destinosUsados = new Set<string>([
+    claveCursoCompartido({ campaign: formData.campaign, curso: formData.curso, salon: formData.salon }),
+    ...compartidoCon.map(claveCursoCompartido),
+  ])
 
   // Prefijo de club del evento BASE (ej. "KARAOKE" si nombreEvento = "KARAOKE - Step 16").
   // Para SESSION devuelve null. Se usa para filtrar las opciones de step de
@@ -535,56 +538,50 @@ export default function EventModal({
     ? extractClubPrefix(formData.nombreEvento)
     : null
 
-  const agregarNivelCompartido = () => {
-    if (compartidoCon.length >= MAX_NIVELES_COMPARTIDOS - 1) return
-    setCompartidoCon([...compartidoCon, { nivel: '', step: '', options: [] }])
+  // ── Cursos adicionales del grupo compartido ──
+  // Cada hijo se arma con la MISMA cascada que el padre (Campaña → Curso →
+  // Salón → Módulo → Lección), leyendo de las mismas fuentes: `cursosCampaign`
+  // para el alcance y `modulosByCurso` para el currículo del curso elegido.
+  const campaniasDisponibles = Array.from(new Set(cursosCampaign.map(r => r.campaign).filter(Boolean)))
+  const cursosDeCampania = (campaign: string) =>
+    Array.from(new Set(cursosCampaign.filter(r => !campaign || r.campaign === campaign).map(r => r.tipoCurso).filter(Boolean)))
+  const salonesDeCurso = (campaign: string, curso: string) =>
+    Array.from(new Set(cursosCampaign
+      .filter(r => (!campaign || r.campaign === campaign) && r.tipoCurso === curso)
+      .map(r => r.salon).filter(Boolean))) as string[]
+  const modulosDeCurso = (curso: string) => modulosByCurso[curso] || []
+  const leccionesDeModulo = (curso: string, modulo: string) =>
+    modulosDeCurso(curso).find(m => m.code === modulo)?.steps || []
+  // Taller/Olimpiada van a nivel de curso: el hijo elige lección de TODO el curso.
+  const leccionesDeCurso = (curso: string) =>
+    Array.from(new Set(modulosDeCurso(curso).flatMap(m => m.steps)))
+
+  const agregarCursoCompartido = () => {
+    if (compartidoCon.length >= MAX_CURSOS_COMPARTIDOS - 1) return
+    // La campaña del padre viene precargada porque es el caso habitual, pero
+    // se puede cambiar: un grupo puede juntar cohortes de campañas distintas.
+    setCompartidoCon([...compartidoCon, { campaign: formData.campaign || '', curso: '', salon: '', modulo: '', leccion: '' }])
   }
-  const quitarNivelCompartido = (idx: number) => {
+  const quitarCursoCompartido = (idx: number) => {
     setCompartidoCon(compartidoCon.filter((_, i) => i !== idx))
   }
-  const actualizarNivelCompartido = (idx: number, nivel: string) => {
-    const options = getOptionsForNivelTipo(nivel, formData.evento, baseClubPrefix)
-
-    // Auto-sugerencia del step pedagógico equivalente.
-    // baseStepRaw para CLUB es "LISTENING - Step 3", para SESSION es "Step 5".
-    const baseStepRaw = formData.nombreEvento || ''
-    const baseStepN = extractStepNumber(baseStepRaw)
-    const baseNivelCode = formData.tituloONivel
-    const offset = calcStepOffset(baseNivelCode, nivel)
-    let stepSugerido = ''
-    if (baseStepN != null && offset !== 0) {
-      const sugeridoN = baseStepN + offset
-      const sugeridoStr = replaceStepNumber(baseStepRaw, sugeridoN)
-      // Solo aplicamos si la opción realmente existe en este nivel
-      if (options.some(o => o.value === sugeridoStr)) {
-        stepSugerido = sugeridoStr
+  /** Actualiza un hijo; al cambiar campaña o curso limpia lo que queda abajo en
+   *  la cascada (un salón/módulo de otro curso no tiene sentido aquí). */
+  const actualizarCursoCompartido = (idx: number, patch: Partial<{ campaign: string; curso: string; salon: string; modulo: string; leccion: string }>) => {
+    setCompartidoCon(prev => prev.map((c, i) => {
+      if (i !== idx) return c
+      const next = { ...c, ...patch }
+      if (patch.campaign !== undefined && patch.campaign !== c.campaign) {
+        next.curso = ''; next.salon = ''; next.modulo = ''; next.leccion = ''
       }
-    }
-
-    setCompartidoCon(compartidoCon.map((c, i) =>
-      i === idx ? { ...c, nivel, step: stepSugerido, options } : c
-    ))
-  }
-  const actualizarStepCompartido = (idx: number, step: string) => {
-    setCompartidoCon(compartidoCon.map((c, i) =>
-      i === idx ? { ...c, step } : c
-    ))
-  }
-
-  // Si el admin cambia el step base (ej. de KARAOKE a LISTENING) después de
-  // haber agregado niveles adicionales, las opciones de step ya cacheadas
-  // pueden volverse inválidas. Las recargamos con el nuevo prefijo y
-  // limpiamos el step seleccionado si ya no es válido.
-  useEffect(() => {
-    if (compartidoCon.length === 0) return
-    setCompartidoCon(prev => prev.map(c => {
-      if (!c.nivel) return c
-      const newOptions = getOptionsForNivelTipo(c.nivel, formData.evento, baseClubPrefix)
-      const stepStillValid = newOptions.some(o => o.value === c.step)
-      return { ...c, options: newOptions, step: stepStillValid ? c.step : '' }
+      if (patch.curso !== undefined && patch.curso !== c.curso) {
+        next.salon = ''; next.modulo = ''; next.leccion = ''
+        if (patch.curso) loadModulos(patch.curso)   // idempotente (caché por curso)
+      }
+      if (patch.modulo !== undefined && patch.modulo !== c.modulo) next.leccion = ''
+      return next
     }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseClubPrefix, formData.evento])
+  }
 
   const cargarNombreStep = () => {
     const nivelSeleccionado = formData.tituloONivel
@@ -689,17 +686,27 @@ export default function EventModal({
       const dateTimeString = `${formData.fecha}T${formData.hora}:00`
       const eventDateTime = new Date(dateTimeString)
 
-      // Si el toggle "Evento compartido" está activo, validamos que cada
-      // entrada tenga nivel y step elegidos. La validación de compartibilidad
-      // y unicidad de niveles la repite el backend como defensa en profundidad.
-      let compartidoConPayload: Array<{ nivel: string; step: string }> | undefined
+      // Evento compartido: cada curso adicional necesita al menos su curso.
+      // La unicidad de destinos (campaña+curso+salón) la repite el backend como
+      // defensa en profundidad.
+      let compartidoConPayload: Array<Record<string, string>> | undefined
       if (compartidoActivo && compartidoCon.length > 0) {
-        const incompletos = compartidoCon.filter(c => !c.nivel || !c.step)
-        if (incompletos.length > 0) {
-          setError('Completa nivel y step en cada nivel adicional del evento compartido.')
+        if (compartidoCon.some(c => !c.curso)) {
+          setError('Elige el curso de cada curso adicional del evento compartido.')
           return
         }
-        compartidoConPayload = compartidoCon.map(c => ({ nivel: c.nivel, step: c.step }))
+        const claves = [
+          claveCursoCompartido({ campaign: formData.campaign, curso: formData.curso, salon: formData.salon }),
+          ...compartidoCon.map(claveCursoCompartido),
+        ]
+        if (new Set(claves).size !== claves.length) {
+          setError('Los cursos del grupo deben ser distintos (campaña + curso + salón).')
+          return
+        }
+        compartidoConPayload = compartidoCon.map(c => ({
+          campaign: c.campaign, curso: c.curso, salon: c.salon,
+          modulo: c.modulo, leccion: c.leccion,
+        }))
       }
 
       // Preparar datos para enviar
@@ -1089,62 +1096,77 @@ export default function EventModal({
                     </label>
                     <p className="text-xs text-gray-500 mt-1">
                       {compartibleHabilitado
-                        ? `Crea el mismo evento en hasta ${MAX_NIVELES_COMPARTIDOS - 1} cursos adicionales (misma hora/guía/zoom). Para el guía cuenta como 1 sola hora.`
-                        : (compartibleMotivo || 'Selecciona primero un nivel y step compartible.')}
+                        ? `Crea la misma clase en hasta ${MAX_CURSOS_COMPARTIDOS - 1} cursos adicionales, cada uno con su salón y su lección (misma hora, guía y Zoom). Para el guía cuenta como 1 sola hora.`
+                        : compartibleMotivo}
                     </p>
                   </div>
                 </div>
 
                 {compartidoActivo && compartibleHabilitado && (
-                  <div className="mt-4 space-y-2">
-                    {compartidoCon.map((c, idx) => (
-                      <div key={idx} className="flex items-end gap-2 flex-wrap">
-                        <div className="flex-1 min-w-[140px]">
-                          <label className="block text-xs text-gray-600 mb-1">Módulo adicional #{idx + 1}</label>
-                          <select
-                            value={c.nivel}
-                            onChange={e => actualizarNivelCompartido(idx, e.target.value)}
-                            className="input w-full"
-                          >
-                            <option value="">— Seleccionar módulo —</option>
-                            {codigosNivel
-                              .filter(code => !nivelesUsados.has(code) || code === c.nivel)
-                              .map(code => (
-                                <option key={code} value={code}>{code}</option>
-                              ))}
-                          </select>
+                  <div className="mt-4 space-y-3">
+                    {compartidoCon.map((c, idx) => {
+                      const cursos = cursosDeCampania(c.campaign)
+                      const salones = salonesDeCurso(c.campaign, c.curso)
+                      const modulos = modulosDeCurso(c.curso)
+                      const lecciones = esTaller ? leccionesDeCurso(c.curso) : leccionesDeModulo(c.curso, c.modulo)
+                      return (
+                        <div key={idx} className="rounded-lg border border-indigo-200 bg-white p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-indigo-800">Curso adicional #{idx + 1}</span>
+                            <button type="button" onClick={() => quitarCursoCompartido(idx)}
+                              className="text-xs text-red-600 hover:text-red-800" title="Quitar este curso del grupo">✕ Quitar</button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Campaña</label>
+                              <select value={c.campaign} onChange={e => actualizarCursoCompartido(idx, { campaign: e.target.value })} className="input w-full">
+                                <option value="">— Campaña —</option>
+                                {campaniasDisponibles.map(cp => <option key={cp} value={cp}>{cp}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Curso *</label>
+                              <select value={c.curso} onChange={e => actualizarCursoCompartido(idx, { curso: e.target.value })} className="input w-full">
+                                <option value="">— Curso —</option>
+                                {cursos.map(cu => <option key={cu} value={cu}>{cu}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Salón</label>
+                              <select value={c.salon} onChange={e => actualizarCursoCompartido(idx, { salon: e.target.value })} className="input w-full" disabled={!c.curso}>
+                                <option value="">— Salón —</option>
+                                {salones.map(sa => <option key={sa} value={sa}>{sa}</option>)}
+                              </select>
+                            </div>
+                            {!esTaller && (
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">Módulo</label>
+                                <select value={c.modulo} onChange={e => actualizarCursoCompartido(idx, { modulo: e.target.value })} className="input w-full" disabled={!c.curso}>
+                                  <option value="">— Módulo —</option>
+                                  {modulos.map(m => <option key={m.code} value={m.code}>{m.code}</option>)}
+                                </select>
+                              </div>
+                            )}
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">Lección</label>
+                              <select value={c.leccion} onChange={e => actualizarCursoCompartido(idx, { leccion: e.target.value })}
+                                className="input w-full" disabled={!c.curso || (!esTaller && !c.modulo)}>
+                                <option value="">— Lección —</option>
+                                {esTaller && <option value={TODOS}>Todas</option>}
+                                {lecciones.map(le => <option key={le} value={le}>{le}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          {destinosUsados.size < compartidoCon.length + 1 && (
+                            <p className="text-[11px] text-red-600 mt-1">Este destino ya está en el grupo — cambia curso o salón.</p>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-[160px]">
-                          <label className="block text-xs text-gray-600 mb-1">Lección / Taller</label>
-                          <select
-                            value={c.step}
-                            onChange={e => actualizarStepCompartido(idx, e.target.value)}
-                            className="input w-full"
-                            disabled={!c.nivel}
-                          >
-                            <option value="">— Seleccionar —</option>
-                            {c.options.map(opt => (
-                              <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => quitarNivelCompartido(idx)}
-                          className="text-xs text-red-600 hover:text-red-800 px-2 py-1.5"
-                          title="Quitar este nivel del grupo"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                    {compartidoCon.length < MAX_NIVELES_COMPARTIDOS - 1 && (
-                      <button
-                        type="button"
-                        onClick={agregarNivelCompartido}
-                        className="text-xs text-indigo-700 hover:text-indigo-900 font-medium"
-                      >
-                        + Agregar nivel ({compartidoCon.length + 1} de {MAX_NIVELES_COMPARTIDOS - 1})
+                      )
+                    })}
+                    {compartidoCon.length < MAX_CURSOS_COMPARTIDOS - 1 && (
+                      <button type="button" onClick={agregarCursoCompartido}
+                        className="text-xs text-indigo-700 hover:text-indigo-900 font-medium">
+                        + Agregar curso ({compartidoCon.length + 1} de {MAX_CURSOS_COMPARTIDOS - 1})
                       </button>
                     )}
                   </div>
