@@ -91,3 +91,9 @@ docs/*.docx
 docs/Contenidos/
 docs/Imagenes Curso/
 docs/Contrato_Mosaico_Chile_parametrizado.txt
+
+# Cookie jar de los smoke-tests de login (contiene sesión)
+jar.txt
+# Herramientas y PDFs de trabajo local
+ensayos-tools/
+*.pdf
