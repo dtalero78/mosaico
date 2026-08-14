@@ -66,8 +66,9 @@ export const POST = handlerWithAuth(async (
   // Approve the person themselves (beneficiario suelto)
   const mainResult = await approveOnePerson(personId, contrato);
 
-  // ─── BENEFICIARIO: copy inicioContrato from titular + auto-approve titular if pending ───
-  let titularAutoApproved = false;
+  // ─── BENEFICIARIO: hereda inicioContrato del titular (al titular NO se le toca) ───
+  // Se mantiene en la respuesta por compatibilidad con el frontend; hoy siempre false.
+  const titularAutoApproved = false;
   if (person.tipoUsuario === 'BENEFICIARIO' && contrato) {
     const titular = await queryOne(
       `SELECT "_id", "aprobacion", "inicioContrato" FROM "PEOPLE"
@@ -85,15 +86,12 @@ export const POST = handlerWithAuth(async (
         console.log(`✅ [Approve] inicioContrato propagado al beneficiario: ${titular.inicioContrato}`);
       }
 
-      // Auto-approve titular if still pending
-      if (titular.aprobacion !== 'Aprobado') {
-        await query(
-          `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "_updatedDate" = NOW() WHERE "_id" = $1`,
-          [titular._id]
-        );
-        titularAutoApproved = true;
-        console.log(`✅ [Approve] Titular auto-aprobado: ${titular._id}`);
-      }
+      // El titular NO se toca: aprobar un beneficiario aprueba SÓLO a ese
+      // beneficiario. Antes se auto-aprobaba al titular escribiendo únicamente
+      // `aprobacion`, lo que lo dejaba "Aprobado" con `estado` en NULL (badge
+      // "Estado: Null") — 10 titulares quedaron así.
+      // Para aprobar el contrato completo están el Centro de Aprobaciones y el
+      // dropdown "Estado Actual → Aprobado" de la ficha, que sí cascadean.
     }
   }
 
