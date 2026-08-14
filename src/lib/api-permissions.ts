@@ -41,3 +41,19 @@ export async function requirePermission(session: Session | null, permission: Per
     throw new ForbiddenError(`Permiso requerido: ${permission}`);
   }
 }
+
+/**
+ * Igual que `requirePermission` pero basta con tener UNO de los permisos.
+ * Para endpoints que sirven a más de una pantalla — p. ej. el reporte de
+ * cuestionarios, que alimenta tanto Evaluaciones como Entrenamientos y a cuyos
+ * roles se les puede dar sólo uno de los dos accesos.
+ */
+export async function requireAnyPermission(session: Session | null, permissions: Permission[]): Promise<void> {
+  const role = ((session?.user as any)?.role ?? '') as string;
+  if (role === Role.SUPER_ADMIN || role === Role.ADMIN || role === 'admin') return;
+
+  const perms = await loadPermissions(role);
+  if (!permissions.some(p => perms.includes(p))) {
+    throw new ForbiddenError(`Permiso requerido: ${permissions.join(' o ')}`);
+  }
+}

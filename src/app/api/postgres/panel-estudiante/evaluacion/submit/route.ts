@@ -7,29 +7,57 @@ import { deriveCuestionarios, esRespuestaCorrecta } from '@/lib/cuestionarios'
 
 /**
  * POST /api/postgres/panel-estudiante/evaluacion/submit
- * Body: { cuestionarioId?, respuestas: [{ qId, selected }], iniciadaEn? }
+ * Body: { cuestionarioId?, respuestas: [{ qId, selected }], iniciadaEn?, code?, step? }
  *
- * Califica en el servidor las respuestas del alumno para UN cuestionario de la
- * lección actual (Evaluación/Entrenamiento) y guarda el evento en
- * EVALUACION_RESPUESTAS. La respuesta correcta nunca sale al cliente.
+ * Califica en el servidor las respuestas del alumno para UN cuestionario y
+ * guarda el evento en EVALUACION_RESPUESTAS. La respuesta correcta nunca sale
+ * al cliente.
+ *
+ * Por defecto opera sobre la lección ACTUAL. `code`/`step` permiten presentar
+ * un cuestionario PENDIENTE de una lección anterior desde el modal
+ * "Seguimiento" del panel; se valida que sea del mismo curso, de un módulo
+ * evaluable y que el alumno YA la haya alcanzado (orden <= el suyo) — nunca
+ * una evaluación futura.
  */
 export const POST = handlerWithAuth(async (req, _ctx, session) => {
   const student: any = await resolveStudentFromSession(session)
   const curso = student.tipoCurso || student.curso || ''
-  const nivel = student.nivel || ''
-  const step = student.step || ''
+  const nivelActual = student.nivel || ''
+  const stepActual = student.step || ''
   const academicaId = student.academicaId || student._id
   const numeroId = student.numeroId || null
   const nombre = [student.primerNombre, student.segundoNombre, student.primerApellido, student.segundoApellido]
     .filter(Boolean).join(' ').trim() || null
 
-  if (!curso || !/evaluac|entren/i.test(nivel)) {
-    throw new ValidationError('Tu lección actual no es una evaluación.')
-  }
-
   const body = await req.json().catch(() => ({}))
   const respuestasIn: Array<{ qId: any; selected: any }> = Array.isArray(body?.respuestas) ? body.respuestas : []
   const iniciadaEn = body?.iniciadaEn ? new Date(body.iniciadaEn) : null
+
+  // Lección objetivo: la actual, o la que pida el body si ya la alcanzó.
+  const pedidoCode = String(body?.code || '').trim()
+  const pedidoStep = String(body?.step || '').trim()
+  const otraLeccion = !!pedidoCode && !!pedidoStep && (pedidoCode !== nivelActual || pedidoStep !== stepActual)
+  const nivel = otraLeccion ? pedidoCode : nivelActual
+  const step = otraLeccion ? pedidoStep : stepActual
+
+  if (!curso || !/evaluac|entren/i.test(nivel)) {
+    throw new ValidationError(otraLeccion ? 'Esa lección no es una evaluación.' : 'Tu lección actual no es una evaluación.')
+  }
+
+  if (otraLeccion) {
+    // Sólo lecciones YA alcanzadas: se compara el `orden` del currículo.
+    const norm = (c: string) => `translate(lower(${c}),'áéíóúñ','aeioun')`
+    const ordenes = await queryOne<{ ordenDestino: number | null; ordenActual: number | null }>(
+      `SELECT
+         (SELECT "orden" FROM "NIVELES" WHERE UPPER("curso")=UPPER($1) AND ${norm('"code"')}=${norm('$2')} AND ${norm('"step"')}=${norm('$3')} LIMIT 1) AS "ordenDestino",
+         (SELECT "orden" FROM "NIVELES" WHERE UPPER("curso")=UPPER($1) AND ${norm('"code"')}=${norm('$4')} AND ${norm('"step"')}=${norm('$5')} LIMIT 1) AS "ordenActual"`,
+      [curso, nivel, step, nivelActual, stepActual]
+    )
+    if (ordenes?.ordenDestino == null) throw new ValidationError('Esa lección no existe en tu curso.')
+    if (ordenes?.ordenActual == null || Number(ordenes.ordenDestino) > Number(ordenes.ordenActual)) {
+      throw new ValidationError('Aún no has llegado a esa lección.')
+    }
+  }
 
   const row = await queryOne<{ preguntasManual: any; evaluacionModo: string | null; evaluacionMinutos: number | null; cuestionarios: any }>(
     `SELECT "preguntasManual","evaluacionModo","evaluacionMinutos","cuestionarios" FROM "NIVELES"

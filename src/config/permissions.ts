@@ -196,6 +196,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Botón "Ver video" en el panel del estudiante',
     description: 'Muestra el botón "Ver video" (video de la lección) en el panel del estudiante. Asignar al rol ESTUDIANTE para que el alumno lo vea; quitarlo lo oculta para todos los estudiantes.',
   },
+  {
+    code: StudentPermission.PANEL_SEGUIMIENTO,
+    module: Module.STUDENT,
+    section: 'Panel Estudiante',
+    name: 'Botón "Seguimiento" (Entrenamientos y Evaluaciones)',
+    description: 'Muestra el botón "Seguimiento" en las cajas Entrenamientos y Evaluaciones del panel del estudiante: historial de sus cuestionarios con el último resultado (%, acertadas y erradas), el detalle imprimible del último intento y la opción de presentar los que le queden pendientes. Asignar al rol ESTUDIANTE.',
+  },
   // -- Global --
   {
     code: StudentPermission.CONSULTA_CONTRATO,
@@ -600,6 +607,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     section: 'Evaluaciones',
     name: 'Página "Evaluaciones"',
     description: 'Acceso a /dashboard/academic/evaluaciones. Resultados de las evaluaciones y cuestionarios por curso: por estudiante, mejor nota, intentos y aprobó/no aprobó. También alimenta el botón "Revisar Evaluación" del panel del evento.',
+  },
+  {
+    code: AcademicoPermission.ENTRENAMIENTOS_VER,
+    module: Module.ACADEMICO,
+    section: 'Entrenamientos',
+    name: 'Página "Entrenamientos"',
+    description: 'Acceso a /dashboard/academic/entrenamientos. Misma pantalla que Evaluaciones pero sobre los módulos "Entrenamiento NN": por estudiante, mejor nota, intentos, el resultado del último intento y el análisis de preguntas más erradas/acertadas.',
   },
   {
     code: AcademicoPermission.REPORTE_ACADEMICO_VER,

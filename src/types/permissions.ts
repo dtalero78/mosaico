@@ -122,6 +122,10 @@ export enum StudentPermission {
 
   // Panel del estudiante (vista propia del alumno, rol ESTUDIANTE)
   PANEL_VER_VIDEO = 'STUDENT.PANEL.VER_VIDEO',
+  // Botón "Seguimiento" de las cajas Entrenamientos/Evaluaciones: abre el historial
+  // del propio alumno (último resultado por cuestionario, detalle imprimible y
+  // presentación de los que le queden pendientes).
+  PANEL_SEGUIMIENTO = 'STUDENT.PANEL.SEGUIMIENTO',
 }
 
 /**
@@ -191,6 +195,10 @@ export enum AcademicoPermission {
 
   // Evaluaciones — resultados de evaluaciones/cuestionarios por curso (Académico)
   EVALUACIONES_VER = 'ACADEMICO.EVALUACIONES.VER',
+
+  // Entrenamientos — misma pantalla que Evaluaciones pero sobre los módulos
+  // "Entrenamiento NN". Permiso aparte para poder darle uno sin el otro.
+  ENTRENAMIENTOS_VER = 'ACADEMICO.ENTRENAMIENTOS.VER',
 
   // Reporte Académico — consolidado semanal de métricas por salón (Académico › Guías)
   REPORTE_ACADEMICO_VER = 'ACADEMICO.REPORTE_ACADEMICO.VER',

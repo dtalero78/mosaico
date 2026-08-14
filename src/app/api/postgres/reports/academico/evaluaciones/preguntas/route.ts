@@ -1,6 +1,6 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { requirePermission } from '@/lib/api-permissions';
+import { requireAnyPermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
 
@@ -21,18 +21,21 @@ import { query } from '@/lib/postgres';
 const TOP = 3;
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
-  await requirePermission(session, AcademicoPermission.EVALUACIONES_VER);
+  await requireAnyPermission(session, [AcademicoPermission.EVALUACIONES_VER, AcademicoPermission.ENTRENAMIENTOS_VER]);
   const sp = new URL(request.url).searchParams;
   const curso = (sp.get('curso') || '').trim();
   const salon = (sp.get('salon') || '').trim();
   const code = (sp.get('code') || '').trim();
   const step = (sp.get('step') || '').trim();
+  const tipo = (sp.get('tipo') || '').trim().toLowerCase();
 
   if (!curso) return successResponse({ available: true, evaluaciones: [], curso: '', salon: '' });
 
   const where: string[] = [`UPPER(er."curso") = UPPER($1)`, `er."enviadaEn" IS NOT NULL`, `er."respuestas" IS NOT NULL`];
   const params: any[] = [curso];
   let join = '';
+  if (tipo === 'evaluacion') where.push(`er."code" ILIKE '%evaluac%'`);
+  else if (tipo === 'entrenamiento') where.push(`er."code" ILIKE '%entren%'`);
   if (code) { where.push(`er."code" = $${params.length + 1}`); params.push(code); }
   if (step) { where.push(`er."step" = $${params.length + 1}`); params.push(step); }
   if (salon) {

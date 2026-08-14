@@ -1,6 +1,6 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { requirePermission } from '@/lib/api-permissions';
+import { requireAnyPermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
@@ -16,7 +16,7 @@ import { query } from '@/lib/postgres';
  * Gateado por ACADEMICO.EVALUACIONES.VER.
  */
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
-  await requirePermission(session, AcademicoPermission.EVALUACIONES_VER);
+  await requireAnyPermission(session, [AcademicoPermission.EVALUACIONES_VER, AcademicoPermission.ENTRENAMIENTOS_VER]);
   const sp = new URL(request.url).searchParams;
   const academicaId = (sp.get('academicaId') || '').trim();
   const code = (sp.get('code') || '').trim();

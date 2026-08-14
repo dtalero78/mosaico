@@ -3,25 +3,32 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from 'react-query'
 import toast from 'react-hot-toast'
-import { ClipboardDocumentCheckIcon, ClockIcon, CheckCircleIcon, XCircleIcon, LockClosedIcon } from '@heroicons/react/24/outline'
+import { ClipboardDocumentCheckIcon, ClockIcon, CheckCircleIcon, XCircleIcon, LockClosedIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
 import MathText from '@/components/ecuaciones/MathText'
+import { usePermissions } from '@/hooks/usePermissions'
+import { StudentPermission } from '@/types/permissions'
+import SeguimientoModal, { SeguimientoItem } from './SeguimientoModal'
 
 interface Pregunta { id: any; type: string; question: string; options: string[] }
 interface Cuest {
   id: string; titulo: string; minutos: number; preguntas: Pregunta[]
   intentos: number; aprobado: boolean; mejor: number; agotado: boolean; resuelto: boolean; intentosMax: number
+  // Sólo cuando se presenta desde "Seguimiento" un cuestionario de una lección
+  // ANTERIOR: viajan al submit para que el servidor califique contra esa lección.
+  code?: string; step?: string
 }
 
 const ORD = ['primera', 'segunda', 'tercera', 'cuarta', 'quinta', 'sexta', 'séptima', 'octava']
 const ordinal = (i: number) => ORD[i] || `${i + 1}ª`
 
 // Paleta por caja (strings literales para que Tailwind las detecte).
+// `btn` = el mismo tono del fondo pero oscuro, para el botón "Seguimiento".
 type TonoKey = 'orange' | 'sky' | 'rose' | 'violet'
-const TONOS: Record<TonoKey, { card: string; head: string; icon: string; accent: string }> = {
-  orange: { card: 'bg-orange-50 border-orange-100', head: 'text-orange-800', icon: 'text-orange-600', accent: 'text-orange-700' },
-  sky:    { card: 'bg-sky-50 border-sky-100',       head: 'text-sky-800',    icon: 'text-sky-600',    accent: 'text-sky-700' },
-  rose:   { card: 'bg-rose-50 border-rose-100',     head: 'text-rose-800',   icon: 'text-rose-600',   accent: 'text-rose-700' },
-  violet: { card: 'bg-violet-50 border-violet-100', head: 'text-violet-800', icon: 'text-violet-600', accent: 'text-violet-700' },
+const TONOS: Record<TonoKey, { card: string; head: string; icon: string; accent: string; btn: string }> = {
+  orange: { card: 'bg-orange-50 border-orange-100', head: 'text-orange-800', icon: 'text-orange-600', accent: 'text-orange-700', btn: 'bg-orange-600 hover:bg-orange-700' },
+  sky:    { card: 'bg-sky-50 border-sky-100',       head: 'text-sky-800',    icon: 'text-sky-600',    accent: 'text-sky-700',    btn: 'bg-sky-600 hover:bg-sky-700' },
+  rose:   { card: 'bg-rose-50 border-rose-100',     head: 'text-rose-800',   icon: 'text-rose-600',   accent: 'text-rose-700',   btn: 'bg-rose-600 hover:bg-rose-700' },
+  violet: { card: 'bg-violet-50 border-violet-100', head: 'text-violet-800', icon: 'text-violet-600', accent: 'text-violet-700', btn: 'bg-violet-600 hover:bg-violet-700' },
 }
 
 /**
@@ -58,6 +65,13 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
   const [result, setResult] = useState<{ porcentaje: number; aprobado: boolean; intento: number; intentosRestantes: number; agotado: boolean } | null>(null)
   const iniciadaRef = useRef<string>('')
 
+  // Botón "Seguimiento" — gateado por permiso (asignable al rol ESTUDIANTE).
+  // Mientras cargan los permisos se muestra, para no parpadear al entrar.
+  const { hasPermission, isLoading: permsLoading } = usePermissions()
+  const esCategoria = tipo === 'evaluacion' || tipo === 'entrenamiento'
+  const puedeVerSeguimiento = esCategoria && (permsLoading || hasPermission(StudentPermission.PANEL_SEGUIMIENTO as any))
+  const [seguimiento, setSeguimiento] = useState(false)
+
   const submit = async () => {
     if (submitting || !activo) return
     setSubmitting(true)
@@ -65,7 +79,12 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
       const respuestas = activo.preguntas.map((q, i) => ({ qId: q.id ?? i, selected: answers[String(q.id ?? i)] ?? null }))
       const res = await fetch('/api/postgres/panel-estudiante/evaluacion/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cuestionarioId: activo.id, respuestas, iniciadaEn: iniciadaRef.current }),
+        body: JSON.stringify({
+          cuestionarioId: activo.id, respuestas, iniciadaEn: iniciadaRef.current,
+          // Presentado desde "Seguimiento": lección explícita (el servidor valida
+          // que ya la haya alcanzado). Sin esto, califica contra la actual.
+          ...(activo.code && activo.step ? { code: activo.code, step: activo.step } : {}),
+        }),
       }).then((r) => r.json())
       if (res.error) throw new Error(res.error)
       setResult({ porcentaje: res.porcentaje, aprobado: res.aprobado, intento: res.intento, intentosRestantes: res.intentosRestantes, agotado: res.agotado })
@@ -87,6 +106,19 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
   }, [phase, remaining])
 
   const presentar = (c: Cuest) => { setActivo(c); setPhase('confirm') }
+
+  /** Presentar desde el modal "Seguimiento" un cuestionario pendiente (puede ser
+   *  de una lección anterior): se arma el mismo `Cuest` que usa el flujo normal
+   *  y se cierra el modal para que el alumno vea la confirmación. */
+  const presentarDesdeSeguimiento = (it: SeguimientoItem) => {
+    setSeguimiento(false)
+    presentar({
+      id: it.cuestionarioId, titulo: it.titulo, minutos: it.minutos, preguntas: it.preguntas,
+      intentos: it.intentos, aprobado: it.aprobado, mejor: it.mejor, agotado: it.agotado,
+      resuelto: it.aprobado || it.agotado, intentosMax: it.intentosMax,
+      code: it.code, step: it.step,
+    })
+  }
   const aceptar = () => {
     if (!activo) return
     setAnswers({}); setQIdx(0); setRemaining((activo.minutos > 0 ? activo.minutos : 30) * 60); setResult(null)
@@ -105,6 +137,13 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
       <div className="flex items-center gap-2 mb-1">
         <ClipboardDocumentCheckIcon className={`h-5 w-5 ${T.icon}`} />
         <h3 className={`text-sm font-bold ${T.head} uppercase tracking-wide`}>{titulo || 'Entrenamientos y Evaluaciones'}</h3>
+        {puedeVerSeguimiento && (
+          <button type="button" onClick={() => setSeguimiento(true)}
+            title={`Ver todos tus ${tipo === 'entrenamiento' ? 'entrenamientos' : 'evaluaciones'} y sus resultados`}
+            className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-medium shrink-0 ${T.btn}`}>
+            <ClipboardDocumentListIcon className="h-4 w-4" /> Seguimiento
+          </button>
+        )}
       </div>
 
       {!reached ? (
@@ -169,6 +208,17 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
             })}
           </ul>
         </>
+      )}
+
+      {/* Modal "Seguimiento" — historial de la categoría (todas; sólo se abren las presentadas) */}
+      {seguimiento && esCategoria && (
+        <SeguimientoModal
+          tipo={tipo as 'evaluacion' | 'entrenamiento'}
+          titulo={titulo || (tipo === 'entrenamiento' ? 'Entrenamientos' : 'Evaluaciones')}
+          accentBtn={T.btn}
+          onClose={() => setSeguimiento(false)}
+          onPresentar={presentarDesdeSeguimiento}
+        />
       )}
 
       {/* Modal 1 — confirmación por parte */}

@@ -1,6 +1,6 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { requirePermission } from '@/lib/api-permissions';
+import { requireAnyPermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
 
@@ -12,12 +12,18 @@ import { query } from '@/lib/postgres';
  *   Gateado por ACADEMICO.EVALUACIONES.VER.
  */
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
-  await requirePermission(session, AcademicoPermission.EVALUACIONES_VER);
+  await requireAnyPermission(session, [AcademicoPermission.EVALUACIONES_VER, AcademicoPermission.ENTRENAMIENTOS_VER]);
   const sp = new URL(request.url).searchParams;
   const curso = (sp.get('curso') || '').trim();
   const salon = (sp.get('salon') || '').trim();
   const code = (sp.get('code') || '').trim();
   const step = (sp.get('step') || '').trim();
+  // Categoría del módulo: "Evaluación NN" vs "Entrenamiento NN". Es lo que separa
+  // la pantalla de Evaluaciones de la de Entrenamientos; sin tipo, ambas.
+  const tipo = (sp.get('tipo') || '').trim().toLowerCase();
+  const filtroTipo = tipo === 'evaluacion' ? `AND er."code" ILIKE '%evaluac%'`
+    : tipo === 'entrenamiento' ? `AND er."code" ILIKE '%entren%'`
+    : '';
 
   // Catálogo de cursos: los de la plataforma, NO sólo los que ya tienen
   // resultados — si no, mientras nadie haya rendido una evaluación el selector
@@ -49,6 +55,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const where: string[] = [`UPPER(er."curso")=UPPER($1)`, `er."enviadaEn" IS NOT NULL`];
   const params: any[] = [curso];
   let join = '';
+  if (filtroTipo) where.push(filtroTipo.replace(/^AND /, ''));
   if (code) { where.push(`er."code"=$${params.length + 1}`); params.push(code); }
   if (step) { where.push(`er."step"=$${params.length + 1}`); params.push(step); }
   if (salon) {
