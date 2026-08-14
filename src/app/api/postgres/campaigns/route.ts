@@ -4,10 +4,11 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
-import { ValidationError } from '@/lib/errors';
-import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-campaign';
+import { ValidationError, ConflictError } from '@/lib/errors';
+import { TIPOS_CURSO, horariosFor, esMenores, addMonths, horariosSeSolapan } from '@/lib/cursos-campaign';
 import { generarEventosCurso } from '@/services/cursos-campaign-eventos.service';
 import { cupoOcupadoSql } from '@/lib/cupo';
+import { detectarColisionesGuia, mensajeColision } from '@/services/colision-guia.service';
 
 /**
  * GET /api/postgres/campaigns  → lista de cursos/campañas (admin Crea Campaña).
@@ -52,6 +53,15 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const inicioCamp = isDate(inicioCampania) ? inicioCampania : null;
   const finalCamp  = isDate(finalCampaign) ? finalCampaign : null;
   const creados: any[] = [];
+  // Cursos ya validados de ESTE envío, para detectar choques entre ellos.
+  const enLote: Array<{ guia: string | null; tipoCurso: string; salon: string | null; horarioCurso: string }> = [];
+  // El INSERT va en una SEGUNDA pasada: primero se valida TODO el lote. Antes se
+  // validaba e insertaba en el mismo bucle, así que un choque en el 3.º curso
+  // dejaba los dos primeros ya creados — media campaña a medio hacer.
+  const aInsertar: Array<{
+    tipo: string; horario: string; salon: string | null; guia: string | null;
+    inicioCurso: string | null; finalCurso: string | null; duracion: number; numeroUsuarios: number;
+  }> = [];
 
   for (const c of cursos) {
     const tipo = String(c?.tipoCurso || '');
@@ -68,6 +78,31 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     const numeroUsuarios = parseInt(String(c?.numeroUsuarios ?? 0), 10) || 0;
     if (numeroUsuarios <= 0) throw new ValidationError(`El curso ${tipo} ${horario} debe tener número de usuarios (cupos) > 0.`);
 
+    // Un guía no puede dictar dos cursos a la vez: se revisa contra TODAS las
+    // campañas activas, no sólo ésta (ver colision-guia.service). El INSERT es
+    // un UPSERT, así que el propio curso se excluye por su clave natural.
+    const colisiones = await detectarColisionesGuia({
+      guia, campaign: nombre, tipoCurso: tipo, horarioCurso: horario, salon, inicioCurso, finalCurso,
+      excluirClaveNatural: true,
+    });
+    if (colisiones.length) throw new ConflictError(mensajeColision(colisiones));
+
+    // …y también contra los cursos del MISMO envío, que aún no están en la BD:
+    // agregar dos salones al mismo guía y hora antes de guardar debe rechazarse.
+    const choqueEnLote = enLote.find(l =>
+      l.guia && guia && l.guia === guia && horariosSeSolapan(l.horarioCurso, horario)
+    );
+    if (choqueEnLote) {
+      throw new ConflictError(
+        `El guía quedaría con dos cursos a la misma hora en esta campaña: ${choqueEnLote.tipoCurso}${choqueEnLote.salon ? ` · ${choqueEnLote.salon}` : ''} · ${choqueEnLote.horarioCurso} y ${tipo}${salon ? ` · ${salon}` : ''} · ${horario}.`
+      );
+    }
+    enLote.push({ guia, tipoCurso: tipo, salon, horarioCurso: horario });
+    aInsertar.push({ tipo, horario, salon, guia, inicioCurso, finalCurso, duracion, numeroUsuarios });
+  }
+
+  // Segunda pasada: ya sabemos que el lote completo es válido.
+  for (const { tipo, horario, salon, guia, inicioCurso, finalCurso, duracion, numeroUsuarios } of aInsertar) {
     const r = await query(
       `INSERT INTO "CURSOS_CAMPAIGN"
          ("_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","guia","horarioCurso","inicioCurso","duracionCurso","finalCurso","numeroUsuarios","usuInscritos","paraMenores","activa","_createdDate","_updatedDate")

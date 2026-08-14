@@ -86,6 +86,43 @@ export function parseHorario(horario: string): { dias: number[]; hora: string } 
 }
 
 /**
+ * Igual que `parseHorario` pero con el RANGO completo, en minutos desde medianoche.
+ * "SÁB 09:00-11:00" → { dias:[6], inicioMin:540, finMin:660 }.
+ *
+ * Lo usa la detección de colisiones de guía: para saber si dos cursos chocan
+ * hace falta el fin, no sólo el inicio (09:00-11:00 y 10:00-12:00 se solapan
+ * aunque empiecen a horas distintas).
+ */
+export function parseHorarioRango(horario: string): { dias: number[]; inicioMin: number; finMin: number } | null {
+  if (!horario) return null;
+  const parts = String(horario).trim().split(/\s+/);
+  if (parts.length < 2) return null;
+  const dias = parts[0].split('-')
+    .map(d => DIA_SEMANA[d.toUpperCase()])
+    .filter(n => n !== undefined);
+  const [ini, fin] = (parts[1] || '').split('-').map(s => (s || '').trim());
+  const aMin = (h: string) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(h);
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  const inicioMin = aMin(ini);
+  const finMin = aMin(fin);
+  if (!dias.length || inicioMin === null || finMin === null || finMin <= inicioMin) return null;
+  return { dias, inicioMin, finMin };
+}
+
+/** ¿Dos horarios del catálogo se pisan? Comparten día Y se solapan en el tiempo. */
+export function horariosSeSolapan(a: string, b: string): boolean {
+  const ra = parseHorarioRango(a);
+  const rb = parseHorarioRango(b);
+  if (!ra || !rb) return false;
+  const compartenDia = ra.dias.some(d => rb.dias.includes(d));
+  if (!compartenDia) return false;
+  // Solape estricto: terminar justo cuando el otro empieza NO es colisión.
+  return ra.inicioMin < rb.finMin && rb.inicioMin < ra.finMin;
+}
+
+/**
  * Lista todas las fechas (YYYY-MM-DD) entre `inicio` y `fin` (inclusive) cuyo día
  * de la semana esté en `dias`. Usa aritmética UTC para evitar desfases de zona.
  */

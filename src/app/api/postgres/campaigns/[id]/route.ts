@@ -6,6 +6,7 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-campaign';
 import { generarEventosCurso, eliminarEventosCurso } from '@/services/cursos-campaign-eventos.service';
+import { detectarColisionesGuia, mensajeColision } from '@/services/colision-guia.service';
 
 /**
  * PATCH /api/postgres/campaigns/[id]  → edita un curso de campaña (CURSOS_CAMPAIGN).
@@ -62,6 +63,28 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
       [row.campaign, tipoCurso, horarioCurso, id]
     );
     if (dup.rows.length > 0) throw new ConflictError(`Ya existe un curso ${tipoCurso} ${horarioCurso} en la campaña ${row.campaign}.`);
+  }
+
+  // Un guía no puede dictar dos cursos a la vez: se revisa contra TODAS las
+  // campañas activas (no sólo ésta) y sólo cuando las vigencias se solapan.
+  //
+  // Grandfathering — la verificación corre SÓLO si el cambio toca el horario del
+  // guía (guía, tipo, horario o vigencia). Al activarse esta regla ya existían
+  // cursos cruzados en la base; sin esta guarda, corregirles los cupos o el
+  // salón quedaría bloqueado para siempre por un cruce que ya estaba ahí. Lo que
+  // se impide es CREAR un cruce nuevo, no editar lo demás de uno viejo.
+  const rowInicio = row.inicioCurso ? String(row.inicioCurso).slice(0, 10) : null;
+  const horarioDelGuiaCambio =
+    guia !== row.guia ||
+    tipoCurso !== row.tipoCurso ||
+    horarioCurso !== row.horarioCurso ||
+    inicioCurso !== rowInicio ||
+    duracion !== (row.duracionCurso || 0);
+  if (horarioDelGuiaCambio) {
+    const colisiones = await detectarColisionesGuia({
+      excluirId: id, guia, campaign: row.campaign, tipoCurso, horarioCurso, salon, inicioCurso, finalCurso,
+    });
+    if (colisiones.length) throw new ConflictError(mensajeColision(colisiones));
   }
 
   const upd = await query(
