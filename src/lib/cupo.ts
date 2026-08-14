@@ -1,12 +1,19 @@
 import 'server-only';
 
 /**
- * Regla de CUPOS de curso (MOSAICO).
+ * Regla de CUPOS de salón (MOSAICO). El cupo es POR SALÓN: cada fila de
+ * CURSOS_CAMPAIGN es un salón con su propio `numeroUsuarios`.
  *
- * Un beneficiario OCUPA un cupo desde que se crea el contrato y lo mantiene mientras
- * el contrato esté **Pendiente, Devuelto o Aprobado**. El cupo se **libera** cuando:
- *  - el contrato queda **Rechazado, Retractado o Contrato nulo** (estados que viven en
- *    el `aprobacion` del TITULAR — el beneficiario solo tiene Aprobado/Pendiente), o
+ * Un beneficiario OCUPA un cupo desde que se crea el contrato y lo mantiene
+ * **sólo mientras el contrato esté Pendiente o Aprobado** (o recién creado, aún
+ * sin estado). En cuanto pasa a CUALQUIER otro estado el cupo se libera **solo**,
+ * sin tocar nada a mano: la regla se evalúa al leer, así que el salón queda
+ * disponible en el mismo instante en que se cambia el estado.
+ *
+ * El cupo se **libera** cuando:
+ *  - el contrato deja de estar Pendiente/Aprobado, es decir queda **Devuelto,
+ *    Rechazado, Retractado o Contrato nulo** (estados que viven en el
+ *    `aprobacion` del TITULAR — el beneficiario solo tiene Aprobado/Pendiente), o
  *  - el beneficiario está en **OnHold** (`fechaOnHold` seteada): se conserva su
  *    campaña/curso/salón pero deja de ocupar cupo hasta que se restablezca, o
  *  - el beneficiario fue **INACTIVADO por un admin** (botón "Inactivar" de la ficha →
@@ -22,8 +29,13 @@ import 'server-only';
  * a propósito por un admin" de "recién creado y pendiente de aprobar".
  */
 
-/** Estados del contrato (TITULAR.aprobacion, normalizados) que LIBERAN el cupo. */
-export const ESTADOS_LIBERAN_CUPO = ['rechazado', 'retractado', 'contrato nulo'] as const;
+/**
+ * Estados del contrato (TITULAR.aprobacion, normalizados) que LIBERAN el cupo.
+ * Es el complemento de "Pendiente o Aprobado": cualquier otro estado lo libera.
+ * `Devuelto` entró en agosto-2026 — antes retenía el cupo, y un contrato devuelto
+ * dejaba el salón bloqueado sin que nadie estuviera ocupándolo.
+ */
+export const ESTADOS_LIBERAN_CUPO = ['devuelto', 'rechazado', 'retractado', 'contrato nulo'] as const;
 
 /**
  * Fragmento SQL booleano: TRUE si el beneficiario con alias `<alias>` OCUPA cupo,
@@ -38,7 +50,7 @@ export function cupoOcupadoSql(alias: string): string {
     SELECT 1 FROM "PEOPLE" t_cupo
      WHERE t_cupo."contrato" = ${alias}."contrato"
        AND t_cupo."tipoUsuario" = 'TITULAR'
-       AND LOWER(TRIM(COALESCE(t_cupo."aprobacion", ''))) IN ('rechazado', 'retractado', 'contrato nulo')))`;
+       AND LOWER(TRIM(COALESCE(t_cupo."aprobacion", ''))) IN (${ESTADOS_LIBERAN_CUPO.map(e => `'${e}'`).join(', ')})))`;
 }
 
 /**
