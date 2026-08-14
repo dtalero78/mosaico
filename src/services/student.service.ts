@@ -12,6 +12,7 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { inicioProximaSemanaUTC } from '@/lib/semana';
+import { isContractExpired } from '@/lib/contract-expiry';
 
 // Ensure ACADEMICA.fechaPromocionEspecial column exists (idempotent, once per server start).
 // Written when student is promoted from F3 Step 45 to MASTER/IELS/B2FIRST/TOEFL;
@@ -139,13 +140,15 @@ export async function promoteFromWelcome(
   actor?: { email?: string; nombre?: string }
 ) {
   const academic = await queryOne<any>(
-    `SELECT "_id", "peopleId", "numeroId", "curso", "nivel", "step", "cambioStepHistory" FROM "ACADEMICA" WHERE "_id" = $1`,
+    `SELECT "_id", "peopleId", "numeroId", "userLogin", "curso", "nivel", "step", "cambioStepHistory" FROM "ACADEMICA" WHERE "_id" = $1`,
     [academicId]
   );
   if (!academic) throw new NotFoundError('Registro académico', academicId);
 
   // PEOPLE del beneficiario: por peopleId; fallback por numeroId (BENEFICIARIO).
-  const PEOPLE_COLS = `"campaign", "tipoCurso", "horarioCurso", "salon", "nivel", "step", "primerNombre", "primerApellido", "celular", "plataforma"`;
+  // `fechaOnHold` y `finalContrato` se traen para decidir si el alumno queda
+  // operativo al promoverlo (ver más abajo).
+  const PEOPLE_COLS = `"campaign", "tipoCurso", "horarioCurso", "salon", "nivel", "step", "primerNombre", "primerApellido", "celular", "plataforma", "fechaOnHold", "finalContrato"`;
   let people = academic.peopleId
     ? await queryOne<any>(`SELECT ${PEOPLE_COLS} FROM "PEOPLE" WHERE "_id" = $1`, [academic.peopleId])
     : null;
@@ -196,6 +199,37 @@ export async function promoteFromWelcome(
     ]
   );
 
+  // ACTIVAR al alumno: promover desde WELCOME significa que ya está listo para
+  // operar, así que queda habilitado en el momento y no espera al cron
+  // `activate-academica` (que sólo actúa ≤10 días antes de `inicioCurso` y NUNCA
+  // toma a quien tenga ese campo en NULL — así quedaban alumnos promovidos sin
+  // poder entrar, incluso con el curso ya empezado).
+  //
+  // Se respetan las DOS causas legítimas de bloqueo: un alumno en OnHold o con el
+  // contrato vencido no debe reactivarse por promoverlo.
+  let activado = false;
+  const enOnHold = !!people.fechaOnHold;
+  const contratoVencido = people.finalContrato ? isContractExpired(people.finalContrato) : false;
+  if (!enOnHold && !contratoVencido) {
+    try {
+      await query(
+        `UPDATE "ACADEMICA" SET "estadoInactivo" = false, "_updatedDate" = NOW() WHERE "_id" = $1`,
+        [academicId]
+      );
+      // La cuenta se resuelve por IDENTIDAD (userLogin único → numberid), nunca por
+      // email: los hermanos comparten el correo del apoderado.
+      await query(
+        `UPDATE "USUARIOS_ROLES" SET "activo" = true, "_updatedDate" = NOW()
+          WHERE ($1 <> '' AND "userLogin" = $1)
+             OR ($1 = '' AND UPPER(TRIM("numberid")) = UPPER(TRIM($2)) AND "rol" = 'ESTUDIANTE')`,
+        [String(academic.userLogin || '').trim(), String(academic.numeroId || '').trim()]
+      );
+      activado = true;
+    } catch (err: any) {
+      console.warn(`[promoteFromWelcome] activación falló para ${academicId}:`, err?.message || err);
+    }
+  }
+
   // Generar los agendamientos del curso REAL (idempotente — sólo crea los que
   // falten). Cierra el hueco de que promover desde WELCOME —por auto-avance al
   // marcar asistencia (autoAdvanceStep) o por el botón "Aprobar Welcome"— dejaba
@@ -217,7 +251,7 @@ export async function promoteFromWelcome(
     console.warn(`[promoteFromWelcome] generarBookings falló para ${academicId}:`, err?.message || err);
   }
 
-  return { promoted: true, before, after, bookingsCreados };
+  return { promoted: true, before, after, bookingsCreados, activado, enOnHold, contratoVencido };
 }
 
 /**
