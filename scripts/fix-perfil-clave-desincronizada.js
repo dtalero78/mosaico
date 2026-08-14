@@ -26,6 +26,15 @@ require('dotenv').config({ path: '.env.local' });
 const APPLY = process.argv.includes('--apply');
 const idArg = process.argv.find(a => a.startsWith('--id='));
 const SOLO_IDS = idArg ? idArg.slice(5).split(',').map(s => s.trim()).filter(Boolean) : null;
+/**
+ * --solo-placeholder: limita la reparación a los alumnos cuya clave de login es
+ * literalmente su número de documento (la placeholder con la que nacen). Deja
+ * fuera a quienes ya tienen otra clave en el login, que podrían estar usándola:
+ * cambiársela los dejaría fuera de la plataforma.
+ */
+const SOLO_PLACEHOLDER = process.argv.includes('--solo-placeholder');
+const esPlaceholder = (r) =>
+  String(r.clave_login || '').trim().toUpperCase() === String(r.numeroId || '').trim().toUpperCase();
 
 const pool = new Pool({
   connectionString: (process.env.DATABASE_URL || '').replace(/[?&]sslmode=[^&]*/g, ''),
@@ -61,7 +70,12 @@ const mask = s => (!s ? '(vacío)' : `${String(s).slice(0, 2)}${'*'.repeat(Math.
       ORDER BY a."_updatedDate" DESC NULLS LAST`
   );
 
-  const afectados = SOLO_IDS ? rows.filter(r => SOLO_IDS.includes(r.numeroId)) : rows;
+  let afectados = SOLO_IDS ? rows.filter(r => SOLO_IDS.includes(r.numeroId)) : rows;
+  const excluidos = [];
+  if (SOLO_PLACEHOLDER) {
+    for (const r of afectados) if (!esPlaceholder(r)) excluidos.push(r);
+    afectados = afectados.filter(esPlaceholder);
+  }
 
   if (!afectados.length) {
     console.log('✅ No hay perfiles con la clave de login desincronizada.');
@@ -81,6 +95,14 @@ const mask = s => (!s ? '(vacío)' : `${String(s).slice(0, 2)}${'*'.repeat(Math.
     activo: r.activo,
     tiene_foto: r.foto ? 'sí' : 'no',
   })));
+
+  if (excluidos.length) {
+    console.log(`\n⚠️ Excluidos por --solo-placeholder (su clave de login NO es su documento, podrían estar usándola): ${excluidos.length}`);
+    console.table(excluidos.map(r => ({
+      numeroId: r.numeroId, nombre: r.nombre, userLogin: r.userLogin,
+      clave_login_actual: mask(r.clave_login), clave_elegida: mask(r.clave_elegida),
+    })));
+  }
 
   if (!APPLY) {
     console.log('\n(dry-run — no se escribió nada. Reejecuta con --apply para sincronizar.)');
