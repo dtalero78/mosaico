@@ -34,14 +34,20 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [advisorNames, setAdvisorNames] = useState<{[key: string]: string}>({})
   const [classes, setClasses] = useState<Class[]>(initialClasses)
 
-  // Permisos para el modal de detalles de clase
+  // Permisos para el modal de detalles de clase.
+  //
+  // Las dos cajas de texto van en DOS niveles: el permiso base deja VER la caja
+  // (en solo lectura) y el `…_EDITAR` deja escribir en ella. Antes la edición
+  // estaba clavada por rol (SUPER_ADMIN/COORDINADOR_ACADEMICO), así que tocar
+  // los permisos no la movía — de ahí que "cambié el permiso y no funcionó".
   const canEvaluate = hasPermission(StudentPermission.EVALUACION)
   const canAddAdvisorNotes = hasPermission(StudentPermission.ANOTACION_ADVISOR)
+  const canEditAdvisorNotes = canAddAdvisorNotes && hasPermission(StudentPermission.ANOTACION_ADVISOR_EDITAR)
   const canAddStudentComments = hasPermission(StudentPermission.COMENTARIOS_ESTUDIANTE)
+  const canEditStudentComments = canAddStudentComments && hasPermission(StudentPermission.COMENTARIOS_ESTUDIANTE_EDITAR)
   const canDeleteEvent = hasPermission(StudentPermission.ELIMINAR_EVENTO)
-
-  // Solo COORDINADOR_ACADEMICO y SUPER_ADMIN pueden editar los campos de comentarios
-  const canEditComments = userRole === Role.SUPER_ADMIN || userRole === Role.COORDINADOR_ACADEMICO
+  // ¿Hay algo editable? — decide si se muestra "Guardar Cambios".
+  const canEditComments = canEditAdvisorNotes || canEditStudentComments
 
   // Bloqueo de agendamiento si el estudiante está INACTIVO en ACADEMICA — solo SUPER_ADMIN o ADMIN pueden continuar
   const isStudentInactive = student.estadoInactivo === true
@@ -1225,7 +1231,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                       <h4 className="text-lg font-semibold text-amber-900 mb-4 flex items-center space-x-2">
                         <span>📝</span>
                         <span>Anotaciones Académicas</span>
-                        {!canEditComments && (
+                        {!canEditAdvisorNotes && (
                           <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-100 px-2 py-1 rounded">
                             Solo lectura
                           </span>
@@ -1236,20 +1242,20 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                           rows={4}
                           value={(selectedClass as any).advisorAnotaciones || ''}
                           onChange={(e) => {
-                            if (selectedClass && canEditComments) {
+                            if (selectedClass && canEditAdvisorNotes) {
                               setSelectedClass({
                                 ...selectedClass,
                                 advisorAnotaciones: e.target.value
                               } as any)
                             }
                           }}
-                          readOnly={!canEditComments}
+                          readOnly={!canEditAdvisorNotes}
                           className={`block w-full rounded-lg border-amber-300 shadow-sm text-sm resize-none ${
-                            canEditComments
+                            canEditAdvisorNotes
                               ? 'bg-white focus:border-amber-500 focus:ring-amber-500'
                               : 'bg-amber-50 cursor-not-allowed'
                           }`}
-                          placeholder={canEditComments ? "Escribir anotaciones internas que solo verán los académicos..." : ""}
+                          placeholder={canEditAdvisorNotes ? "Escribir anotaciones internas que solo verán los académicos..." : ""}
                         />
                         <div className="absolute bottom-2 right-2 text-xs text-amber-600">
                           Solo para académicos
@@ -1264,7 +1270,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                       <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center space-x-2">
                         <span>💬</span>
                         <span>Comentarios para el Usuario</span>
-                        {!canEditComments && (
+                        {!canEditStudentComments && (
                           <span className="ml-2 text-xs font-normal text-blue-600 bg-blue-100 px-2 py-1 rounded">
                             Solo lectura
                           </span>
@@ -1275,20 +1281,20 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                           rows={4}
                           value={selectedClass.comentarios || ''}
                           onChange={(e) => {
-                            if (selectedClass && canEditComments) {
+                            if (selectedClass && canEditStudentComments) {
                               setSelectedClass({
                                 ...selectedClass,
                                 comentarios: e.target.value
                               })
                             }
                           }}
-                          readOnly={!canEditComments}
+                          readOnly={!canEditStudentComments}
                           className={`block w-full rounded-lg border-blue-300 shadow-sm text-sm resize-none ${
-                            canEditComments
+                            canEditStudentComments
                               ? 'bg-white focus:border-blue-500 focus:ring-blue-500'
                               : 'bg-blue-50 cursor-not-allowed'
                           }`}
-                          placeholder={canEditComments ? "Escribir comentarios que verá el usuario en su perfil..." : ""}
+                          placeholder={canEditStudentComments ? "Escribir comentarios que verá el usuario en su perfil..." : ""}
                         />
                         <div className="absolute bottom-2 right-2 text-xs text-blue-600">
                           Visible para el usuario
@@ -1325,7 +1331,9 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                       Cancelar
                     </button>
 
-                    {(canEvaluate || ((canAddAdvisorNotes || canAddStudentComments) && canEditComments)) && (
+                    {/* "Guardar" sólo si hay algo que guardar: la evaluación o
+                        alguna de las dos cajas con permiso de EDICIÓN. */}
+                    {(canEvaluate || canEditComments) && (
                       <button
                         onClick={handleSaveChanges}
                         className="inline-flex items-center justify-center px-6 py-2.5 rounded-lg border border-transparent bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 text-sm font-medium shadow-lg transform hover:scale-105"
