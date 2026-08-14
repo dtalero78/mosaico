@@ -1138,7 +1138,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                             <div className={`w-3 h-3 rounded-full ${selectedClass.asistencia ? 'bg-green-500' : 'bg-red-500'}`}></div>
                             <div>
                               <p className="text-sm font-medium text-gray-900">Asistencia</p>
-                              <p className="text-xs text-gray-500">Marca si el estudiante asistió</p>
+                              <p className="text-xs text-gray-500">Marca si el usuario asistió</p>
                             </div>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer">
@@ -1224,7 +1224,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                       <div className="bg-amber-50 rounded-xl p-6 border border-amber-200">
                       <h4 className="text-lg font-semibold text-amber-900 mb-4 flex items-center space-x-2">
                         <span>📝</span>
-                        <span>Anotaciones del Advisor</span>
+                        <span>Anotaciones Académicas</span>
                         {!canEditComments && (
                           <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-100 px-2 py-1 rounded">
                             Solo lectura
@@ -1249,10 +1249,10 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                               ? 'bg-white focus:border-amber-500 focus:ring-amber-500'
                               : 'bg-amber-50 cursor-not-allowed'
                           }`}
-                          placeholder={canEditComments ? "Escribir anotaciones internas que solo verán los advisors..." : ""}
+                          placeholder={canEditComments ? "Escribir anotaciones internas que solo verán los académicos..." : ""}
                         />
                         <div className="absolute bottom-2 right-2 text-xs text-amber-600">
-                          Solo para advisors
+                          Solo para académicos
                         </div>
                       </div>
                     </div>
@@ -1263,7 +1263,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                       <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
                       <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center space-x-2">
                         <span>💬</span>
-                        <span>Comentarios para el Estudiante</span>
+                        <span>Comentarios para el Usuario</span>
                         {!canEditComments && (
                           <span className="ml-2 text-xs font-normal text-blue-600 bg-blue-100 px-2 py-1 rounded">
                             Solo lectura
@@ -1288,10 +1288,10 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                               ? 'bg-white focus:border-blue-500 focus:ring-blue-500'
                               : 'bg-blue-50 cursor-not-allowed'
                           }`}
-                          placeholder={canEditComments ? "Escribir comentarios que verá el estudiante en su perfil..." : ""}
+                          placeholder={canEditComments ? "Escribir comentarios que verá el usuario en su perfil..." : ""}
                         />
                         <div className="absolute bottom-2 right-2 text-xs text-blue-600">
-                          Visible para el estudiante
+                          Visible para el usuario
                         </div>
                       </div>
                     </div>

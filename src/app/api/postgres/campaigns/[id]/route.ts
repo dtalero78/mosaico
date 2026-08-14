@@ -84,7 +84,14 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     const colisiones = await detectarColisionesGuia({
       excluirId: id, guia, campaign: row.campaign, tipoCurso, horarioCurso, salon, inicioCurso, finalCurso,
     });
-    if (colisiones.length) throw new ConflictError(mensajeColision(colisiones));
+    if (colisiones.length) {
+      throw new ConflictError(mensajeColision(colisiones), {
+        tipo: 'colision_guia',
+        cursoId: id,
+        curso: { tipoCurso, salon, horarioCurso, guia },
+        colisiones,
+      });
+    }
   }
 
   const upd = await query(

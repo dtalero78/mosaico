@@ -63,7 +63,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     inicioCurso: string | null; finalCurso: string | null; duracion: number; numeroUsuarios: number;
   }> = [];
 
-  for (const c of cursos) {
+  for (const [indice, c] of (cursos as any[]).entries()) {
     const tipo = String(c?.tipoCurso || '');
     if (!(TIPOS_CURSO as readonly string[]).includes(tipo)) throw new ValidationError(`Tipo de curso inválido: ${tipo}`);
     const horario = String(c?.horarioCurso || '');
@@ -85,7 +85,16 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       guia, campaign: nombre, tipoCurso: tipo, horarioCurso: horario, salon, inicioCurso, finalCurso,
       excluirClaveNatural: true,
     });
-    if (colisiones.length) throw new ConflictError(mensajeColision(colisiones));
+    if (colisiones.length) {
+      // El detalle alimenta el modal que corrige la colisión (cambiar horario o
+      // guía y reintentar): hace falta saber QUÉ curso del lote falló.
+      throw new ConflictError(mensajeColision(colisiones), {
+        tipo: 'colision_guia',
+        indice,
+        curso: { tipoCurso: tipo, salon, horarioCurso: horario, guia },
+        colisiones,
+      });
+    }
 
     // …y también contra los cursos del MISMO envío, que aún no están en la BD:
     // agregar dos salones al mismo guía y hora antes de guardar debe rechazarse.
@@ -94,7 +103,17 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     );
     if (choqueEnLote) {
       throw new ConflictError(
-        `El guía quedaría con dos cursos a la misma hora en esta campaña: ${choqueEnLote.tipoCurso}${choqueEnLote.salon ? ` · ${choqueEnLote.salon}` : ''} · ${choqueEnLote.horarioCurso} y ${tipo}${salon ? ` · ${salon}` : ''} · ${horario}.`
+        `El guía quedaría con dos cursos a la misma hora en esta campaña: ${choqueEnLote.tipoCurso}${choqueEnLote.salon ? ` · ${choqueEnLote.salon}` : ''} · ${choqueEnLote.horarioCurso} y ${tipo}${salon ? ` · ${salon}` : ''} · ${horario}.`,
+        {
+          tipo: 'colision_guia',
+          indice,
+          curso: { tipoCurso: tipo, salon, horarioCurso: horario, guia },
+          colisiones: [{
+            _id: null, campaign: nombre, tipoCurso: choqueEnLote.tipoCurso, salon: choqueEnLote.salon,
+            horarioCurso: choqueEnLote.horarioCurso, inicioCurso: null, finalCurso: null,
+            guiaNombre: null, vigenciaIndeterminada: false, mismoEnvio: true,
+          }],
+        }
       );
     }
     enLote.push({ guia, tipoCurso: tipo, salon, horarioCurso: horario });

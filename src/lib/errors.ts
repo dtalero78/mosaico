@@ -12,7 +12,13 @@ export class AppError extends Error {
   constructor(
     message: string,
     public statusCode: number = 500,
-    public code?: string
+    public code?: string,
+    /**
+     * Datos estructurados del error, para que el cliente pueda hacer algo con él
+     * además de mostrar el texto — p. ej. el modal que corrige una colisión de
+     * horario necesita saber QUÉ curso choca y con cuáles.
+     */
+    public detail?: unknown
   ) {
     super(message);
     this.name = 'AppError';
@@ -52,8 +58,8 @@ export class ForbiddenError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string) {
-    super(message, 409, 'CONFLICT');
+  constructor(message: string, detail?: unknown) {
+    super(message, 409, 'CONFLICT', detail);
     this.name = 'ConflictError';
   }
 }

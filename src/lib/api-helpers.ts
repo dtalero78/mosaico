@@ -62,6 +62,8 @@ export function errorResponse(error: AppError) {
       success: false,
       error: error.message,
       code: error.code,
+      // Sólo viaja si el error lo trae; los demás responden igual que siempre.
+      ...(error.detail !== undefined ? { detail: error.detail } : {}),
     },
     { status: error.statusCode }
   );

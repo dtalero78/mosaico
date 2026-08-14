@@ -49,6 +49,12 @@ function CrearCampanaContent() {
   const [editMsg, setEditMsg] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<any | null>(null)
   const [rowBusy, setRowBusy] = useState(false)
+  // Colisión de horario del guía: se abre un modal para corregirla (cambiar
+  // horario o guía) y reintentar. No hay "guardar igual" — la idea es EVITAR
+  // la asignación cruzada, no advertirla.
+  const [colision, setColision] = useState<any | null>(null)
+  const [colHorario, setColHorario] = useState('')
+  const [colGuia, setColGuia] = useState('')
   // Gestión: campaña seleccionada en el dropdown ('' | '__NEW__' | nombre) + modal de curso
   const [gestionSel, setGestionSel] = useState('')
   const [showCursoModal, setShowCursoModal] = useState(false)
@@ -158,21 +164,85 @@ function CrearCampanaContent() {
   }
   const cancelEdit = () => { setForm(EMPTY); setEditIndex(null) }
 
-  const submit = async () => {
+  const submit = async (cursosOverride?: CursoDraft[]) => {
+    const lista = cursosOverride ?? cursos
     if (!campaign.trim()) { setMsg({ type: 'err', text: 'El nombre de la campaña es obligatorio.' }); return }
-    if (cursos.length === 0) { setMsg({ type: 'err', text: 'Agregue al menos un curso a la campaña.' }); return }
+    if (lista.length === 0) { setMsg({ type: 'err', text: 'Agregue al menos un curso a la campaña.' }); return }
     setSaving(true); setMsg(null)
     try {
       const res = await fetch('/api/postgres/campaigns', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaign: campaign.trim(), inicioCampania: inicioCampania || null, finalCampaign: finalCampaign || null, cursos }),
+        body: JSON.stringify({ campaign: campaign.trim(), inicioCampania: inicioCampania || null, finalCampaign: finalCampaign || null, cursos: lista }),
       })
       const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'Error al crear la campaña')
+      if (!res.ok) {
+        // Colisión de guía → modal para corregirla, no un simple mensaje.
+        if (d?.detail?.tipo === 'colision_guia') { abrirColision({ ...d.detail, origen: 'draft', lista }); return }
+        throw new Error(d.error || 'Error al crear la campaña')
+      }
+      setColision(null)
       setMsg({ type: 'ok', text: `Campaña "${campaign.trim()}" guardada con ${d.creados} curso(s).` })
       setCampaign(''); setInicioCampania(''); setFinalCampaign(''); setCursos([]); setForm(EMPTY); setEditIndex(null)
       loadExisting()
     } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setSaving(false) }
+  }
+
+  /** Abre el modal de colisión con los valores que fallaron ya cargados. */
+  const abrirColision = (detalle: any) => {
+    setColision(detalle)
+    setColHorario(detalle?.curso?.horarioCurso || '')
+    setColGuia(detalle?.curso?.guia || '')
+  }
+  const cancelarColision = () => { setColision(null); setSaving(false); setRowBusy(false) }
+  // Reintentar sin tocar nada dejaría el mismo cruce: el botón se deshabilita.
+  const sinCambios = !!colision
+    && colHorario === (colision.curso?.horarioCurso || '')
+    && colGuia === (colision.curso?.guia || '')
+  /** Aplica horario/guía nuevos al curso que chocó y reintenta el guardado. */
+  const reintentarColision = async () => {
+    if (!colision || sinCambios) return
+
+    if (colision.origen === 'edit') {
+      setEditRow((r: any) => (r ? { ...r, horarioCurso: colHorario, guia: colGuia } : r))
+      setColision(null)
+      await saveEdit({ horarioCurso: colHorario, guia: colGuia })
+      return
+    }
+
+    if (colision.origen === 'existing') {
+      // "Agregar curso" a una campaña ya guardada: se reenvía ese único curso.
+      const corregido = { ...colision.nuevo, horarioCurso: colHorario, guia: colGuia }
+      setForm((f) => ({ ...f, horarioCurso: colHorario, guia: colGuia }))
+      setColision(null)
+      setSaving(true); setMsg(null)
+      try {
+        const g = campaniasAgg.find(x => x.campaign === gestionSel)
+        const res = await fetch('/api/postgres/campaigns', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            campaign: gestionSel,
+            inicioCampania: g?.rows?.[0]?.inicioCampania ? String(g.rows[0].inicioCampania).slice(0, 10) : null,
+            finalCampaign: g?.finalCampaign ? String(g.finalCampaign).slice(0, 10) : null,
+            cursos: [corregido],
+          }),
+        })
+        const d = await res.json()
+        if (!res.ok) {
+          if (d?.detail?.tipo === 'colision_guia') { abrirColision({ ...d.detail, origen: 'existing', nuevo: corregido }); return }
+          throw new Error(d.error || 'Error al agregar el curso')
+        }
+        setMsg({ type: 'ok', text: `Curso agregado a "${gestionSel}".` })
+        setShowCursoModal(false); setForm(EMPTY); loadExisting()
+      } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setSaving(false) }
+      return
+    }
+
+    const lista: CursoDraft[] = (colision.lista || cursos).map((c: CursoDraft, i: number) =>
+      i === colision.indice ? { ...c, horarioCurso: colHorario, guia: colGuia } : c
+    )
+    setCursos(lista)
+    setColision(null)
+    await submit(lista)
   }
 
   const handleCSV = () => {
@@ -207,21 +277,28 @@ function CrearCampanaContent() {
     activa: r.activa !== false,
   }) }
 
-  const saveEdit = async () => {
+  const saveEdit = async (override?: { horarioCurso?: string; guia?: string }) => {
     if (!editRow) return
     setRowBusy(true); setEditMsg(null)
     try {
       const res = await fetch(`/api/postgres/campaigns/${editRow._id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tipoCurso: editRow.tipoCurso, salon: editRow.salon, guia: editRow.guia || null, horarioCurso: editRow.horarioCurso,
+          tipoCurso: editRow.tipoCurso, salon: editRow.salon,
+          // El modal de colisión reintenta con estos valores ya corregidos.
+          guia: (override?.guia !== undefined ? override.guia : editRow.guia) || null,
+          horarioCurso: override?.horarioCurso ?? editRow.horarioCurso,
           inicioCurso: editRow.inicioCurso || null, duracionCurso: editRow.duracionCurso,
           numeroUsuarios: editRow.numeroUsuarios, inicioCampania: editRow.inicioCampania || null,
           finalCampaign: editRow.finalCampaign || null, activa: editRow.activa,
         }),
       })
       const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'Error al editar el curso')
+      if (!res.ok) {
+        if (d?.detail?.tipo === 'colision_guia') { abrirColision({ ...d.detail, origen: 'edit' }); return }
+        throw new Error(d.error || 'Error al editar el curso')
+      }
+      setColision(null)
       setEditRow(null); setMsg({ type: 'ok', text: 'Curso actualizado.' }); loadExisting()
     } catch (e: any) { setEditMsg(e.message) } finally { setRowBusy(false) }
   }
@@ -338,7 +415,11 @@ function CrearCampanaContent() {
           }),
         })
         const d = await res.json()
-        if (!res.ok) throw new Error(d.error || 'Error al agregar el curso')
+        if (!res.ok) {
+          if (d?.detail?.tipo === 'colision_guia') { abrirColision({ ...d.detail, origen: 'existing', nuevo }); return }
+          throw new Error(d.error || 'Error al agregar el curso')
+        }
+        setColision(null)
         setMsg({ type: 'ok', text: `Curso agregado a "${gestionSel}".` })
         setShowCursoModal(false); setForm(EMPTY); loadExisting()
       } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setSaving(false) }
@@ -501,7 +582,7 @@ function CrearCampanaContent() {
             )}
             {cursos.length > 0 && (
               <div className="mt-4 flex justify-end">
-                <button type="button" onClick={submit} disabled={saving}
+                <button type="button" onClick={() => submit()} disabled={saving}
                   className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-accent-600 hover:bg-accent-700 disabled:opacity-50">
                   {saving ? 'Guardando...' : 'Crear Campaña'}
                 </button>
@@ -858,7 +939,7 @@ function CrearCampanaContent() {
             </label>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={() => setEditRow(null)} className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
-              <button type="button" onClick={saveEdit} disabled={rowBusy} className="px-4 py-2 text-sm rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
+              <button type="button" onClick={() => saveEdit()} disabled={rowBusy} className="px-4 py-2 text-sm rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
                 {rowBusy ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
@@ -944,6 +1025,80 @@ function CrearCampanaContent() {
             </div>
             <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
               <button type="button" onClick={() => setInscritosCurso(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de colisión de horario del guía — corregir y reintentar.
+          NO existe "guardar igual": el objetivo es evitar la asignación cruzada. */}
+      {colision && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full my-8">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">⚠ El guía ya tiene un curso a esa hora</h3>
+              <p className="text-xs text-gray-500">Cambia el horario o el guía para poder guardar.</p>
+            </div>
+
+            <div className="p-5">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 mb-4">
+                <p className="text-[11px] uppercase tracking-wide text-amber-800 font-bold mb-1">Choca con</p>
+                <ul className="space-y-1">
+                  {colision.colisiones.map((c: any, i: number) => (
+                    <li key={i} className="text-[13px] text-amber-900">
+                      {c.mismoEnvio ? 'Otro curso de este mismo envío: ' : ''}
+                      {c.campaign} · {c.tipoCurso}{c.salon ? ` · ${c.salon}` : ''} · {c.horarioCurso}
+                      {c.inicioCurso && c.finalCurso && (
+                        <span className="text-amber-700"> ({c.inicioCurso} → {c.finalCurso})</span>
+                      )}
+                      {c.vigenciaIndeterminada && (
+                        <span className="block text-[11px] text-amber-700">Sin fechas de vigencia — no se pudo descartar el cruce.</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 font-bold mb-2">
+                Curso que intentas guardar: {colision.curso.tipoCurso}{colision.curso.salon ? ` · ${colision.curso.salon}` : ''}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="col-horario" className="block text-xs font-medium text-gray-500 uppercase mb-1">Horario</label>
+                  <select id="col-horario" value={colHorario} onChange={e => setColHorario(e.target.value)} className={inputCls}>
+                    {horariosFor(colision.curso.tipoCurso).map(h => <option key={h} value={h}>{h}</option>)}
+                    {/* El actual, aunque ya no esté en el catálogo (cursos antiguos) */}
+                    {!horariosFor(colision.curso.tipoCurso).includes(colision.curso.horarioCurso) && (
+                      <option value={colision.curso.horarioCurso}>{colision.curso.horarioCurso} (actual)</option>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="col-guia" className="block text-xs font-medium text-gray-500 uppercase mb-1">Guía</label>
+                  <select id="col-guia" value={colGuia} onChange={e => setColGuia(e.target.value)} className={inputCls}>
+                    <option value="">Sin guía</option>
+                    {guias.map(g => <option key={g._id} value={g._id}>{g.nombreCompleto}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {sinCambios && (
+                <p className="text-[12px] text-gray-500 mt-3">
+                  Cambia el horario o el guía: con estos valores el cruce sigue ahí.
+                </p>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-3">
+              <button type="button" onClick={cancelarColision}
+                className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={reintentarColision} disabled={sinCambios || saving || rowBusy}
+                className="px-4 py-2 text-sm rounded-lg bg-primary-600 text-white font-medium hover:bg-primary-700 disabled:opacity-40">
+                {saving || rowBusy ? 'Guardando…' : 'Aplicar y guardar'}
+              </button>
             </div>
           </div>
         </div>
