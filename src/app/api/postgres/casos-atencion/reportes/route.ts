@@ -1,7 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { ValidationError } from '@/lib/errors';
-import { crearReporte, casosAbiertosDeAlumno } from '@/services/casos-atencion.service';
+import { crearReporte, casosAbiertosDeAlumno, guiaDeSesion } from '@/services/casos-atencion.service';
 
 /**
  * Reportes de Casos de Atención — se crean SÓLO desde aquí (R1) y son
@@ -28,6 +28,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json().catch(() => ({}));
   const u = (session as any)?.user || {};
 
+  // `guiaId` debe ser el GUIAS._id, no el de la sesión (que es USUARIOS_ROLES):
+  // es lo que compara el filtro "sólo mis casos" del listado. Si quien reporta
+  // no es un guía (un coordinador, por ejemplo), queda null y basta el nombre.
+  const guia = await guiaDeSesion(u.email);
+
   const r = await crearReporte({
     academicaId: body?.academicaId,
     texto: body?.texto,
@@ -35,8 +40,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     eventoId: body?.eventoId ?? null,
     bookingId: body?.bookingId ?? null,
     // Autor = quien está logueado.
-    guiaId: u.id ?? null,
-    guiaNombre: u.name || u.email || null,
+    guiaId: guia?._id ?? null,
+    // El nombreCompleto de GUIAS, no session.user.name — ese trae sólo el
+    // nombre de pila y el reporte quedaría firmado a medias.
+    guiaNombre: guia?.nombreCompleto || u.name || u.email || null,
     destino: body?.destino ?? null,
   });
 

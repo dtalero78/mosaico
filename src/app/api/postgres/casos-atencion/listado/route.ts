@@ -3,7 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission, Role } from '@/types/permissions';
 import { query } from '@/lib/postgres';
-import { ESTADO_ABIERTO } from '@/services/casos-atencion.service';
+import { ESTADO_ABIERTO, guiaIdDeSesion } from '@/services/casos-atencion.service';
 
 /**
  * GET /api/postgres/casos-atencion/listado — Académico › Casos Usuarios.
@@ -31,15 +31,19 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const params: any[] = [];
   let i = 1;
 
-  // Alcance del guía: sólo sus reportes.
+  // Alcance del guía: sólo sus reportes. El id se resuelve por EMAIL contra
+  // GUIAS — `session.user.id` es el de USUARIOS_ROLES, otra fila, y
+  // `session.user.name` sólo trae el nombre de pila (ver `guiaIdDeSesion`).
   const u = (session as any)?.user || {};
   const esGuia = String(u.role || '') === Role.ADVISOR;
   if (esGuia) {
+    const gid = await guiaIdDeSesion(u.email);
     where.push(`EXISTS (SELECT 1 FROM "CASOS_REPORTES" rr
                          WHERE rr."casoId" = c."_id"
-                           AND (LOWER(TRIM(rr."guiaId")) = LOWER(TRIM($${i}))
-                             OR LOWER(TRIM(rr."guiaNombre")) = LOWER(TRIM($${i + 1}))))`);
-    params.push(u.id || '', u.name || u.email || '');
+                           AND (($${i} <> '' AND rr."guiaId" = $${i})
+                             OR LOWER(TRIM(COALESCE(rr."guiaNombre",''))) = LOWER(TRIM($${i + 1}))))`);
+    // El nombre queda como respaldo para reportes viejos sin guiaId resuelto.
+    params.push(gid || '', u.name || u.email || '');
     i += 2;
   }
 
