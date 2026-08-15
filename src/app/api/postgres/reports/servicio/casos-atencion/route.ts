@@ -49,6 +49,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             p."tipoCurso" AS curso,
             TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido"), '\\s+', ' ', 'g')) AS nombre,
             p."numeroId" AS "numeroId",
+            p."contrato",
+            -- Titular del contrato: el enlace del nº de contrato abre SU ficha en
+            -- la pestaña Financiera (el resumen financiero es del titular, no del
+            -- beneficiario). LATERAL para quedarnos con uno solo.
+            tit."_id" AS "titularId",
             p."salon",
             COALESCE(c."step", b."step") AS leccion,
             n."description" AS tema,
@@ -64,6 +69,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
          ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
        LEFT JOIN "NIVELES" n ON n."curso" = p."tipoCurso" AND n."step" = COALESCE(c."step", b."step")
+       LEFT JOIN LATERAL (
+         SELECT t."_id" FROM "PEOPLE" t
+          WHERE t."contrato" = p."contrato" AND t."tipoUsuario" = 'TITULAR' LIMIT 1
+       ) tit ON true
       WHERE ${where.join(' AND ')}
       ORDER BY fecha DESC NULLS LAST, nombre ASC
       LIMIT ${MAX_ROWS}`,

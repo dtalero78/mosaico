@@ -39,6 +39,9 @@ interface Row {
   curso: string | null
   nombre: string
   numeroId: string | null
+  contrato: string | null
+  /** PEOPLE._id del titular: el nº de contrato enlaza a SU pestaña Financiera. */
+  titularId: string | null
   salon: string | null
   leccion: string | null
   tema: string | null
@@ -153,7 +156,15 @@ function CasosAtencionContent() {
       ], 'sesiones-vacias')
       return
     }
-    const cols: any[] = [
+    // El CSV sigue a la tabla: en Casos van las mismas columnas que se ven.
+    const cols: any[] = tab === 'casos' ? [
+      { header: 'Curso', accessor: (r: Row) => r.curso || '' },
+      { header: 'Nombre', accessor: (r: Row) => r.nombre || '' },
+      { header: 'Contrato', accessor: (r: Row) => r.contrato || '' },
+      { header: 'ID', accessor: (r: Row) => r.numeroId || '' },
+      { header: 'Salón', accessor: (r: Row) => r.salon || '' },
+      { header: 'Guía', accessor: (r: Row) => r.guia || '' },
+    ] : [
       { header: 'Curso', accessor: (r: Row) => r.curso || '' },
       { header: 'Nombre', accessor: (r: Row) => r.nombre || '' },
       { header: 'ID', accessor: (r: Row) => r.numeroId || '' },
@@ -162,18 +173,17 @@ function CasosAtencionContent() {
       { header: 'Tema', accessor: (r: Row) => r.tema || '' },
       { header: 'Guía', accessor: (r: Row) => r.guia || '' },
     ]
+    // Fecha va antes que la última columna para que el CSV siga el orden de la
+    // tabla (…Guía · Fecha · Estado).
+    cols.push({ header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fecha) })
     if (tab === 'casos') {
-      cols.push(
-        { header: 'Caso', accessor: (r: Row) => r.caso || '' },
-        { header: 'Conteo', accessor: (r: Row) => (r.conteo ?? '') },
-      )
+      cols.push({ header: 'Estado', accessor: () => 'Pendiente' })
     } else {
       cols.push(
         { header: 'Contactado apoderado', accessor: (r: Row) => (r.contactadoApoderado ? 'Sí' : 'No') },
         { header: 'Recordatorio enviado', accessor: (r: Row) => (r.recordatorioEnviado ? 'Sí' : 'No') },
       )
     }
-    cols.push({ header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fecha) })
     exportToExcel(rows, cols, tab === 'casos' ? 'casos-atencion' : 'inasistencias-semana')
   }
 
@@ -239,7 +249,7 @@ function CasosAtencionContent() {
 
   const hayDatos = tab === 'vacias' ? grupos.length > 0 : rows.length > 0
   const columnas = tab === 'casos'
-    ? ['Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Caso', 'Conteo', 'Fecha', 'Resuelto']
+    ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
     : tab === 'asistencia'
       ? ['Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Fecha', 'Contactado apoderado', 'Envío recordatorio']
       : ['Curso', 'Faltaron', 'Salón', 'Lección (tema)', 'Guía', 'Fecha']
@@ -387,7 +397,60 @@ function CasosAtencionContent() {
                     ))}
                   </Fragment>
                 ))
-              ) : rows.map((r) => (
+              ) : tab === 'casos' ? rows.map((r) => (
+                /* Curso · Nombre · Contrato · ID · Salón · Guía · Fecha · Estado */
+                <tr key={r.bookingId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                    {r.nombre ? (
+                      <button
+                        type="button"
+                        /* Abre la ficha del alumno directamente en Casos Atención. */
+                        onClick={() => window.open(`/student/${r.academicaId}?tab=casos-atencion`, '_blank', 'noopener,noreferrer')}
+                        className="text-primary-600 hover:text-primary-800 hover:underline"
+                        title="Ver los casos de atención del beneficiario"
+                      >
+                        {r.nombre}
+                      </button>
+                    ) : <span className="text-gray-900">—</span>}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {r.contrato ? (
+                      r.titularId ? (
+                        <button
+                          type="button"
+                          /* El resumen financiero es del TITULAR, por eso el enlace
+                             va a su ficha y no a la del beneficiario. */
+                          onClick={() => window.open(`/person/${r.titularId}?tab=financiera`, '_blank', 'noopener,noreferrer')}
+                          className="text-primary-600 hover:text-primary-800 hover:underline"
+                          title="Ver la información financiera del titular"
+                        >
+                          {r.contrato}
+                        </button>
+                      ) : <span className="text-gray-700" title="El contrato no tiene titular registrado">{r.contrato}</span>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.numeroId || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600">
+                    <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
+                  </td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {/* El informe sólo lista casos abiertos, así que el estado es
+                        Pendiente y el botón es la vía para cerrarlo. */}
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 mr-2">
+                      Pendiente
+                    </span>
+                    <button type="button" title="Marcar como resuelto (agrega un comentario al historial)"
+                      onClick={() => { setResolver(r); setComentario('') }}
+                      disabled={!canGestion}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                      <CheckCircleIcon className="h-4 w-4" /> Resolver
+                    </button>
+                  </td>
+                </tr>
+              )) : rows.map((r) => (
                 <tr key={r.bookingId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
                   <td className="px-3 py-2 font-medium whitespace-nowrap">
@@ -414,25 +477,9 @@ function CasosAtencionContent() {
                     <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
                   </td>
 
-                  {tab === 'casos' ? (
-                    <>
-                      <td className="px-3 py-2 text-gray-600 max-w-xs">
-                        <span className="block whitespace-pre-wrap break-words">{r.caso || '—'}</span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
-                      </td>
-                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
-                      <td className="px-3 py-2">
-                        <button type="button" title="Marcar como resuelto (agrega un comentario al historial)"
-                          onClick={() => { setResolver(r); setComentario('') }}
-                          disabled={!canGestion}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
-                          <CheckCircleIcon className="h-4 w-4" /> Resuelto
-                        </button>
-                      </td>
-                    </>
-                  ) : (
+                  {/* Sólo la pestaña Asistencia llega aquí: la de Casos tiene su
+                      propio bloque de filas arriba, con columnas distintas. */}
+                  {(
                     <>
                       <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
                       {/* Fijas a la derecha: el botón de enviar debe verse siempre,

@@ -10,6 +10,7 @@ import { StudentPermission } from '@/types/permissions'
 import StudentGeneral from './StudentGeneral'
 import StudentAcademic from './StudentAcademic'
 import StudentContract from './StudentContract'
+import StudentCasosAtencion from './StudentCasosAtencion'
 import StudentWhatsApp from './StudentWhatsApp'
 import StudentComments from './StudentComments'
 import StudentProgress from './StudentProgress'
@@ -34,6 +35,8 @@ interface WelcomePreview {
 const tabs = [
   { id: 'general', name: 'Información General', icon: 'ℹ️' },
   { id: 'academic', name: 'Académica', icon: '📚', hasSubmenu: true },
+  // Destino del enlace desde Servicio › Casos de Atención (nombre del beneficiario).
+  { id: 'casos-atencion', name: 'Casos Atención', icon: '🛎️' },
   { id: 'contract', name: 'Contrato', icon: '📝' },
   { id: 'whatsapp', name: 'WhatsApp', icon: '💬' },
   { id: 'comments', name: 'Comentarios', icon: '💭' },
@@ -51,7 +54,12 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     if (searchParams?.get('agendar')) {
       setActiveTab('academic')
       setAcademicView('schedule')
+      return
     }
+    // Deep-link ?tab=<id> (ej. Servicio › Casos de Atención → nombre del alumno).
+    // Sólo se aceptan ids conocidos para no dejar la ficha en una pestaña vacía.
+    const t = searchParams?.get('tab')
+    if (t && tabs.some(x => x.id === t)) setActiveTab(t)
   }, [searchParams])
   const [showAcademicSubmenu, setShowAcademicSubmenu] = useState(false)
   const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null)
@@ -102,6 +110,8 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
           return <StudentProgress student={student} />
         }
         return <StudentAcademic student={student} classes={classes} view={academicView as any} />
+      case 'casos-atencion':
+        return <StudentCasosAtencion studentName={`${student.primerNombre || ''} ${student.primerApellido || ''}`.trim()} />
       case 'contract':
         return <StudentContract student={student} contratoFinalizado={contratoFinalizado} />
       case 'whatsapp':
