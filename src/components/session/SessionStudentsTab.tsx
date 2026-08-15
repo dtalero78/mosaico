@@ -10,6 +10,7 @@ import {
   ExclamationTriangleIcon,
   HandRaisedIcon,
 } from '@heroicons/react/24/outline'
+import ReportarCasoModal from './ReportarCasoModal'
 
 interface CalendarioEvent {
   _id: string
@@ -126,6 +127,8 @@ export default function SessionStudentsTab({
   const [calificacion, setCalificacion] = useState('')
   const [comentarios, setComentarios] = useState('')
   const [advisorAnotaciones, setAdvisorAnotaciones] = useState('')
+  // Modal del módulo nuevo de Casos de Atención (Académico › Casos Usuarios).
+  const [reportarCaso, setReportarCaso] = useState(false)
   // La caja "Actividad Propuesta (IA)" se movió al botón "Actividad IA" de la
   // barra de pestañas: ahora es UNA actividad para todo el grupo. El valor ya
   // guardado en el booking se conserva y se reenvía tal cual al guardar, así que
@@ -558,10 +561,24 @@ export default function SessionStudentsTab({
 
             {/* Casos de Atención */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <DocumentTextIcon className="h-5 w-5" />
-                Casos de Atención
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <DocumentTextIcon className="h-5 w-5" />
+                  Casos de Atención
+                </h3>
+                {/* Abre un reporte del módulo nuevo (Académico › Casos Usuarios).
+                    El textarea de abajo es el flujo anterior, que alimenta el
+                    informe de Servicio y se conserva tal cual. */}
+                <button
+                  type="button"
+                  onClick={() => setReportarCaso(true)}
+                  disabled={isLocked || !selectedStudent?._id}
+                  title="Enviar un reporte al módulo de Casos de Atención"
+                  className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Reportar caso
+                </button>
+              </div>
               <textarea
                 value={advisorAnotaciones}
                 onChange={(e) => setAdvisorAnotaciones(e.target.value)}
@@ -661,6 +678,22 @@ export default function SessionStudentsTab({
             </div>
           </div>
         </div>
+      )}
+
+      {reportarCaso && selectedStudent && (
+        <ReportarCasoModal
+          academicaId={selectedStudent._id}
+          alumno={`${selectedStudent.primerNombre || ''} ${selectedStudent.primerApellido || ''}`.trim()}
+          eventoId={evento?._id}
+          bookingId={selectedStudent.classRecord?._id ?? null}
+          sesionLabel={evento?.dia
+            ? `Sesión del ${new Date(evento.dia).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}${evento?.step ? ` · ${evento.step}` : ''}`
+            : undefined}
+          onClose={() => setReportarCaso(false)}
+          onEnviado={(r) => toast.success(
+            r.abrioCaso ? `Reporte enviado. Se abrió el caso ${r.codigo}.` : `Reporte agregado al caso ${r.codigo}.`
+          )}
+        />
       )}
     </div>
   )

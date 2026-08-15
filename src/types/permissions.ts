@@ -202,6 +202,10 @@ export enum AcademicoPermission {
   LISTA_USUARIOS_EXPORTAR = 'ACADEMICO.LISTA_USUARIOS.EXPORTAR',
   LISTA_USUARIOS_EDITAR   = 'ACADEMICO.LISTA_USUARIOS.EDITAR',
 
+  // Casos Usuarios — módulo de Casos de Atención (Académico). El rol GUIA sólo
+  // ve los casos que él mismo reportó; los demás roles ven todos.
+  CASOS_USUARIOS_VER = 'ACADEMICO.CASOS_USUARIOS.VER',
+
   // Evaluaciones — resultados de evaluaciones/cuestionarios por curso (Académico)
   EVALUACIONES_VER = 'ACADEMICO.EVALUACIONES.VER',
 

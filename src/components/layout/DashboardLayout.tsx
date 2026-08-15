@@ -58,6 +58,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Reporte Académico', href: '/dashboard/academic/reporte-academico', newTab: true },
           { name: 'Evaluaciones', href: '/dashboard/academic/evaluaciones', newTab: true },
           { name: 'Entrenamientos', href: '/dashboard/academic/entrenamientos', newTab: true },
+          { name: 'Casos Usuarios', href: '/dashboard/academic/casos-usuarios', newTab: true },
         ],
       },
       // Submenú Sesiones — lo que opera sesiones fuera del calendario del día a día.
@@ -323,6 +324,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/dashboard/academic/entrenamientos': [
       AcademicoPermission.ENTRENAMIENTOS_VER,
+    ],
+    '/dashboard/academic/casos-usuarios': [
+      AcademicoPermission.CASOS_USUARIOS_VER,
     ],
     '/panel-advisor': [
       AcademicoPermission.ADVISOR_VER_ENLACE,

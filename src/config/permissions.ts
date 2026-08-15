@@ -616,6 +616,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/sesiones-sin-gestion. Lista de eventos pasados sin registrar (sesionCerrada=false) con filtros por fecha y advisor. Muestra inscritos/asistencia marcada para detectar si el advisor empezó pero no cerró, y un acceso directo al panel del evento para que el coordinador gestione el cierre.',
   },
   {
+    code: AcademicoPermission.CASOS_USUARIOS_VER,
+    module: Module.ACADEMICO,
+    section: 'Casos Usuarios',
+    name: 'Página "Casos Usuarios"',
+    description: 'Acceso a /dashboard/academic/casos-usuarios. Casos de Atención de los alumnos: reportes del guía agrupados por tema, estado de gestión, intentos de contacto con el apoderado, acuerdo y seguimiento de finanzas. El rol GUIA ve SÓLO los casos que él mismo reportó; los demás roles ven todos. Distinto del informe Servicio › Casos de Atención, que es la lista plana anterior.',
+  },
+  {
     code: AcademicoPermission.EVALUACIONES_VER,
     module: Module.ACADEMICO,
     section: 'Evaluaciones',
