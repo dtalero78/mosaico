@@ -5,7 +5,7 @@ import {
   getCasoDetalle, cambiarEstado, agregarContacto, guardarGestion, marcarReportesLeidos,
   type EstadoCaso,
 } from '@/services/casos-atencion.service';
-import { recalcularEnSegundoPlano } from '@/services/casos-reincidencia.service';
+import { recalcularEnSegundoPlano, resolverReincidenciaInmediata } from '@/services/casos-reincidencia.service';
 
 /**
  * Detalle y gestión de un Caso de Atención.
@@ -24,6 +24,11 @@ import { recalcularEnSegundoPlano } from '@/services/casos-reincidencia.service'
 export const GET = handlerWithAuth(async (_request, ctx: any, session) => {
   const id = String(ctx?.params?.id || '').trim();
   if (!id) throw new ValidationError('Falta el id del caso.');
+
+  // Primer caso del alumno: la reincidencia es BAJA por definición y se resuelve
+  // aquí mismo (dos queries) para que la ficha no se abra en "Calculando…".
+  // Si hay historial devuelve null y el cálculo con IA queda para el background.
+  await resolverReincidenciaInmediata(id).catch(() => null);
 
   const detalle = await getCasoDetalle(id);
 

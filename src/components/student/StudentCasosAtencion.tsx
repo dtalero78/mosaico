@@ -117,6 +117,17 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
 
   useEffect(() => { if (casoId) cargarDetalle(casoId) }, [casoId, cargarDetalle])
 
+  // La reincidencia con IA se calcula en segundo plano, así que la primera
+  // lectura puede llegar sin ella. Se reintenta UNA vez a los 8 s para que la
+  // ficha no se quede en "Calculando…" hasta que alguien refresque a mano.
+  // (El primer caso del alumno no pasa por aquí: el servidor lo resuelve al
+  // vuelo, porque sin antecedentes la reincidencia es BAJA por definición.)
+  useEffect(() => {
+    if (!casoId || !d || d.caso?.reincidenciaNivel) return
+    const t = setTimeout(() => { cargarDetalle(casoId) }, 8000)
+    return () => clearTimeout(t)
+  }, [casoId, d, cargarDetalle])
+
   const patch = async (body: any, okMsg?: string) => {
     if (!casoId) return
     setBusy(true); setMsg(null)

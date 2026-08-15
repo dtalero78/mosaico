@@ -67,6 +67,45 @@ async function reunirFactores(academicaId: string, casoId: string): Promise<Fact
   return f as Factores;
 }
 
+/**
+ * ¿Es el primer caso del alumno, sin antecedentes? Entonces la reincidencia es
+ * **BAJA por definición** — no hay historial contra el que reincidir, así que
+ * preguntarle a la IA no aporta nada y sólo deja la ficha en "Calculando…".
+ */
+function sinAntecedentes(f: Factores): boolean {
+  return f.reportesTotales <= 1 && f.casosPrevios === 0;
+}
+
+/**
+ * Resuelve la reincidencia AHORA cuando no hace falta la IA (primer caso del
+ * alumno). Devuelve `null` si el caso sí tiene historial, y entonces el cálculo
+ * queda para el background.
+ *
+ * Se llama con `await` desde el GET del detalle: son dos queries, milisegundos,
+ * así que el primer caso ya se abre con su valor en vez de con "Calculando…".
+ */
+export async function resolverReincidenciaInmediata(casoId: string): Promise<NivelReincidencia | null> {
+  const caso = await queryOne<{ academicaId: string; nivel: string | null }>(
+    `SELECT "academicaId", "reincidenciaNivel" AS nivel FROM "CASOS_ATENCION" WHERE "_id" = $1`,
+    [casoId]
+  );
+  if (!caso || caso.nivel) return null;          // ya tiene valor: nada que hacer
+
+  const f = await reunirFactores(caso.academicaId, casoId);
+  if (!sinAntecedentes(f)) return null;          // hay historial → lo mira la IA
+
+  await query(
+    `UPDATE "CASOS_ATENCION"
+        SET "reincidenciaNivel" = 'BAJA', "reincidenciaPatron" = $1,
+            "reincidenciaFactores" = $2, "reincidenciaCalculadaEn" = NOW()
+      WHERE "_id" = $3`,
+    ['sin antecedentes',
+      JSON.stringify({ ...f, fuente: 'reglas', resumen: 'Primer caso del alumno: no hay historial previo.' }),
+      casoId]
+  );
+  return 'BAJA';
+}
+
 /** Regla de respaldo cuando no hay OpenAI o la llamada falla. */
 function nivelPorReglas(f: Factores): NivelReincidencia {
   if (f.reportesTotales >= 5 || f.casosPrevios >= 2 || f.reportesUltimos30d >= 3) return 'ALTA';
@@ -91,8 +130,14 @@ export async function calcularReincidencia(casoId: string): Promise<{
   let fuente: 'ia' | 'reglas' = 'reglas';
   let resumen: string | undefined;
 
+  // Primer caso: BAJA por definición, sin gastar una llamada a la IA.
+  if (sinAntecedentes(factores)) {
+    factores.temaPredominante = 'sin antecedentes';
+    resumen = 'Primer caso del alumno: no hay historial previo.';
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
-  if (apiKey && factores.reportesTotales > 0) {
+  if (apiKey && factores.reportesTotales > 0 && !sinAntecedentes(factores)) {
     try {
       // Al modelo se le pasan los textos de los reportes: el matiz que no
       // capturan los contadores (¿es el mismo problema repitiéndose o son
