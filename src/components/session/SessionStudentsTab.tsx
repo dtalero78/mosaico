@@ -124,10 +124,10 @@ export default function SessionStudentsTab({
   const [acPermanencia, setAcPermanencia] = useState(false)
   const [acRespeto, setAcRespeto] = useState(false)
   const [acDisposicion, setAcDisposicion] = useState(false)
-  const [calificacion, setCalificacion] = useState('')
   const [comentarios, setComentarios] = useState('')
-  const [advisorAnotaciones, setAdvisorAnotaciones] = useState('')
-  // Modal del módulo nuevo de Casos de Atención (Académico › Casos Usuarios).
+  // Modal de "Reportar caso": ÚNICO origen de un Caso de Atención. El textarea
+  // que había aquí se retiró — el reporte alimenta el módulo de Casos y también
+  // el informe de Servicio.
   const [reportarCaso, setReportarCaso] = useState(false)
   // La caja "Actividad Propuesta (IA)" se movió al botón "Actividad IA" de la
   // barra de pestañas: ahora es UNA actividad para todo el grupo. El valor ya
@@ -211,9 +211,7 @@ export default function SessionStudentsTab({
       setAsistencia(selectedStudent.classRecord.asistencia || false)
       setParticipacion(selectedStudent.classRecord.participacion || false)
       setNoAprobo((selectedStudent.classRecord as any).noAprobo || false)
-      setCalificacion(selectedStudent.classRecord.calificacion || '')
       setComentarios(selectedStudent.classRecord.comentarios || '')
-      setAdvisorAnotaciones(selectedStudent.classRecord.advisorAnotaciones || '')
       setActividadPropuesta(selectedStudent.classRecord.actividadPropuesta || '')
       const cr = selectedStudent.classRecord as any
       setHePuntualidad(cr.hePuntualidad || false)
@@ -232,9 +230,7 @@ export default function SessionStudentsTab({
     setAsistencia(false)
     setParticipacion(false)
     setNoAprobo(false)
-    setCalificacion('')
     setComentarios('')
-    setAdvisorAnotaciones('')
     setActividadPropuesta('')
     setHePuntualidad(false)
     setHeAsignacion(false)
@@ -280,9 +276,14 @@ export default function SessionStudentsTab({
           acPermanencia,
           acRespeto,
           acDisposicion,
-          calificacion,
+          // `calificacion` NO se envía: se retiró del panel porque MOSAICO no la
+          // usa. El endpoint sólo la toca si viene, así que lo ya guardado en
+          // bookings antiguos se conserva.
           comentarios,
-          advisorAnotaciones,
+          // `advisorAnotaciones` NO se envía a propósito: el endpoint recalcula
+          // `casoAtencion` a partir de este campo, así que mandarlo vacío
+          // cerraría el caso al guardar la evaluación. Ahora lo escribe sólo el
+          // flujo de "Reportar caso".
           actividadPropuesta,
           nivel: evento?.tituloONivel,
           step: evento?.nombreEvento ? extractStepNumber(evento.nombreEvento) : evento?.nombreEvento,
@@ -332,8 +333,8 @@ export default function SessionStudentsTab({
     const vacio = !asistencia && !participacion && !noAprobo
       && !hePuntualidad && !heAsignacion && !daDominio && !daDesafio
       && !acPermanencia && !acRespeto && !acDisposicion
-      && !calificacion.trim() && !comentarios.trim()
-      && !advisorAnotaciones.trim() && !actividadPropuesta.trim()
+      && !comentarios.trim()
+      && !actividadPropuesta.trim()
     if (vacio) { setShowEmptyWarn(true); return }
     await doSaveClassRecord()
   }
@@ -387,11 +388,6 @@ export default function SessionStudentsTab({
                       <div className="flex items-center gap-2">
                         {student.classRecord?.asistencia && (
                           <CheckCircleIcon className="h-5 w-5 text-green-600" title="Asistió" />
-                        )}
-                        {student.classRecord?.calificacion && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                            {student.classRecord.calificacion}
-                          </span>
                         )}
                       </div>
                     </div>
@@ -522,27 +518,6 @@ export default function SessionStudentsTab({
               </div>
             </div>
 
-            {/* Calificación — OCULTA en MOSAICO (no se usa). Se conserva el código y
-                el campo `calificacion` por si se decide usarla más adelante. */}
-            {false && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Calificación</h3>
-              <select
-                value={calificacion}
-                onChange={(e) => setCalificacion(e.target.value)}
-                disabled={isLocked}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value="">Seleccionar calificación</option>
-                <option value="Excelente">Excelente</option>
-                <option value="Muy Bien">Muy Bien</option>
-                <option value="Bien">Bien</option>
-                <option value="Regular">Regular</option>
-                <option value="Necesita Mejorar">Necesita Mejorar</option>
-              </select>
-            </div>
-            )}
-
             {/* Comentarios para el usuario */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -566,27 +541,26 @@ export default function SessionStudentsTab({
                   <DocumentTextIcon className="h-5 w-5" />
                   Casos de Atención
                 </h3>
-                {/* Abre un reporte del módulo nuevo (Académico › Casos Usuarios).
-                    El textarea de abajo es el flujo anterior, que alimenta el
-                    informe de Servicio y se conserva tal cual. */}
+                {/* ÚNICO origen de un caso. El textarea que había aquí se
+                    retiró: eran dos formas de reportar lo mismo, y además el
+                    caso se cerraba solo si el guía borraba el texto y volvía a
+                    guardar. Ahora el reporte alimenta el módulo de Casos y
+                    también el informe de Servicio. */}
                 <button
                   type="button"
                   onClick={() => setReportarCaso(true)}
                   disabled={isLocked || !selectedStudent?._id}
-                  title="Enviar un reporte al módulo de Casos de Atención"
+                  title="Reportar una situación de este estudiante"
                   className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Reportar caso
                 </button>
               </div>
-              <textarea
-                value={advisorAnotaciones}
-                onChange={(e) => setAdvisorAnotaciones(e.target.value)}
-                disabled={isLocked}
-                rows={4}
-                placeholder="Describe el caso de atención de este estudiante..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-              />
+              <p className="text-sm text-gray-500">
+                Usa <span className="font-medium text-gray-700">Reportar caso</span> para dejar constancia de una
+                situación del estudiante. El reporte no se puede editar ni borrar; queda en su ficha y en el
+                módulo de Casos de Atención.
+              </p>
             </div>
 
             {/* Botón Guardar */}
@@ -597,7 +571,7 @@ export default function SessionStudentsTab({
                 disabled={isLocked}
                 className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
               >
-                {isLocked ? 'Edición bloqueada' : 'Guardar Calificación y Comentarios'}
+                {isLocked ? 'Edición bloqueada' : 'Guardar registro Usuario'}
               </button>
             </div>
           </>

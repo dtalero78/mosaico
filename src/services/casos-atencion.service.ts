@@ -242,6 +242,20 @@ export async function crearReporte(input: CrearReporteInput): Promise<CrearRepor
         input.bookingId || null, input.guiaId || null, input.guiaNombre || null, abrioCaso]
     );
 
+    // Origen ÚNICO: reportar aquí alimenta también el informe Servicio › Casos
+    // de Atención, que sigue leyendo la marca del booking. Antes lo hacía el
+    // textarea del panel de la sesión, que se retiró para no tener dos formas
+    // de reportar lo mismo. Va en la misma transacción: si el caso se crea, la
+    // marca se pone; si algo falla, no queda ni lo uno ni lo otro.
+    if (input.bookingId) {
+      await client.query(
+        `UPDATE "ACADEMICA_BOOKINGS"
+            SET "casoAtencion" = true, "advisorAnotaciones" = $1, "_updatedDate" = NOW()
+          WHERE "_id" = $2`,
+        [texto, input.bookingId]
+      );
+    }
+
     return { reporteId, casoId, codigo, abrioCaso };
   });
 }
