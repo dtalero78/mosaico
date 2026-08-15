@@ -366,3 +366,97 @@ export async function marcarReportesLeidos(casoId: string, actor: Actor) {
   );
   return { marcados: r.rowCount ?? 0 };
 }
+
+/**
+ * Detalle completo del caso para la pestaña del alumno.
+ *
+ * El contexto administrativo (curso, salón, horario, guía, contrato, apoderado,
+ * asesor, ejecutivo de finanzas, estado de finanzas) NO vive en el caso: se
+ * DERIVA de sus fuentes en cada lectura (R10). Copiarlo lo dejaría desfasado en
+ * cuanto el alumno cambie de salón o el contrato de gestor.
+ */
+export async function getCasoDetalle(casoId: string) {
+  const caso = await queryOne<any>(
+    `SELECT c.*,
+            -- Alumno
+            TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre",
+                 p."primerApellido", p."segundoApellido"), '\s+', ' ', 'g')) AS "alumno",
+            -- Contexto académico: del alumno, no copiado al caso
+            p."tipoCurso" AS "curso", p."salon", p."horarioCurso", p."campaign",
+            g."nombreCompleto" AS "guiaCurso",
+            -- Contexto administrativo: apoderado del beneficiario, el resto del titular
+            p."apoderado", p."apoderadoTelefono", p."apoderadoMail",
+            t."asesor" AS "asesorComercial",
+            ur."nombre" || ' ' || COALESCE(ur."apellido",'') AS "ejecutivoFinanzas",
+            pg."tipoCartera" AS "estadoFinanzas",
+            fin."numeroCuotas", fin."cuotasPagadas", fin."saldo"
+       FROM "CASOS_ATENCION" c
+       JOIN "ACADEMICA" a ON a."_id" = c."academicaId"
+       LEFT JOIN "PEOPLE" p ON p."_id" = a."peopleId"
+       LEFT JOIN "CURSOS_CAMPAIGN" cc
+         ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso"
+        AND cc."horarioCurso" = p."horarioCurso"
+       LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
+       LEFT JOIN LATERAL (
+         SELECT * FROM "PEOPLE" tt
+          WHERE tt."contrato" = p."contrato" AND tt."tipoUsuario" = 'TITULAR' LIMIT 1
+       ) t ON true
+       LEFT JOIN "USUARIOS_ROLES" ur ON ur."_id" = t."gestorRecaudo"
+       LEFT JOIN LATERAL (
+         SELECT "tipoCartera" FROM "PAGOS_TITULARES"
+          WHERE "idPeople" = t."_id" AND "numCuota" = 0 LIMIT 1
+       ) pg ON true
+       LEFT JOIN LATERAL (
+         SELECT "numeroCuotas", "cuotasPagadas", "saldo" FROM "FINANCIEROS"
+          WHERE "contrato" = p."contrato" ORDER BY "_createdDate" DESC LIMIT 1
+       ) fin ON true
+      WHERE c."_id" = $1`,
+    [casoId]
+  );
+  if (!caso) throw new NotFoundError('Caso de atención', casoId);
+
+  const [reportes, contactos, historial, otrosAbiertos, cerrados] = await Promise.all([
+    query<any>(
+      `SELECT r.*, ev."dia" AS "sesionDia", ev."nivel" AS "sesionCurso", ev."salon" AS "sesionSalon"
+         FROM "CASOS_REPORTES" r
+         LEFT JOIN "CALENDARIO" ev ON ev."_id" = r."eventoId"
+        WHERE r."casoId" = $1 ORDER BY r."_createdDate" DESC`, [casoId]),
+    query<any>(
+      `SELECT * FROM "CASOS_CONTACTOS" WHERE "casoId" = $1
+        ORDER BY "canal", "intento"`, [casoId]),
+    query<any>(
+      `SELECT * FROM "CASOS_ESTADO_HISTORIAL" WHERE "casoId" = $1
+        ORDER BY "_createdDate" DESC`, [casoId]),
+    // R3: los otros casos abiertos del alumno, para que dos gestores no
+    // contacten a la misma apoderada sin saberlo.
+    query<any>(
+      `SELECT "_id","codigo","tema" FROM "CASOS_ATENCION"
+        WHERE "academicaId" = $1 AND "_id" <> $2 AND "estado" = '${ESTADO_ABIERTO}'
+        ORDER BY "abiertoEn" DESC`, [caso.academicaId, casoId]),
+    // Histórico: los casos ya cerrados del alumno.
+    query<any>(
+      `SELECT c."_id","codigo","tema","estado","abiertoEn","cerradoEn","acuerdo","seguimientoFinanzas",
+              (SELECT COUNT(*)::int FROM "CASOS_REPORTES" r WHERE r."casoId" = c."_id") AS reportes
+         FROM "CASOS_ATENCION" c
+        WHERE c."academicaId" = $1 AND c."_id" <> $2 AND c."estado" <> '${ESTADO_ABIERTO}'
+        ORDER BY c."cerradoEn" DESC NULLS LAST`, [caso.academicaId, casoId]),
+  ]);
+
+  // Total histórico de reportes del alumno: el "2 de 5" de la ficha.
+  const { rows: [tot] } = await query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM "CASOS_REPORTES" WHERE "academicaId" = $1`,
+    [caso.academicaId]
+  );
+
+  return {
+    caso,
+    reportes: reportes.rows,
+    contactos: contactos.rows,
+    historial: historial.rows,
+    otrosCasosAbiertos: otrosAbiertos.rows,
+    casosCerrados: cerrados.rows,
+    reportesEnEsteCaso: reportes.rows.length,
+    reportesTotalesAlumno: Number(tot?.n || 0),
+    abierto: caso.estado === ESTADO_ABIERTO,
+  };
+}
