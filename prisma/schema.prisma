@@ -58,6 +58,8 @@ model ACADEMICA {
   foto                               String?
   salon                              String?          @db.VarChar(100)
   cambioAcademicoHistory             Json?            @default("[]")
+  /// Casos de Atención que ha tenido el alumno (el "N.º 3" de su ficha).
+  casosCount                         Int              @default(0)
   PEOPLE_ACADEMICA_peopleIdToPEOPLE  PEOPLE?          @relation("ACADEMICA_peopleIdToPEOPLE", fields: [peopleId], references: [id], onUpdate: NoAction)
   PEOPLE_ACADEMICA_studentIdToPEOPLE PEOPLE           @relation("ACADEMICA_studentIdToPEOPLE", fields: [studentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   STEP_OVERRIDES                     STEP_OVERRIDES[]
@@ -859,4 +861,157 @@ model auditautoaprov {
   ip            String?   @db.VarChar(100)
   userAgent     String?
   createdDate   DateTime? @default(now()) @map("_createdDate") @db.Timestamptz(6)
+}
+
+// ─── Casos de Atención ────────────────────────────────────────────────────────
+// Reemplaza el modelo plano previo (ACADEMICA_BOOKINGS.casoAtencion bool, donde
+// un booking marcado ERA el caso) por entidades propias.
+//
+// ⚠ Prisma NO es la capa de acceso en MOSAICO (no hay @prisma/client instalado
+// ni imports de PrismaClient): la app usa SQL parametrizado sobre `pg`. Este
+// schema es documentación e insumo de `npm run studio`. Las tablas se crean con
+// scripts/create-casos-atencion-tables.js
+
+enum EstadoCaso {
+  EN_GESTION
+  RESUELTO
+  PROCESO_DE_CIERRE
+  PROPUESTA_DE_CAMBIO
+  CIERRA_PROGRAMA
+  REMITIDO_A_ACADEMICA
+  PROGRAMA_CONGELADO
+  PRE_JURIDICO
+  SIN_CONTACTO
+
+  @@map("estado_caso")
+}
+
+enum TemaCaso {
+  ASISTENCIA
+  CONDUCTA
+  DESEMPENO
+  SALUD
+  PAGO
+  OTRO
+
+  @@map("tema_caso")
+}
+
+enum CanalContacto {
+  LLAMADA
+  WHATSAPP
+  EMAIL
+
+  @@map("canal_contacto")
+}
+
+enum ResultadoContacto {
+  CONTESTO
+  NO_CONTESTO
+  RESPONDIO
+  SIN_RESPUESTA
+  PENDIENTE
+
+  @@map("resultado_contacto")
+}
+
+enum NivelReincidencia {
+  BAJA
+  MEDIA
+  ALTA
+
+  @@map("nivel_reincidencia")
+}
+
+model CASOS_ATENCION {
+  id                      String             @id @map("_id") @db.VarChar(50)
+  codigo                  String             @unique @db.VarChar(20)
+  academicaId             String             @db.VarChar(50)
+  numeroId                String?            @db.VarChar(50)
+  numeroCaso              Int                @default(1)
+  tema                    TemaCaso           @default(OTRO)
+  estado                  EstadoCaso         @default(EN_GESTION)
+  // Origen del contexto (R10): curso, salón, horario y guía se derivan de aquí.
+  eventoOrigenId          String?            @db.VarChar(50)
+  acuerdo                 String?
+  fechaCompromiso         DateTime?          @db.Date
+  responsable             String?            @db.VarChar(255)
+  seguimientoFinanzas     String?
+  // Calculada por IA en background (R9), nunca editable a mano.
+  reincidenciaNivel       NivelReincidencia?
+  reincidenciaPatron      String?            @db.VarChar(60)
+  reincidenciaFactores    Json?
+  reincidenciaCalculadaEn DateTime?          @db.Timestamptz(6)
+  abiertoPor              String?            @db.VarChar(255)
+  abiertoEn               DateTime           @default(now()) @db.Timestamptz(6)
+  cerradoPor              String?            @db.VarChar(255)
+  cerradoEn               DateTime?          @db.Timestamptz(6)
+  createdDate             DateTime           @default(now()) @map("_createdDate") @db.Timestamptz(6)
+  updatedDate             DateTime           @default(now()) @map("_updatedDate") @db.Timestamptz(6)
+
+  reportes  CASOS_REPORTES[]
+  contactos CASOS_CONTACTOS[]
+  historial CASOS_ESTADO_HISTORIAL[]
+
+  @@index([academicaId], map: "idx_casos_academica")
+  @@index([academicaId, tema], map: "idx_casos_abiertos")
+  @@index([estado, abiertoEn(sort: Desc)], map: "idx_casos_estado")
+}
+
+// Inmutable tras el envío (R4): sin update ni delete.
+model CASOS_REPORTES {
+  id          String   @id @map("_id") @db.VarChar(50)
+  casoId      String   @db.VarChar(50)
+  academicaId String   @db.VarChar(50)
+  texto       String
+  tema        TemaCaso @default(OTRO)
+  eventoId    String?  @db.VarChar(50)
+  bookingId   String?  @db.VarChar(50)
+  guiaId      String?  @db.VarChar(50)
+  guiaNombre  String?  @db.VarChar(255)
+  abrioCaso   Boolean  @default(false)
+  // R7: nace sin leer cuando llega a un caso ya en gestión.
+  leido       Boolean  @default(false)
+  leidoPor    String?  @db.VarChar(255)
+  leidoEn     DateTime? @db.Timestamptz(6)
+  createdDate DateTime @default(now()) @map("_createdDate") @db.Timestamptz(6)
+
+  caso CASOS_ATENCION @relation(fields: [casoId], references: [id], onDelete: Cascade)
+
+  @@index([casoId, createdDate(sort: Desc)], map: "idx_casos_rep_caso")
+  @@index([casoId], map: "idx_casos_rep_noleido")
+}
+
+// R8: sin tope de intentos; sólo se agregan, no se editan.
+model CASOS_CONTACTOS {
+  id          String            @id @map("_id") @db.VarChar(50)
+  casoId      String            @db.VarChar(50)
+  canal       CanalContacto
+  intento     Int
+  resultado   ResultadoContacto @default(PENDIENTE)
+  observacion String?
+  autorEmail  String?           @db.VarChar(255)
+  autorNombre String?           @db.VarChar(255)
+  createdDate DateTime          @default(now()) @map("_createdDate") @db.Timestamptz(6)
+
+  caso CASOS_ATENCION @relation(fields: [casoId], references: [id], onDelete: Cascade)
+
+  @@unique([casoId, canal, intento])
+  @@index([casoId, canal, intento], map: "idx_casos_cont_caso")
+}
+
+// R6: todo cambio de estado queda registrado.
+model CASOS_ESTADO_HISTORIAL {
+  id             String      @id @map("_id") @db.VarChar(50)
+  casoId         String      @db.VarChar(50)
+  estadoAnterior EstadoCaso?
+  estadoNuevo    EstadoCaso
+  autorEmail     String?     @db.VarChar(255)
+  autorNombre    String?     @db.VarChar(255)
+  motivo         String?
+  createdDate    DateTime    @default(now()) @map("_createdDate") @db.Timestamptz(6)
+
+  caso CASOS_ATENCION @relation(fields: [casoId], references: [id], onDelete: Cascade)
+
+  @@index([casoId, createdDate(sort: Desc)], map: "idx_casos_hist_caso")
 }
