@@ -58,15 +58,35 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
 
   const email = (session as any)?.user?.email || 'desconocido';
 
-  // --- LIBERAR: sólo apaga la marca ------------------------------------------
+  // --- LIBERAR: apaga la marca Y BORRA el curso --------------------------------
+  // Soltar el cupo es dejar el salón: el alumno queda sin campaña/curso/horario/
+  // salón. Así desaparece de las listas del salón por el propio dato (no sólo por
+  // la regla de cupo), no se le generan agendamientos, y la aprobación lo salta
+  // (ver `motivoNoAprobable` en approval.service). Para volver a entrar hay que
+  // pasar por "Asignar cupo", que exige elegir destino con disponibilidad.
   if (liberar) {
     await query(
       `UPDATE "PEOPLE"
-          SET "cupoLiberado" = true, "cupoLiberadoPor" = $1, "cupoLiberadoEn" = NOW(), "_updatedDate" = NOW()
+          SET "cupoLiberado" = true, "cupoLiberadoPor" = $1, "cupoLiberadoEn" = NOW(),
+              "campaign" = NULL, "tipoCurso" = NULL, "horarioCurso" = NULL, "salon" = NULL,
+              "_updatedDate" = NOW()
         WHERE "_id" = $2`,
       [email, id]
     );
-    return successResponse({ ok: true, cupoLiberado: true, nombre: persona.nombre });
+    // ACADEMICA sigue al beneficiario (si ya tiene ficha).
+    await query(
+      `UPDATE "ACADEMICA" SET "campaign" = NULL, "salon" = NULL, "_updatedDate" = NOW()
+        WHERE "numeroId" = (SELECT "numeroId" FROM "PEOPLE" WHERE "_id" = $1)`,
+      [id]
+    ).catch(() => { /* best-effort: puede no tener ficha aún */ });
+
+    return successResponse({
+      ok: true, cupoLiberado: true, nombre: persona.nombre,
+      cursoBorrado: {
+        campaign: persona.campaign || null, tipoCurso: persona.tipoCurso || null,
+        horarioCurso: persona.horarioCurso || null, salon: persona.salon || null,
+      },
+    });
   }
 
   // --- ASIGNAR: exige contrato en un estado que lo permita y destino con cupo --

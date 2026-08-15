@@ -95,7 +95,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   }
 
   // ── 2) Aprobar el contrato (titular + beneficiarios) SIN WhatsApp ──
-  const { mainResult, beneficiaryResults } = await approveContract(titularId, {
+  const { mainResult, beneficiaryResults, skippedBeneficiaries } = await approveContract(titularId, {
     sendWhatsApp: false,
   });
 
@@ -142,6 +142,8 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     consentRegistrado,
     titular: { personId: mainResult.personId, nombre: mainResult.nombre },
     beneficiariosAprobados: beneficiaryResults.length,
+    // No aprobados a propósito por no tener salón (cupo liberado / sin curso).
+    beneficiariosSinAprobar: skippedBeneficiaries,
     welcomePromovidos: promociones.filter(p => p.ok).length,
     welcomeErrores: promociones.filter(p => !p.ok),
     pdfArchivado,

@@ -549,8 +549,17 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 return approved ? { ...ben, estado: 'Aprobado', aprobacion: 'Aprobado' } : ben
               })
             )
-          } else if (data.beneficiariesCount === 0) {
+          } else if (data.beneficiariesCount === 0 && !data.skippedCount) {
             lines.push('\nNo hay beneficiarios pendientes por aprobar.')
+          }
+
+          // Saltados a propósito: sin salón no se aprueban ni reciben WhatsApp.
+          if (data.skippedBeneficiaries && data.skippedBeneficiaries.length > 0) {
+            lines.push(`\n⛔ ${data.skippedBeneficiaries.length} beneficiario(s) NO aprobados (sin WhatsApp):`)
+            for (const s of data.skippedBeneficiaries) {
+              lines.push(`  • ${s.nombre} — ${s.motivo}`)
+            }
+            lines.push('\nAsígnales un salón con "Asignar cupo" y vuelve a aprobarlos.')
           }
 
           alert(lines.join('\n'))

@@ -1,6 +1,6 @@
 import 'server-only';
 import { query, queryOne, queryMany } from '@/lib/postgres';
-import { NotFoundError } from '@/lib/errors';
+import { NotFoundError, ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service';
@@ -26,6 +26,33 @@ export interface ApproveResult {
 export interface ApproveOpts {
   /** default true. false = no envía el WhatsApp de bienvenida (autoaprobar). */
   sendWhatsApp?: boolean;
+}
+
+/**
+ * ¿Por qué NO se puede aprobar a este beneficiario? (null = sí se puede)
+ *
+ * Un beneficiario sin salón no puede aprobarse: la aprobación le genera los
+ * agendamientos a partir de (campaña, curso, horario), así que sin eso quedaría
+ * aprobado, activo y con acceso, pero sin clases — y encima recibiría el
+ * WhatsApp de bienvenida a un curso que no tiene.
+ *
+ * ⚠ NO se usa `estadoInactivo` como señal: TODO beneficiario pendiente está
+ * inactivo (nace así y es la aprobación la que lo activa), así que bloquear por
+ * eso no aprobaría a nadie nunca. Lo que discrimina es haber soltado el salón:
+ * el cupo liberado, que además borra los datos de curso.
+ */
+export function motivoNoAprobable(person: {
+  cupoLiberado?: boolean | null;
+  campaign?: string | null;
+  tipoCurso?: string | null;
+  horarioCurso?: string | null;
+}): string | null {
+  if (person.cupoLiberado === true) return 'Cupo liberado: no pertenece a ningún salón.';
+  const falta = (v: any) => !String(v ?? '').trim();
+  if (falta(person.campaign) || falta(person.tipoCurso) || falta(person.horarioCurso)) {
+    return 'Sin curso asignado (campaña, curso u horario).';
+  }
+  return null;
 }
 
 /**
@@ -63,6 +90,14 @@ export async function approveOnePerson(
       whatsappSent: false,
       whatsappError: 'Ya estaba aprobado',
     };
+  }
+
+  // Sin salón no se aprueba ni se manda WhatsApp (ver `motivoNoAprobable`).
+  // La guarda va aquí, no sólo en la cascada, para que cubra también el botón
+  // "Aprobar" individual del beneficiario y el "Autoaprobar" del centro.
+  if (String(person.tipoUsuario || '').toUpperCase() !== 'TITULAR') {
+    const motivo = motivoNoAprobable(person as any);
+    if (motivo) throw new ValidationError(`No se puede aprobar a ${person.primerNombre} ${person.primerApellido}: ${motivo}`);
   }
 
   console.log(`🟢 [Approve] Aprobando ${person.tipoUsuario}: ${person.primerNombre} ${person.primerApellido} (${personId})`);
@@ -228,6 +263,8 @@ export async function approveOnePerson(
 export interface ApproveContractResult {
   mainResult: ApproveResult;
   beneficiaryResults: ApproveResult[];
+  /** Beneficiarios NO aprobados a propósito (sin salón). No reciben WhatsApp. */
+  skippedBeneficiaries: Array<{ personId: string; nombre: string; motivo: string }>;
 }
 
 /**
@@ -253,9 +290,12 @@ export async function approveContract(
   const mainResult = await approveOnePerson(titularId, contrato, null, opts);
 
   const beneficiaryResults: ApproveResult[] = [];
+  const skippedBeneficiaries: ApproveContractResult['skippedBeneficiaries'] = [];
   if (contrato) {
     const pendingBeneficiaries = await queryMany(
-      `SELECT "_id" FROM "PEOPLE"
+      `SELECT "_id", "cupoLiberado", "campaign", "tipoCurso", "horarioCurso",
+              TRIM(CONCAT_WS(' ', "primerNombre", "primerApellido")) AS nombre
+         FROM "PEOPLE"
        WHERE "contrato" = $1
          AND "tipoUsuario" = 'BENEFICIARIO'
          AND ("aprobacion" IS NULL OR "aprobacion" != 'Aprobado')`,
@@ -265,6 +305,14 @@ export async function approveContract(
     const titularInicioContrato = titular.inicioContrato || null;
     for (let i = 0; i < pendingBeneficiaries.length; i++) {
       const ben = pendingBeneficiaries[i];
+      // Sin salón: no se aprueba ni se le manda WhatsApp, y NO aborta la cascada
+      // (los hermanos que sí tienen curso se aprueban igual).
+      const motivo = motivoNoAprobable(ben as any);
+      if (motivo) {
+        console.log(`⏭️ [Approve] Saltando a ${ben.nombre}: ${motivo}`);
+        skippedBeneficiaries.push({ personId: ben._id, nombre: ben.nombre || ben._id, motivo });
+        continue;
+      }
       try {
         const result = await approveOnePerson(ben._id, contrato, titularInicioContrato, opts);
         beneficiaryResults.push(result);
@@ -282,5 +330,5 @@ export async function approveContract(
     }
   }
 
-  return { mainResult, beneficiaryResults };
+  return { mainResult, beneficiaryResults, skippedBeneficiaries };
 }
