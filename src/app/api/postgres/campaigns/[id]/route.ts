@@ -103,9 +103,13 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     [tipoCurso, horarioCurso, salon, guia, inicioCurso, duracion, finalCurso, numeroUsuarios, inicioCampania, finalCampaign, esMenores(tipoCurso), activa, id]
   );
   // Regenerar eventos de CALENDARIO del curso con los nuevos datos.
+  // `grupoHorarioId` se toma de la fila ACTUALIZADA: si el curso pertenece a un
+  // grupo de salón, sus eventos vuelven a enlazarse con los de los hermanos (el
+  // enlace se deriva, así que regenerar no lo pierde).
   await generarEventosCurso({
     _id: id, campaign: row.campaign, tipoCurso, salon, guia,
     horarioCurso, inicioCurso, finalCurso, numeroUsuarios,
+    grupoHorarioId: upd.rows[0]?.grupoHorarioId ?? null,
   });
   return successResponse({ curso: upd.rows[0] });
 });

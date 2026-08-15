@@ -3,6 +3,7 @@ import { query, transaction } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
 import { esFestivoChile } from '@/lib/festivos-chile';
+import { eventoCompartidoIdDeGrupo } from '@/lib/grupo-horario-server';
 import { mapearLeccionesSalon } from './repetir-clase.service';
 
 /** iso + n días (UTC, sin desfase de zona horaria). */
@@ -39,6 +40,13 @@ export interface CursoParaEventos {
   finalCurso?: string | null;
   numeroUsuarios?: number | null;
   linkZoom?: string | null;
+  /**
+   * Grupo de salón (hasta 3 cursos con el mismo guía y horario). Si viene, cada
+   * evento recibe un `eventoCompartidoId` DERIVADO de (grupo + fecha/hora), así
+   * que los eventos de los cursos hermanos quedan enlazados solos — y el enlace
+   * se reconstruye en cada regeneración sin que haya nada que mantener.
+   */
+  grupoHorarioId?: string | null;
 }
 
 /** Elimina todos los eventos de CALENDARIO generados por un curso de campaña. */
@@ -114,16 +122,17 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
     linkZoom = (gz.rows[0]?.zoom || '').trim() || null;
   }
 
-  // INSERT multi-fila. Columnas parametrizadas por evento (14); el resto literales.
-  const cols = '"_id","tipo","evento","fecha","hora","dia","advisor","nivel","titulo","tituloONivel","nombreEvento","linkZoom","limiteUsuarios","cursoCampaignId","inscritos","origen","sesionCerrada","_createdDate","_updatedDate"';
+  // INSERT multi-fila. Columnas parametrizadas por evento (15); el resto literales.
+  const grupo = (curso.grupoHorarioId || '').trim() || null;
+  const cols = '"_id","tipo","evento","fecha","hora","dia","advisor","nivel","titulo","tituloONivel","nombreEvento","linkZoom","limiteUsuarios","cursoCampaignId","eventoCompartidoId","inscritos","origen","sesionCerrada","_createdDate","_updatedDate"';
   const params: any[] = [];
   const rows: string[] = [];
   fechas.forEach((fecha, r) => {
-    const b = r * 14;
+    const b = r * 15;
     rows.push(
       `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},` +
       `($${b + 6}::timestamp AT TIME ZONE '${PLATAFORMA_TZ}'),` +
-      `$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},` +
+      `$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15},` +
       `0,'POSTGRES',false,NOW(),NOW())`
     );
     params.push(
@@ -141,6 +150,9 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
       linkZoom,         // linkZoom
       limite,           // limiteUsuarios
       curso._id,        // cursoCampaignId
+      // Enlace con los cursos hermanos del grupo: se DERIVA de (grupo + fecha/hora
+      // local), no se guarda en ningún lado, así que sobrevive a las regeneraciones.
+      grupo ? eventoCompartidoIdDeGrupo(grupo, `${fecha} ${hora}`) : null,
     );
   });
 
@@ -177,7 +189,8 @@ export interface RegenResult {
 export async function regenerarCursoPreservandoEstado(cursoId: string): Promise<RegenResult> {
   const cursoRow = await query<any>(
     `SELECT "_id","campaign","tipoCurso","salon","guia","horarioCurso",
-            "inicioCurso"::text AS "inicioCurso", "finalCurso"::text AS "finalCurso", "numeroUsuarios"
+            "inicioCurso"::text AS "inicioCurso", "finalCurso"::text AS "finalCurso", "numeroUsuarios",
+            "grupoHorarioId"
      FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`,
     [cursoId]
   );

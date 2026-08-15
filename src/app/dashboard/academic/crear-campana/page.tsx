@@ -7,6 +7,9 @@ import { AcademicoPermission } from '@/types/permissions'
 import { TIPOS_CURSO, horariosFor, esMenores, addMonths, campaignNameToDate } from '@/lib/cursos-campaign'
 import { exportToExcel } from '@/lib/export-excel'
 import { PlusIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import ColisionesTab from '@/components/academic/ColisionesTab'
+import AdicionarSalonModal, { type CursoLite } from '@/components/academic/AdicionarSalonModal'
+import { esHorarioSabado } from '@/lib/grupo-horario'
 
 interface CursoDraft {
   tipoCurso: string
@@ -68,7 +71,13 @@ function CrearCampanaContent() {
   const [inscritosList, setInscritosList] = useState<any[] | null>(null)
   const [inscritosLoading, setInscritosLoading] = useState(false)
   // Pestañas + filtros del Reporte (inputs = draft; se aplican con "Aplicar filtros")
-  const [activeTab, setActiveTab] = useState<'gestion' | 'reporte'>('gestion')
+  const [activeTab, setActiveTab] = useState<'gestion' | 'reporte' | 'colisiones'>('gestion')
+  // Nº de colisiones de la campaña seleccionada, para pintar la pestaña en
+  // verde (sin cruces) o rojo (hay cruces por resolver) sin tener que entrar.
+  const [colisionesCount, setColisionesCount] = useState<number | null>(null)
+  // Curso de SÁBADO al que se le acaba de asignar guía: dispara el modal
+  // "¿va a adicionar salón?" (los salones de sábado suelen compartirse).
+  const [salonPadre, setSalonPadre] = useState<CursoLite | null>(null)
   const [repNombre, setRepNombre] = useState('')
   const [repCurso, setRepCurso] = useState('')
   const [repDesde, setRepDesde] = useState('')
@@ -130,6 +139,19 @@ function CrearCampanaContent() {
       .catch(() => {})
   }, [])
   useEffect(() => { loadExisting() }, [loadExisting])
+
+  // Conteo de colisiones de la campaña elegida, para que la pestaña salga verde
+  // o roja sin tener que abrirla. Se consulta al cambiar de campaña (~380 ms).
+  useEffect(() => {
+    if (!gestionSel || gestionSel === '__NEW__') { setColisionesCount(null); return }
+    let vigente = true
+    setColisionesCount(null)
+    fetch(`/api/postgres/campaigns/grupo-horario?campaign=${encodeURIComponent(gestionSel)}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { if (vigente && j?.success) setColisionesCount(Number(j.total) || 0) })
+      .catch(() => { /* el badge simplemente no aparece */ })
+    return () => { vigente = false }   // evita pisar el conteo si se cambia de campaña rápido
+  }, [gestionSel])
   useEffect(() => {
     fetch('/api/postgres/guias')
       .then(r => (r.ok ? r.json() : { guias: [] }))
@@ -299,7 +321,17 @@ function CrearCampanaContent() {
         throw new Error(d.error || 'Error al editar el curso')
       }
       setColision(null)
+      const guardado = d?.curso || editRow
       setEditRow(null); setMsg({ type: 'ok', text: 'Curso actualizado.' }); loadExisting()
+      // En SÁBADO se suelen juntar salones: si el curso quedó con guía, se
+      // ofrece adicionar otro salón al mismo bloque (iterativo, hasta 3).
+      if (guardado?.guia && esHorarioSabado(guardado.horarioCurso) && !guardado.grupoHorarioId) {
+        setSalonPadre({
+          _id: guardado._id, campaign: guardado.campaign, tipoCurso: guardado.tipoCurso,
+          salon: guardado.salon, horarioCurso: guardado.horarioCurso,
+          guia: guardado.guia, grupoHorarioId: guardado.grupoHorarioId ?? null,
+        })
+      }
     } catch (e: any) { setEditMsg(e.message) } finally { setRowBusy(false) }
   }
 
@@ -466,18 +498,31 @@ function CrearCampanaContent() {
       {/* Pestañas */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex gap-6">
-          {([['gestion', 'Gestión'], ['reporte', 'Reporte']] as const).map(([key, label]) => (
+          {([['gestion', 'Gestión'], ['reporte', 'Reporte'], ['colisiones', 'Colisiones']] as const).map(([key, label]) => (
             <button
               key={key}
               type="button"
               onClick={() => setActiveTab(key)}
-              className={`py-2 px-1 border-b-2 text-sm font-medium transition-colors ${
+              className={`py-2 px-1 border-b-2 text-sm font-medium transition-colors flex items-center gap-1.5 ${
                 activeTab === key
                   ? 'border-primary-600 text-primary-700'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               {label}
+              {/* Semáforo: verde sin cruces, rojo con cruces por resolver. */}
+              {key === 'colisiones' && gestionSel && gestionSel !== '__NEW__' && colisionesCount !== null && (
+                <span
+                  className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-semibold ${
+                    colisionesCount > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                  }`}
+                  title={colisionesCount > 0
+                    ? `${colisionesCount} colisión(es) de guía por resolver`
+                    : 'Sin colisiones de guía'}
+                >
+                  {colisionesCount > 0 ? colisionesCount : '✓'}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -1102,6 +1147,23 @@ function CrearCampanaContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'colisiones' && (
+        <ColisionesTab
+          campaign={gestionSel && gestionSel !== '__NEW__' ? gestionSel : ''}
+          onCount={setColisionesCount}
+        />
+      )}
+
+      {salonPadre && (
+        <AdicionarSalonModal
+          padre={salonPadre}
+          cursos={existing as CursoLite[]}
+          guiaNombre={guiaNombre(salonPadre.guia)}
+          onClose={() => { setSalonPadre(null); loadExisting() }}
+          onUnido={loadExisting}
+        />
       )}
     </div>
   )

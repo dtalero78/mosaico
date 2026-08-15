@@ -36,6 +36,12 @@ export interface CursoParaColision {
   salon?: string | null;
   inicioCurso?: string | null;
   finalCurso?: string | null;
+  /**
+   * Grupo de salón al que pertenece este curso. Dos cursos del MISMO grupo
+   * comparten guía y horario **a propósito** (el guía dicta una sola sesión para
+   * los alumnos de ambos), así que no son una colisión: se excluyen del choque.
+   */
+  grupoHorarioId?: string | null;
 }
 
 export interface ColisionGuia {
@@ -47,6 +53,8 @@ export interface ColisionGuia {
   inicioCurso: string | null;
   finalCurso: string | null;
   guiaNombre: string | null;
+  /** Grupo de salón del curso con el que se choca (null = no está agrupado). */
+  grupoHorarioId: string | null;
   /** true si no se pudo comparar la vigencia por falta de fechas (se reporta igual). */
   vigenciaIndeterminada: boolean;
 }
@@ -64,6 +72,37 @@ function vigenciasSeSolapan(aIni: string | null, aFin: string | null, bIni: stri
   return { solapan: aIni <= bFin && bIni <= aFin, indeterminada: false };
 }
 
+/**
+ * ¿Chocan estos dos cursos? Regla pura, sin tocar la BD: mismo guía + horarios
+ * que se pisan + vigencias que se solapan, y que NO sean hermanos del mismo
+ * grupo de salón (esos comparten guía y hora a propósito).
+ *
+ * Se expone para poder revisar una campaña entera con UNA sola consulta:
+ * `detectarColisionesGuia` pega a la BD por curso, lo que en una campaña de 28
+ * cursos costaba 21 s.
+ */
+export function chocanCursos(
+  a: Pick<CursoParaColision, 'guia' | 'horarioCurso' | 'inicioCurso' | 'finalCurso' | 'grupoHorarioId'>,
+  b: Pick<CursoParaColision, 'guia' | 'horarioCurso' | 'inicioCurso' | 'finalCurso' | 'grupoHorarioId'>
+): { choca: boolean; vigenciaIndeterminada: boolean } {
+  const no = { choca: false, vigenciaIndeterminada: false };
+  const guiaA = String(a.guia || '').trim();
+  const guiaB = String(b.guia || '').trim();
+  if (!guiaA || guiaA !== guiaB) return no;
+  if (!a.horarioCurso || !b.horarioCurso) return no;
+
+  const grupoA = String(a.grupoHorarioId || '').trim();
+  const grupoB = String(b.grupoHorarioId || '').trim();
+  if (grupoA && grupoA === grupoB) return no;   // salones unidos a propósito
+
+  if (!horariosSeSolapan(a.horarioCurso, b.horarioCurso)) return no;
+  const { solapan, indeterminada } = vigenciasSeSolapan(
+    soloFecha(a.inicioCurso), soloFecha(a.finalCurso),
+    soloFecha(b.inicioCurso), soloFecha(b.finalCurso)
+  );
+  return solapan ? { choca: true, vigenciaIndeterminada: indeterminada } : no;
+}
+
 export async function detectarColisionesGuia(curso: CursoParaColision): Promise<ColisionGuia[]> {
   const guia = String(curso.guia || '').trim();
   if (!guia) return [];               // sin guía asignado no hay nada que chocar
@@ -72,7 +111,7 @@ export async function detectarColisionesGuia(curso: CursoParaColision): Promise<
   const candidatos = (await query<any>(
     `SELECT cc."_id", cc."campaign", cc."tipoCurso", cc."salon", cc."horarioCurso",
             cc."inicioCurso"::text AS "inicioCurso", cc."finalCurso"::text AS "finalCurso",
-            g."nombreCompleto" AS "guiaNombre"
+            cc."grupoHorarioId", g."nombreCompleto" AS "guiaNombre"
        FROM "CURSOS_CAMPAIGN" cc
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
       WHERE cc."guia" = $1
@@ -84,6 +123,8 @@ export async function detectarColisionesGuia(curso: CursoParaColision): Promise<
   const iniA = soloFecha(curso.inicioCurso);
   const finA = soloFecha(curso.finalCurso);
 
+  const grupoPropio = String(curso.grupoHorarioId || '').trim();
+
   const colisiones: ColisionGuia[] = [];
   for (const c of candidatos) {
     // El propio curso, identificado por su clave natural (caso UPSERT).
@@ -91,6 +132,8 @@ export async function detectarColisionesGuia(curso: CursoParaColision): Promise<
       && c.campaign === curso.campaign
       && c.tipoCurso === curso.tipoCurso
       && c.horarioCurso === curso.horarioCurso) continue;
+    // Hermanos del mismo grupo de salón: comparten guía y horario A PROPÓSITO.
+    if (grupoPropio && String(c.grupoHorarioId || '').trim() === grupoPropio) continue;
     if (!horariosSeSolapan(curso.horarioCurso, c.horarioCurso)) continue;
     const { solapan, indeterminada } = vigenciasSeSolapan(iniA, finA, soloFecha(c.inicioCurso), soloFecha(c.finalCurso));
     if (!solapan) continue;
@@ -103,6 +146,7 @@ export async function detectarColisionesGuia(curso: CursoParaColision): Promise<
       inicioCurso: soloFecha(c.inicioCurso),
       finalCurso: soloFecha(c.finalCurso),
       guiaNombre: c.guiaNombre || null,
+      grupoHorarioId: c.grupoHorarioId || null,
       vigenciaIndeterminada: indeterminada,
     });
   }

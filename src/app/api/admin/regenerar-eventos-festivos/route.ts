@@ -31,7 +31,7 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
   // generarEventosCurso hace String(x).slice(0,10) (un objeto Date daría basura).
   const cursos = (await query(
     `SELECT "_id","campaign","tipoCurso","salon","guia","horarioCurso",
-            "inicioCurso"::text AS "inicioCurso", "finalCurso"::text AS "finalCurso", "numeroUsuarios"
+            "inicioCurso"::text AS "inicioCurso", "finalCurso"::text AS "finalCurso", "numeroUsuarios", "grupoHorarioId"
      FROM "CURSOS_CAMPAIGN" WHERE "activa" = true`
   )).rows
 
