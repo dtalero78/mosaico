@@ -5,6 +5,7 @@ import {
   getCasoDetalle, cambiarEstado, agregarContacto, guardarGestion, marcarReportesLeidos,
   type EstadoCaso,
 } from '@/services/casos-atencion.service';
+import { recalcularEnSegundoPlano } from '@/services/casos-reincidencia.service';
 
 /**
  * Detalle y gestión de un Caso de Atención.
@@ -31,6 +32,11 @@ export const GET = handlerWithAuth(async (_request, ctx: any, session) => {
   const u = (session as any)?.user || {};
   const leidos = await marcarReportesLeidos(id, { email: u.email, nombre: u.name })
     .catch(() => ({ marcados: 0 }));
+
+  // La reincidencia se recalcula al abrir el caso, pero SIN esperarla: si
+  // bloqueara, abrir un caso esperaría a OpenAI. Se devuelve lo último
+  // calculado y el valor nuevo aparece al siguiente refresco.
+  recalcularEnSegundoPlano(id);
 
   return successResponse({ ...detalle, reportesMarcadosLeidos: leidos.marcados });
 });

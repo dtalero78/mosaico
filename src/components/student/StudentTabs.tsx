@@ -111,7 +111,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
         }
         return <StudentAcademic student={student} classes={classes} view={academicView as any} />
       case 'casos-atencion':
-        return <StudentCasosAtencion studentName={`${student.primerNombre || ''} ${student.primerApellido || ''}`.trim()} />
+        return <StudentCasosAtencion studentId={student._id} />
       case 'contract':
         return <StudentContract student={student} contratoFinalizado={contratoFinalizado} />
       case 'whatsapp':
