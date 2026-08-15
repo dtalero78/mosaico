@@ -78,6 +78,9 @@ function CrearCampanaContent() {
   // Curso de SÁBADO al que se le acaba de asignar guía: dispara el modal
   // "¿va a adicionar salón?" (los salones de sábado suelen compartirse).
   const [salonPadre, setSalonPadre] = useState<CursoLite | null>(null)
+  // Cambio de horario en un curso que comparte salón: el backend lo rechaza sin
+  // instrucción y aquí se pregunta si se mueve el grupo entero o se separa.
+  const [cambioHorarioGrupo, setCambioHorarioGrupo] = useState<any | null>(null)
   const [repNombre, setRepNombre] = useState('')
   const [repCurso, setRepCurso] = useState('')
   const [repDesde, setRepDesde] = useState('')
@@ -299,13 +302,15 @@ function CrearCampanaContent() {
     activa: r.activa !== false,
   }) }
 
-  const saveEdit = async (override?: { horarioCurso?: string; guia?: string }) => {
+  const saveEdit = async (override?: { horarioCurso?: string; guia?: string; accionGrupoHorario?: 'propagar' | 'separar' }) => {
     if (!editRow) return
     setRowBusy(true); setEditMsg(null)
     try {
       const res = await fetch(`/api/postgres/campaigns/${editRow._id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Decisión sobre el grupo de salón cuando cambia el horario.
+          _accionGrupoHorario: override?.accionGrupoHorario,
           tipoCurso: editRow.tipoCurso, salon: editRow.salon,
           // El modal de colisión reintenta con estos valores ya corregidos.
           guia: (override?.guia !== undefined ? override.guia : editRow.guia) || null,
@@ -318,11 +323,23 @@ function CrearCampanaContent() {
       const d = await res.json()
       if (!res.ok) {
         if (d?.detail?.tipo === 'colision_guia') { abrirColision({ ...d.detail, origen: 'edit' }); return }
+        // Curso de un grupo de salón al que le cambian el horario: hay que
+        // decidir si el grupo entero se mueve o si este curso se separa.
+        if (d?.detail?.tipo === 'cambio_horario_grupo') { setCambioHorarioGrupo(d.detail); return }
         throw new Error(d.error || 'Error al editar el curso')
       }
-      setColision(null)
+      setColision(null); setCambioHorarioGrupo(null)
       const guardado = d?.curso || editRow
-      setEditRow(null); setMsg({ type: 'ok', text: 'Curso actualizado.' }); loadExisting()
+      setEditRow(null)
+      setMsg({
+        type: 'ok',
+        text: d?.grupo?.accion === 'propagar'
+          ? `Curso actualizado. El horario nuevo se aplicó a los ${d.grupo.cursos} cursos del grupo.`
+          : d?.grupo?.accion === 'separar'
+            ? 'Curso actualizado y separado del grupo de salón.'
+            : 'Curso actualizado.',
+      })
+      loadExisting()
       // En SÁBADO se suelen juntar salones: si el curso quedó con guía, se
       // ofrece adicionar otro salón al mismo bloque (iterativo, hasta 3).
       if (guardado?.guia && esHorarioSabado(guardado.horarioCurso) && !guardado.grupoHorarioId) {
@@ -1154,6 +1171,54 @@ function CrearCampanaContent() {
           campaign={gestionSel && gestionSel !== '__NEW__' ? gestionSel : ''}
           onCount={setColisionesCount}
         />
+      )}
+
+      {/* Cambio de horario en un curso que comparte salón */}
+      {cambioHorarioGrupo && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900">Este curso comparte salón</h3>
+            <p className="text-sm text-gray-600 mt-2">
+              <strong>{cambioHorarioGrupo.curso?.tipoCurso} · Salón {cambioHorarioGrupo.curso?.salon}</strong> se
+              dicta junto con {cambioHorarioGrupo.hermanos?.length === 1 ? 'otro curso' : `otros ${cambioHorarioGrupo.hermanos?.length} cursos`} en{' '}
+              <strong>{cambioHorarioGrupo.horarioAnterior}</strong>:
+            </p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {(cambioHorarioGrupo.hermanos || []).map((h: any) => (
+                <li key={h._id} className="border border-gray-200 rounded-md px-3 py-1.5 text-gray-800">
+                  {h.tipoCurso} · Salón {h.salon}
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-gray-600 mt-3">
+              Vas a cambiarlo a <strong>{cambioHorarioGrupo.horarioNuevo}</strong>. ¿Qué hacemos con el grupo?
+            </p>
+            <div className="mt-4 space-y-2">
+              <button type="button" disabled={rowBusy}
+                onClick={() => saveEdit({ accionGrupoHorario: 'propagar' })}
+                className="w-full text-left px-4 py-3 rounded-lg border border-primary-200 bg-primary-50 hover:bg-primary-100 disabled:opacity-50">
+                <div className="text-sm font-medium text-primary-800">Cambiar el horario a todo el grupo</div>
+                <div className="text-xs text-primary-700 mt-0.5">
+                  Los {(cambioHorarioGrupo.hermanos?.length || 0) + 1} cursos pasan a {cambioHorarioGrupo.horarioNuevo} y se siguen dictando juntos.
+                </div>
+              </button>
+              <button type="button" disabled={rowBusy}
+                onClick={() => saveEdit({ accionGrupoHorario: 'separar' })}
+                className="w-full text-left px-4 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50">
+                <div className="text-sm font-medium text-gray-800">Separar este curso del grupo</div>
+                <div className="text-xs text-gray-600 mt-0.5">
+                  Sólo este curso pasa a {cambioHorarioGrupo.horarioNuevo}; los demás se quedan como están.
+                </div>
+              </button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={() => { setCambioHorarioGrupo(null); setRowBusy(false) }} disabled={rowBusy}
+                className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {salonPadre && (

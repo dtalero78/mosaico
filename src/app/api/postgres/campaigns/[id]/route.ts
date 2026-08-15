@@ -5,8 +5,9 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-campaign';
-import { generarEventosCurso, eliminarEventosCurso } from '@/services/cursos-campaign-eventos.service';
+import { generarEventosCurso, eliminarEventosCurso, regenerarCursoPreservandoEstado } from '@/services/cursos-campaign-eventos.service';
 import { detectarColisionesGuia, mensajeColision } from '@/services/colision-guia.service';
+import { deshacerGrupo } from '@/services/grupo-horario.service';
 
 /**
  * PATCH /api/postgres/campaigns/[id]  → edita un curso de campaña (CURSOS_CAMPAIGN).
@@ -24,7 +25,7 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     `SELECT "_id","campaign","tipoCurso","horarioCurso","salon","guia","numeroUsuarios","usuInscritos",
             "paraMenores","activa","duracionCurso",
             "inicioCurso"::text AS "inicioCurso", "inicioCampania"::text AS "inicioCampania",
-            "finalCampaign"::text AS "finalCampaign"
+            "finalCampaign"::text AS "finalCampaign", "grupoHorarioId"
      FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`,
     [id]
   );
@@ -65,6 +66,58 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     if (dup.rows.length > 0) throw new ConflictError(`Ya existe un curso ${tipoCurso} ${horarioCurso} en la campaña ${row.campaign}.`);
   }
 
+  // ─── Curso agrupado al que le cambian el horario ───
+  // Los cursos de un grupo de salón comparten guía y horario: si a uno le
+  // cambian la hora, sus eventos pasan a otras fechas y se descuelga del grupo
+  // en silencio. Antes de guardar hay que decidir qué se hace, así que sin una
+  // instrucción explícita se rechaza y la UI pregunta.
+  const cambiaHorario = horarioCurso !== row.horarioCurso;
+  const accionGrupo = String(body._accionGrupoHorario || '').trim(); // 'propagar' | 'separar'
+  if (row.grupoHorarioId && cambiaHorario && !accionGrupo) {
+    const hermanos = (await query(
+      `SELECT "_id","tipoCurso","salon","horarioCurso" FROM "CURSOS_CAMPAIGN"
+        WHERE "grupoHorarioId" = $1 AND "_id" <> $2 ORDER BY "tipoCurso"`,
+      [row.grupoHorarioId, id]
+    )).rows;
+    throw new ConflictError(
+      'Este curso comparte salón con otros. Decide si el horario nuevo se aplica a todo el grupo o si el curso se separa.',
+      {
+        tipo: 'cambio_horario_grupo',
+        cursoId: id,
+        grupoHorarioId: row.grupoHorarioId,
+        horarioAnterior: row.horarioCurso,
+        horarioNuevo: horarioCurso,
+        curso: { tipoCurso, salon, horarioCurso: row.horarioCurso },
+        hermanos,
+      }
+    );
+  }
+
+  // Mover el grupo entero puede chocar con un curso que YA ocupa ese horario: la
+  // campaña no admite dos cursos del mismo tipo a la misma hora, y el guard de
+  // duplicado de más abajo sólo mira el curso editado, no a los hermanos que se
+  // arrastran. Va ANTES del UPDATE: si fallara después, el curso quedaría con el
+  // horario nuevo y el grupo a medio mover (pasó en pruebas).
+  if (row.grupoHorarioId && cambiaHorario && accionGrupo === 'propagar') {
+    const choques = (await query<{ tipoCurso: string; salon: string | null }>(
+      `SELECT h."tipoCurso", otro."salon"
+         FROM "CURSOS_CAMPAIGN" h
+         JOIN "CURSOS_CAMPAIGN" otro
+           ON otro."campaign" = h."campaign" AND otro."tipoCurso" = h."tipoCurso"
+          AND otro."horarioCurso" = $1
+          AND otro."grupoHorarioId" IS DISTINCT FROM h."grupoHorarioId"
+        WHERE h."grupoHorarioId" = $2 AND h."_id" <> $3`,
+      [horarioCurso, row.grupoHorarioId, id]
+    )).rows;
+    if (choques.length) {
+      throw new ConflictError(
+        `No se puede mover el grupo a ${horarioCurso}: ya hay ${choques
+          .map(c => `${c.tipoCurso}${c.salon ? ` · Salón ${c.salon}` : ''}`)
+          .join(', ')} en ese horario. Separa este curso del grupo o elige otro horario.`
+      );
+    }
+  }
+
   // Un guía no puede dictar dos cursos a la vez: se revisa contra TODAS las
   // campañas activas (no sólo ésta) y sólo cuando las vigencias se solapan.
   //
@@ -83,6 +136,11 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   if (horarioDelGuiaCambio) {
     const colisiones = await detectarColisionesGuia({
       excluirId: id, guia, campaign: row.campaign, tipoCurso, horarioCurso, salon, inicioCurso, finalCurso,
+      // Los hermanos del grupo comparten guía y hora a propósito: sin esto,
+      // editar cualquier cosa de un curso agrupado lo bloquearían sus propios
+      // compañeros de salón. Si se está separando, deja de tener grupo y sus
+      // ex-hermanos vuelven a contar (aunque con horario distinto no chocarán).
+      grupoHorarioId: accionGrupo === 'separar' ? null : row.grupoHorarioId,
     });
     if (colisiones.length) {
       throw new ConflictError(mensajeColision(colisiones), {
@@ -102,16 +160,45 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
      WHERE "_id"=$13 RETURNING *`,
     [tipoCurso, horarioCurso, salon, guia, inicioCurso, duracion, finalCurso, numeroUsuarios, inicioCampania, finalCampaign, esMenores(tipoCurso), activa, id]
   );
+  // ─── Efecto de la decisión sobre el grupo de salón ───
+  // Se aplica ANTES de regenerar los eventos de este curso, para que la
+  // regeneración ya use el estado final (con grupo o sin él).
+  let grupoResultado: { accion: string; cursos: number } | null = null;
+  if (row.grupoHorarioId && cambiaHorario && accionGrupo) {
+    if (accionGrupo === 'propagar') {
+      // El horario nuevo va para todo el grupo: siguen dictándose juntos.
+      const hermanos = (await query<{ _id: string }>(
+        `UPDATE "CURSOS_CAMPAIGN" SET "horarioCurso" = $1, "_updatedDate" = NOW()
+          WHERE "grupoHorarioId" = $2 AND "_id" <> $3 RETURNING "_id"`,
+        [horarioCurso, row.grupoHorarioId, id]
+      )).rows;
+      // Los hermanos cambian de fecha/hora → hay que regenerarlos, preservando
+      // la asistencia ya marcada.
+      for (const h of hermanos) await regenerarCursoPreservandoEstado(h._id);
+      grupoResultado = { accion: 'propagar', cursos: hermanos.length + 1 };
+    } else if (accionGrupo === 'separar') {
+      // Este curso se va con su horario nuevo; los demás siguen como estaban.
+      // `deshacerGrupo` disuelve el grupo si quedaba de 2 (uno solo no es grupo)
+      // y regenera a los afectados para que pierdan el enlace.
+      const r = await deshacerGrupo({ cursoId: id });
+      grupoResultado = { accion: 'separar', cursos: r.afectados.length };
+    } else {
+      throw new ValidationError(`Acción de grupo desconocida: "${accionGrupo}".`);
+    }
+  }
+
   // Regenerar eventos de CALENDARIO del curso con los nuevos datos.
-  // `grupoHorarioId` se toma de la fila ACTUALIZADA: si el curso pertenece a un
-  // grupo de salón, sus eventos vuelven a enlazarse con los de los hermanos (el
-  // enlace se deriva, así que regenerar no lo pierde).
+  // `grupoHorarioId` se relee de la BD (no de `upd`): si se acaba de separar,
+  // `deshacerGrupo` ya lo puso en NULL y `upd` tendría el valor viejo.
+  const { rows: [estadoFinal] } = await query<{ grupoHorarioId: string | null }>(
+    `SELECT "grupoHorarioId" FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`, [id]
+  );
   await generarEventosCurso({
     _id: id, campaign: row.campaign, tipoCurso, salon, guia,
     horarioCurso, inicioCurso, finalCurso, numeroUsuarios,
-    grupoHorarioId: upd.rows[0]?.grupoHorarioId ?? null,
+    grupoHorarioId: estadoFinal?.grupoHorarioId ?? null,
   });
-  return successResponse({ curso: upd.rows[0] });
+  return successResponse({ curso: upd.rows[0], grupo: grupoResultado });
 });
 
 export const DELETE = handlerWithAuth(async (_request, ctx: any, session) => {
