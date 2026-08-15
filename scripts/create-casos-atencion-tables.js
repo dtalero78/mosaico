@@ -42,7 +42,7 @@ const DDL = [
   // (regla R10). Por eso aquí sólo va `eventoOrigenId`.
   `CREATE TABLE IF NOT EXISTS "CASOS_ATENCION" (
      "_id"                    VARCHAR(50) PRIMARY KEY,
-     "codigo"                 VARCHAR(20) NOT NULL UNIQUE,
+     "codigo"                 VARCHAR(40) NOT NULL UNIQUE,
      "academicaId"            VARCHAR(50) NOT NULL,
      "numeroId"               VARCHAR(50),
      "numeroCaso"             INTEGER NOT NULL DEFAULT 1,
@@ -122,6 +122,14 @@ const DDL = [
 
   // El "N.º 3" de la ficha: cuántos casos ha tenido el alumno en total.
   `ALTER TABLE "ACADEMICA" ADD COLUMN IF NOT EXISTS "casosCount" INTEGER NOT NULL DEFAULT 0`,
+
+  // El código del caso es CA-<contrato sin puntos ni guiones>-<consecutivo>, así
+  // que el contrato se guarda en el caso: es lo que acota el consecutivo y evita
+  // tener que recorrer PEOPLE para generarlo.
+  `ALTER TABLE "CASOS_ATENCION" ADD COLUMN IF NOT EXISTS "contrato" VARCHAR(50)`,
+  // CA- + contrato limpio (hasta ~14) + - + consecutivo no cabe en VARCHAR(20).
+  `ALTER TABLE "CASOS_ATENCION" ALTER COLUMN "codigo" TYPE VARCHAR(40)`,
+  `CREATE INDEX IF NOT EXISTS idx_casos_contrato ON "CASOS_ATENCION" ("contrato")`,
 ];
 
 (async () => {
@@ -144,16 +152,21 @@ const DDL = [
     `SELECT 1 AS ok FROM information_schema.columns
       WHERE table_name = 'ACADEMICA' AND column_name = 'casosCount'`
   );
+  const { rows: [colContrato] } = await pool.query(
+    `SELECT 1 AS ok FROM information_schema.columns
+      WHERE table_name = 'CASOS_ATENCION' AND column_name = 'contrato'`
+  );
 
   console.log('ENUMS:');
   for (const e of Object.keys(ENUMS)) console.log(`  ${e.padEnd(22)} ${enumsExistentes.has(e) ? 'ya existe' : 'FALTA'}`);
   console.log('TABLAS:');
   for (const t of tablas) console.log(`  ${t.padEnd(24)} ${existentes.has(t) ? 'ya existe' : 'FALTA'}`);
   console.log(`  ACADEMICA."casosCount"   ${colCount ? 'ya existe' : 'FALTA'}`);
+  console.log(`  CASOS_ATENCION."contrato" ${colContrato ? 'ya existe' : 'FALTA'}`);
 
   const faltaAlgo = tablas.some(t => !existentes.has(t))
     || Object.keys(ENUMS).some(e => !enumsExistentes.has(e))
-    || !colCount;
+    || !colCount || !colContrato;
   if (!faltaAlgo) { console.log('\n✅ Nada que hacer.'); await pool.end(); return; }
   if (!APPLY) { console.log('\n(dry-run — no se escribió nada. Reejecuta con --apply.)'); await pool.end(); return; }
 
