@@ -11,7 +11,7 @@ import { PeopleRepository } from '@/repositories/people.repository';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { query, queryOne, queryMany } from '@/lib/postgres';
-import { inicioProximaSemanaUTC } from '@/lib/semana';
+import { finSemanaSiguienteUTC } from '@/lib/semana';
 import { isContractExpired } from '@/lib/contract-expiry';
 
 // Ensure ACADEMICA.fechaPromocionEspecial column exists (idempotent, once per server start).
@@ -267,14 +267,17 @@ export async function promoteFromWelcome(
  * Get academic history: academic record + class list.
  */
 /**
- * Historial de clases del estudiante.
+ * Historial de clases del estudiante — vista ADMIN (`/student/[id]` › Académica).
  *
- * Por defecto oculta las clases de semanas FUTURAS (se ven las pasadas + la
- * semana en curso). En la ficha admin eso es engañoso justo después de aprobar
- * un contrato: el alumno queda con todos sus agendamientos creados pero, si su
- * curso arranca la semana siguiente, la tabla sale vacía y se lee como "no se
- * agendó". Por eso se devuelve `ocultasFuturas`/`primeraFutura` (para avisarlo)
- * y `incluirFuturas` permite verlas.
+ * Muestra **todas las pasadas + la semana en curso + la semana siguiente**
+ * (corte: `finSemanaSiguienteUTC`). El panel del ALUMNO usa un corte más
+ * estrecho (sólo la semana en curso) y no pasa por aquí.
+ *
+ * Aun con esa ventana, un alumno recién aprobado cuyo curso arranque más
+ * adelante puede quedar con la tabla vacía y leerse como "no se agendó" —
+ * justo lo contrario de lo que se audita aquí. Por eso se devuelven siempre
+ * `ocultasFuturas`/`primeraFutura` (para avisarlo) e `incluirFuturas` permite
+ * ver el agendamiento completo.
  */
 export async function getAcademicHistory(id: string, limit: number = 100, incluirFuturas = false) {
   // Try ACADEMICA by any ID field
@@ -294,7 +297,7 @@ export async function getAcademicHistory(id: string, limit: number = 100, inclui
   const rawAll = await BookingRepository.findByStudentId(academicRecord._id, limit);
   // Historial: solo clases pasadas + de la semana corriente; se ocultan las de
   // semanas FUTURAS (fechaEvento < inicio de la próxima semana).
-  const cutoff = await inicioProximaSemanaUTC();
+  const cutoff = await finSemanaSiguienteUTC();
   const esFutura = (c: any) => !!c.fechaEvento && new Date(c.fechaEvento).getTime() >= cutoff;
   const futuras = rawAll.filter(esFutura);
   const rawClasses = incluirFuturas ? rawAll : rawAll.filter((c: any) => !esFutura(c));

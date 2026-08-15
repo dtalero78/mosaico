@@ -17,3 +17,23 @@ export async function inicioProximaSemanaUTC(): Promise<number> {
   );
   return r?.cutoff ? new Date(r.cutoff).getTime() : Infinity;
 }
+
+/**
+ * Instante UTC del inicio de la semana SUBSIGUIENTE (lunes 00:00 hora Chile),
+ * o sea el corte que deja ver **la semana en curso + la siguiente**.
+ *
+ * Es el corte del historial de la ficha ADMIN (`/student/[id]` › Académica):
+ * todas las clases pasadas + esta semana + la próxima. Es la misma regla que ya
+ * aplicaba el filtro cliente [`visibleEnHistorial`](./fecha-semana.ts); el
+ * servidor cortaba una semana antes, así que el cliente nunca alcanzaba a
+ * mostrar su segunda semana.
+ *
+ * El panel del ALUMNO usa `inicioProximaSemanaUTC` (sólo la semana en curso).
+ */
+export async function finSemanaSiguienteUTC(): Promise<number> {
+  const r = await queryOne<{ cutoff: string }>(
+    `SELECT (date_trunc('week', (NOW() AT TIME ZONE 'America/Santiago')) + INTERVAL '14 days')
+              AT TIME ZONE 'America/Santiago' AS "cutoff"`
+  );
+  return r?.cutoff ? new Date(r.cutoff).getTime() : Infinity;
+}
