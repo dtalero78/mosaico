@@ -41,6 +41,7 @@ export default function CasosUsuariosPage() {
   const [tema, setTema] = useState('')
   const [curso, setCurso] = useState('')
   const [salon, setSalon] = useState('')
+  const [guia, setGuia] = useState('')
   const [q, setQ] = useState('')
 
   const cargar = useCallback(async () => {
@@ -51,12 +52,13 @@ export default function CasosUsuariosPage() {
       if (tema) p.set('tema', tema)
       if (curso) p.set('curso', curso)
       if (salon) p.set('salon', salon)
+      if (guia) p.set('guia', guia)
       if (q.trim()) p.set('q', q.trim())
       const r = await fetch(`/api/postgres/casos-atencion/listado?${p}`, { cache: 'no-store' })
       const j = await r.json()
       if (j?.success) { setRows(j.rows || []); setMeta(j) }
     } finally { setLoading(false) }
-  }, [estado, tema, curso, salon, q])
+  }, [estado, tema, curso, salon, guia, q])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -71,7 +73,7 @@ export default function CasosUsuariosPage() {
           </p>
 
           {/* Filtros */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-5 gap-3">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
               <select value={estado} onChange={e => setEstado(e.target.value)}
@@ -106,10 +108,21 @@ export default function CasosUsuariosPage() {
                 {(meta.salones || []).map((s: string) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+            {/* Un GUIA sólo ve sus propios casos, así que el filtro no le aporta. */}
+            {!meta.soloMisCasos && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
+                <select value={guia} onChange={e => setGuia(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <option value="">Todos</option>
+                  {(meta.guias || []).map((g: any) => <option key={g._id} value={g._id}>{g.nombre}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Buscar</label>
               <input type="text" value={q} onChange={e => setQ(e.target.value)}
-                placeholder="Alumno, código o contrato"
+                placeholder="Alumno, contrato o código"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
           </div>
@@ -121,10 +134,10 @@ export default function CasosUsuariosPage() {
             </p>
             <button type="button" disabled={!rows.length}
               onClick={() => exportToExcel(rows, [
+                { header: 'Contrato', accessor: (r: any) => r.contrato || '' },
                 { header: 'Código', accessor: (r: any) => r.codigo },
                 { header: 'Alumno', accessor: (r: any) => r.alumno || '' },
                 { header: 'ID', accessor: (r: any) => r.numeroId || '' },
-                { header: 'Contrato', accessor: (r: any) => r.contrato || '' },
                 { header: 'Curso', accessor: (r: any) => r.curso || '' },
                 { header: 'Salón', accessor: (r: any) => r.salon || '' },
                 { header: 'Guía', accessor: (r: any) => r.guia || '' },
@@ -144,7 +157,7 @@ export default function CasosUsuariosPage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600">
                   <tr>
-                    {['Código', 'Alumno', 'Curso', 'Salón', 'Guía', 'Tema', 'Reportes', 'Reincidencia', 'Estado', 'Abierto'].map(h => (
+                    {['Contrato', 'Alumno', 'Curso', 'Salón', 'Guía', 'Tema', 'Reportes', 'Reincidencia', 'Estado', 'Abierto'].map(h => (
                       <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -159,11 +172,13 @@ export default function CasosUsuariosPage() {
                   ) : rows.map(r => (
                     <tr key={r._id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 whitespace-nowrap">
+                        {/* El contrato es lo que se reconoce a simple vista; el
+                            código del caso queda en el tooltip y en el CSV. */}
                         <button type="button"
                           onClick={() => window.open(`/student/${r.academicaId}?tab=casos-atencion`, '_blank', 'noopener,noreferrer')}
                           className="text-primary-600 hover:underline font-medium"
-                          title="Abrir el caso en la ficha del alumno">
-                          {r.codigo}
+                          title={`Abrir el caso ${r.codigo} en la ficha del alumno`}>
+                          {r.contrato || r.codigo}
                         </button>
                         {r.sinLeer > 0 && (
                           <span className="ml-1 inline-block w-2 h-2 rounded-full bg-red-500 align-middle"
