@@ -7,6 +7,7 @@ import { ContratoPruebaBadge } from '@/components/common/ContratoPruebaBadge'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import { isAdminSuspended } from '@/lib/contract-status'
+import { estadoContratoTitular, estadoContratoBadgeClass, ESTADO_EN_GESTION } from '@/lib/estado-contrato'
 
 interface PersonPageProps {
   params: {
@@ -94,6 +95,9 @@ async function PersonContent({ personId, initialTab, soloGeneral }: { personId: 
       // `estado` mezcla aprobación y actividad; los botones de la tarjeta necesitan
       // la aprobación cruda para distinguir "sin aprobar" de "aprobado e inactivo".
       aprobacion: person.aprobacion || null,
+      // Distingue "En Gestión" (Comercial no lo ha cerrado, cupo sin reservar)
+      // de "Pendiente" (listo, esperando aprobación).
+      gestionContratoListo: person.gestionContratoListo === true,
       fechaCreacion: person._createdDate,
       nivel: person.nivel,
       curso: person.tipoCurso,
@@ -150,11 +154,29 @@ async function PersonContent({ personId, initialTab, soloGeneral }: { personId: 
               {(personData.person as any).extemporanea && (
                 <span className="badge bg-red-100 text-red-700">⏰ Extemporánea</span>
               )}
-              {personData.person.aprobacion && (
-                <span className={`badge ${getEstadoBadgeClass(personData.person.aprobacion)}`}>
-                  {personData.person.aprobacion === 'FINALIZADA' ? '❌ Aprobada' : personData.person.aprobacion}
-                </span>
-              )}
+              {/* Estado del contrato. Mientras Comercial no lo deje listo se
+                  muestra "En Gestión": su curso está guardado pero el cupo del
+                  salón todavía no está tomado. Sólo aplica al TITULAR, que es
+                  quien tiene la marca de gestión. */}
+              {(() => {
+                if (personData.person.tipoUsuario !== 'TITULAR') {
+                  return personData.person.aprobacion ? (
+                    <span className={`badge ${estadoContratoBadgeClass(personData.person.aprobacion)}`}>
+                      {personData.person.aprobacion === 'FINALIZADA' ? '❌ Aprobada' : personData.person.aprobacion}
+                    </span>
+                  ) : null;
+                }
+                const est = estadoContratoTitular(
+                  personData.person.aprobacion,
+                  personData.person.gestionContratoListo
+                );
+                return (
+                  <span className={`badge ${estadoContratoBadgeClass(est)}`}
+                    title={est === ESTADO_EN_GESTION ? 'Comercial aún no lo marcó listo: el cupo del salón no está reservado.' : undefined}>
+                    {est === 'FINALIZADA' ? '❌ Aprobada' : est}
+                  </span>
+                );
+              })()}
               {personData.person.plataforma && (
                 <span className="badge badge-success">
                   {personData.person.plataforma}

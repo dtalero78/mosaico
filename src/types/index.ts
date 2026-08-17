@@ -80,6 +80,11 @@ export interface Person {
   nivelParalelo?: string // Nivel paralelo opcional (ej: ESS)
   stepParalelo?: string  // Step paralelo opcional
   aprobacion?: 'Aprobado' | 'Pendiente' | 'Rechazado' | 'Contrato nulo' | 'Devuelto'
+  /**
+   * TITULAR: Comercial ya cerró el contrato en Gestión Contrato (y ahí se tomó
+   * el cupo del salón). Mientras sea false el estado se muestra "En Gestión".
+   */
+  gestionContratoListo?: boolean
   estadoInactivo?: boolean
   estado?: string
   fechaOnHold?: string

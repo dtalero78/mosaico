@@ -10,6 +10,7 @@ import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
 import { generateUserLogin } from '@/lib/user-login'
+import { estadoContratoTitular, estadoContratoBadgeClass, ESTADO_EN_GESTION } from '@/lib/estado-contrato'
 
 interface PersonAdminProps {
   person: Person
@@ -53,6 +54,9 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     beneficiaries
   })
   const [selectedEstado, setSelectedEstado] = useState(person.aprobacion || 'Pendiente')
+  // El desplegable escribe `aprobacion`; el badge muestra el estado REAL, que
+  // mientras Comercial no cierre el contrato es "En Gestión" (cupo sin reservar).
+  const estadoVisible = estadoContratoTitular(selectedEstado, person.gestionContratoListo)
   const [newComment, setNewComment] = useState('')
   // Confirmación antes de guardar el beneficiario
   const [confirmBeneficiario, setConfirmBeneficiario] = useState(false)
@@ -951,24 +955,8 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     }
   }
 
-  const getEstadoBadgeClass = (estado: string): string => {
-    switch (estado) {
-      case 'Aprobado':
-        return 'badge-success'
-      case 'Pendiente':
-        return 'badge-warning'
-      case 'Rechazado':
-        return 'badge-danger'
-      case 'ON HOLD':
-        return 'badge-warning'
-      case 'Eliminado':
-        return 'badge-danger'
-      case 'Inactivo':
-        return 'badge-secondary'
-      default:
-        return 'badge-info'
-    }
-  }
+  const getEstadoBadgeClass = (estado: string): string =>
+    estado === 'ON HOLD' ? 'badge-warning' : estadoContratoBadgeClass(estado)
 
   const getPrioridadBadgeClass = (prioridad: string): string => {
     switch (prioridad) {
@@ -1166,9 +1154,17 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 <div>
                   <span className="text-sm font-medium text-gray-700">Estado Visible:</span>
                   <div className="mt-1">
-                    <span className={`badge ${getEstadoBadgeClass(selectedEstado)}`}>
-                      {selectedEstado}
+                    {/* Mientras Comercial no lo deje listo se muestra "En Gestión"
+                        aunque el desplegable diga "Pendiente": el contrato existe
+                        con su curso, pero el cupo del salón no está reservado. */}
+                    <span className={`badge ${estadoContratoBadgeClass(estadoVisible)}`}>
+                      {estadoVisible}
                     </span>
+                    {estadoVisible === ESTADO_EN_GESTION && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Comercial aún no lo marcó listo en Gestión Contrato, así que el cupo del salón todavía no está reservado.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
