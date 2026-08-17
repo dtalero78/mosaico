@@ -198,7 +198,14 @@ export default function GestionContratoPage() {
                       )}
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="flex flex-col"><b className="text-[13.5px] text-gray-900">{r.nombre || '(sin nombre)'}</b>
-                          <span className="text-[11.5px] text-gray-500">ID {r.numeroId} · {r.plataforma || ''}{r.liderComercial ? ` · 👤 ${r.liderComercial}` : ''}{r.extemporanea ? ' · ⏰ Extemporánea' : ''}</span></div>
+                          {/* Asesor y líder van etiquetados: son dos nombres de
+                              persona seguidos y sin la etiqueta no se distinguen. */}
+                          <span className="text-[11.5px] text-gray-500">
+                            ID {r.numeroId} · {r.plataforma || ''}
+                            {r.asesor ? <> · Asesor <b className="font-medium text-gray-700">{r.asesor}</b></> : null}
+                            {r.liderComercial ? <> · Líder <b className="font-medium text-gray-700">{r.liderComercial}</b></> : null}
+                            {r.extemporanea ? ' · ⏰ Extemporánea' : ''}
+                          </span></div>
                       </td>
                       <td className="px-3 py-3 border-b border-gray-100 text-sm font-medium text-gray-700">{r.contrato || '—'}</td>
                       <td className="px-3 py-3 border-b border-gray-100 text-sm text-gray-600">{fmtFecha(r.fecha)}</td>
@@ -207,8 +214,11 @@ export default function GestionContratoPage() {
                       </td>
                       <td className="px-3 py-3 border-b border-gray-100">
                         <div className="flex items-center justify-end gap-2">
+                          {/* Etiqueta corta: el botón ocupaba casi el doble que
+                              "Dejar listo" y la fila quedaba desbalanceada. */}
                           <a href={`/person/${r._id}?soloGeneral=1`} target="_blank" rel="noopener noreferrer"
-                            className="px-3 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-xs font-medium hover:bg-purple-50">📎 Adicionar documentos</a>
+                            title="Adicionar documentos"
+                            className="px-2.5 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-xs font-medium hover:bg-purple-50 whitespace-nowrap">📎 Documentos</a>
                           <button onClick={() => setConfirmar(r)}
                             className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700">✓ Dejar listo</button>
                         </div>
