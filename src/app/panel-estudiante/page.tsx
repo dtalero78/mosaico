@@ -44,11 +44,10 @@ import ClassHistory from '@/components/panel-estudiante/ClassHistory'
 import JumpExamBanner from '@/components/panel-estudiante/JumpExamBanner'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission } from '@/types/permissions'
+import { ZOOM_ABRE_MIN_ANTES, ZOOM_CIERRA_MIN_DESPUES } from '@/lib/zoom-window'
 
-// Ventana de conexión a Zoom de la "Sesión próxima": se habilita 5 min antes del
-// inicio y se cierra 15 min después. Fuera de ella el ícono queda bloqueado.
-const ZOOM_ABRE_MIN_ANTES = 5
-const ZOOM_CIERRA_MIN_DESPUES = 15
+// La ventana de conexión a Zoom vive en `lib/zoom-window` (cliente+servidor),
+// para que el número no quede escrito por separado en la lógica y en el texto.
 // Tope de una espera de setTimeout (desborda pasados ~24 días): si al próximo
 // cambio le falta más, se despierta a las 6 h y se reprograma el resto.
 const ZOOM_MAX_ESPERA_MS = 6 * 60 * 60 * 1000
@@ -471,9 +470,10 @@ function PanelEstudianteContent() {
                   {zoomLink ? (
                     <div className="mt-1 flex items-center gap-3">
                       <ZoomAccessButton zoomLink={zoomLink} disponible={showZoom} />
-                      {/* El aviso se mantiene visible en los dos estados. */}
+                      {/* El aviso se mantiene visible en los dos estados, y el
+                          número sale de la constante para que no se despegue. */}
                       <p className="text-sm text-gray-600">
-                        Enlace disponible 5 min antes, recuerda refrescar el navegador
+                        Enlace disponible {ZOOM_ABRE_MIN_ANTES} min antes, recuerda refrescar el navegador
                       </p>
                     </div>
                   ) : (

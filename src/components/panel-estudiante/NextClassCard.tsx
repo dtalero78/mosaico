@@ -8,6 +8,7 @@ import {
   XMarkIcon,
   PlayCircleIcon,
 } from '@heroicons/react/24/outline'
+import { ZOOM_ABRE_MIN_ANTES, zoomDisponible } from '@/lib/zoom-window'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -70,11 +71,9 @@ export default function NextClassCard({ events, isLoading }: NextClassCardProps)
   }
 
   const eventDate = new Date(nextClass.fechaEvento)
-  const now = new Date()
-  const minutesUntil = (eventDate.getTime() - now.getTime()) / (1000 * 60)
-  const minutesSince = -minutesUntil
-
-  const showZoom = minutesUntil <= 5 && minutesSince <= 10
+  // Misma ventana que el panel (lib/zoom-window). Antes tenía la suya propia
+  // (5 antes / 10 después) y ya se había despegado de la del panel.
+  const showZoom = zoomDisponible(eventDate.getTime())
   const zoomLink = nextClass.eventLinkZoom || nextClass.linkZoom
 
   const tipoColor = nextClass.tipo === 'SESSION'
@@ -125,7 +124,7 @@ export default function NextClassCard({ events, isLoading }: NextClassCardProps)
             ) : zoomLink ? (
               <span className="inline-flex items-center gap-2 text-sm text-white font-medium">
                 <VideoCameraIcon className="h-4 w-4 text-white" />
-                Enlace disponible 5 min antes, recuerda refrescar el navegador
+                Enlace disponible {ZOOM_ABRE_MIN_ANTES} min antes, recuerda refrescar el navegador
               </span>
             ) : null}
             <button
