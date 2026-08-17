@@ -34,6 +34,9 @@ export default function SessionAdvisorMaterialTab({ step, nivel, curso }: Props)
   const [viewerUrl, setViewerUrl]     = useState<string | null>(null)
   const [viewerTitle, setViewerTitle] = useState('')
   const [viewerLoading, setViewerLoading] = useState(false)
+  // De dónde salió el material, para explicarlo cuando no es la lección pedida.
+  const [origen, setOrigen] = useState<string | null>(null)
+  const [moduloReal, setModuloReal] = useState<string | null>(null)
 
   useEffect(() => { loadMaterials() }, [step, nivel, curso])
 
@@ -48,8 +51,11 @@ export default function SessionAdvisorMaterialTab({ step, nivel, curso }: Props)
       const r = await fetch(`/api/postgres/materials/nivel?${params}`)
       if (!r.ok) throw new Error('Error al cargar material')
       const data = await r.json()
-      if (data.success) setMaterials(data.materials || [])
-      else throw new Error(data.error || 'Error al cargar material')
+      if (data.success) {
+        setMaterials(data.materials || [])
+        setOrigen(data.origen ?? null)
+        setModuloReal(data.moduloReal ?? null)
+      } else throw new Error(data.error || 'Error al cargar material')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
@@ -109,6 +115,9 @@ export default function SessionAdvisorMaterialTab({ step, nivel, curso }: Props)
   }
 
   const label = nivel && step ? `${nivel} — ${step}` : step || '…'
+  // Las sesiones de Evaluación no son una lección del currículo: se les muestra
+  // el material del módulo completo, que es lo que el guía necesita a mano.
+  const esEvaluacion = /evaluaci/i.test(step || '')
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -143,7 +152,11 @@ export default function SessionAdvisorMaterialTab({ step, nivel, curso }: Props)
     return (
       <div className="bg-white rounded-lg shadow-sm p-8 text-center">
         <BookOpenIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-        <p className="text-gray-600">No hay material de advisor disponible para este step</p>
+        <p className="text-gray-600">
+          {esEvaluacion
+            ? `La evaluación del ${nivel || 'módulo'} no tiene material propio, y el módulo tampoco tiene ninguno cargado.`
+            : 'No hay material de advisor disponible para esta lección'}
+        </p>
         <p className="text-sm text-gray-500 mt-2">{label}</p>
       </div>
     )
@@ -163,6 +176,21 @@ export default function SessionAdvisorMaterialTab({ step, nivel, curso }: Props)
             </span>
           </div>
         </div>
+
+        {/* El material no siempre sale de la lección que trae el evento: se dice
+            de dónde vino para que el guía no crea que está viendo otra cosa. */}
+        {origen === 'modulo' && (
+          <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-900">
+            Es la <strong>evaluación</strong> del {nivel}: no tiene material propio, así que se muestra
+            el de <strong>todas las lecciones del módulo</strong>.
+          </div>
+        )}
+        {origen === 'otro-modulo' && moduloReal && (
+          <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-900">
+            En el currículo <strong>{step}</strong> pertenece a <strong>{moduloReal}</strong>, no a {nivel}.
+            Se muestra su material igual.
+          </div>
+        )}
 
         {/* Table */}
         <div className="overflow-x-auto">
