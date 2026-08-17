@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
@@ -17,6 +17,7 @@ import {
   MessageCircle
 } from 'lucide-react'
 import { exportToExcel } from '@/lib/export-excel'
+import { normalizeNumeroId } from '@/lib/numeroid-normalize'
 
 interface Beneficiario {
   _id: string
@@ -29,6 +30,7 @@ interface Beneficiario {
   celular?: string
   telefono?: string
   contrato?: string
+  campaign?: string
   _createdDate: string
 }
 
@@ -51,8 +53,17 @@ export default function SinRegistroPage() {
 
   // Estados para filtros
   const [filteredBeneficiarios, setFilteredBeneficiarios] = useState<Beneficiario[]>([])
+  const [campaignFilter, setCampaignFilter] = useState('')
+  const [idFilter, setIdFilter] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+
+  // Las campañas del dropdown salen de los propios registros: así nunca se
+  // ofrece una opción que devolvería la lista vacía.
+  const campaigns = useMemo(
+    () => Array.from(new Set(beneficiarios.map(b => (b.campaign || '').trim()).filter(Boolean))).sort(),
+    [beneficiarios]
+  )
 
   const loadBeneficiariosSinRegistro = async () => {
     setLoading(true)
@@ -106,6 +117,20 @@ export default function SinRegistroPage() {
       )
     }
 
+    // Filter by campaign
+    if (campaignFilter) {
+      filtered = filtered.filter(b => (b.campaign || '').trim() === campaignFilter)
+    }
+
+    // Filter by documento. Se compara normalizado (sin puntos, guiones ni
+    // espacios y en mayúsculas) para que '24.777.856-k' encuentre '24777856K'.
+    if (idFilter.trim()) {
+      const needle = normalizeNumeroId(idFilter)
+      if (needle) {
+        filtered = filtered.filter(b => normalizeNumeroId(b.numeroId).includes(needle))
+      }
+    }
+
     // Filter by date range
     if (startDate || endDate) {
       filtered = filtered.filter(beneficiario => {
@@ -130,7 +155,7 @@ export default function SinRegistroPage() {
     }
 
     setFilteredBeneficiarios(filtered)
-  }, [searchQuery, beneficiarios, startDate, endDate])
+  }, [searchQuery, beneficiarios, campaignFilter, idFilter, startDate, endDate])
 
   const handleSendWhatsApp = async (beneficiario: Beneficiario) => {
     if (!beneficiario.celular && !beneficiario.telefono) {
@@ -178,6 +203,8 @@ export default function SinRegistroPage() {
 
   const clearFilters = () => {
     setSearchQuery('')
+    setCampaignFilter('')
+    setIdFilter('')
     setStartDate('')
     setEndDate('')
   }
@@ -190,6 +217,7 @@ export default function SinRegistroPage() {
       { header: 'Email', accessor: (b) => b.email },
       { header: 'Teléfono', accessor: (b) => b.celular || b.telefono },
       { header: 'Contrato', accessor: (b) => b.contrato },
+      { header: 'Campaña', accessor: (b) => b.campaign },
       { header: 'Fecha Creación', accessor: (b) => new Date(b._createdDate).toLocaleDateString() },
     ], `beneficiarios-sin-registro-${new Date().toISOString().split('T')[0]}`)
   }
@@ -280,8 +308,39 @@ export default function SinRegistroPage() {
               </div>
             </div>
 
-            {/* Date Filters */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Filtros */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div>
+                <label htmlFor="f-campaign" className="block text-sm font-medium text-gray-700 mb-1">
+                  Campaña
+                </label>
+                <select
+                  id="f-campaign"
+                  value={campaignFilter}
+                  onChange={(e) => setCampaignFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="">Todas</option>
+                  {campaigns.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="f-id" className="block text-sm font-medium text-gray-700 mb-1">
+                  ID (documento)
+                </label>
+                <input
+                  id="f-id"
+                  type="text"
+                  placeholder="Ej. 24777856K"
+                  value={idFilter}
+                  onChange={(e) => setIdFilter(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Fecha desde
@@ -385,6 +444,9 @@ export default function SinRegistroPage() {
                       Contrato
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Campaña
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Fecha Registro
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -418,6 +480,9 @@ export default function SinRegistroPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">{beneficiario.contrato || 'No especificado'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{beneficiario.campaign || 'No especificada'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(beneficiario._createdDate).toLocaleDateString()}
