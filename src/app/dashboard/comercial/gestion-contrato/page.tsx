@@ -24,7 +24,14 @@ export default function GestionContratoPage() {
   // Contrato rechazado por falta de cupo: el modal pregunta qué hacer.
   const [sinCupo, setSinCupo] = useState<{ row: any; detalle: SinCupoDetalle } | null>(null)
   const { hasPermission } = usePermissions()
+  // Baja masiva: casillas + modal con motivo obligatorio.
+  const [marcados, setMarcados] = useState<Set<string>>(new Set())
+  const [bajaOpen, setBajaOpen] = useState(false)
+  const [bajaMotivo, setBajaMotivo] = useState('')
+  const [bajaConfirm, setBajaConfirm] = useState(false)
+  const [bajaResultado, setBajaResultado] = useState<any>(null)
   const puedeSobrecupo = hasPermission(ComercialPermission.GESTION_CONTRATO_SOBRECUPO)
+  const puedeDarBaja = hasPermission(ComercialPermission.GESTION_CONTRATO_DAR_BAJA)
 
   const fetchData = useCallback(async (fl: typeof emptyF) => {
     setLoading(true)
@@ -65,6 +72,30 @@ export default function GestionContratoPage() {
       toast.success(res.message || `Contrato ${r.contrato || ''} marcado como listo`)
       setRows(prev => prev.filter(x => x._id !== r._id))
       setConfirmar(null); setSinCupo(null)
+    } catch (e: any) { toast.error(e?.message || 'Error') } finally { setSaving(false) }
+  }
+
+  const toggleMarca = (id: string) => setMarcados(prev => {
+    const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s
+  })
+  const marcarTodos = (on: boolean) => setMarcados(on ? new Set(rows.map(r => r._id)) : new Set())
+
+  /** Da de baja (BORRA) los contratos marcados. El servidor revalida cada uno. */
+  const darDeBaja = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/postgres/comercial/gestion-contrato/baja', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(marcados), motivo: bajaMotivo }),
+      }).then(x => x.json())
+      if (res.error) throw new Error(res.error)
+
+      setBajaResultado(res)
+      const okIds = new Set(res.resultados.filter((r: any) => r.status === 'ok').map((r: any) => r.contrato))
+      setRows(prev => prev.filter(x => !okIds.has(x.contrato)))
+      setMarcados(new Set())
+      setBajaOpen(false); setBajaMotivo(''); setBajaConfirm(false)
+      toast.success(res.message)
     } catch (e: any) { toast.error(e?.message || 'Error') } finally { setSaving(false) }
   }
 
@@ -121,13 +152,29 @@ export default function GestionContratoPage() {
             {hayFiltro && <button onClick={() => { setF(emptyF); setApplied(emptyF) }} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 text-sm hover:bg-gray-50">Limpiar</button>}
           </div>
 
-          <div className="text-sm text-gray-500 mb-2">{loading ? 'Cargando…' : `${rows.length} contrato(s) firmados sin aprobar`}</div>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+            <span className="text-sm text-gray-500">{loading ? 'Cargando…' : `${rows.length} contrato(s) firmados sin aprobar`}</span>
+            {puedeDarBaja && marcados.size > 0 && (
+              <button onClick={() => setBajaOpen(true)}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700">
+                Dar de baja ({marcados.size})
+              </button>
+            )}
+          </div>
 
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse">
                 <thead>
                   <tr className="text-left">
+                    {puedeDarBaja && (
+                      <th className="px-3 py-3 border-b-2 border-gray-200 w-10">
+                        <input type="checkbox" aria-label="Marcar todos"
+                          checked={rows.length > 0 && marcados.size === rows.length}
+                          onChange={e => marcarTodos(e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
+                      </th>
+                    )}
                     <th className="text-xs font-semibold text-gray-600 uppercase px-4 py-3 border-b-2 border-gray-200">Titular</th>
                     <th className="text-xs font-semibold text-gray-600 uppercase px-3 py-3 border-b-2 border-gray-200">Contrato</th>
                     <th className="text-xs font-semibold text-gray-600 uppercase px-3 py-3 border-b-2 border-gray-200">Fecha</th>
@@ -137,11 +184,18 @@ export default function GestionContratoPage() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-10">Cargando…</td></tr>
+                    <tr><td colSpan={puedeDarBaja ? 6 : 5} className="text-center text-sm text-gray-400 py-10">Cargando…</td></tr>
                   ) : rows.length === 0 ? (
-                    <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-10">No hay contratos firmados sin aprobar pendientes de gestión.</td></tr>
+                    <tr><td colSpan={puedeDarBaja ? 6 : 5} className="text-center text-sm text-gray-400 py-10">No hay contratos firmados sin aprobar pendientes de gestión.</td></tr>
                   ) : rows.map((r) => (
-                    <tr key={r._id} className="hover:bg-purple-50/40">
+                    <tr key={r._id} className={`hover:bg-purple-50/40 ${marcados.has(r._id) ? 'bg-red-50/60' : ''}`}>
+                      {puedeDarBaja && (
+                        <td className="px-3 py-3 border-b border-gray-100">
+                          <input type="checkbox" checked={marcados.has(r._id)} onChange={() => toggleMarca(r._id)}
+                            aria-label={`Marcar ${r.contrato || r.nombre}`}
+                            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
+                        </td>
+                      )}
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="flex flex-col"><b className="text-[13.5px] text-gray-900">{r.nombre || '(sin nombre)'}</b>
                           <span className="text-[11.5px] text-gray-500">ID {r.numeroId} · {r.plataforma || ''}{r.liderComercial ? ` · 👤 ${r.liderComercial}` : ''}{r.extemporanea ? ' · ⏰ Extemporánea' : ''}</span></div>
@@ -193,6 +247,82 @@ export default function GestionContratoPage() {
               onCambiarHorario={cambios => dejarListo(sinCupo.row, { cambios })}
               onSobrecupo={() => dejarListo(sinCupo.row, { sobrecupo: true })}
             />
+          )}
+
+          {/* Dar de baja = BORRAR. Se pide motivo y confirmación explícita, y el
+              servidor vuelve a comprobar que ninguno esté aprobado ni listo. */}
+          {bajaOpen && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setBajaOpen(false)}>
+              <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Dar de baja {marcados.size} contrato(s)</h3>
+                <div className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg p-3">
+                  Se <strong>borran</strong> el contrato y todos sus registros: titular, beneficiarios,
+                  registro académico, clases agendadas, financiero, pagos y accesos.
+                  <div className="mt-2 text-xs">
+                    No se puede deshacer desde aquí, pero queda una copia completa en la auditoría
+                    por si hubiera que reconstruirlo.
+                  </div>
+                </div>
+
+                <ul className="mt-3 max-h-40 overflow-y-auto text-sm text-gray-700 border border-gray-200 rounded-lg divide-y divide-gray-100">
+                  {rows.filter(r => marcados.has(r._id)).map(r => (
+                    <li key={r._id} className="px-3 py-2">
+                      <b>{r.contrato || '(sin número)'}</b> — {r.nombre}
+                    </li>
+                  ))}
+                </ul>
+
+                <label htmlFor="baja-motivo" className="block text-sm font-medium text-gray-700 mt-4 mb-1">Motivo *</label>
+                <textarea id="baja-motivo" rows={3} value={bajaMotivo} onChange={e => setBajaMotivo(e.target.value)}
+                  placeholder="Por qué se dan de baja estos contratos"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+
+                <label className="flex items-start gap-2 mt-3 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" checked={bajaConfirm} onChange={e => setBajaConfirm(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500" />
+                  Confirmo que quiero borrar estos contratos y todos sus registros.
+                </label>
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <button onClick={() => { setBajaOpen(false); setBajaConfirm(false) }}
+                    className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cancelar</button>
+                  <button onClick={darDeBaja} disabled={saving || !bajaConfirm || !bajaMotivo.trim()}
+                    className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                    {saving ? 'Borrando…' : `Dar de baja (${marcados.size})`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {bajaResultado && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setBajaResultado(null)}>
+              <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Resultado</h3>
+                <p className="text-sm text-gray-600 mb-3">{bajaResultado.message}</p>
+                <ul className="text-sm border border-gray-200 rounded-lg divide-y divide-gray-100">
+                  {bajaResultado.resultados.map((r: any, i: number) => (
+                    <li key={i} className="px-3 py-2">
+                      <span className={r.status === 'ok' ? 'text-emerald-700' : 'text-red-700'}>
+                        {r.status === 'ok' ? '✓' : '✗'} <b>{r.contrato}</b>
+                      </span>
+                      {r.status === 'ok'
+                        ? <span className="text-gray-500"> — {r.borrados.people} persona(s), {r.borrados.bookings} clase(s), {r.borrados.usuariosRoles} acceso(s)</span>
+                        : <span className="text-gray-600"> — {r.error}</span>}
+                      {r.conservados?.length > 0 && (
+                        <div className="mt-1 text-xs text-amber-700">
+                          Se conservaron por estar en otro contrato: {r.conservados.map((c: any) => `${c.nombre} (${c.otrosContratos.join(', ')})`).join(' · ')}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-6 flex justify-end">
+                  <button onClick={() => setBajaResultado(null)}
+                    className="px-5 py-2 rounded-lg bg-gray-800 text-white text-sm font-medium hover:bg-gray-900">Cerrar</button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </PermissionGuard>

@@ -97,3 +97,6 @@ jar.txt
 # Herramientas y PDFs de trabajo local
 ensayos-tools/
 *.pdf
+
+# Respaldos que dejan los scripts de datos (contienen números de contrato)
+contratos-online-mapeo-*.json

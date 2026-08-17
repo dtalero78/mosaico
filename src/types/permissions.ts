@@ -381,6 +381,9 @@ export enum ComercialPermission {
   // Aparte de VER a propósito: es ampliar el salón de hecho, y el comercial sólo
   // debería poder cambiarlo de horario.
   GESTION_CONTRATO_SOBRECUPO = 'COMERCIAL.GESTION_CONTRATO.SOBRECUPO',
+  // Dar de baja = BORRAR el contrato y todos sus registros. Irreversible desde
+  // la interfaz (queda el snapshot en PURGE_LOG). Va aparte de VER a propósito.
+  GESTION_CONTRATO_DAR_BAJA = 'COMERCIAL.GESTION_CONTRATO.DAR_BAJA',
 }
 
 /**

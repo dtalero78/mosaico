@@ -1006,6 +1006,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Autorizar sobrecupo',
     description: 'Al dejar un contrato listo, permite meter al beneficiario en un salón LLENO. Sin este permiso el modal sólo ofrece cambiarlo de horario. Queda registrado quién lo autorizó y cuándo.',
   },
+  {
+    code: ComercialPermission.GESTION_CONTRATO_DAR_BAJA,
+    module: Module.COMERCIAL,
+    section: 'Gestión Contrato',
+    name: '↳ Dar de baja (borrar contrato)',
+    description: 'Permite BORRAR contratos y todos sus registros (personas, académica, clases, financiero, pagos y logins) desde Gestión Contrato. Sólo contratos que NO estén aprobados ni marcados listos. Queda el snapshot completo en PURGE_LOG.',
+  },
 
   // ========== APROBACION MODULE (/dashboard/aprobacion) ==========
   {
