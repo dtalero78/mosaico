@@ -991,6 +991,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Página "Gestión Contrato"',
     description: 'Acceso a /dashboard/comercial/gestion-contrato. Lista de contratos firmados sin aprobar (nombre, contrato, fecha, estado) con opciones de adjuntar documentos y "dejar listo".',
   },
+  {
+    code: ComercialPermission.GESTION_CONTRATO_SOBRECUPO,
+    module: Module.COMERCIAL,
+    section: 'Gestión Contrato',
+    name: '↳ Autorizar sobrecupo',
+    description: 'Al dejar un contrato listo, permite meter al beneficiario en un salón LLENO. Sin este permiso el modal sólo ofrece cambiarlo de horario. Queda registrado quién lo autorizó y cuándo.',
+  },
 
   // ========== APROBACION MODULE (/dashboard/aprobacion) ==========
   {

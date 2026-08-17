@@ -374,6 +374,10 @@ export enum ComercialPermission {
   CONSULTA_CURSOS = 'COMERCIAL.CONSULTA_CURSOS', // consulta de cursos de campaña (read-only)
   CONSULTA_CURSOS_EXPORTAR = 'COMERCIAL.CONSULTA_CURSOS.EXPORTAR', // botón descargar CSV
   GESTION_CONTRATO = 'COMERCIAL.GESTION_CONTRATO.VER', // contratos firmados sin aprobar (adjuntar docs / dejar listo)
+  // Autorizar que un beneficiario entre a un salón LLENO al dejar el contrato listo.
+  // Aparte de VER a propósito: es ampliar el salón de hecho, y el comercial sólo
+  // debería poder cambiarlo de horario.
+  GESTION_CONTRATO_SOBRECUPO = 'COMERCIAL.GESTION_CONTRATO.SOBRECUPO',
 }
 
 /**

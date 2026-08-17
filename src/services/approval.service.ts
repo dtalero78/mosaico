@@ -41,6 +41,41 @@ export interface ApproveOpts {
  * eso no aprobaría a nadie nunca. Lo que discrimina es haber soltado el salón:
  * el cupo liberado, que además borra los datos de curso.
  */
+/**
+ * Un contrato sólo se aprueba si Comercial ya lo dejó **listo** en Gestión
+ * Contrato, que es el momento en que se toma el cupo del salón.
+ *
+ * Se resuelve por el TITULAR del contrato (la marca vive ahí), así que da igual
+ * si lo que se está aprobando es el titular o un beneficiario suelto.
+ *
+ * Los contratos anteriores a esta regla ya quedaron marcados por el backfill de
+ * `scripts/add-cupo-confirmado-columns.js`, y las altas de back-office (Migrar,
+ * importar PDF, bulk) nacen listas.
+ */
+export async function assertContratoListo(person: {
+  _id: string; contrato?: string | null; tipoUsuario?: string | null; gestionContratoListo?: boolean | null;
+}): Promise<void> {
+  const esTitular = String(person.tipoUsuario || '').toUpperCase() === 'TITULAR';
+  if (esTitular) {
+    if (person.gestionContratoListo === true) return;
+  } else if (person.contrato) {
+    const t = await queryOne(
+      `SELECT "gestionContratoListo" FROM "PEOPLE"
+        WHERE "contrato" = $1 AND "tipoUsuario" = 'TITULAR' LIMIT 1`,
+      [person.contrato]
+    );
+    // Sin titular en la base no hay a quién exigirle la gestión: se deja pasar
+    // en vez de bloquear una aprobación por un dato incompleto.
+    if (!t || t.gestionContratoListo === true) return;
+  } else {
+    return; // sin contrato no hay gestión comercial que esperar
+  }
+  throw new ValidationError(
+    'El contrato aún no está listo. Comercial debe marcarlo en Gestión Contrato ' +
+    '(ahí se confirma el cupo del salón) antes de aprobarlo.'
+  );
+}
+
 export function motivoNoAprobable(person: {
   cupoLiberado?: boolean | null;
   campaign?: string | null;
@@ -91,6 +126,12 @@ export async function approveOnePerson(
       whatsappError: 'Ya estaba aprobado',
     };
   }
+
+  // El contrato tiene que estar LISTO para aprobarse: ahí es donde Comercial
+  // toma el cupo del salón. Sin esta guarda un contrato podía aprobarse por el
+  // Centro sin haber pasado por Gestión Contrato, y el alumno quedaba activo y
+  // estudiando sin ocupar cupo — el salón se sobrevendía solo.
+  await assertContratoListo(person);
 
   // Sin salón no se aprueba ni se manda WhatsApp (ver `motivoNoAprobable`).
   // La guarda va aquí, no sólo en la cascada, para que cubra también el botón

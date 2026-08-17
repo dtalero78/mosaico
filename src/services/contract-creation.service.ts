@@ -125,6 +125,14 @@ export interface BeneficiarioInput {
  *
  * NO toca los cupos — el llamador debe invocar `incrementarCupoCurso` después del
  * commit (best-effort, igual que Crear Contrato).
+ *
+ * `confirmarCupo` decide si el beneficiario OCUPA el cupo desde ya:
+ *   - `false` (Crear Contrato, el flujo comercial): nace **provisional**. Se guarda
+ *     su curso y horario, pero el salón no se reserva ni se valida — eso ocurre
+ *     cuando Comercial marca el contrato "listo" (`gestion-cupo.service`).
+ *   - `true` (Migrar Contrato, importar PDF, bulk y el alta sobre un contrato que
+ *     YA está listo): son ventas ya cerradas, así que ocupan el asiento en el
+ *     acto y por eso sí se valida el cupo aquí.
  */
 export async function insertBeneficiarioTx(
   client: any,
@@ -135,9 +143,12 @@ export async function insertBeneficiarioTx(
     plataforma: string | null;
     vigencia: any;
     finalContrato: string | null;
+    confirmarCupo?: boolean;
+    confirmadoPor?: string | null;
   }
 ): Promise<any> {
   const { b, titularId, contrato, plataforma, vigencia, finalContrato } = args;
+  const confirmarCupo = args.confirmarCupo === true;
   const benefId = ids.person();
 
   // Resolver el curso desde CURSOS_CAMPAIGN: salón + inicioCurso + cupos
@@ -153,15 +164,16 @@ export async function insertBeneficiarioTx(
     salon = cr.rows[0]?.salon || null;
     inicioCurso = cr.rows[0]?.inicioCurso || null;
 
-    // ── Cupo: NO hay sobrecupo. Para meter más alumnos hay que AMPLIAR el curso ──
-    // Se valida aquí y no en cada endpoint porque por esta función pasan TODOS los
-    // caminos que crean un beneficiario (Crear Contrato, Migrar Contrato, importar
-    // PDF, bulk y el alta sobre un contrato existente). Antes sólo lo frenaba el
-    // dropdown del wizard, y por eso hay cursos con sobrecupo en la base.
+    // ── Cupo ──
+    // Sólo se valida cuando el beneficiario va a OCUPAR el asiento en el acto
+    // (`confirmarCupo`). En el flujo comercial el curso es provisional hasta
+    // "Dejar listo", así que aquí no se valida ni se reserva: comprobar el cupo
+    // contra un salón que todavía no se está ocupando sólo frenaría ventas que
+    // después se resuelven cambiando el horario.
     // El conteo corre dentro de la MISMA transacción, así que dos hermanos del
     // mismo contrato al mismo curso se cuentan uno tras otro.
     const cupos = Number(cr.rows[0]?.cupos ?? 0);
-    if (cupos > 0) {
+    if (confirmarCupo && cupos > 0) {
       const oc = await client.query(
         `SELECT COUNT(*)::int AS n FROM "PEOPLE" pe
           WHERE pe."tipoUsuario" = 'BENEFICIARIO'
@@ -239,15 +251,18 @@ export async function insertBeneficiarioTx(
       "email", "celular", "fechaNacimiento", "domicilio", "ciudad", "titularId",
       "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
       "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "nivel", "step", "userLogin",
-      "apoderado", "apoderadoTelefono", "apoderadoMail", "origen", "_createdDate", "_updatedDate")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$25,$26,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'POSTGRES',NOW(),NOW()) RETURNING *`,
+      "apoderado", "apoderadoTelefono", "apoderadoMail", "origen",
+      "cupoConfirmado", "cupoConfirmadoPor", "cupoConfirmadoEn", "_createdDate", "_updatedDate")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$25,$26,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'POSTGRES',
+             $27, CASE WHEN $27 THEN $28 ELSE NULL END, CASE WHEN $27 THEN NOW() ELSE NULL END, NOW(),NOW()) RETURNING *`,
     [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
      b.primerApellido, b.segundoApellido || null,
      b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
      contrato, plataforma || null, vigencia || null, finalContrato,
      b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon, realNivel, realStep, userLogin,
      apoderado, apoderadoTelefono, apoderadoMail,
-     b.domicilio || null, b.ciudad || null]
+     b.domicilio || null, b.ciudad || null,
+     confirmarCupo, args.confirmadoPor || 'creacion']
   );
 
   // 2. ACADEMICA del beneficiario — INACTIVO, nace en el curso puente WELCOME.
@@ -375,6 +390,13 @@ export interface CreateContractInput {
   createdBy: string;
   /** YYYY-MM-DD en TZ local del cliente para fechaPago/fechaValidacion (opcional). */
   clientToday?: string | null;
+  /**
+   * ¿Los beneficiarios OCUPAN el cupo desde ya? Por defecto **no**: en el flujo
+   * comercial el curso es provisional hasta que se marque "listo".
+   * Las herramientas de back-office (Migrar Contrato, importar PDF, bulk) lo
+   * pasan en `true` — son ventas ya cerradas, no borradores.
+   */
+  confirmarCupo?: boolean;
 }
 
 /**
@@ -437,6 +459,19 @@ export async function createFullContract(input: CreateContractInput) {
     );
     created.titular = titularResult.rows[0];
 
+    // Las altas de back-office (Migrar, importar PDF, bulk) son ventas ya
+    // cerradas: nacen con el cupo tomado y con la gestión comercial dada por
+    // hecha. Sin esto no podrían aprobarse, porque aprobar exige el contrato
+    // listo (ver `approval.service`).
+    if (input.confirmarCupo === true) {
+      await client.query(
+        `UPDATE "PEOPLE" SET "gestionContratoListo"=true, "gestionContratoListoBy"=$2,
+                             "gestionContratoListoDate"=NOW()
+          WHERE "_id"=$1`,
+        [titularId, input.createdBy]
+      );
+    }
+
     // 3. BENEFICIARIOS — PEOPLE (inactivo) + ACADEMICA (inactivo) + USUARIOS_ROLES (activo=false)
     for (const b of allBeneficiarios) {
       const row = await insertBeneficiarioTx(client, {
@@ -446,6 +481,8 @@ export async function createFullContract(input: CreateContractInput) {
         plataforma: titular.plataforma || null,
         vigencia: financial?.vigencia || null,
         finalContrato,
+        confirmarCupo: input.confirmarCupo === true,
+        confirmadoPor: input.createdBy,
       });
       created.beneficiarios.push(row);
     }

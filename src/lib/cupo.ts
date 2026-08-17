@@ -4,11 +4,18 @@ import 'server-only';
  * Regla de CUPOS de salón (MOSAICO). El cupo es POR SALÓN: cada fila de
  * CURSOS_CAMPAIGN es un salón con su propio `numeroUsuarios`.
  *
- * Un beneficiario OCUPA un cupo desde que se crea el contrato y lo mantiene
- * **sólo mientras el contrato esté Pendiente o Aprobado** (o recién creado, aún
- * sin estado). En cuanto pasa a CUALQUIER otro estado el cupo se libera **solo**,
- * sin tocar nada a mano: la regla se evalúa al leer, así que el salón queda
- * disponible en el mismo instante en que se cambia el estado.
+ * Un beneficiario OCUPA un cupo desde que Comercial marca el contrato como
+ * **listo** en Gestión Contrato (`cupoConfirmado`), y lo mantiene **sólo
+ * mientras el contrato esté Pendiente o Aprobado**. En cuanto pasa a CUALQUIER
+ * otro estado el cupo se libera **solo**, sin tocar nada a mano: la regla se
+ * evalúa al leer, así que el salón queda disponible en el mismo instante en que
+ * se cambia el estado.
+ *
+ * ⚠ Al CREAR el contrato el curso se guarda pero el cupo **no se reserva**
+ * (`cupoConfirmado=false`): la asignación es provisional hasta que se marque
+ * listo, que es cuando se comprueba que el salón todavía tiene lugar. Ver
+ * `gestion-cupo.service.ts`. Antes se reservaba en el instante de crear, y un
+ * contrato que nunca se cerraba dejaba el asiento bloqueado.
  *
  * El cupo se **libera** cuando:
  *  - el contrato deja de estar Pendiente/Aprobado, es decir queda **Devuelto,
@@ -43,7 +50,8 @@ export const ESTADOS_LIBERAN_CUPO = ['devuelto', 'rechazado', 'retractado', 'con
  * `alias` es el alias de la fila PEOPLE (beneficiario) en la query que lo invoca.
  */
 export function cupoOcupadoSql(alias: string): string {
-  return `(${alias}."fechaOnHold" IS NULL
+  return `(${alias}."cupoConfirmado" IS TRUE
+    AND ${alias}."fechaOnHold" IS NULL
     AND ${alias}."cupoLiberado" IS NOT TRUE
     AND NOT (${alias}."estadoInactivo" IS TRUE AND COALESCE(${alias}."suspenddata"->>'accion', '') = 'INACTIVACION')
     AND NOT EXISTS (

@@ -9,6 +9,10 @@ export const GET = handlerWithAuth(async () => {
             p."numeroId", p."contrato", p."celular", p."email", p."plataforma", p."tipoUsuario",
             p."aprobacion", p."hashConsentimiento", p."documentacion", p."extemporanea",
             p."listoAprobacion",
+            -- Aprobar exige que Comercial haya dejado el contrato listo (ahí se
+            -- toma el cupo del salón). Se expone para que el Centro lo avise
+            -- antes de intentar la aprobación y no sólo al chocar con el error.
+            COALESCE(p."gestionContratoListo", false) AS "gestionContratoListo",
             p."_createdDate", p."fechaCreacion",
             camp."campaign"
      FROM "PEOPLE" p

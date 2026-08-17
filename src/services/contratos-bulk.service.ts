@@ -186,6 +186,8 @@ export async function createBulk(csvText: string, opts: ParseOpts, createdBy?: s
         tipoPlan: normalizeTipoPlan(c.financial?.plan),
         createdBy: createdBy || 'migracion-lote',
         clientToday: null,
+        // Lote de contratos ya firmados → ocupan cupo en el acto.
+        confirmarCupo: true,
       });
       let extra = '';
       try { if (await fijarFechas(c)) extra += ' +fecha'; } catch (e: any) { extra += ` (fecha err: ${e.message})`; }

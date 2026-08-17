@@ -34,7 +34,8 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   const body = await request.json();
 
   const titular = await queryOne<any>(
-    `SELECT "_id", "tipoUsuario", "contrato", "plataforma", "vigencia", "finalContrato"::text AS "finalContrato"
+    `SELECT "_id", "tipoUsuario", "contrato", "plataforma", "vigencia", "finalContrato"::text AS "finalContrato",
+            "gestionContratoListo", "aprobacion"
      FROM "PEOPLE" WHERE "_id" = $1`,
     [titularId]
   );
@@ -83,7 +84,14 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   if (!curso) {
     throw new ValidationError(`El curso ${body.tipoCurso} ${body.horarioCurso} no existe en la campaña ${body.campaign}`);
   }
-  if (curso.cupos > 0 && curso.inscritos >= curso.cupos) {
+  // El beneficiario ocupa cupo desde ya SÓLO si el contrato al que se suma ya
+  // está cerrado (listo o aprobado). Si el contrato sigue en gestión comercial,
+  // su curso es provisional como el de sus hermanos y el cupo se toma cuando se
+  // deje listo — y ahí se valida para todos juntos.
+  const contratoCerrado = titular.gestionContratoListo === true
+    || ['aprobado', 'aprobada'].includes(String(titular.aprobacion || '').trim().toLowerCase());
+
+  if (contratoCerrado && curso.cupos > 0 && curso.inscritos >= curso.cupos) {
     throw new ValidationError(`${MENSAJE_SIN_CUPO} (${body.tipoCurso} ${body.horarioCurso}${curso.salon ? ` · Salón ${curso.salon}` : ''}: ${curso.inscritos}/${curso.cupos})`);
   }
 
@@ -115,6 +123,8 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
       plataforma: titular.plataforma || null,
       vigencia: titular.vigencia || null,
       finalContrato: titular.finalContrato || null,
+      confirmarCupo: contratoCerrado,
+      confirmadoPor: (session?.user as any)?.email || 'alta-beneficiario',
     })
   );
 

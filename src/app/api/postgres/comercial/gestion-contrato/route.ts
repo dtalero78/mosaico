@@ -5,6 +5,7 @@ import { ComercialPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
 import { getUserComercialScope } from '@/lib/crm';
+import { marcarListoConCupo } from '@/services/gestion-cupo.service';
 
 /**
  * GET /api/postgres/comercial/gestion-contrato
@@ -87,24 +88,61 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   return successResponse({ rows, total: rows.length, asesores, estados, lideres, scope: { seeAll: scope.seeAll } });
 });
 
+/**
+ * "Dejar listo" — además de marcar el contrato, **toma el cupo** de cada
+ * beneficiario (hasta aquí su curso era provisional: ver `gestion-cupo.service`).
+ *
+ * Body:
+ *   { id }                          → confirmar tal cual
+ *   { id, cambios: [{personId, campaign, tipoCurso, horarioCurso}] } → mover de horario y confirmar
+ *   { id, sobrecupo: true }         → autorizar pasarse del cupo (permiso aparte)
+ *
+ * Si falta lugar responde 409 con `detail.tipo='sin_cupo'` y **sin escribir nada**,
+ * para que el modal ofrezca cambiar de horario o autorizar el sobrecupo.
+ */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ComercialPermission.GESTION_CONTRATO);
   const b = await request.json().catch(() => ({}));
   const id = String(b?.id || '').trim();
   if (!id) throw new ValidationError('Falta el titular.');
+
   const role = (session as any)?.user?.role;
   const email = (session as any)?.user?.email || 'desconocido';
   const scope = (role === 'SUPER_ADMIN' || role === 'ADMIN')
     ? { seeAll: true, liderCorreo: null as string | null }
     : await getUserComercialScope(email);
-  const params: any[] = [id, email];
+
+  // El scope de líder se verifica ANTES de tocar cupos: un comercial no puede
+  // cerrar el contrato de otro equipo ni siquiera para reservarle un asiento.
+  const params: any[] = [id];
   let scopeSql = '';
   if (!scope.seeAll) { params.push(scope.liderCorreo); scopeSql = ` AND LOWER("liderComercialCorreo") = LOWER($${params.length})`; }
-  const r = await query(
-    `UPDATE "PEOPLE" SET "gestionContratoListo"=true, "gestionContratoListoBy"=$2, "gestionContratoListoDate"=NOW()
-      WHERE "_id"=$1 AND "tipoUsuario"='TITULAR'${scopeSql}`,
-    params
+  const dueño = await query(
+    `SELECT "_id" FROM "PEOPLE" WHERE "_id"=$1 AND "tipoUsuario"='TITULAR'${scopeSql}`, params
   );
-  if (!r.rowCount) throw new ValidationError('No se encontró el titular (o está fuera de tu equipo).');
-  return successResponse({ ok: true });
+  if (!dueño.rowCount) throw new ValidationError('No se encontró el titular (o está fuera de tu equipo).');
+
+  const sobrecupo = b?.sobrecupo === true;
+  // Autorizar un sobrecupo es ampliar el salón de hecho, así que va por su
+  // propio permiso: el comercial ve el modal pero sólo puede cambiar el horario.
+  if (sobrecupo) await requirePermission(session, ComercialPermission.GESTION_CONTRATO_SOBRECUPO);
+
+  const cambios = Array.isArray(b?.cambios)
+    ? b.cambios
+        .filter((c: any) => c?.personId && c?.campaign && c?.tipoCurso && c?.horarioCurso)
+        .map((c: any) => ({
+          personId: String(c.personId),
+          campaign: String(c.campaign),
+          tipoCurso: String(c.tipoCurso),
+          horarioCurso: String(c.horarioCurso),
+        }))
+    : [];
+
+  const r = await marcarListoConCupo({ titularId: id, actor: email, cambios, sobrecupo });
+
+  const partes = [`${r.confirmados} beneficiario(s) con el cupo tomado`];
+  if (r.movidos.length) partes.push(`${r.movidos.length} cambiado(s) de horario`);
+  if (r.sobrecupos) partes.push(`${r.sobrecupos} con sobrecupo autorizado`);
+
+  return successResponse({ ok: true, ...r, message: `Contrato listo — ${partes.join(' · ')}.` });
 });

@@ -5,6 +5,8 @@ import toast from 'react-hot-toast'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ComercialPermission } from '@/types/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
+import SinCupoModal, { type SinCupoDetalle } from '@/components/comercial/SinCupoModal'
 
 const fmtFecha = (v: any) => { if (!v) return '—'; try { return new Date(v).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return String(v).slice(0, 10) } }
 
@@ -19,6 +21,10 @@ export default function GestionContratoPage() {
   const [loading, setLoading] = useState(false)
   const [confirmar, setConfirmar] = useState<any>(null)
   const [saving, setSaving] = useState(false)
+  // Contrato rechazado por falta de cupo: el modal pregunta qué hacer.
+  const [sinCupo, setSinCupo] = useState<{ row: any; detalle: SinCupoDetalle } | null>(null)
+  const { hasPermission } = usePermissions()
+  const puedeSobrecupo = hasPermission(ComercialPermission.GESTION_CONTRATO_SOBRECUPO)
 
   const fetchData = useCallback(async (fl: typeof emptyF) => {
     setLoading(true)
@@ -35,16 +41,30 @@ export default function GestionContratoPage() {
   useEffect(() => { fetchData(applied) }, [applied, fetchData])
   const hayFiltro = Object.values(applied).some(Boolean)
 
-  const dejarListo = async (r: any) => {
+  /**
+   * "Dejar listo" toma el cupo del salón de cada beneficiario. Si alguno ya no
+   * cabe, el servidor responde sin escribir nada y con el detalle: ahí abrimos
+   * el modal para cambiar de horario o autorizar el sobrecupo, que reenvía por
+   * esta misma función (y el servidor vuelve a verificar el cupo).
+   */
+  const dejarListo = async (r: any, extra: { cambios?: any[]; sobrecupo?: boolean } = {}) => {
     setSaving(true)
     try {
       const res = await fetch('/api/postgres/comercial/gestion-contrato', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r._id }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: r._id, ...extra }),
       }).then(x => x.json())
+
+      if (res?.detail?.tipo === 'sin_cupo') {
+        setConfirmar(null)
+        setSinCupo({ row: r, detalle: res.detail })
+        return
+      }
       if (res.error) throw new Error(res.error)
-      toast.success(`Contrato ${r.contrato || ''} marcado como listo`)
+
+      toast.success(res.message || `Contrato ${r.contrato || ''} marcado como listo`)
       setRows(prev => prev.filter(x => x._id !== r._id))
-      setConfirmar(null)
+      setConfirmar(null); setSinCupo(null)
     } catch (e: any) { toast.error(e?.message || 'Error') } finally { setSaving(false) }
   }
 
@@ -151,12 +171,28 @@ export default function GestionContratoPage() {
               <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
                 <h3 className="text-lg font-bold text-gray-900 mb-2">Dejar listo</h3>
                 <p className="text-sm text-gray-600">Marcarás el contrato <strong>{confirmar.contrato}</strong> de <strong>{confirmar.nombre}</strong> como gestionado (documentación completa). Saldrá de esta lista.</p>
+                <p className="mt-3 text-sm text-gray-600 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  Al confirmar se <strong>toma el cupo</strong> del salón de cada beneficiario. Hasta ahora su curso era provisional.
+                </p>
                 <div className="mt-6 flex justify-end gap-3">
                   <button onClick={() => setConfirmar(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cancelar</button>
                   <button onClick={() => dejarListo(confirmar)} disabled={saving} className="px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">{saving ? 'Guardando…' : 'Confirmar'}</button>
                 </div>
               </div>
             </div>
+          )}
+
+          {sinCupo && (
+            <SinCupoModal
+              detalle={sinCupo.detalle}
+              contrato={sinCupo.row.contrato}
+              titular={sinCupo.row.nombre}
+              saving={saving}
+              puedeSobrecupo={puedeSobrecupo}
+              onCancel={() => setSinCupo(null)}
+              onCambiarHorario={cambios => dejarListo(sinCupo.row, { cambios })}
+              onSobrecupo={() => dejarListo(sinCupo.row, { sobrecupo: true })}
+            />
           )}
         </div>
       </PermissionGuard>

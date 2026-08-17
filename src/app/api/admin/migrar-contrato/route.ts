@@ -55,6 +55,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     tipoPlan,
     createdBy: (session?.user as any)?.email || 'unknown',
     clientToday: financial?.clientToday || null,
+    // Migrar Contrato / importar PDF: la venta ya está cerrada, así que ocupa
+    // el cupo en el acto (y por eso aquí SÍ se valida que el salón tenga lugar).
+    confirmarCupo: true,
   });
 
   return successResponse({

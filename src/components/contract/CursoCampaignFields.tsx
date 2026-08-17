@@ -1,6 +1,6 @@
 'use client'
 
-import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
+
 
 /**
  * Cascada Campaña → Curso → Horario (+ Salón / Final del curso / userLogin) sobre
@@ -39,7 +39,7 @@ export default function CursoCampaignFields({
   const horarioRows = rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso);
   const selectedRow = horarioRows.find(r => r.horarioCurso === horarioCurso);
   // ¿Algún salón de este curso está sin cupo? Se avisa debajo del dropdown para
-  // que se entienda por qué hay opciones deshabilitadas.
+  // que se entienda qué significa el "SIN CUPO (provisional)" de las opciones.
   const hayLlenos = horarioRows.some(r => {
     const cap = r.numeroUsuarios ?? 0;
     return cap > 0 && cap - (r.usuInscritos ?? 0) <= 0;
@@ -75,17 +75,23 @@ export default function CursoCampaignFields({
             const cupos = cap - (r.usuInscritos ?? 0);
             const full = cap > 0 && cupos <= 0;
             // El cupo es POR SALÓN (cada fila de CURSOS_CAMPAIGN es un salón).
-            // Sin cupo no se puede seleccionar: para meter otro alumno hay que
-            // AMPLIAR el salón desde Académico › Campañas.
+            // Se marca el que está lleno pero NO se deshabilita: al crear el
+            // contrato el curso es provisional y el asiento aún no se reserva.
+            // El cupo se comprueba al dejar el contrato listo, y ahí se ofrece
+            // cambiar de horario. Bloquear aquí frenaría ventas por un salón
+            // que puede haberse liberado para cuando se cierre el contrato.
             return (
-              <option key={r.horarioCurso} value={r.horarioCurso} disabled={full}>
-                {r.horarioCurso}{r.salon ? ` · Salón ${r.salon}` : ''} — {full ? 'SIN CUPO' : `${cupos} cupos`}
+              <option key={r.horarioCurso} value={r.horarioCurso}>
+                {r.horarioCurso}{r.salon ? ` · Salón ${r.salon}` : ''} — {full ? 'SIN CUPO (provisional)' : `${cupos} cupos`}
               </option>
             );
           })}
         </select>
         {hayLlenos && (
-          <p className="mt-1 text-xs text-red-600">{MENSAJE_SIN_CUPO}</p>
+          <p className="mt-1 text-xs text-amber-600">
+            Hay salones sin cupo. Se pueden elegir igual —el cupo se reserva al dejar
+            el contrato listo—, pero si sigue lleno habrá que cambiar de horario.
+          </p>
         )}
       </div>
       {selectedRow && (
