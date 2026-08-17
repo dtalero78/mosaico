@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
-import { TIPOS_CURSO, horariosFor, esMenores, addMonths, campaignNameToDate } from '@/lib/cursos-campaign'
+import { TIPOS_CURSO, horariosFor, esMenores, addMonths, campaignNameToDate, estadoCurso, ESTADO_CURSO_META, hoyEnChile } from '@/lib/cursos-campaign'
 import { exportToExcel } from '@/lib/export-excel'
 import { PlusIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import ColisionesTab from '@/components/academic/ColisionesTab'
@@ -378,21 +378,9 @@ function CrearCampanaContent() {
   const editing = editIndex !== null
 
   // --- Reporte: estado de cada curso por fecha + filtros ---
-  const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
-  // Estado por fechas: Cerrado (finalCurso < hoy) / En matrícula (cierre de matrícula
-  // aún no pasa) / Activo (matrícula cerrada pero curso en progreso).
-  const rowEstado = (r: any): 'matricula' | 'activo' | 'cerrado' => {
-    const fc = r.finalCurso ? String(r.finalCurso).slice(0, 10) : ''
-    const fcamp = r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : ''
-    if (fc && fc < todayStr) return 'cerrado'
-    if (fcamp && fcamp >= todayStr) return 'matricula'
-    return 'activo'
-  }
-  const ESTADO_META = {
-    matricula: { label: 'En matrícula', cls: 'bg-blue-100 text-blue-700' },
-    activo:    { label: 'Activo',       cls: 'bg-green-100 text-green-700' },
-    cerrado:   { label: 'Cerrado',      cls: 'bg-gray-200 text-gray-700' },
-  } as const
+  // Regla única en `lib/cursos-campaign` (7 días de gracia + corte 09:00 Chile).
+  const rowEstado = (r: any) => estadoCurso(r)
+  const ESTADO_META = ESTADO_CURSO_META
 
   // Agregación por CAMPAÑA (para las tarjetas del Reporte y el detalle en Gestión):
   // cursos, matriculados (Σ inscritos / Σ cupos), cierre de matrícula, cursos por tipo.
@@ -418,13 +406,10 @@ function CrearCampanaContent() {
     })
   }, [existing])
 
-  // Estado agregado de una campaña (mismo criterio que Consulta de Cursos, a nivel campaña).
-  const campEstado = (g: any): 'matricula' | 'activo' | 'cerrado' => {
-    const fcamp = g.finalCampaign ? String(g.finalCampaign).slice(0, 10) : ''
-    if (fcamp && fcamp >= todayStr) return 'matricula'
-    if (g.maxFinalCurso && g.maxFinalCurso < todayStr) return 'cerrado'
-    return 'activo'
-  }
+  // Estado agregado de una campaña: la MISMA regla, aplicada al cierre de la
+  // campaña y a la fecha del curso que termina más tarde.
+  // (Antes evaluaba las condiciones en orden invertido y divergía en el borde.)
+  const campEstado = (g: any) => estadoCurso({ finalCampaign: g.finalCampaign, finalCurso: g.maxFinalCurso })
   const cursosDeCampania = (nombre: string) => existing.filter((r: any) => r.campaign === nombre)
   // Tipos de curso presentes en la campaña (para el dropdown del detalle del reporte)
   const tiposDeCampania = (nombre: string) =>
@@ -502,7 +487,7 @@ function CrearCampanaContent() {
       { header: 'Cierre matríc.', accessor: (r: any) => (r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : '') },
       { header: 'Cupos', accessor: (r: any) => `${r.usuInscritos ?? 0}/${r.numeroUsuarios ?? 0}` },
       { header: 'Estado', accessor: (r: any) => ESTADO_META[rowEstado(r)].label },
-    ], `reporte_campanas_${todayStr}`)
+    ], `reporte_campanas_${hoyEnChile()}`)
   }
 
   return (

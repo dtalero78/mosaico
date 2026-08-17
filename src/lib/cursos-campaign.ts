@@ -174,22 +174,23 @@ export function campaignNameToDate(name: string): string | null {
 
 /**
  * Cursos visibles en Crear Contrato según la casilla EXTEMPORÁNEA.
- * - NO extemporánea → solo cursos de campañas "En matrícula" (cierre de matrícula >= hoy).
+ * - NO extemporánea → solo cursos de campañas "En matrícula" (`matriculaAbierta`,
+ *   que incluye los 7 días de gracia tras el cierre — ver `corteMatricula`).
  * - Extemporánea → cursos "Activo" de la campaña inmediatamente ANTERIOR a la "En matrícula"
  *   (doble comparación: nombre-fecha de campaña + fechas reales; finalCampaign < inicio de la
  *   "En matrícula"), excluyendo cursos cuyo inicio fue hace MÁS de 2 semanas. Vacío si no aplica.
  */
 export function cursosVisiblesContrato<T extends { campaign?: string; inicioCurso?: any; finalCurso?: any; finalCampaign?: any }>(
-  rows: T[], extemporanea: boolean
+  rows: T[], extemporanea: boolean, now: Date = new Date()
 ): T[] {
-  const hoy = new Date().toLocaleDateString('en-CA');
-  const sl = (v: any) => (v ? String(v).slice(0, 10) : '');
+  const hoy = hoyEnChile(now);
+  const sl = soloFecha;
   const fcamp = (r: T) => sl(r.finalCampaign);
   const fcurso = (r: T) => sl(r.finalCurso);
   const ini = (r: T) => sl(r.inicioCurso);
 
   if (!extemporanea) {
-    return rows.filter(r => { const f = fcamp(r); return !!f && f >= hoy; });
+    return rows.filter(r => matriculaAbierta(r.finalCampaign, now));
   }
 
   // Agregado por campaña
@@ -202,8 +203,8 @@ export function cursosVisiblesContrato<T extends { campaign?: string; inicioCurs
     else if (i && (!cur.inicioMin || i < cur.inicioMin)) cur.inicioMin = i;
   }
 
-  // E = campaña "En matrícula" (finalCampaign >= hoy). Si varias, la próxima (menor nameDate).
-  const enMat = Array.from(byCamp.entries()).filter(([, v]) => v.finalCampaign && v.finalCampaign >= hoy);
+  // E = campaña "En matrícula". Si varias, la próxima (menor nameDate).
+  const enMat = Array.from(byCamp.entries()).filter(([, v]) => matriculaAbierta(v.finalCampaign, now));
   if (enMat.length === 0) return [];
   enMat.sort((a, b) => ((a[1].nameDate || '9999') < (b[1].nameDate || '9999') ? -1 : 1));
   const [, ev] = enMat[0];
@@ -213,16 +214,17 @@ export function cursosVisiblesContrato<T extends { campaign?: string; inicioCurs
   const candidatas = Array.from(byCamp.entries()).filter(([c, v]) => {
     if (ev.nameDate && v.nameDate && !(v.nameDate < ev.nameDate)) return false;
     if (eInicio && v.finalCampaign && !(v.finalCampaign < eInicio)) return false;
-    return rows.some(r => r.campaign === c && fcamp(r) < hoy && fcurso(r) >= hoy);
+    return rows.some(r => r.campaign === c && estadoCurso(r, now) === 'activo');
   });
   if (candidatas.length === 0) return [];
   // Inmediatamente anterior = mayor nameDate
   candidatas.sort((a, b) => ((a[1].nameDate || '') > (b[1].nameDate || '') ? -1 : 1));
   const target = candidatas[0][0];
 
-  // Límite: el curso no debe haber empezado hace más de 2 semanas
-  const lim = new Date(); lim.setDate(lim.getDate() - 14);
-  const limStr = lim.toLocaleDateString('en-CA');
+  // Límite: el curso no debe haber empezado hace más de 2 semanas (días de
+  // calendario sobre HOY en Chile, no sobre el reloj del navegador).
+  const [ly, lm, ld] = hoy.split('-').map(Number);
+  const limStr = new Date(Date.UTC(ly, lm - 1, ld - 14)).toISOString().slice(0, 10);
 
   return rows.filter(r => r.campaign === target && fcurso(r) >= hoy && ini(r) && ini(r) >= limStr);
 }
@@ -240,3 +242,101 @@ export function addMonths(isoDate: string, meses: number): string {
   target.setUTCDate(Math.min(d, lastDay));
   return target.toISOString().slice(0, 10);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * ESTADO de un curso/campaña — En matrícula · Activo · Cerrado
+ *
+ * El estado NO se guarda en ninguna columna: se DERIVA de `finalCampaign`
+ * (cierre de matrícula) y `finalCurso`. Antes esta regla estaba copiada en 7
+ * sitios (Consulta de Cursos, Campañas ×2, ficha del guía, listado por guía,
+ * dashboard y el wizard de contratos) y ya divergían entre sí — una evaluaba
+ * las condiciones en orden invertido y el dashboard calculaba "hoy" en hora de
+ * Bogotá. Con un corte a las 09:00 esa diferencia deja de ser inofensiva, así
+ * que la regla vive AQUÍ y sólo aquí.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Zona horaria de operación. El corte de matrícula es a las 09:00 DE CHILE. */
+export const TZ_OPERACION = 'America/Santiago';
+
+/**
+ * La matrícula sigue abierta 7 días DESPUÉS del cierre (`finalCampaign`), y se
+ * cierra a las 09:00 del séptimo día. Es una ventana de gracia para seguir
+ * matriculando cuando el curso ya arrancó.
+ */
+export const GRACIA_MATRICULA_DIAS = 7;
+export const HORA_CIERRE_MATRICULA = 9;
+
+export type EstadoCurso = 'matricula' | 'activo' | 'cerrado';
+
+/** Cualquier fecha (Date, timestamptz, 'YYYY-MM-DD…') → 'YYYY-MM-DD' | ''. */
+export function soloFecha(v: any): string {
+  return v ? String(v).slice(0, 10) : '';
+}
+
+/**
+ * "Ahora" en hora de Chile como `'YYYY-MM-DDTHH:mm'`, comparable como STRING.
+ *
+ * Se formatea en vez de operar con `Date` porque el navegador de cada usuario
+ * está en su propia zona: si comparáramos contra un `new Date()` local, en
+ * Colombia el corte caería a las 08:00 chilenas.
+ */
+export function ahoraEnChile(now: Date = new Date()): string {
+  const p: any = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ_OPERACION,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(now).reduce((acc: any, x) => (acc[x.type] = x.value, acc), {});
+  // `hour12:false` devuelve '24' a medianoche en algunos runtimes.
+  const hh = p.hour === '24' ? '00' : p.hour;
+  return `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}`;
+}
+
+/** Fecha de HOY en Chile ('YYYY-MM-DD'). */
+export function hoyEnChile(now: Date = new Date()): string {
+  return ahoraEnChile(now).slice(0, 10);
+}
+
+/**
+ * Instante en que la matrícula deja de estar abierta:
+ * `finalCampaign + GRACIA_MATRICULA_DIAS` a las 09:00 de Chile.
+ * Devuelve `'YYYY-MM-DDTHH:mm'` (comparable con `ahoraEnChile`) o '' si no hay
+ * cierre definido.
+ *
+ * Los días se suman en UTC a propósito: sólo se está corriendo un número de
+ * calendario, así que el cambio de horario de Chile no debe alterarlo.
+ */
+export function corteMatricula(finalCampaign: any): string {
+  const f = soloFecha(finalCampaign);
+  if (!f) return '';
+  const [y, m, d] = f.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const dt = new Date(Date.UTC(y, m - 1, d + GRACIA_MATRICULA_DIAS));
+  return `${dt.toISOString().slice(0, 10)}T${String(HORA_CIERRE_MATRICULA).padStart(2, '0')}:00`;
+}
+
+/** ¿La matrícula de esa campaña sigue abierta AHORA? */
+export function matriculaAbierta(finalCampaign: any, now: Date = new Date()): boolean {
+  const corte = corteMatricula(finalCampaign);
+  return !!corte && ahoraEnChile(now) < corte;
+}
+
+/**
+ * Estado derivado de un curso. El orden importa: un curso que ya TERMINÓ está
+ * cerrado aunque su cierre de matrícula fuera ayer.
+ */
+export function estadoCurso(
+  row: { finalCampaign?: any; finalCurso?: any },
+  now: Date = new Date()
+): EstadoCurso {
+  const fc = soloFecha(row.finalCurso);
+  if (fc && fc < hoyEnChile(now)) return 'cerrado';
+  if (matriculaAbierta(row.finalCampaign, now)) return 'matricula';
+  return 'activo';
+}
+
+/** Etiquetas y colores del badge de estado (idénticos en todas las pantallas). */
+export const ESTADO_CURSO_META: Record<EstadoCurso, { label: string; cls: string }> = {
+  matricula: { label: 'En matrícula', cls: 'bg-blue-100 text-blue-700' },
+  activo: { label: 'Activo', cls: 'bg-green-100 text-green-700' },
+  cerrado: { label: 'Cerrado', cls: 'bg-gray-200 text-gray-700' },
+};

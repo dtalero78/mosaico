@@ -158,7 +158,7 @@ export async function getMonthlyAggregates(_tz: string = 'America/Bogota'): Prom
 // Resumen de campañas + usuarios activos/inactivos + cursos activos por tipo.
 // Alimenta el bloque "Campañas y cursos" del dashboard admin.
 
-import { ordenTipoCurso } from '@/lib/cursos-campaign';
+import { ordenTipoCurso, estadoCurso, hoyEnChile, TZ_OPERACION } from '@/lib/cursos-campaign';
 
 export interface CampaniaResumen {
   campaign: string;
@@ -181,23 +181,21 @@ export interface CampaniasResumen {
 const CAMPANIAS_TTL_MS = 60 * 1000;
 let campaniasCache: { value: CampaniasResumen; expires: number } | null = null;
 
-/** Estado de una campaña por sus fechas (mismo criterio que Consulta de Cursos). */
-function estadoCampania(cierreMatricula: string | null, finalCursoMax: string | null, hoy: string): 'matricula' | 'activo' | 'cerrado' {
-  const fc = (finalCursoMax || '').slice(0, 10);
-  const fcamp = (cierreMatricula || '').slice(0, 10);
-  if (fc && fc < hoy) return 'cerrado';        // el curso ya terminó
-  if (fcamp && fcamp >= hoy) return 'matricula'; // matrícula aún abierta
-  return 'activo';
-}
-
-export async function getCampaniasResumen(tz: string = 'America/Bogota'): Promise<CampaniasResumen> {
+/**
+ * El estado de la campaña usa la MISMA regla que el resto de la plataforma
+ * (`lib/cursos-campaign`): 7 días de gracia tras el cierre y corte a las 09:00
+ * de Chile. Antes esta copia calculaba "hoy" en la zona que le pasara el
+ * cliente (`tz`), así que el dashboard podía discrepar de Consulta de Cursos.
+ *
+ * `tz` se conserva en la firma por compatibilidad con el endpoint, pero ya no
+ * decide el estado: la matrícula abre y cierra a la misma hora para todos.
+ */
+export async function getCampaniasResumen(_tz: string = TZ_OPERACION): Promise<CampaniasResumen> {
   const nowMs = Date.now();
   if (campaniasCache && campaniasCache.expires > nowMs) return campaniasCache.value;
 
-  // "Hoy" en la zona horaria pedida, en formato YYYY-MM-DD (comparación con DATE).
-  let hoy: string;
-  try { hoy = new Date().toLocaleDateString('en-CA', { timeZone: tz }); }
-  catch { hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }); }
+  // "Hoy" en Chile (YYYY-MM-DD) para las comparaciones con DATE en SQL.
+  const hoy = hoyEnChile();
 
   const [campRows, cursosRows, userRow] = await Promise.all([
     // Campañas agregadas (una fila por campaña).
@@ -252,7 +250,7 @@ export async function getCampaniasResumen(tz: string = 'America/Bogota'): Promis
   const cerradas: CampaniaResumen[] = [];
   for (const r of campRows) {
     const c = mapCamp(r);
-    const est = estadoCampania(c.cierreMatricula, c.finalCursoMax, hoy);
+    const est = estadoCurso({ finalCampaign: c.cierreMatricula, finalCurso: c.finalCursoMax });
     if (est === 'matricula') enMatricula.push(c);
     else if (est === 'activo') activas.push(c);
     else cerradas.push(c);

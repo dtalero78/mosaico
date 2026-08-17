@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { estadoCurso, ESTADO_CURSO_META, type EstadoCurso } from '@/lib/cursos-campaign'
 
 type Row = {
   campaign: string
@@ -14,26 +15,12 @@ type Row = {
   usuInscritos: number
 }
 
-type Estado = 'matricula' | 'activo' | 'cerrado'
+type Estado = EstadoCurso
 
-const ESTADO_META: Record<Estado, { label: string; cls: string }> = {
-  matricula: { label: 'En matrícula', cls: 'bg-blue-100 text-blue-700' },
-  activo:    { label: 'Activo',       cls: 'bg-green-100 text-green-700' },
-  cerrado:   { label: 'Cerrado',      cls: 'bg-gray-200 text-gray-700' },
-}
+const ESTADO_META = ESTADO_CURSO_META
 
-// Fecha local YYYY-MM-DD para comparar con las fechas puras de la BD.
-const todayStr = () => new Date().toLocaleDateString('en-CA')
-
-// Misma regla de estado que Consulta Cursos (por fecha).
-function rowEstado(r: Row): Estado {
-  const t = todayStr()
-  const fc = r.finalCurso ? String(r.finalCurso).slice(0, 10) : ''
-  const fcamp = r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : ''
-  if (fc && fc < t) return 'cerrado'          // el curso ya terminó
-  if (fcamp && fcamp >= t) return 'matricula' // matrícula aún abierta
-  return 'activo'                             // matrícula cerrada, curso en progreso
-}
+// Regla única en `lib/cursos-campaign` (7 días de gracia + corte 09:00 Chile).
+const rowEstado = (r: Row): Estado => estadoCurso(r)
 
 const d = (x: string | null) => (x ? String(x).slice(0, 10) : '—')
 

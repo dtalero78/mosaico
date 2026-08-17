@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { estadoCurso as estadoDeCurso, ESTADO_CURSO_META } from '@/lib/cursos-campaign'
 
 interface Advisor {
   _id: string
@@ -23,17 +24,10 @@ interface CursoRow {
   usuInscritos: number
 }
 
-const hoy = () => new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
 const d10 = (s: any) => (s ? String(s).slice(0, 10) : '')
 
-/** Estado por fechas (mismo criterio que Consulta de Cursos). */
-function estadoCurso(r: CursoRow): { label: string; cls: string } {
-  const t = hoy()
-  const fc = d10(r.finalCurso), fcamp = d10(r.finalCampaign)
-  if (fc && fc < t) return { label: 'Cerrado', cls: 'bg-gray-100 text-gray-600' }
-  if (fcamp && fcamp >= t) return { label: 'En matrícula', cls: 'bg-blue-100 text-blue-700' }
-  return { label: 'Activo', cls: 'bg-green-100 text-green-700' }
-}
+/** Regla única en `lib/cursos-campaign` (7 días de gracia + corte 09:00 Chile). */
+const estadoCurso = (r: CursoRow) => ESTADO_CURSO_META[estadoDeCurso(r)]
 
 export default function AdvisorsCursos({ advisors }: Props) {
   const [rows, setRows] = useState<CursoRow[]>([])

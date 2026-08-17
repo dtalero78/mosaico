@@ -5,16 +5,12 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { ComercialPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
-import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import { TIPOS_CURSO, estadoCurso, ESTADO_CURSO_META, hoyEnChile, type EstadoCurso } from '@/lib/cursos-campaign'
 import { exportToExcel } from '@/lib/export-excel'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 
-type Estado = 'matricula' | 'activo' | 'cerrado'
-const ESTADO_META: Record<Estado, { label: string; cls: string }> = {
-  matricula: { label: 'En matrícula', cls: 'bg-blue-100 text-blue-700' },
-  activo:    { label: 'Activo',       cls: 'bg-green-100 text-green-700' },
-  cerrado:   { label: 'Cerrado',      cls: 'bg-gray-200 text-gray-700' },
-}
+type Estado = EstadoCurso
+const ESTADO_META = ESTADO_CURSO_META
 
 export default function ConsultaCursosPage() {
   return (
@@ -62,14 +58,9 @@ function ConsultaCursosContent() {
     return g ? g.nombreCompleto : String(id)
   }
 
-  const todayStr = new Date().toLocaleDateString('en-CA')
-  const rowEstado = (r: any): Estado => {
-    const fc = r.finalCurso ? String(r.finalCurso).slice(0, 10) : ''
-    const fcamp = r.finalCampaign ? String(r.finalCampaign).slice(0, 10) : ''
-    if (fc && fc < todayStr) return 'cerrado'          // el curso ya terminó
-    if (fcamp && fcamp >= todayStr) return 'matricula' // matrícula aún abierta
-    return 'activo'                                    // matrícula cerrada, curso en progreso
-  }
+  // Regla única en `lib/cursos-campaign` (incluye los 7 días de gracia y el
+  // corte de las 09:00 de Chile).
+  const rowEstado = (r: any): Estado => estadoCurso(r)
 
   const campanas = useMemo(() => Array.from(new Set(rows.map(r => r.campaign).filter(Boolean))).sort(), [rows])
 
@@ -103,7 +94,7 @@ function ConsultaCursosContent() {
       { header: 'Inicio curso', accessor: (r: any) => d(r.inicioCurso) },
       { header: 'Final curso', accessor: (r: any) => d(r.finalCurso) },
       { header: 'Cierre matrícula', accessor: (r: any) => d(r.finalCampaign) },
-    ], `consulta_cursos_${todayStr}`)
+    ], `consulta_cursos_${hoyEnChile()}`)
   }
 
   const selCls = 'w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500'
