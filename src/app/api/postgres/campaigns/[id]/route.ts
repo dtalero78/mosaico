@@ -4,7 +4,8 @@ import { query } from '@/lib/postgres';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
-import { TIPOS_CURSO, horariosFor, esMenores, addMonths } from '@/lib/cursos-campaign';
+import { TIPOS_CURSO, esMenores, addMonths } from '@/lib/cursos-campaign';
+import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso, eliminarEventosCurso, regenerarCursoPreservandoEstado } from '@/services/cursos-campaign-eventos.service';
 import { detectarColisionesGuia, mensajeColision } from '@/services/colision-guia.service';
 import { deshacerGrupo } from '@/services/grupo-horario.service';
@@ -41,7 +42,7 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   // aunque ya no esté en el catálogo (cursos creados con horarios antiguos).
   // Solo se valida contra el catálogo cuando el horario o el tipo cambian.
   const tipoOHorarioCambio = horarioCurso !== row.horarioCurso || tipoCurso !== row.tipoCurso;
-  if (tipoOHorarioCambio && !horariosFor(tipoCurso).includes(horarioCurso)) {
+  if (tipoOHorarioCambio && !(await horarioEsValido(tipoCurso, horarioCurso))) {
     throw new ValidationError(`Horario inválido para ${tipoCurso}: ${horarioCurso}`);
   }
 

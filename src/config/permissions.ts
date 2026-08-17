@@ -749,6 +749,14 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/crear-campana. Crear campañas con sus cursos (tipo de curso, horario, fechas, cupos) en CURSOS_CAMPAIGN. Estos cursos alimentan los dropdowns del wizard de Crear Contrato. Pensado para SUPER_ADMIN / ADMIN / COORDINADOR_ACADEMICO.',
   },
 
+  {
+    code: AcademicoPermission.HORARIOS_GESTION,
+    module: Module.ACADEMICO,
+    section: 'Horarios',
+    name: 'Página "Horarios" — catálogo de horarios por curso',
+    description: 'Acceso a /dashboard/academic/horarios. Agregar y desactivar los horarios que se ofrecen al crear un curso de campaña. Desactivar NO afecta a los cursos ni alumnos que ya lo usan.',
+  },
+
   // ========== INFORMES MODULE ==========
   // Abuelo: muestra el grupo Informes en el sidebar. Cada informe se habilita
   // marcando ADEMÁS su ítem en la sección correspondiente. Las secciones

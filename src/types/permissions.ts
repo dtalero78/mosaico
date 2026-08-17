@@ -196,6 +196,9 @@ export enum AcademicoPermission {
 
   // Crea Campaña — gestión de campañas/cursos (CURSOS_CAMPAIGN)
   CAMPANA_CREAR = 'ACADEMICO.CAMPANA.CREAR',
+  // Catálogo de horarios por tipo de curso (Académico › Horarios): agregar y
+  // desactivar. El catálogo sólo llena el desplegable de Campañas.
+  HORARIOS_GESTION = 'ACADEMICO.HORARIOS.GESTION',
 
   // Lista de Usuarios — reporte de estudiantes (Académico › Guías)
   LISTA_USUARIOS_VER      = 'ACADEMICO.LISTA_USUARIOS.VER',

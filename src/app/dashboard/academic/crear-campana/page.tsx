@@ -45,6 +45,8 @@ function CrearCampanaContent() {
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [existing, setExisting] = useState<any[]>([])
+  // Catálogo de horarios (HORARIOS_CURSO). Se gestiona en Académico › Horarios.
+  const [catalogoHorarios, setCatalogoHorarios] = useState<Record<string, string[]>>({})
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
   // Edición / borrado de cursos ya guardados (tabla "Campañas existentes")
@@ -142,6 +144,13 @@ function CrearCampanaContent() {
       .catch(() => {})
   }, [])
   useEffect(() => { loadExisting() }, [loadExisting])
+
+  useEffect(() => {
+    fetch('/api/postgres/horarios-curso', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.catalogo) setCatalogoHorarios(d.catalogo) })
+      .catch(() => {}) // si falla, horariosDe cae al catálogo del código
+  }, [])
 
   // Conteo de colisiones de la campaña elegida, para que la pestaña salga verde
   // o roja sin tener que abrirla. Se consulta al cambiar de campaña (~380 ms).
@@ -374,7 +383,10 @@ function CrearCampanaContent() {
     } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setRowBusy(false) }
   }
 
-  const horariosOpts = horariosFor(form.tipoCurso)
+  // El catálogo vive en HORARIOS_CURSO (Académico › Horarios). `horariosFor`
+  // queda como respaldo si el fetch falla, para no dejar el alta sin opciones.
+  const horariosDe = (tipo: string) => (tipo ? (catalogoHorarios[tipo] ?? horariosFor(tipo)) : [])
+  const horariosOpts = horariosDe(form.tipoCurso)
   const editing = editIndex !== null
 
   // --- Reporte: estado de cada curso por fecha + filtros ---
@@ -949,10 +961,10 @@ function CrearCampanaContent() {
                 <label className={lblCls}>Horario *</label>
                 <select value={editRow.horarioCurso} onChange={e => setEditRow({ ...editRow, horarioCurso: e.target.value })} className={inputCls}>
                   <option value="">Seleccionar...</option>
-                  {(editRow.horarioCurso && !horariosFor(editRow.tipoCurso).includes(editRow.horarioCurso)
-                    ? [editRow.horarioCurso, ...horariosFor(editRow.tipoCurso)]
-                    : horariosFor(editRow.tipoCurso)
-                  ).map(h => <option key={h} value={h}>{h}{editRow.horarioCurso === h && !horariosFor(editRow.tipoCurso).includes(h) ? ' (actual)' : ''}</option>)}
+                  {(editRow.horarioCurso && !horariosDe(editRow.tipoCurso).includes(editRow.horarioCurso)
+                    ? [editRow.horarioCurso, ...horariosDe(editRow.tipoCurso)]
+                    : horariosDe(editRow.tipoCurso)
+                  ).map(h => <option key={h} value={h}>{h}{editRow.horarioCurso === h && !horariosDe(editRow.tipoCurso).includes(h) ? ' (actual)' : ''}</option>)}
                 </select>
               </div>
               <div>
@@ -1114,9 +1126,9 @@ function CrearCampanaContent() {
                 <div>
                   <label htmlFor="col-horario" className="block text-xs font-medium text-gray-500 uppercase mb-1">Horario</label>
                   <select id="col-horario" value={colHorario} onChange={e => setColHorario(e.target.value)} className={inputCls}>
-                    {horariosFor(colision.curso.tipoCurso).map(h => <option key={h} value={h}>{h}</option>)}
+                    {horariosDe(colision.curso.tipoCurso).map(h => <option key={h} value={h}>{h}</option>)}
                     {/* El actual, aunque ya no esté en el catálogo (cursos antiguos) */}
-                    {!horariosFor(colision.curso.tipoCurso).includes(colision.curso.horarioCurso) && (
+                    {!horariosDe(colision.curso.tipoCurso).includes(colision.curso.horarioCurso) && (
                       <option value={colision.curso.horarioCurso}>{colision.curso.horarioCurso} (actual)</option>
                     )}
                   </select>

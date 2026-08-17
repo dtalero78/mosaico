@@ -5,7 +5,8 @@ import { query } from '@/lib/postgres';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, ConflictError } from '@/lib/errors';
-import { TIPOS_CURSO, horariosFor, esMenores, addMonths, horariosSeSolapan } from '@/lib/cursos-campaign';
+import { TIPOS_CURSO, esMenores, addMonths, horariosSeSolapan } from '@/lib/cursos-campaign';
+import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso } from '@/services/cursos-campaign-eventos.service';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { detectarColisionesGuia, mensajeColision } from '@/services/colision-guia.service';
@@ -67,7 +68,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     const tipo = String(c?.tipoCurso || '');
     if (!(TIPOS_CURSO as readonly string[]).includes(tipo)) throw new ValidationError(`Tipo de curso inválido: ${tipo}`);
     const horario = String(c?.horarioCurso || '');
-    if (!horariosFor(tipo).includes(horario)) throw new ValidationError(`Horario inválido para ${tipo}: ${horario}`);
+    // El catálogo vive en HORARIOS_CURSO (Académico › Horarios), ya no en el código.
+    if (!(await horarioEsValido(tipo, horario))) throw new ValidationError(`Horario inválido para ${tipo}: ${horario}`);
 
     const salon = (c?.salon ? String(c.salon).trim() : null) || null;
     const guia = (c?.guia ? String(c.guia).trim() : null) || null;
