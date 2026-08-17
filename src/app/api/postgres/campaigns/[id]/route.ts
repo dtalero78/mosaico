@@ -188,17 +188,17 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     }
   }
 
-  // Regenerar eventos de CALENDARIO del curso con los nuevos datos.
-  // `grupoHorarioId` se relee de la BD (no de `upd`): si se acaba de separar,
-  // `deshacerGrupo` ya lo puso en NULL y `upd` tendría el valor viejo.
-  const { rows: [estadoFinal] } = await query<{ grupoHorarioId: string | null }>(
-    `SELECT "grupoHorarioId" FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`, [id]
-  );
-  await generarEventosCurso({
-    _id: id, campaign: row.campaign, tipoCurso, salon, guia,
-    horarioCurso, inicioCurso, finalCurso, numeroUsuarios,
-    grupoHorarioId: estadoFinal?.grupoHorarioId ?? null,
-  });
+  // Regenerar los eventos de CALENDARIO del curso con los nuevos datos.
+  //
+  // ⚠ `regenerarCursoPreservandoEstado` y NO `generarEventosCurso` a secas: el
+  // segundo BORRA y recrea las filas de CALENDARIO, y los agendamientos de los
+  // alumnos quedan apuntando a eventos que ya no existen — el guía abre su
+  // sesión y ve "0 estudiantes" aunque el salón tenga 11. Pasó de verdad en
+  // agosto-2026 (AGOSTO172026M · YOJI 01: 1.848 bookings huérfanos, y DANSHI 03)
+  // simplemente por editar el curso desde Campañas.
+  // La versión que preserva toma un snapshot del estado por (alumno, fecha),
+  // regenera y lo vuelve a aplicar, así que la asistencia ya marcada no se pierde.
+  await regenerarCursoPreservandoEstado(id);
   return successResponse({ curso: upd.rows[0], grupo: grupoResultado });
 });
 
