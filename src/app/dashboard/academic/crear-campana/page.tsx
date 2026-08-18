@@ -63,6 +63,9 @@ function CrearCampanaContent() {
   // Gestión: campaña seleccionada en el dropdown ('' | '__NEW__' | nombre) + modal de curso
   const [gestionSel, setGestionSel] = useState('')
   const [showCursoModal, setShowCursoModal] = useState(false)
+  // Curso con alumnos al que le cambian horario/salón/tipo: hay que explicar las
+  // consecuencias antes de mover sus fichas.
+  const [arrastreAlumnos, setArrastreAlumnos] = useState<any>(null)
   const [cursoMode, setCursoMode] = useState<'draft' | 'existing'>('draft')
   // Reporte: campaña cuyo detalle está desplegado (null = mostrar tarjetas)
   const [detalleCampaign, setDetalleCampaign] = useState<string | null>(null)
@@ -311,7 +314,7 @@ function CrearCampanaContent() {
     activa: r.activa !== false,
   }) }
 
-  const saveEdit = async (override?: { horarioCurso?: string; guia?: string; accionGrupoHorario?: 'propagar' | 'separar' }) => {
+  const saveEdit = async (override?: { horarioCurso?: string; guia?: string; accionGrupoHorario?: 'propagar' | 'separar'; arrastrarAlumnos?: boolean }) => {
     if (!editRow) return
     setRowBusy(true); setEditMsg(null)
     try {
@@ -320,6 +323,8 @@ function CrearCampanaContent() {
         body: JSON.stringify({
           // Decisión sobre el grupo de salón cuando cambia el horario.
           _accionGrupoHorario: override?.accionGrupoHorario,
+          // Confirmación de que los alumnos del curso se mueven con él.
+          _arrastrarAlumnos: override?.arrastrarAlumnos === true,
           tipoCurso: editRow.tipoCurso, salon: editRow.salon,
           // El modal de colisión reintenta con estos valores ya corregidos.
           guia: (override?.guia !== undefined ? override.guia : editRow.guia) || null,
@@ -335,9 +340,11 @@ function CrearCampanaContent() {
         // Curso de un grupo de salón al que le cambian el horario: hay que
         // decidir si el grupo entero se mueve o si este curso se separa.
         if (d?.detail?.tipo === 'cambio_horario_grupo') { setCambioHorarioGrupo(d.detail); return }
+        // El curso tiene alumnos: se explica qué les pasa antes de moverlos.
+        if (d?.detail?.tipo === 'arrastra_alumnos') { setArrastreAlumnos(d.detail); return }
         throw new Error(d.error || 'Error al editar el curso')
       }
-      setColision(null); setCambioHorarioGrupo(null)
+      setColision(null); setCambioHorarioGrupo(null); setArrastreAlumnos(null)
       const guardado = d?.curso || editRow
       setEditRow(null)
       setMsg({
@@ -1168,6 +1175,55 @@ function CrearCampanaContent() {
           campaign={gestionSel && gestionSel !== '__NEW__' ? gestionSel : ''}
           onCount={setColisionesCount}
         />
+      )}
+
+      {/* Curso CON ALUMNOS al que le cambian horario / salón / tipo */}
+      {arrastreAlumnos && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900">Este curso tiene alumnos</h3>
+            <p className="text-sm text-gray-600 mt-2">
+              Vas a mover el curso de{' '}
+              <strong>{arrastreAlumnos.antes?.tipoCurso} · Salón {arrastreAlumnos.antes?.salon || '—'} · {arrastreAlumnos.antes?.horarioCurso}</strong>
+              {' '}a{' '}
+              <strong>{arrastreAlumnos.despues?.tipoCurso} · Salón {arrastreAlumnos.despues?.salon || '—'} · {arrastreAlumnos.despues?.horarioCurso}</strong>.
+            </p>
+
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <div className="text-sm font-medium text-amber-900">Qué va a pasar</div>
+              <ul className="mt-2 space-y-1 text-sm text-amber-800 list-disc list-inside">
+                {(arrastreAlumnos.consecuencias || []).map((c: string, i: number) => <li key={i}>{c}</li>)}
+              </ul>
+            </div>
+
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                Ver los {arrastreAlumnos.alumnos?.length || 0} alumno(s) que se mueven
+              </summary>
+              <ul className="mt-2 space-y-1 text-sm max-h-48 overflow-y-auto">
+                {(arrastreAlumnos.alumnos || []).map((a: any) => (
+                  <li key={a.numeroId} className="border border-gray-200 rounded-md px-3 py-1.5 text-gray-800 flex justify-between gap-3">
+                    <span className="truncate">{a.nombre}</span>
+                    <span className="text-gray-500 font-mono text-xs flex-shrink-0">{a.numeroId}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={rowBusy}
+                onClick={() => { setArrastreAlumnos(null); setRowBusy(false) }}
+                className="px-4 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="button" disabled={rowBusy}
+                onClick={() => saveEdit({ arrastrarAlumnos: true })}
+                className="px-4 py-2 text-sm rounded-md text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
+                {rowBusy ? 'Moviendo…' : `Mover el curso y sus ${arrastreAlumnos.alumnos?.length || 0} alumno(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Cambio de horario en un curso que comparte salón */}

@@ -7,7 +7,7 @@ import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { TIPOS_CURSO, esMenores, addMonths } from '@/lib/cursos-campaign';
 import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { horarioEsValido } from '@/services/horarios-curso.service';
-import { generarEventosCurso, eliminarEventosCurso, regenerarCursoPreservandoEstado } from '@/services/cursos-campaign-eventos.service';
+import { generarEventosCurso, eliminarEventosCurso, regenerarCursoPreservandoEstado, arrastrarAlumnosDelCurso } from '@/services/cursos-campaign-eventos.service';
 import { detectarColisionesGuia, mensajeColision, guiaAsignado } from '@/services/colision-guia.service';
 import { deshacerGrupo } from '@/services/grupo-horario.service';
 
@@ -157,6 +157,49 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     }
   }
 
+  // ─── El curso cambia de identidad y TIENE alumnos ───
+  // El curso es el grupo: si el salón de las 19:00 pasa a las 19:15, sus alumnos van
+  // con él. Pero eso mueve la ficha de gente sin que nadie la toque una por una, así
+  // que sin una instrucción explícita se rechaza y la UI explica las consecuencias.
+  // Va ANTES del UPDATE: si se rechazara después, el curso quedaría movido y los
+  // alumnos atrás — que es exactamente el estado que dejó a DANSHI · Salón 01 sin
+  // agendamientos el 18-ago.
+  const cambiaIdentidad = tipoCurso !== row.tipoCurso
+    || horarioCurso !== row.horarioCurso
+    || (salon || '') !== (row.salon || '');
+  const arrastrar = body._arrastrarAlumnos === true;
+
+  if (cambiaIdentidad && !arrastrar) {
+    const alumnos = (await query<{ nombre: string; numeroId: string }>(
+      `SELECT TRIM(CONCAT_WS(' ', "primerNombre", "primerApellido")) AS nombre, "numeroId"
+         FROM "PEOPLE"
+        WHERE "tipoUsuario"='BENEFICIARIO'
+          AND "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3
+        ORDER BY 1`,
+      [row.campaign, row.tipoCurso, row.horarioCurso]
+    )).rows;
+
+    if (alumnos.length > 0) {
+      throw new ConflictError(
+        `Este curso tiene ${alumnos.length} alumno(s). Si cambias su horario, curso o salón, ellos se mueven con él.`,
+        {
+          tipo: 'arrastra_alumnos',
+          cursoId: id,
+          alumnos,
+          antes: { tipoCurso: row.tipoCurso, horarioCurso: row.horarioCurso, salon: row.salon },
+          despues: { tipoCurso, horarioCurso, salon },
+          consecuencias: [
+            `${alumnos.length} alumno(s) pasan a ${tipoCurso} · Salón ${salon || '—'} · ${horarioCurso}.`,
+            'Sus clases se regeneran en las fechas y horas nuevas.',
+            'La asistencia y las evaluaciones ya marcadas se conservan.',
+            'Su avance (módulo y lección) no cambia: es el mismo curso.',
+            'El cambio queda registrado en la ficha de cada alumno.',
+          ],
+        }
+      );
+    }
+  }
+
   const upd = await query(
     `UPDATE "CURSOS_CAMPAIGN" SET
        "tipoCurso"=$1, "horarioCurso"=$2, "salon"=$3, "guia"=$4, "inicioCurso"=$5, "duracionCurso"=$6,
@@ -202,8 +245,21 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   // simplemente por editar el curso desde Campañas.
   // La versión que preserva toma un snapshot del estado por (alumno, fecha),
   // regenera y lo vuelve a aplicar, así que la asistencia ya marcada no se pierde.
+  // Los alumnos van con el curso ANTES de regenerar: la regeneración busca a quién
+  // agendarle cruzando campaña+curso+horario contra PEOPLE, así que si todavía
+  // tuvieran la terna vieja no encontraría a nadie y el salón quedaría con sus
+  // eventos y cero agendamientos.
+  let alumnosMovidos = 0;
+  if (cambiaIdentidad && arrastrar) {
+    alumnosMovidos = await arrastrarAlumnosDelCurso(
+      { campaign: row.campaign, tipoCurso: row.tipoCurso, horarioCurso: row.horarioCurso, salon: row.salon },
+      { campaign: row.campaign, tipoCurso, horarioCurso, salon },
+      { email: (session as any)?.user?.email, nombre: (session as any)?.user?.name },
+    );
+  }
+
   await regenerarCursoPreservandoEstado(id);
-  return successResponse({ curso: upd.rows[0], grupo: grupoResultado });
+  return successResponse({ curso: upd.rows[0], grupo: grupoResultado, alumnosMovidos });
 });
 
 export const DELETE = handlerWithAuth(async (_request, ctx: any, session) => {

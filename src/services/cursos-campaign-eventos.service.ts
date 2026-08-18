@@ -373,3 +373,90 @@ export async function generarBookingsBeneficiario(
   });
   return creados;
 }
+
+/** Identidad de curso de un alumno: lo que lo ata a una fila de CURSOS_CAMPAIGN. */
+export interface IdentidadCurso {
+  campaign: string;
+  tipoCurso: string;
+  horarioCurso: string;
+  salon?: string | null;
+}
+
+/**
+ * Mueve a los alumnos de un curso cuando al CURSO le cambian el horario, el salón
+ * o el tipo.
+ *
+ * El curso es el grupo: si el salón de las 19:00 pasa a las 19:15, sus alumnos van
+ * con él — no se quedan apuntando a una hora que ya no existe. Sin esto, tras editar
+ * el curso los alumnos conservaban la terna vieja en su ficha, la regeneración no
+ * encontraba a nadie (busca campaña+curso+horario contra PEOPLE) y el salón quedaba
+ * con sus eventos y CERO agendamientos. Pasó con DANSHI · Salón 01 el 18-ago.
+ *
+ * Qué NO toca, a propósito:
+ *   · módulo y lección — es el mismo curso, el alumno conserva su avance;
+ *   · las marcas de cupo — el asiento sigue siendo de esta misma fila de curso, así
+ *     que el conteo (que va por campaña+curso+horario) lo sigue solo;
+ *   · a nadie que no fuera de este curso: sólo mueve a quien tenga EXACTAMENTE la
+ *     terna vieja.
+ *
+ * Deja constancia en `ACADEMICA.cambioAcademicoHistory`, para que la ficha del alumno
+ * explique por qué cambió sin que nadie la tocara.
+ *
+ * Devuelve cuántos alumnos se movieron.
+ */
+export async function arrastrarAlumnosDelCurso(
+  antes: IdentidadCurso,
+  despues: IdentidadCurso,
+  actor?: { email?: string | null; nombre?: string | null },
+): Promise<number> {
+  const igual = antes.campaign === despues.campaign
+    && antes.tipoCurso === despues.tipoCurso
+    && antes.horarioCurso === despues.horarioCurso
+    && (antes.salon || '') === (despues.salon || '');
+  if (igual) return 0;
+  if (!antes.campaign || !antes.tipoCurso || !antes.horarioCurso) return 0;
+
+  const alumnos = (await query<{ _id: string; numeroId: string | null }>(
+    `SELECT "_id","numeroId" FROM "PEOPLE"
+      WHERE "tipoUsuario"='BENEFICIARIO'
+        AND "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3`,
+    [antes.campaign, antes.tipoCurso, antes.horarioCurso]
+  )).rows;
+  if (!alumnos.length) return 0;
+
+  const ids = alumnos.map(a => a._id);
+  const numeros = alumnos.map(a => a.numeroId).filter(Boolean) as string[];
+
+  await transaction(async (client) => {
+    await client.query(
+      `UPDATE "PEOPLE" SET "campaign"=$2, "tipoCurso"=$3, "horarioCurso"=$4, "salon"=$5, "_updatedDate"=NOW()
+        WHERE "_id" = ANY($1::text[])`,
+      [ids, despues.campaign, despues.tipoCurso, despues.horarioCurso, despues.salon || null]);
+
+    if (numeros.length) {
+      await client.query(
+        `UPDATE "ACADEMICA" SET "campaign"=$2, "salon"=$3, "_updatedDate"=NOW()
+          WHERE "numeroId" = ANY($1::text[])`,
+        [numeros, despues.campaign, despues.salon || null]);
+
+      const entrada = {
+        fecha: new Date().toISOString(),
+        motivo: 'El curso cambió de horario/salón y sus alumnos se movieron con él',
+        origen: { campaign: antes.campaign, tipoCurso: antes.tipoCurso, horarioCurso: antes.horarioCurso, salon: antes.salon || null },
+        destino: { campaign: despues.campaign, tipoCurso: despues.tipoCurso, horarioCurso: despues.horarioCurso, salon: despues.salon || null },
+        realizadoPor: actor?.email || 'sistema',
+        realizadoPorNombre: actor?.nombre || null,
+        automatico: true,
+      };
+      await client.query(
+        `UPDATE "ACADEMICA"
+            SET "cambioAcademicoHistory" =
+                  COALESCE("cambioAcademicoHistory", '[]'::jsonb) || $2::jsonb,
+                "_updatedDate" = NOW()
+          WHERE "numeroId" = ANY($1::text[])`,
+        [numeros, JSON.stringify([entrada])]).catch(() => null); // columna opcional
+    }
+  });
+
+  return alumnos.length;
+}
