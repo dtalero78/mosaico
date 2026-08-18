@@ -8,7 +8,7 @@ import { TIPOS_CURSO, esMenores, addMonths } from '@/lib/cursos-campaign';
 import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso, eliminarEventosCurso, regenerarCursoPreservandoEstado } from '@/services/cursos-campaign-eventos.service';
-import { detectarColisionesGuia, mensajeColision } from '@/services/colision-guia.service';
+import { detectarColisionesGuia, mensajeColision, guiaAsignado } from '@/services/colision-guia.service';
 import { deshacerGrupo } from '@/services/grupo-horario.service';
 
 /**
@@ -48,7 +48,10 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   }
 
   const salon = body.salon !== undefined ? (String(body.salon).trim() || null) : row.salon;
-  const guia = body.guia !== undefined ? (String(body.guia).trim() || null) : row.guia;
+  // Normalizado: el formulario puede mandar el texto 'null'/'undefined' cuando no
+  // se elige guía, y guardarlo así lo volvía un guía llamado «null» que chocaba
+  // contra cualquier otro curso sin guía.
+  const guia = body.guia !== undefined ? guiaAsignado(body.guia) : guiaAsignado(row.guia);
   const inicioCurso = body.inicioCurso !== undefined ? (isDate(body.inicioCurso) ? body.inicioCurso : null) : (row.inicioCurso ? String(row.inicioCurso).slice(0, 10) : null);
   const duracion = body.duracionCurso !== undefined ? (parseInt(String(body.duracionCurso), 10) || 0) : (row.duracionCurso || 0);
   const numeroUsuarios = body.numeroUsuarios !== undefined ? (parseInt(String(body.numeroUsuarios), 10) || 0) : (row.numeroUsuarios || 0);

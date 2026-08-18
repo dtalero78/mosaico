@@ -1,6 +1,10 @@
 import 'server-only';
 import { query } from '@/lib/postgres';
 import { horariosSeSolapan } from '@/lib/cursos-campaign';
+// La regla de «hay guía asignado» vive en lib/ para que la puedan usar también
+// los scripts y los tests; se reexporta para no cambiar a quien la importe de aquí.
+import { guiaAsignado } from '@/lib/guia';
+export { guiaAsignado };
 
 /**
  * Colisiones de horario de un GUÍA entre cursos de campaña.
@@ -61,6 +65,7 @@ export interface ColisionGuia {
 
 const soloFecha = (v: any): string | null => (v ? String(v).slice(0, 10) : null);
 
+
 /**
  * ¿Se solapan dos periodos [aIni,aFin] y [bIni,bFin]?
  * Si a alguno le faltan fechas no se puede descartar el choque → se considera
@@ -86,9 +91,9 @@ export function chocanCursos(
   b: Pick<CursoParaColision, 'guia' | 'horarioCurso' | 'inicioCurso' | 'finalCurso' | 'grupoHorarioId'>
 ): { choca: boolean; vigenciaIndeterminada: boolean } {
   const no = { choca: false, vigenciaIndeterminada: false };
-  const guiaA = String(a.guia || '').trim();
-  const guiaB = String(b.guia || '').trim();
-  if (!guiaA || guiaA !== guiaB) return no;
+  const guiaA = guiaAsignado(a.guia);
+  const guiaB = guiaAsignado(b.guia);
+  if (!guiaA || !guiaB || guiaA !== guiaB) return no;
   if (!a.horarioCurso || !b.horarioCurso) return no;
 
   const grupoA = String(a.grupoHorarioId || '').trim();
@@ -104,16 +109,20 @@ export function chocanCursos(
 }
 
 export async function detectarColisionesGuia(curso: CursoParaColision): Promise<ColisionGuia[]> {
-  const guia = String(curso.guia || '').trim();
+  const guia = guiaAsignado(curso.guia);
   if (!guia) return [];               // sin guía asignado no hay nada que chocar
   if (!curso.horarioCurso) return [];
 
+  // El guía tiene que ESTAR en la lista de guías. Un id que no resuelve no es una
+  // persona a la que se le puedan solapar dos clases: es un dato suelto, y avisar
+  // por él sólo bloquea el guardado sin motivo. `INNER JOIN` en vez de `LEFT`, así
+  // que si el id no existe la consulta no devuelve candidatos.
   const candidatos = (await query<any>(
     `SELECT cc."_id", cc."campaign", cc."tipoCurso", cc."salon", cc."horarioCurso",
             cc."inicioCurso"::text AS "inicioCurso", cc."finalCurso"::text AS "finalCurso",
             cc."grupoHorarioId", g."nombreCompleto" AS "guiaNombre"
        FROM "CURSOS_CAMPAIGN" cc
-       LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
+       JOIN "GUIAS" g ON g."_id" = cc."guia"
       WHERE cc."guia" = $1
         AND cc."activa" = true
         AND ($2::text IS NULL OR cc."_id" <> $2)`,

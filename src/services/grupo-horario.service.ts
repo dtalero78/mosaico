@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { query } from '@/lib/postgres';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { motivoNoAgrupable, MAX_CURSOS_GRUPO } from '@/lib/grupo-horario';
-import { chocanCursos, describirColision } from '@/services/colision-guia.service';
+import { chocanCursos, describirColision, guiaAsignado } from '@/services/colision-guia.service';
 import { regenerarCursoPreservandoEstado } from '@/services/cursos-campaign-eventos.service';
 
 /**
@@ -202,7 +202,7 @@ export async function colisionesDeCampania(campaign: string): Promise<{
   const todos = (await query<CursoGrupo>(
     `SELECT ${CAMPOS_CURSO}, (SELECT g."nombreCompleto" FROM "GUIAS" g WHERE g."_id" = cc."guia") AS "guiaNombre"
        FROM "CURSOS_CAMPAIGN" cc
-      WHERE cc."activa" = true AND cc."guia" IS NOT NULL
+      WHERE cc."activa" = true AND EXISTS (SELECT 1 FROM "GUIAS" g2 WHERE g2."_id" = cc."guia")
       ORDER BY cc."horarioCurso", cc."tipoCurso", cc."salon"`
   )).rows;
 
@@ -211,7 +211,7 @@ export async function colisionesDeCampania(campaign: string): Promise<{
   // Sólo hace falta comparar contra los cursos del MISMO guía.
   const porGuia = new Map<string, CursoGrupo[]>();
   for (const c of todos) {
-    const g = String(c.guia || '').trim();
+    const g = guiaAsignado(c.guia);
     if (!g) continue;
     const arr = porGuia.get(g) || [];
     arr.push(c);
@@ -222,7 +222,7 @@ export async function colisionesDeCampania(campaign: string): Promise<{
   const vistos = new Set<string>();
 
   for (const curso of cursos) {
-    for (const otro of porGuia.get(String(curso.guia || '').trim()) || []) {
+    for (const otro of porGuia.get(guiaAsignado(curso.guia) || '') || []) {
       if (otro._id === curso._id) continue;
       const { choca, vigenciaIndeterminada } = chocanCursos(curso, otro);
       if (!choca) continue;

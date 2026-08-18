@@ -9,7 +9,7 @@ import { TIPOS_CURSO, esMenores, addMonths, horariosSeSolapan } from '@/lib/curs
 import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso } from '@/services/cursos-campaign-eventos.service';
 import { cupoOcupadoSql } from '@/lib/cupo';
-import { detectarColisionesGuia, mensajeColision } from '@/services/colision-guia.service';
+import { detectarColisionesGuia, mensajeColision, guiaAsignado } from '@/services/colision-guia.service';
 
 /**
  * GET /api/postgres/campaigns  → lista de cursos/campañas (admin Crea Campaña).
@@ -72,7 +72,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     if (!(await horarioEsValido(tipo, horario))) throw new ValidationError(`Horario inválido para ${tipo}: ${horario}`);
 
     const salon = (c?.salon ? String(c.salon).trim() : null) || null;
-    const guia = (c?.guia ? String(c.guia).trim() : null) || null;
+    // Se normaliza aquí: el formulario puede mandar el texto 'null'/'undefined'
+    // cuando no se elige guía, y guardarlo así lo convertía en un guía llamado «null».
+    const guia = guiaAsignado(c?.guia);
     const inicioCurso = isDate(c?.inicioCurso) ? c.inicioCurso : null;
     const duracion = parseInt(String(c?.duracionCurso ?? 0), 10) || 0;
     // Final del curso = inicio + (duración + 1) meses.
