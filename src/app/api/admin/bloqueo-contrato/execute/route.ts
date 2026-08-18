@@ -1,4 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { MantenimientoPermission } from '@/types/permissions';
 import { executeBloqueo } from '@/services/bloqueo-contrato.service';
 import { ValidationError } from '@/lib/errors';
 
@@ -10,7 +12,8 @@ import { ValidationError } from '@/lib/errors';
  * IDs recibidos. Los IDs deben provenir de un lookup previo confirmado por el
  * usuario en UI.
  */
-export const POST = handlerWithAuth(async (request) => {
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
+  await requirePermission(session, MantenimientoPermission.BLOQUEAR_CONTRATO);
   const body = await request.json();
   const personIds = body?.personIds;
 

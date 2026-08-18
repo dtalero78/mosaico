@@ -1,4 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { StudentPermission } from '@/types/permissions';
 import { AcademicaRepository } from '@/repositories/academica.repository';
 import { StepOverridesRepository } from '@/repositories/niveles.repository';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
@@ -41,6 +43,7 @@ async function resolveAcademicaId(paramsId: string): Promise<{ academicaId: stri
  * spoofeables desde el body.
  */
 export const POST = handlerWithAuth(async (request, { params }, session) => {
+  await requirePermission(session, StudentPermission.MARCAR_STEP);
   const body = await request.json();
   const { step, completado, motivo, nivel: nivelFromBody } = body;
 
@@ -85,6 +88,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
  * POST con completado=null. motivo obligatorio (querystring).
  */
 export const DELETE = handlerWithAuth(async (request, { params }, session) => {
+  await requirePermission(session, StudentPermission.MARCAR_STEP);
   const { searchParams } = new URL(request.url);
   const step = searchParams.get('step');
   const motivo = (searchParams.get('motivo') || '').trim();

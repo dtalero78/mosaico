@@ -1,5 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { PersonPermission } from '@/types/permissions';
 import { query, queryOne } from '@/lib/postgres';
 import { NotFoundError, ConflictError } from '@/lib/errors';
 import { approveOnePerson, approveContract } from '@/services/approval.service';
@@ -24,9 +26,11 @@ import { approveOnePerson, approveContract } from '@/services/approval.service';
  * el "Autoaprobar" del centro de aprobación, que la usa con sendWhatsApp=false).
  */
 export const POST = handlerWithAuth(async (
-  _request: Request,
-  { params }: { params: Record<string, string> }
+  _request,
+  { params }: { params: Record<string, string> },
+  session
 ) => {
+  await requirePermission(session, PersonPermission.APROBAR);
   const personId = params.id;
 
   // Get person to determine type (include inicioContrato for propagation to beneficiarios)

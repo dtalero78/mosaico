@@ -1,5 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { MantenimientoPermission } from '@/types/permissions';
 import { queryOne } from '@/lib/postgres';
 import { ValidationError, ConflictError } from '@/lib/errors';
 import { createFullContract, normalizeTipoPlan, validarNumeroIds, buscarTitularExistente } from '@/services/contract-creation.service';
@@ -14,6 +16,7 @@ import { createFullContract, normalizeTipoPlan, validarNumeroIds, buscarTitularE
  * de contrato se DIGITA manualmente (aquí) en vez de auto-generarse.
  */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
+  await requirePermission(session, MantenimientoPermission.MIGRAR_CONTRATO);
   const { contrato, titular, financial, beneficiarios, titularEsBeneficiario, permitirTitularDuplicado } = await request.json();
 
   // Número de contrato manual — requerido y único.

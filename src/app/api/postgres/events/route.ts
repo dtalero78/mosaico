@@ -1,4 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { AcademicoPermission } from '@/types/permissions';
 import { createEvent } from '@/services/calendar.service';
 import { ValidationError } from '@/lib/errors';
 
@@ -45,7 +47,8 @@ function derivarCamposEvento(v: {
  *
  * Create a new event in the calendar.
  */
-export const POST = handlerWithAuth(async (request) => {
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
+  await requirePermission(session, AcademicoPermission.CREAR_EVENTO);
   const body = await request.json();
 
   if (!body.dia) throw new ValidationError('dia is required');

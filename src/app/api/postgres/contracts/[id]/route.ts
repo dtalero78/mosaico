@@ -1,5 +1,7 @@
 import 'server-only';
 import { handler, handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { ComercialPermission } from '@/types/permissions';
 import { queryOne, queryMany, parseJsonbFields } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { PeopleRepository } from '@/repositories/people.repository';
@@ -116,9 +118,11 @@ export const GET = handler(async (
  * }
  */
 export const PUT = handlerWithAuth(async (
-  request: Request,
-  { params }: { params: Record<string, string> }
+  request,
+  { params }: { params: Record<string, string> },
+  session
 ) => {
+  await requirePermission(session, ComercialPermission.MODIFICAR_CONTRATO);
   const titularId = params.id;
   const body = await request.json();
   const { titular: titularChanges, beneficiarios: beneficiariosChanges, financial: financialChanges } = body;

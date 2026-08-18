@@ -1,5 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { AprobacionPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 
@@ -22,7 +24,8 @@ const APROBACION_TO_ESTADO: Record<string, string> = {
   'Rechazado':      'ANULADO',
 };
 
-export const PUT = handlerWithAuth(async (request, { params }) => {
+export const PUT = handlerWithAuth(async (request, { params }, session) => {
+  await requirePermission(session, AprobacionPermission.ACTUALIZAR);
   const { estado } = await request.json();
   if (!estado) throw new ValidationError('estado is required');
 

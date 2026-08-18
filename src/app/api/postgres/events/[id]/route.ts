@@ -1,4 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { AcademicoPermission } from '@/types/permissions';
 import { getEventById, updateEvent, deleteEvent } from '@/services/calendar.service';
 
 /**
@@ -24,6 +26,7 @@ export const GET = handlerWithAuth(async (request, { params }) => {
  * columnas de CALENDARIO).
  */
 export const PUT = handlerWithAuth(async (request, { params }, session) => {
+  await requirePermission(session, AcademicoPermission.EDITAR);
   const body = await request.json();
   const motivo = typeof body?._motivoCambioAdvisor === 'string' ? body._motivoCambioAdvisor : undefined;
   const skipLog = body?._skipLog === true;
@@ -50,6 +53,7 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
  *                          evento solicitado y los hermanos quedan vivos.
  */
 export const DELETE = handlerWithAuth(async (request, { params }, session) => {
+  await requirePermission(session, AcademicoPermission.ELIMINAR);
   const { searchParams } = new URL(request.url);
   const deleteBookings = searchParams.get('deleteBookings') === 'true';
   const motivo = searchParams.get('motivo') || undefined;

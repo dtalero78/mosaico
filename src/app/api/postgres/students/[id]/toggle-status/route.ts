@@ -1,4 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { PersonPermission } from '@/types/permissions';
 import { toggleStatus } from '@/services/student.service';
 import { cambiarCursoAcademico } from '@/services/cambio-academico.service';
 import { PeopleRepository } from '@/repositories/people.repository';
@@ -25,6 +27,7 @@ import { cupoOcupadoSql } from '@/lib/cupo';
  * suspendcount increments only on INACTIVACION.
  */
 export const POST = handlerWithAuth(async (request, { params }, session) => {
+  await requirePermission(session, PersonPermission.ACTIVAR_DESACTIVAR);
   const body = await request.json().catch(() => ({}));
   const { active, motivo } = body;
 

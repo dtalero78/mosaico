@@ -1,5 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { ComercialPermission } from '@/types/permissions';
 import { queryOne } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 
@@ -12,6 +14,7 @@ import { NotFoundError, ValidationError } from '@/lib/errors';
  * estaba en LISTO, conserva la marca original.
  */
 export const POST = handlerWithAuth(async (_request, { params }, session) => {
+  await requirePermission(session, ComercialPermission.GESTION_CONTRATO);
   const titular = await queryOne<{ _id: string; tipoUsuario: string; aprobacion: string | null; listoAprobacion: string | null; contrato: string | null }>(
     `SELECT "_id", "tipoUsuario", "aprobacion", "listoAprobacion"::text, "contrato" FROM "PEOPLE" WHERE "_id" = $1`,
     [params.id]

@@ -1,4 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { ComercialPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { query, queryOne } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
@@ -16,7 +18,8 @@ const FIELD_MAP: Record<string, string> = {
   direccion: 'domicilio',
 };
 
-export const POST = handlerWithAuth(async (request) => {
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
+  await requirePermission(session, ComercialPermission.SUBIR_LOTE);
   const body = await request.json();
   const registros = body.registros;
 

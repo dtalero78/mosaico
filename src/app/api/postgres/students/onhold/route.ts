@@ -1,4 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { requirePermission } from '@/lib/api-permissions';
+import { StudentPermission } from '@/types/permissions';
 import { activateOnHold, deactivateOnHold } from '@/services/contract.service';
 import { cambiarCursoAcademico } from '@/services/cambio-academico.service';
 import { ValidationError } from '@/lib/errors';
@@ -12,6 +14,7 @@ import { cupoOcupadoSql } from '@/lib/cupo';
  * When deactivating, automatically extends the contract by the paused days.
  */
 export const POST = handlerWithAuth(async (request, context, session) => {
+  await requirePermission(session, StudentPermission.ACTIVAR_HOLD);
   const body = await request.json();
 
   if (!body.studentId) throw new ValidationError('studentId is required');
