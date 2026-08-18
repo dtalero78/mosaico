@@ -1151,6 +1151,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /admin/contratos-prueba. Lista los contratos creados como prueba (prefijo PRB-) y permite purgarlos en cascada (PEOPLE + ACADEMICA + ACADEMICA_BOOKINGS + FINANCIEROS + PAGOS_TITULARES + STEP_OVERRIDES + COMPLEMENTARIA_ATTEMPTS + USUARIOS_ROLES). Cada purga deja snapshot completo en PURGE_LOG (reversible si se identifica error). Acción destructiva — recomendado SUPER_ADMIN únicamente',
   },
   {
+    code: MantenimientoPermission.BOOKING,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Página "Booking"',
+    description: 'Acceso a /admin/booking. Busca un usuario por su documento, muestra su curso, salón y horario, y le genera los agendamientos que le falten sobre los eventos de su curso. Sólo crea sesiones FUTURAS (crear las pasadas lo marcaría ausente en clases donde nunca estuvo inscrito). Idempotente: no duplica los que ya tiene',
+  },
+  {
     code: MantenimientoPermission.AVISOS_TICKER,
     module: Module.MANTENIMIENTO,
     section: 'Avisos',

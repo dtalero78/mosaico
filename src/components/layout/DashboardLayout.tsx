@@ -222,6 +222,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       },
       {
         name: 'Usuarios', isSubmenu: true, children: [
+          { name: 'Booking',        href: '/admin/booking',        newTab: true },
           { name: 'Clear Historic', href: '/admin/clear-historic', newTab: true },
           { name: 'Crea UserRol',   href: '/admin/roles/create',   newTab: true },
         ],
@@ -421,6 +422,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/admin/contratos-prueba': [
       MantenimientoPermission.CONTRATOS_PRUEBA,
+    ],
+    '/admin/booking': [
+      MantenimientoPermission.BOOKING,
     ],
     '/admin/envio-mensajes': [
       MantenimientoPermission.ENVIO_MENSAJES,

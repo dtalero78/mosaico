@@ -283,9 +283,18 @@ export interface BeneficiarioParaBookings {
  *
  * @returns cantidad de bookings creados.
  */
+export interface OpcionesBookings {
+  /** Sólo sesiones que aún no han ocurrido. Crear las pasadas dejaría al alumno
+   *  marcado AUSENTE en clases donde nunca estuvo inscrito. */
+  soloFuturos?: boolean;
+  /** Quién lo generó, para el registro del agendamiento. */
+  agendadoPor?: string;
+}
+
 export async function generarBookingsBeneficiario(
   academicId: string,
-  persona: BeneficiarioParaBookings
+  persona: BeneficiarioParaBookings,
+  opts: OpcionesBookings = {}
 ): Promise<number> {
   if (!academicId) return 0;
   if (!persona.campaign || !persona.tipoCurso || !persona.horarioCurso) return 0;
@@ -303,7 +312,8 @@ export async function generarBookingsBeneficiario(
   const ev = await query(
     `SELECT "_id","advisor","dia","hora","tipo","evento","nivel","step",
             "tituloONivel","nombreEvento","titulo","linkZoom"
-     FROM "CALENDARIO" WHERE "cursoCampaignId"=$1`,
+     FROM "CALENDARIO" WHERE "cursoCampaignId"=$1
+       ${opts.soloFuturos ? 'AND "dia" >= NOW()' : ''}`,
     [cursoId]
   );
   if (ev.rows.length === 0) return 0;
@@ -351,7 +361,7 @@ export async function generarBookingsBeneficiario(
         participacion: false,
         noAprobo: false,
         cancelo: false,
-        agendadoPor: 'Sistema (aprobación contrato)',
+        agendadoPor: opts.agendadoPor || 'Sistema (aprobación contrato)',
         fechaAgendamiento: new Date().toISOString(),
         origen: 'POSTGRES',
       };
