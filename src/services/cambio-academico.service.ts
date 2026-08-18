@@ -2,6 +2,7 @@ import 'server-only';
 import { query, queryOne, queryMany, transaction } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { ValidationError, NotFoundError } from '@/lib/errors';
+import { esAprobadoSql } from '@/lib/estados';
 
 /**
  * "Cambio Académico" — mueve un beneficiario de una campaña/curso/salón a otro.
@@ -17,9 +18,10 @@ import { ValidationError, NotFoundError } from '@/lib/errors';
  *      POSTERIORES a hoy se borran y se generan en el curso nuevo los eventos futuros.
  *   5. Auditoría: entrada en ACADEMICA.cambioAcademicoHistory + comentario en PEOPLE.
  *
- * El movimiento de bookings solo aplica si el estudiante ya estaba inscrito en el
- * curso viejo (tenía bookings); si no (p.ej. sigue en el puente WELCOME sin agenda),
- * solo se cambia la identidad del curso + cupos + lección.
+ * Los agendamientos del curso NUEVO se generan si al alumno le corresponden clases
+ * —está activo y su contrato está aprobado—, NO según lo que tuviera antes. Mirar lo
+ * anterior fallaba justo cuando al curso de origen le habían cambiado el horario: ese
+ * curso dejaba de resolverse y el alumno se quedaba sin ninguna clase.
  */
 
 export interface CambioAcademicoInput {
@@ -98,16 +100,25 @@ export async function cambiarCursoAcademico(academicaId: string, input: CambioAc
   // Lección actual del curso destino
   const { modulo: nuevoModulo, leccion: nuevaLeccion } = await leccionActualCurso(newCursoId, tipoCurso);
 
-  // ¿Tenía bookings en el curso viejo? (para decidir si movemos bookings)
-  let teniaBookings = false;
-  if (oldCursoId) {
-    const cnt = await queryOne<{ n: number }>(
-      `SELECT COUNT(*)::int n FROM "ACADEMICA_BOOKINGS" b
-       JOIN "CALENDARIO" c ON (c."_id"=b."eventoId" OR c."_id"=b."idEvento")
-       WHERE c."cursoCampaignId"=$1 AND (b."idEstudiante"=$2 OR b."studentId"=$2)`,
-      [oldCursoId, academicaId]);
-    teniaBookings = (cnt?.n || 0) > 0;
-  }
+  // ¿Le corresponden clases en el curso destino?
+  //
+  // Antes esto se decidía mirando si el alumno TENÍA agendamientos en el curso
+  // viejo, y ahí estaba el fallo: si al curso de origen le habían cambiado el
+  // horario, `oldCursoId` no resuelve —el curso con ese horario ya no existe—, se
+  // concluía que no tenía nada y se saltaba la generación entera. El alumno quedaba
+  // asignado al salón nuevo y con CERO clases. Pasó con DANSHI · Salón 01 el 18-ago:
+  // 11 alumnos movidos, 0 agendamientos.
+  //
+  // La condición correcta no es «tenía», es «le corresponden»: alumno activo y
+  // contrato aprobado, el mismo criterio con el que la regeneración de un curso
+  // deriva a sus alumnos.
+  const elegible = await queryOne<{ ok: boolean }>(
+    `SELECT (b."estadoInactivo" IS NOT TRUE AND ${esAprobadoSql('t."aprobacion"')}) AS ok
+       FROM "PEOPLE" b
+       LEFT JOIN "PEOPLE" t ON t."contrato" = b."contrato" AND t."tipoUsuario" = 'TITULAR'
+      WHERE b."_id" = $1`,
+    [per._id]);
+  const debeTenerClases = elegible?.ok === true;
 
   const origen = { campaign: per.campaign, tipoCurso: per.tipoCurso, horarioCurso: per.horarioCurso, salon: per.salon, nivel: per.nivel, step: per.step };
   const destino = { campaign, tipoCurso, horarioCurso, salon, nivel: nuevoModulo, step: nuevaLeccion };
@@ -122,8 +133,9 @@ export async function cambiarCursoAcademico(academicaId: string, input: CambioAc
     }
     await client.query(`UPDATE "CURSOS_CAMPAIGN" SET "usuInscritos" = COALESCE("usuInscritos",0) + 1, "_updatedDate"=NOW() WHERE "_id"=$1`, [newCursoId]);
 
-    // 3) Bookings (solo si estaba inscrito en el curso viejo)
-    if (teniaBookings && oldCursoId) {
+    // 3a) Soltar los agendamientos FUTUROS del curso viejo, si ese curso resuelve.
+    //     Ya no se condiciona a que "tuviera" bookings: si no tenía, borra 0.
+    if (oldCursoId) {
       // Borrar los futuros del curso viejo, devolviendo el evento para decrementar inscritos
       const del = await client.query(
         `DELETE FROM "ACADEMICA_BOOKINGS" b
@@ -141,6 +153,13 @@ export async function cambiarCursoAcademico(academicaId: string, input: CambioAc
           [evIds]);
       }
 
+    }
+
+    // 3b) Generar los agendamientos FUTUROS del curso nuevo. Va por separado y
+    //     depende de que al alumno le correspondan clases, no de lo que tuviera
+    //     antes: es lo que faltaba cuando el curso de origen había cambiado de
+    //     horario y dejaba de resolverse.
+    if (debeTenerClases) {
       // Generar bookings para los eventos FUTUROS del curso nuevo (dedupe)
       const ev = await client.query(
         `SELECT "_id","advisor","dia","hora","tipo","evento","nivel","step","sesionModulo","sesionLeccion","tituloONivel","nombreEvento","titulo","linkZoom"
@@ -220,5 +239,5 @@ export async function cambiarCursoAcademico(academicaId: string, input: CambioAc
       [per._id, JSON.stringify(comentario)]);
   });
 
-  return { origen, destino, bookingsBorrados, bookingsCreados, moviolBookings: teniaBookings };
+  return { origen, destino, bookingsBorrados, bookingsCreados, moviolBookings: debeTenerClases };
 }
