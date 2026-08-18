@@ -26,6 +26,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const campaign = (searchParams.get('campaign') || '').trim()
   const curso = (searchParams.get('curso') || '').trim()
   const salon = (searchParams.get('salon') || '').trim()
+  const horario = (searchParams.get('horario') || '').trim()
   const guia = (searchParams.get('guia') || '').trim()
   const startDate = (searchParams.get('startDate') || '').trim()
   const endDate = (searchParams.get('endDate') || '').trim()
@@ -45,6 +46,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (campaign) { where.push(`p."campaign" = $${i++}`); params.push(campaign) }
   if (curso)    { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (salon)    { where.push(`p."salon" = $${i++}`); params.push(salon) }
+  // El nº de salón se repite entre cursos (el "01" existe en los 6): con el
+  // horario el filtro apunta al salón exacto.
+  if (horario)  { where.push(`p."horarioCurso" = $${i++}`); params.push(horario) }
   if (guia)     { where.push(`cc."guia" = $${i++}`); params.push(guia) }
   if (startDate){ where.push(`p."fechaContrato" >= $${i++}::date`); params.push(startDate) }
   if (endDate)  { where.push(`p."fechaContrato" <= $${i++}::date`); params.push(endDate) }
@@ -62,7 +66,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        a."_id" AS "academicaId",
        COALESCE(NULLIF(CASE WHEN a."curso" = 'WELCOME' OR a."curso" IS NULL THEN p."nivel" ELSE a."nivel" END, ''), p."nivel") AS modulo,
        COALESCE(NULLIF(CASE WHEN a."curso" = 'WELCOME' OR a."curso" IS NULL THEN p."step"  ELSE a."step"  END, ''), p."step")  AS leccion,
-       p."tipoCurso" AS curso, p."salon", p."campaign",
+       p."tipoCurso" AS curso, p."salon", p."horarioCurso" AS horario, p."campaign",
        g."nombreCompleto" AS guia,
        p."fechaContrato"::text AS "fechaContrato"
      FROM "PEOPLE" p
@@ -84,11 +88,16 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
       WHERE "tipoUsuario"='BENEFICIARIO' AND "campaign" IS NOT NULL AND "campaign" <> ''
         AND COALESCE("contrato",'') NOT LIKE 'PRB-%' ORDER BY "campaign" DESC`
   )).rows.map((r: any) => r.v)
+  // Salones CON su horario y su alcance: el nº solo no identifica nada — dentro de
+  // (campaña, curso) el salón tiene un único horario, pero el mismo "01" existe en
+  // los 6 cursos. El front acota las opciones a la campaña/curso elegidos.
   const salones = (await query(
-    `SELECT DISTINCT "salon" AS v FROM "PEOPLE"
+    `SELECT DISTINCT "salon", "horarioCurso" AS horario, "campaign", "tipoCurso" AS curso
+       FROM "PEOPLE"
       WHERE "tipoUsuario"='BENEFICIARIO' AND "salon" IS NOT NULL AND "salon" <> ''
-        AND COALESCE("contrato",'') NOT LIKE 'PRB-%' ORDER BY "salon" ASC`
-  )).rows.map((r: any) => r.v)
+        AND COALESCE("contrato",'') NOT LIKE 'PRB-%'
+      ORDER BY "salon" ASC, "horarioCurso" ASC`
+  )).rows
   // Guías asignados a cursos que tienen beneficiarios (para el dropdown)
   const guias = (await query(
     `SELECT DISTINCT g."_id" AS id, g."nombreCompleto" AS nombre

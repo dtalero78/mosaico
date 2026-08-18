@@ -9,6 +9,9 @@ import { AcademicoPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
 
+/** Opción del desplegable de Salón: el nº solo no identifica nada sin su horario. */
+interface SalonOpt { salon: string; horario: string | null; campaign: string | null; curso: string | null }
+
 interface Row {
   id: string
   academicaId: string | null
@@ -20,6 +23,7 @@ interface Row {
   segundoApellido: string | null
   curso: string | null
   salon: string | null
+  horario: string | null
   fechaNacimiento: string | null
   edad: number | null
   apoderado: string | null
@@ -52,7 +56,8 @@ function ListaUsuariosContent() {
 
   const [rows, setRows] = useState<Row[]>([])
   const [campanias, setCampanias] = useState<string[]>([])
-  const [salones, setSalones] = useState<string[]>([])
+  const [horario, setHorario] = useState('')
+  const [salones, setSalones] = useState<SalonOpt[]>([])
   const [guias, setGuias] = useState<Guia[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -67,13 +72,14 @@ function ListaUsuariosContent() {
   const syncFromTop = () => { if (scrollRef.current && topRef.current) scrollRef.current.scrollLeft = topRef.current.scrollLeft }
   const syncFromBottom = () => { if (scrollRef.current && topRef.current) topRef.current.scrollLeft = scrollRef.current.scrollLeft }
 
-  const fetchData = useCallback(async (f?: { campaign?: string; curso?: string; salon?: string; guia?: string; startDate?: string; endDate?: string }) => {
+  const fetchData = useCallback(async (f?: { campaign?: string; curso?: string; salon?: string; horario?: string; guia?: string; startDate?: string; endDate?: string }) => {
     setLoading(true)
     try {
       const qs = new URLSearchParams()
       if (f?.campaign)  qs.set('campaign', f.campaign)
       if (f?.curso)     qs.set('curso', f.curso)
       if (f?.salon)     qs.set('salon', f.salon)
+      if (f?.horario)   qs.set('horario', f.horario)
       if (f?.guia)      qs.set('guia', f.guia)
       if (f?.startDate) qs.set('startDate', f.startDate)
       if (f?.endDate)   qs.set('endDate', f.endDate)
@@ -92,9 +98,16 @@ function ListaUsuariosContent() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const aplicar = () => fetchData({ campaign, curso, salon, guia, startDate, endDate })
+  const aplicar = () => fetchData({ campaign, curso, salon, horario, guia, startDate, endDate })
+
+  // El desplegable muestra los salones de la campaña y curso elegidos, con su
+  // horario. Sin esos filtros lista todos, y el horario los desambigua.
+  const salonesVisibles = salones.filter(s =>
+    (!campaign || s.campaign === campaign) && (!curso || s.curso === curso))
+  const salonKey = (s: SalonOpt) => `${s.salon}||${s.horario || ''}`
+  const seleccionado = salon ? `${salon}||${horario}` : ''
   const borrar = () => {
-    setCampaign(''); setCurso(''); setSalon(''); setGuia(''); setStartDate(''); setEndDate('')
+    setCampaign(''); setCurso(''); setSalon(''); setHorario(''); setGuia(''); setStartDate(''); setEndDate('')
     fetchData()
   }
   const exportar = () => {
@@ -102,6 +115,7 @@ function ListaUsuariosContent() {
       { header: 'Nombre', accessor: r => r.nombre },
       { header: 'Curso', accessor: r => r.curso || '' },
       { header: 'Salón', accessor: r => r.salon || '' },
+      { header: 'Horario', accessor: r => r.horario || '' },
       { header: 'Fecha nacimiento', accessor: r => r.fechaNacimiento || '' },
       { header: 'Edad', accessor: r => (r.edad ?? '') },
       { header: 'Apoderado', accessor: r => r.apoderado || '' },
@@ -148,23 +162,34 @@ function ListaUsuariosContent() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Campaña</label>
-            <select value={campaign} onChange={e => setCampaign(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <select value={campaign} onChange={e => { setCampaign(e.target.value); setSalon(''); setHorario('') }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todas</option>
               {campanias.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
-            <select value={curso} onChange={e => setCurso(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <select value={curso} onChange={e => { setCurso(e.target.value); setSalon(''); setHorario('') }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todos</option>
               {TIPOS_CURSO.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Salón</label>
-            <select value={salon} onChange={e => setSalon(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <select
+              value={seleccionado}
+              onChange={e => {
+                const [s, h] = e.target.value.split('||')
+                setSalon(s || ''); setHorario(h || '')
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
               <option value="">Todos</option>
-              {salones.map(s => <option key={s} value={s}>{s}</option>)}
+              {salonesVisibles.map(s => (
+                <option key={salonKey(s)} value={salonKey(s)}>
+                  {s.salon}{s.horario ? ` · ${s.horario}` : ''}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -205,7 +230,7 @@ function ListaUsuariosContent() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Nombre', 'Curso', 'Salón', 'Fecha nacimiento', 'Edad', 'Apoderado', 'Guía', 'Módulo', 'Lección'].map(h => (
+                {['Nombre', 'Curso', 'Salón', 'Horario', 'Fecha nacimiento', 'Edad', 'Apoderado', 'Guía', 'Módulo', 'Lección'].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
                 {puedeEditar && <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">Editar</th>}
@@ -227,6 +252,7 @@ function ListaUsuariosContent() {
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.curso || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.salon || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.horario || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.fechaNacimiento || '—'}</td>
                   <td className="px-3 py-2 text-gray-600">{r.edad ?? '—'}</td>
                   <td className="px-3 py-2 text-gray-600">{r.apoderado || '—'}</td>
