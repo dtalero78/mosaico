@@ -15,6 +15,15 @@ const INICIO = new Date('2026-08-17T20:00:00.000Z');
 const en = (min: number) => new Date(INICIO.getTime() + min * 60_000);
 
 test.describe('Ventana de la sesión del guía', () => {
+  test('la ventana es la acordada: 24 h, con el registro abriendo a los 30 min', () => {
+    // Fijado a propósito. El resto de tests usa las constantes, así que pasarían
+    // con cualquier valor; éste obliga a que cambiar la ventana sea una decisión
+    // explícita y no un descuido.
+    expect(ATTENDANCE_WINDOW_MIN).toBe(1440);
+    expect(REGISTER_CLOSE_MIN).toBe(1440);
+    expect(REGISTER_OPEN_MIN).toBe(30);
+  });
+
   test('antes de empezar no se puede marcar asistencia ni registrar', () => {
     const w = getSessionWindow(INICIO, 'GUIA', en(-5));
     expect(w.canMarkAttendance).toBe(false);

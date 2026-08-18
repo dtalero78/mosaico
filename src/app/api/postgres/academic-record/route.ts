@@ -28,7 +28,7 @@ const UPDATABLE_FIELDS = [
  * Used by the session detail page (SessionStudentsTab).
  *
  * Ventana temporal: el advisor solo puede marcar asistencia/evaluación
- * desde el inicio del evento hasta +18h después. Pasado eso, debe
+ * desde el inicio del evento hasta +24h después. Pasado eso, debe
  * pasar por el Coordinador Académico. Bypass por rol:
  * COORDINADOR_ACADEMICO / SUPER_ADMIN / ADMIN.
  */
