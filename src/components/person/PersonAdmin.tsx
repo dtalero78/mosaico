@@ -11,6 +11,7 @@ import { PersonPermission } from '@/types/permissions'
 import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
 import { generateUserLogin } from '@/lib/user-login'
 import { estadoContratoTitular, estadoContratoBadgeClass, ESTADO_EN_GESTION } from '@/lib/estado-contrato'
+import { esAprobado } from '@/lib/estados'
 
 interface PersonAdminProps {
   person: Person
@@ -42,7 +43,7 @@ const PREFIJOS_CELULAR = [
  */
 function isBeneficiaryApproved(b: Beneficiary): boolean {
   const a = (b as any).aprobacion
-  if (a) return a === 'Aprobado' || a === 'Aprobada'
+  if (a) return esAprobado(a)
   // Sin `aprobacion` en el payload (p.ej. estado optimista), caemos al estado.
   return b.estado === 'Aprobado'
 }

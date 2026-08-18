@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { ComercialPermission } from '@/types/permissions';
 import { queryOne } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
+import { esAprobado } from '@/lib/estados';
 
 /**
  * POST /api/postgres/people/[id]/listo-aprobacion
@@ -23,7 +24,7 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
   if (titular.tipoUsuario !== 'TITULAR') {
     throw new ValidationError('Solo el TITULAR del contrato puede marcarse como listo para aprobación');
   }
-  if (titular.aprobacion === 'Aprobado' || titular.aprobacion === 'Aprobada') {
+  if (esAprobado(titular.aprobacion)) {
     throw new ValidationError('El contrato ya está aprobado');
   }
 

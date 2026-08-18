@@ -6,6 +6,7 @@ import { ValidationError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
 import { getUserComercialScope } from '@/lib/crm';
 import { marcarListoConCupo } from '@/services/gestion-cupo.service';
+import { esAprobadoSql } from '@/lib/estados';
 
 /**
  * GET /api/postgres/comercial/gestion-contrato
@@ -18,7 +19,7 @@ import { marcarListoConCupo } from '@/services/gestion-cupo.service';
 // Universo base: titulares FIRMADOS y SIN APROBAR, pendientes de gestión.
 const BASE = `p."tipoUsuario"='TITULAR'
   AND p."hashConsentimiento" IS NOT NULL AND p."hashConsentimiento" <> ''
-  AND (p."aprobacion" IS NULL OR p."aprobacion" NOT IN ('Aprobado','Aprobada'))
+  AND (p."aprobacion" IS NULL OR NOT ${esAprobadoSql('p."aprobacion"')})
   AND COALESCE(p."gestionContratoListo", false) = false
   AND (p."estado" IS NULL OR p."estado" <> 'FINALIZADA')
   AND COALESCE(p."contrato", '') NOT LIKE 'PRB-%'`;

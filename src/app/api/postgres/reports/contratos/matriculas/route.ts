@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query, queryOne } from '@/lib/postgres'
 import { InformesPermission } from '@/types/permissions'
+import { esAprobadoSql } from '@/lib/estados'
 
 /**
  * GET /api/postgres/reports/contratos/matriculas?startDate&endDate&pais
@@ -43,7 +44,7 @@ const NOMBRE_OK = `(
   AND COALESCE("contrato",'') NOT LIKE 'PRB-%'
 )`
 const CDATE     = `COALESCE("inicioContrato","fechaContrato",("_createdDate" AT TIME ZONE 'America/Bogota')::date)`
-const APROBADO  = `("aprobacion" IN ('Aprobado','Aprobada'))`
+const APROBADO  = `(${esAprobadoSql('"aprobacion"')})`
 // x Aprobar = pendientes sin decisión. Excluye aprobados/finalizados Y los
 // estados ya decididos (Rechazado/Devuelto/Retractado/Contrato Nulo/Pendiente).
 const NO_APROBADO = `("aprobacion" IS NULL OR "aprobacion" NOT IN

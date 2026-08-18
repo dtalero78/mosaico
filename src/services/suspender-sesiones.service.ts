@@ -3,6 +3,7 @@ import { query } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { regenerarCursoPreservandoEstado } from './cursos-campaign-eventos.service';
+import { esAprobadoSql } from '@/lib/estados';
 
 /**
  * Suspender Sesiones (Académico › Sesiones › Suspende Sesión).
@@ -133,7 +134,7 @@ export async function previsualizar(items: SuspensionItem[]): Promise<CambioCurs
     const alumnos = await query<{ n: number }>(
       `SELECT COUNT(DISTINCT p."_id")::int AS n FROM "PEOPLE" p
        JOIN "CURSOS_CAMPAIGN" cc ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
-       WHERE cc."_id" = $1 AND p."tipoUsuario" = 'BENEFICIARIO' AND p."aprobacion" IN ('Aprobado','Aprobada')`,
+       WHERE cc."_id" = $1 AND p."tipoUsuario" = 'BENEFICIARIO' AND ${esAprobadoSql('p."aprobacion"')}`,
       [cursoId]
     );
     out.push({

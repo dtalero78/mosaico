@@ -15,7 +15,9 @@
  * ocurrencia lo calcula PostgreSQL por fecha con la base IANA (DST-correcto) en la
  * materialización — aquí sólo se computan fechas/horas locales y el resumen.
  */
-export const IMPULSA_AUTHOR_TZ = 'America/Santiago';
+import { TZ_OPERACION } from './cursos-campaign';
+
+export const IMPULSA_AUTHOR_TZ = TZ_OPERACION;
 export const SESION_HORA_INICIO = '20:00';   // 20:00–21:00 (60 min)
 export const SESION_DUR_MIN = 60;
 // Entrenamiento (2h30): sábado 09:30–12:00; entre semana 18:30–21:00.

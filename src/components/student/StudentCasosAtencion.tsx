@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { TZ_OPERACION } from '@/lib/cursos-campaign'
 
 /**
  * Pestaña "Casos Atención" de la ficha del estudiante.
@@ -58,7 +59,7 @@ const REINCIDENCIA_COLOR: Record<string, string> = {
 }
 
 // Los timestamps viajan en UTC y se muestran en la hora de la plataforma.
-const TZ = 'America/Santiago'
+const TZ = TZ_OPERACION
 const fmt = (v: any, conHora = true) => {
   if (!v) return '—'
   const d = new Date(v)

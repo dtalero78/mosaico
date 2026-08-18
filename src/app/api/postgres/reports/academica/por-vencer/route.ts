@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { InformesPermission } from '@/types/permissions'
+import { esAprobadoSql } from '@/lib/estados';
 
 /**
  * GET /api/postgres/reports/academica/por-vencer
@@ -25,7 +26,7 @@ import { InformesPermission } from '@/types/permissions'
  *                      /student/[academicaId] (fallback /person/[_id]).
  *
  * Filtros comunes: "aprobado y activo" =
- *   aprobacion IN ('Aprobado','Aprobada')
+ *   aprobacion aprobada (ver lib/estados)
  *   AND estadoInactivo IS NOT TRUE
  *   AND (estado IS NULL OR estado <> 'FINALIZADA')
  *   AND finalContrato BETWEEN $1 AND $2
@@ -58,7 +59,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
   // WHERE común
   const conds: string[] = [
     `p."tipoUsuario" = $${1}`,
-    `p."aprobacion" IN ('Aprobado','Aprobada')`,
+    esAprobadoSql('p."aprobacion"'),
     `p."estadoInactivo" IS NOT TRUE`,
     `(p."estado" IS NULL OR p."estado" <> 'FINALIZADA')`,
     `p."finalContrato" IS NOT NULL`,

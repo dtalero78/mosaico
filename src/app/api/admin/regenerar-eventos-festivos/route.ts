@@ -4,6 +4,7 @@ import { ForbiddenError } from '@/lib/errors'
 import { query } from '@/lib/postgres'
 import { generarEventosCurso, generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service'
 import { bookingConRegistroSql } from '@/lib/booking-registro'
+import { esAprobadoSql } from '@/lib/estados'
 
 /**
  * POST /api/admin/regenerar-eventos-festivos   (SUPER_ADMIN)
@@ -48,7 +49,7 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
        JOIN "ACADEMICA" a ON a."peopleId" = p."_id"
        WHERE p."tipoUsuario" = 'BENEFICIARIO'
          AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
-         AND p."aprobacion" IN ('Aprobado','Aprobada')
+         AND ${esAprobadoSql('p."aprobacion"')}
          AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
       [curso.campaign, curso.tipoCurso, curso.horarioCurso]
     )).rows
