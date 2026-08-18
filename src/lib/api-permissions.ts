@@ -43,6 +43,20 @@ export async function requirePermission(session: Session | null, permission: Per
 }
 
 /**
+ * Exige SUPER_ADMIN o ADMIN, sin pasar por un permiso del catálogo.
+ *
+ * Es para las operaciones que NO deben poder delegarse marcando una casilla en
+ * `/admin/permissions`: crear roles, reescribir los permisos de un rol y cambiar
+ * el rol de un usuario. Un permiso para eso sería la llave que abre todas las
+ * demás — quien lo tuviera podría darse a sí mismo cualquier otro.
+ */
+export function requireAdmin(session: Session | null, accion = 'esta operación'): void {
+  const role = ((session?.user as any)?.role ?? '') as string;
+  if (role === Role.SUPER_ADMIN || role === Role.ADMIN || role === 'admin') return;
+  throw new ForbiddenError(`Solo SUPER_ADMIN puede ${accion}`);
+}
+
+/**
  * Igual que `requirePermission` pero basta con tener UNO de los permisos.
  * Para endpoints que sirven a más de una pantalla — p. ej. el reporte de
  * cuestionarios, que alimenta tanto Evaluaciones como Entrenamientos y a cuyos

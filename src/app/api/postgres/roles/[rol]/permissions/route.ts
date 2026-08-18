@@ -1,6 +1,7 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { RolPermisosRepository } from '@/repositories/roles.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
+import { requireAdmin } from '@/lib/api-permissions';
 
 /**
  * GET /api/postgres/roles/[rol]/permissions
@@ -20,7 +21,10 @@ export const GET = handlerWithAuth(async (request, { params }) => {
 /**
  * PUT /api/postgres/roles/[rol]/permissions
  */
-export const PUT = handlerWithAuth(async (request, { params }) => {
+export const PUT = handlerWithAuth(async (request, { params }, session) => {
+  // Reescribir los permisos de un rol equivale a repartir accesos: no se delega.
+  requireAdmin(session, 'modificar los permisos de un rol');
+
   const body = await request.json();
   const { permisos, descripcion } = body;
   const rol = decodeURIComponent(params.rol);

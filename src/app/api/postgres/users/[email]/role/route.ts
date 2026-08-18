@@ -1,6 +1,7 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { RolPermisosRepository, UsuariosRolesRepository } from '@/repositories/roles.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
+import { requireAdmin } from '@/lib/api-permissions';
 
 /**
  * GET /api/postgres/users/[email]/role
@@ -23,7 +24,11 @@ export const GET = handlerWithAuth(async (request, { params }) => {
 /**
  * PUT /api/postgres/users/[email]/role
  */
-export const PUT = handlerWithAuth(async (request, { params }) => {
+export const PUT = handlerWithAuth(async (request, { params }, session) => {
+  // Cambiar el rol de un usuario es la operación con la que alguien podría
+  // darse SUPER_ADMIN a sí mismo: no se delega por permiso.
+  requireAdmin(session, 'cambiar el rol de un usuario');
+
   const body = await request.json();
   const { rol } = body;
   const email = decodeURIComponent(params.email);

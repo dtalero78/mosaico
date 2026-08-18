@@ -1,6 +1,7 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { RolPermisosRepository } from '@/repositories/roles.repository';
 import { ValidationError, ConflictError } from '@/lib/errors';
+import { requireAdmin } from '@/lib/api-permissions';
 
 /**
  * GET /api/postgres/roles
@@ -18,7 +19,10 @@ export const GET = handlerWithAuth(async (request) => {
 /**
  * POST /api/postgres/roles
  */
-export const POST = handlerWithAuth(async (request) => {
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
+  // Crear un rol es crear un juego de permisos: no se delega.
+  requireAdmin(session, 'crear roles');
+
   const body = await request.json();
   const { rol, permisos, descripcion, activo } = body;
 
