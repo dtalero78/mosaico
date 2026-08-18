@@ -30,9 +30,11 @@ const pool = new Pool({
 });
 
 const HUERFANO = `NOT EXISTS (SELECT 1 FROM "CALENDARIO" c WHERE c."_id" = b."eventoId" OR c."_id" = b."idEvento")`;
-const CON_REGISTRO = `(b."asistio" IS TRUE OR b."asistencia" IS TRUE OR b."participacion" IS TRUE
-   OR b."noAprobo" IS TRUE OR b."cancelo" IS TRUE OR b."calificacion" IS NOT NULL
-   OR COALESCE(b."advisorAnotaciones", '') <> '' OR COALESCE(b."comentarios", '') <> '')`;
+// Las reglas se IMPORTAN de src/ en vez de copiarse: node >= 22.6 lee TypeScript
+// directamente (aquí corre 24). Si esto falla por la versión de node, hay que
+// actualizarla — NO volver a pegar una copia, que es de donde venía el problema.
+const { bookingConRegistroSql } = require('../src/lib/booking-registro.ts');
+const CON_REGISTRO = bookingConRegistroSql('b');
 
 (async () => {
   const { rows: [r] } = await pool.query(`

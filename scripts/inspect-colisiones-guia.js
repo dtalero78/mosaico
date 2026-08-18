@@ -20,23 +20,10 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-const DIA = { DOM: 0, LUN: 1, MAR: 2, MIE: 3, 'MIÉ': 3, JUE: 4, VIE: 5, SAB: 6, 'SÁB': 6 };
-const rango = (h) => {
-  if (!h) return null;
-  const p = String(h).trim().split(/\s+/);
-  if (p.length < 2) return null;
-  const dias = p[0].split('-').map(d => DIA[d.toUpperCase()]).filter(n => n !== undefined);
-  const [a, b] = (p[1] || '').split('-').map(s => (s || '').trim());
-  const m = (s) => { const x = /^(\d{1,2}):(\d{2})$/.exec(s); return x ? (+x[1]) * 60 + (+x[2]) : null; };
-  const i = m(a), f = m(b);
-  if (!dias.length || i === null || f === null || f <= i) return null;
-  return { dias, i, f };
-};
-const chocan = (a, b) => {
-  const x = rango(a), y = rango(b);
-  if (!x || !y) return false;
-  return x.dias.some(d => y.dias.includes(d)) && x.i < y.f && y.i < x.f;
-};
+// Las reglas se IMPORTAN de src/ en vez de copiarse: node >= 22.6 lee TypeScript
+// directamente (aquí corre 24). Si esto falla por la versión de node, hay que
+// actualizarla — NO volver a pegar una copia, que es de donde venía el problema.
+const { horariosSeSolapan: chocan } = require('../src/lib/cursos-campaign.ts');
 const etiqueta = (c) => `${c.campaign} · ${c.tipoCurso} · ${c.salon || 's/salón'} · ${c.horarioCurso}`;
 
 (async () => {

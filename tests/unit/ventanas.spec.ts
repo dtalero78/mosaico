@@ -126,6 +126,13 @@ test.describe('Acceso a Zoom del alumno', () => {
 test.describe('Qué agendamiento guarda historia (y por tanto no se puede borrar)', () => {
   const sql = bookingConRegistroSql('b');
 
+  test('y también el texto escrito a mano por el guía', () => {
+    // La versión amplia venía del script de limpieza de huérfanos: una anotación
+    // o un comentario tampoco se reconstruyen, así que también impiden el borrado.
+    expect(sql).toContain('advisorAnotaciones');
+    expect(sql).toContain('comentarios');
+  });
+
   test('cuenta asistencia, participación, no-aprobó, cancelación y calificación', () => {
     for (const campo of ['asistio', 'asistencia', 'participacion', 'noAprobo', 'cancelo', 'calificacion']) {
       expect(sql, campo).toContain(`"${campo}"`);

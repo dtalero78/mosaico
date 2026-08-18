@@ -15,25 +15,10 @@ const { Pool } = require('pg');
 
 const TZ = 'America/Santiago';
 const MAX = 2000;
-const DIA = { DOM: 0, LUN: 1, MAR: 2, MIE: 3, 'MIÉ': 3, JUE: 4, VIE: 5, SAB: 6, 'SÁB': 6 };
-
-function parseHorario(h) {
-  if (!h) return null;
-  const p = String(h).trim().split(/\s+/);
-  if (p.length < 2) return null;
-  const dias = p[0].split('-').map(d => DIA[d.toUpperCase()]).filter(n => n !== undefined);
-  const hora = (p[1].split('-')[0] || '').trim();
-  if (dias.length === 0 || !/^\d{1,2}:\d{2}$/.test(hora)) return null;
-  return { dias, hora };
-}
-function fechasEntre(i, f, dias) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(i) || !/^\d{4}-\d{2}-\d{2}$/.test(f)) return [];
-  const set = new Set(dias); const out = [];
-  const [iy, im, id] = i.split('-').map(Number); const [fy, fm, fd] = f.split('-').map(Number);
-  let c = Date.UTC(iy, im - 1, id); const e = Date.UTC(fy, fm - 1, fd); let g = 0;
-  while (c <= e && g < 4000) { const d = new Date(c); if (set.has(d.getUTCDay())) out.push(d.toISOString().slice(0, 10)); c += 86400000; g++; }
-  return out;
-}
+// Las reglas se IMPORTAN de src/ en vez de copiarse: node >= 22.6 lee TypeScript
+// directamente (aquí corre 24). Si esto falla por la versión de node, hay que
+// actualizarla — NO volver a pegar una copia, que es de donde venía el problema.
+const { parseHorario, fechasEntre } = require('../src/lib/cursos-campaign.ts');
 
 (async () => {
   const apply = process.argv.includes('--apply');
