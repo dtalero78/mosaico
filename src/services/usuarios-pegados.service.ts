@@ -26,6 +26,7 @@ import { AcademicaRepository } from '@/repositories/academica.repository';
 import { PeopleRepository } from '@/repositories/people.repository';
 import { changeStep } from '@/services/student.service';
 import { ValidationError } from '@/lib/errors';
+import { extractStepNumber as extractStepNum, isExitosa, aproboElJump, getClassType } from '@/lib/motor-academico';
 
 const NIVELES_ORDEN = [
   { code: 'BN1', steps: [1, 2, 3, 4, 5] },
@@ -90,30 +91,6 @@ interface BookingRow {
 }
 
 // ──────────────────────── helpers (puro) ────────────────────────
-
-function extractStepNum(stepName: string | null | undefined): number | null {
-  if (!stepName) return null;
-  const m = String(stepName).match(/Step\s*(\d+)/i);
-  return m ? parseInt(m[1], 10) : null;
-}
-
-function isExitosa(b: BookingRow): boolean {
-  return b.asistio === true || b.asistencia === true;
-}
-
-function aproboElJump(b: BookingRow): boolean {
-  return isExitosa(b) && b.participacion === true && b.noAprobo !== true && b.cancelo !== true;
-}
-
-function getClassType(b: BookingRow): 'SESSION' | 'CLUB' | 'OTHER' {
-  if (b.tipo === 'SESSION' || b.tipo === 'COMPLEMENTARIA') return 'SESSION';
-  if (b.tipo === 'CLUB') return 'CLUB';
-  if (!b.tipo && b.step) {
-    if (/^TRAINING\s*-/i.test(b.step)) return 'CLUB';
-    if (/^Step\s+\d+$/i.test(b.step)) return 'SESSION';
-  }
-  return 'OTHER';
-}
 
 function isStepComplete(
   stepNum: number,

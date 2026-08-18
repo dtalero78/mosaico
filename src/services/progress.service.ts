@@ -23,11 +23,12 @@ import 'server-only';
 import { queryMany, queryOne } from '@/lib/postgres';
 import { NotFoundError } from '@/lib/errors';
 import { EVALUACION_STEP } from './repetir-clase.service';
+import { isExitosa } from '@/lib/motor-academico';
 
 // --- Helpers ---
 const stripAccents = (s: any) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '');
 const norm = (s: any) => stripAccents(s).toLowerCase().replace(/\s+/g, ' ').trim();
-const isAttended = (b: any) => b.asistio === true || b.asistencia === true;
+const isAttended = isExitosa;   // misma regla, ver lib/motor-academico
 const EVAL_KEY = norm(EVALUACION_STEP);
 
 interface AcademicaRow {

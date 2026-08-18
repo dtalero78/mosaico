@@ -11,6 +11,7 @@ import {
   HandRaisedIcon,
 } from '@heroicons/react/24/outline'
 import ReportarCasoModal from './ReportarCasoModal'
+import { isJumpStep as esJumpStep } from '@/lib/motor-academico'
 
 interface CalendarioEvent {
   _id: string
@@ -241,14 +242,9 @@ export default function SessionStudentsTab({
     setAcDisposicion(false)
   }
 
-  const isJumpStep = () => {
-    if (!evento?.nombreEvento) return false
-    const stepMatch = evento.nombreEvento.match(/Step\s+(\d+)/i)
-    if (!stepMatch) return false
-    const stepNumber = parseInt(stepMatch[1])
-    const JUMP_STEPS = [5, 10, 15, 20, 25, 30, 35, 40, 45]
-    return JUMP_STEPS.includes(stepNumber)
-  }
+  // La regla del jump vive en lib/motor-academico. Aqui habia una lista literal
+  // [5..45]; la canonica es aritmetica (multiplos de 5).
+  const isJumpStep = () => esJumpStep(evento?.nombreEvento)
 
   const doSaveClassRecord = async (comentarioNivel?: string) => {
     if (!selectedStudent) return

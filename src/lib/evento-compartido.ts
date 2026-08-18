@@ -26,11 +26,7 @@
 export const MAX_CURSOS_COMPARTIDOS = 3;
 
 /** Extrae el número del step ("Step 5" → 5; "TRAINING - Step 10" → 10). */
-export function extractStepNumber(step: string | null | undefined): number | null {
-  if (!step) return null;
-  const m = String(step).match(/Step\s*(\d+)/i);
-  return m ? Number(m[1]) : null;
-}
+export { extractStepNumber } from './motor-academico';
 
 /**
  * Extrae el prefijo del tipo de club de un step ("KARAOKE - Step 16" → "KARAOKE").

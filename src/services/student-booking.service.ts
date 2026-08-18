@@ -28,39 +28,9 @@ import { ValidationError, ConflictError, NotFoundError, ForbiddenError } from '@
 import { ids } from '@/lib/id-generator';
 import { queryMany, queryOne } from '@/lib/postgres';
 import { eventEndDate } from '@/lib/event-duration';
+import { extractStepNumber, isExitosa as isExitosaBooking, aproboElJump as aproboElJumpBooking, getClassType as getClassTypeBooking, esTrainingClub } from '@/lib/motor-academico';
 
 // --- Helpers (mirrors progress.service.ts logic) ---
-
-function extractStepNumber(stepName: string): number | null {
-  const match = stepName?.match(/Step\s*(\d+)/i);
-  return match ? parseInt(match[1]) : null;
-}
-
-function isExitosaBooking(c: any): boolean {
-  return c.asistio === true || c.asistencia === true;
-}
-
-/**
- * Strict approval rule for a Jump booking (Step 5, 10, 15, ...):
- *   asistencia=true AND participacion=true AND noAprobo!==true AND not cancelled.
- */
-function aproboElJumpBooking(c: any): boolean {
-  const asistio = c.asistio === true || c.asistencia === true;
-  return asistio
-      && c.participacion === true
-      && c.noAprobo !== true
-      && c.cancelo !== true;
-}
-
-function getClassTypeBooking(c: any): 'SESSION' | 'CLUB' | 'OTHER' {
-  if (c.tipo === 'SESSION' || c.tipo === 'COMPLEMENTARIA') return 'SESSION';
-  if (c.tipo === 'CLUB') return 'CLUB';
-  if (!c.tipo && c.step) {
-    if (/^TRAINING\s*-/i.test(c.step)) return 'CLUB';
-    if (/^Step\s+\d+$/i.test(c.step)) return 'SESSION';
-  }
-  return 'OTHER';
-}
 
 /**
  * Determines the first incomplete step number for a student in their current nivel.
@@ -123,7 +93,7 @@ export async function getEffectiveStepNumber(
       const trainingClubsExitosos = clasesDelStep.filter(c => {
         if (getClassTypeBooking(c) !== 'CLUB') return false;
         const name = c.step || c.nombreEvento || '';
-        return /^TRAINING\s*-/i.test(name) && isExitosaBooking(c);
+        return esTrainingClub(name) && isExitosaBooking(c);
       }).length;
       if (sesionesExitosas < 2 || trainingClubsExitosos < 1) return stepNum;
     }

@@ -27,6 +27,7 @@ import { createRealtimeClientSecret } from '@/lib/realtime-session';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { autoAdvanceStep } from '@/services/student.service';
+import { extractStepNumber, isJumpStep } from '@/lib/motor-academico';
 
 const MAX_ATTEMPTS = 3;
 
@@ -49,16 +50,6 @@ function isAllowedForTesting(student: any): boolean {
 }
 
 // ── Helpers ──
-
-function extractStepNumber(stepName?: string | null): number | null {
-  const match = stepName?.match(/Step\s*(\d+)/i);
-  return match ? parseInt(match[1], 10) : null;
-}
-
-function isJumpStep(stepName?: string | null): boolean {
-  const n = extractStepNumber(stepName);
-  return n !== null && n > 0 && n % 5 === 0;
-}
 
 function ageFromBirthdate(fechaNacimiento?: string | null): number | null {
   if (!fechaNacimiento) return null;

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { MAX_CURSOS_COMPARTIDOS, claveCursoCompartido, extractClubPrefix } from '@/lib/evento-compartido'
+import { extractStepNumber } from '@/lib/motor-academico'
 
 interface CalendarEvent {
   _id: string
@@ -467,10 +468,8 @@ export default function EventModal({
   // ─────────────────────────────────────────────────────────────────────
 
   /** Extrae el número del step. "Step 3" → 3, "LISTENING - Step 16" → 16, null si no matchea. */
-  const extractStepNumber = (stepStr: string): number | null => {
-    const m = (stepStr || '').match(/Step\s+(\d+)/i)
-    return m ? parseInt(m[1], 10) : null
-  }
+  // extractStepNumber vive en lib/motor-academico. Aqui habia una copia que
+  // exigia un espacio y a "Step7" le devolvia null.
 
   /** Reemplaza el número del step preservando el prefijo del club.
    *  "LISTENING - Step 3" + 8 → "LISTENING - Step 8". */

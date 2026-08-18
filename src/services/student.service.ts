@@ -13,6 +13,7 @@ import { NotFoundError, ValidationError } from '@/lib/errors';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { finSemanaSiguienteUTC } from '@/lib/semana';
 import { isContractExpired } from '@/lib/contract-expiry';
+import { extractStepNumber as extractStepNum, isJumpStep, isExitosa, aproboElJump, getClassType, esTrainingClub } from '@/lib/motor-academico';
 
 // Ensure ACADEMICA.fechaPromocionEspecial column exists (idempotent, once per server start).
 // Written when student is promoted from F3 Step 45 to MASTER/IELS/B2FIRST/TOEFL;
@@ -442,45 +443,6 @@ export async function toggleStatus(id: string, active: boolean, opts: ToggleStat
 
 // --- Auto-advance helpers ---
 
-function extractStepNum(stepName: string): number | null {
-  const match = stepName?.match(/Step\s*(\d+)/i);
-  return match ? parseInt(match[1]) : null;
-}
-
-function isJumpStep(stepName: string): boolean {
-  const num = extractStepNum(stepName);
-  return num !== null && num > 0 && num % 5 === 0;
-}
-
-function isExitosa(c: any): boolean {
-  return c.asistio === true || c.asistencia === true;
-}
-
-/**
- * Strict approval rule for a Jump booking (Step 5, 10, 15, ...):
- *   asistencia=true AND participacion=true AND noAprobo!==true AND not cancelled.
- * The student stays in the jump step until ANY one booking meets all four.
- * Past failed attempts (noAprobo=true on previous bookings) do NOT block a
- * later successful attempt.
- */
-function aproboElJump(c: any): boolean {
-  const asistio = c.asistio === true || c.asistencia === true;
-  return asistio
-      && c.participacion === true
-      && c.noAprobo !== true
-      && c.cancelo !== true;
-}
-
-function getClassType(c: any): 'SESSION' | 'CLUB' | 'OTHER' {
-  if (c.tipo === 'SESSION' || c.tipo === 'COMPLEMENTARIA') return 'SESSION';
-  if (c.tipo === 'CLUB') return 'CLUB';
-  if (!c.tipo && c.step) {
-    if (/^TRAINING\s*-/i.test(c.step)) return 'CLUB';
-    if (/^Step\s+\d+$/i.test(c.step)) return 'SESSION';
-  }
-  return 'OTHER';
-}
-
 async function isCurrentStepComplete(
   studentId: string,
   nivel: string,
@@ -525,7 +487,7 @@ async function isCurrentStepComplete(
   const trainingClubsExitosos = clasesDelStep.filter((c: any) => {
     if (getClassType(c) !== 'CLUB') return false;
     const name = c.step || c.nombreEvento || '';
-    return /^TRAINING\s*-/i.test(name) && isExitosa(c);
+    return esTrainingClub(name) && isExitosa(c);
   }).length;
   return sesionesExitosas >= 2 && trainingClubsExitosos >= 1 && !tieneNoAprobo;
 }

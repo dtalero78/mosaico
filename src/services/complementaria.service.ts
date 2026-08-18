@@ -19,30 +19,12 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, ConflictError, NotFoundError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { autoAdvanceStep } from '@/services/student.service';
+import { extractStepNumber, isExitosa, getClassType } from '@/lib/motor-academico';
 
 const MAX_ATTEMPTS = 3;
 const PASS_THRESHOLD = 50;
 
 // ── Helpers ──
-
-function extractStepNumber(stepName: string): number | null {
-  const match = stepName?.match(/Step\s*(\d+)/i);
-  return match ? parseInt(match[1]) : null;
-}
-
-function isExitosa(c: any): boolean {
-  return c.asistio === true || c.asistencia === true || c.participacion === true;
-}
-
-function getClassType(c: any): 'SESSION' | 'CLUB' | 'OTHER' {
-  if (c.tipo === 'SESSION' || c.tipo === 'COMPLEMENTARIA') return 'SESSION';
-  if (c.tipo === 'CLUB') return 'CLUB';
-  if (!c.tipo && c.step) {
-    if (/^TRAINING\s*-/i.test(c.step)) return 'CLUB';
-    if (/^Step\s+\d+$/i.test(c.step)) return 'SESSION';
-  }
-  return 'OTHER';
-}
 
 // ── Eligibility ──
 
