@@ -12,7 +12,8 @@
     "db:backup": "node scripts/backup.js",
     "cron:worker": "node scripts/cron-worker.js",
     "cron:run-now": "node scripts/cron-worker.js --run-now",
-    "studio": "node scripts/prisma-studio.js"
+    "studio": "node scripts/prisma-studio.js",
+    "test:unit": "node scripts/test-unit.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.996.0",

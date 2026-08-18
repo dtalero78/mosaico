@@ -100,3 +100,7 @@ ensayos-tools/
 
 # Respaldos que dejan los scripts de datos (contienen números de contrato)
 contratos-online-mapeo-*.json
+
+# Artefactos de los tests (Playwright)
+test-results/
+playwright-report/
