@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { TIPOS_CURSO, esMenores, addMonths } from '@/lib/cursos-campaign';
+import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso, eliminarEventosCurso, regenerarCursoPreservandoEstado } from '@/services/cursos-campaign-eventos.service';
 import { detectarColisionesGuia, mensajeColision } from '@/services/colision-guia.service';
@@ -206,8 +207,31 @@ export const DELETE = handlerWithAuth(async (_request, ctx: any, session) => {
   await requirePermission(session, AcademicoPermission.CAMPANA_CREAR);
   const id = ctx?.params?.id;
   if (!id) throw new ValidationError('id requerido');
+  // Los agendamientos van ANTES que los eventos: si se borran los eventos primero,
+  // las filas de sus alumnos quedan apuntando a un id muerto — así se perdieron
+  // 5.236 agendamientos en agosto. Y si alguno ya tiene asistencia registrada no
+  // se borra nada: un curso que ya se dictó no se elimina, se cierra.
+  const conHistoria = await query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM "ACADEMICA_BOOKINGS" b
+     JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
+     WHERE c."cursoCampaignId" = $1 AND ${bookingConRegistroSql('b')}`,
+    [id]
+  );
+  const n = conHistoria.rows[0]?.n ?? 0;
+  if (n > 0) {
+    throw new ValidationError(
+      `No se puede eliminar el curso: ${n} agendamiento(s) ya tienen asistencia o evaluación registrada.`
+    );
+  }
+
   const del = await query(`DELETE FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1 RETURNING "_id"`, [id]);
   if (del.rows.length === 0) throw new NotFoundError('Curso de campaña no encontrado');
+
+  await query(
+    `DELETE FROM "ACADEMICA_BOOKINGS" b USING "CALENDARIO" c
+     WHERE (c."_id" = b."eventoId" OR c."_id" = b."idEvento") AND c."cursoCampaignId" = $1`,
+    [id]
+  );
   // Eliminar los eventos de CALENDARIO generados por este curso.
   await eliminarEventosCurso(id);
   return successResponse({ deleted: id });

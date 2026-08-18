@@ -4,6 +4,7 @@ import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
 import { esFestivoChile } from '@/lib/festivos-chile';
 import { eventoCompartidoIdDeGrupo } from '@/lib/grupo-horario-server';
+import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { mapearLeccionesSalon } from './repetir-clase.service';
 
 /** iso + n días (UTC, sin desfase de zona horaria). */
@@ -214,8 +215,7 @@ export async function regenerarCursoPreservandoEstado(cursoId: string): Promise<
      FROM "ACADEMICA_BOOKINGS" b
      JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
      WHERE c."cursoCampaignId" = $1
-       AND (b."asistio" = true OR b."asistencia" = true OR b."participacion" = true
-            OR b."noAprobo" = true OR b."cancelo" = true OR b."calificacion" IS NOT NULL)`,
+       AND ${bookingConRegistroSql('b')}`,
     [cursoId]
   )).rows;
 

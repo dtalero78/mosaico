@@ -14,6 +14,7 @@ import { ids } from '@/lib/id-generator';
 import { withTransaction } from '@/lib/postgres';
 import { MAX_CURSOS_COMPARTIDOS, claveCursoCompartido } from '@/lib/evento-compartido';
 import { eventDurationMin } from '@/lib/event-duration';
+import { bookingConRegistroSql } from '@/lib/booking-registro';
 
 const MAX_ADVISOR_REASSIGNMENTS = 2;
 
@@ -483,6 +484,22 @@ export async function deleteEvent(
       }
 
       if (deleteBookings) {
+        // No nos llevamos por delante lo que ya se registró: si algún agendamiento
+        // del evento tiene asistencia, participación o calificación marcada, eso es
+        // historia que no se reconstruye. Se aborta la transacción entera y se avisa.
+        const conHistoria = await client.query(
+          `SELECT COUNT(*)::int AS n FROM "ACADEMICA_BOOKINGS" b
+           WHERE (b."eventoId" = $1 OR b."idEvento" = $1) AND ${bookingConRegistroSql('b')}`,
+          [id],
+        );
+        const n = conHistoria.rows[0]?.n ?? 0;
+        if (n > 0) {
+          throw new ValidationError(
+            `No se puede eliminar el evento: ${n} agendamiento(s) ya tienen asistencia o evaluación registrada. ` +
+            `Esa información no se puede recuperar — si el evento debe desaparecer, limpia primero esos registros.`,
+          );
+        }
+
         const r = await client.query(
           `DELETE FROM "ACADEMICA_BOOKINGS" WHERE "eventoId" = $1 OR "idEvento" = $1 RETURNING "_id"`,
           [id],

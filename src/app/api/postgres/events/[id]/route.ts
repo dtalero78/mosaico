@@ -46,7 +46,12 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
  *   - `skipLog=true`     — modo "Restructuración": NO inserta en
  *                          ADVISOR_EVENT_LOG (borrado limpio, sin huella en
  *                          Ctrl Horas del advisor).
- *   - `deleteBookings`   — true para borrar bookings asociados (default true).
+ *   - `deleteBookings`   — `false` para NO borrar los agendamientos. Por defecto
+ *                          SÍ se borran: dejarlos apuntando a un evento que ya no
+ *                          existe los vuelve invisibles para el alumno y para el
+ *                          guía, y es la vía por la que aparecían huérfanos. Si
+ *                          alguno tiene asistencia registrada el borrado se
+ *                          rechaza entero (ver `deleteEvent`).
  *   - `deleteGroup=true` — si el evento es compartido (eventoCompartidoId),
  *                          borra también todos sus hermanos del grupo en una
  *                          sola transacción. Sin esta flag, sólo borra el
@@ -55,7 +60,9 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
 export const DELETE = handlerWithAuth(async (request, { params }, session) => {
   await requirePermission(session, AcademicoPermission.ELIMINAR);
   const { searchParams } = new URL(request.url);
-  const deleteBookings = searchParams.get('deleteBookings') === 'true';
+  // Ojo: por defecto TRUE. Antes era `=== 'true'`, y como la interfaz nunca manda
+  // el parámetro, cada borrado de evento dejaba sus agendamientos huérfanos.
+  const deleteBookings = searchParams.get('deleteBookings') !== 'false';
   const motivo = searchParams.get('motivo') || undefined;
   const skipLog = searchParams.get('skipLog') === 'true';
   const deleteGroup = searchParams.get('deleteGroup') === 'true';

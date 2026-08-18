@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { ForbiddenError } from '@/lib/errors'
 import { query } from '@/lib/postgres'
 import { generarEventosCurso, generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service'
+import { bookingConRegistroSql } from '@/lib/booking-registro'
 
 /**
  * POST /api/admin/regenerar-eventos-festivos   (SUPER_ADMIN)
@@ -59,8 +60,7 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
        FROM "ACADEMICA_BOOKINGS" b
        JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
        WHERE c."cursoCampaignId" = $1
-         AND (b."asistio" = true OR b."asistencia" = true OR b."participacion" = true
-              OR b."noAprobo" = true OR b."cancelo" = true OR b."calificacion" IS NOT NULL)`, [curso._id]
+         AND ${bookingConRegistroSql('b')}`, [curso._id]
     )).rows
 
     const item: any = {

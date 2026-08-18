@@ -477,6 +477,16 @@ export const DELETE = handlerWithAuth(async (
     throw new ValidationError('Solo se pueden eliminar registros de tipo BENEFICIARIO');
   }
 
+  // Los agendamientos cuelgan de ACADEMICA por su `_id`: si se borra el registro
+  // académico sin borrarlos, quedan apuntando a un alumno que ya no existe.
+  await query(
+    `DELETE FROM "ACADEMICA_BOOKINGS" b
+     USING "ACADEMICA" a
+     WHERE (a."_id" = b."studentId" OR a."_id" = b."idEstudiante")
+       AND a."numeroId" = $1`,
+    [person.numeroId]
+  );
+
   // Delete from ACADEMICA if exists
   await query(`DELETE FROM "ACADEMICA" WHERE "numeroId" = $1`, [person.numeroId]);
 
