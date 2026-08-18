@@ -2,6 +2,7 @@ import 'server-only';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { EVALUACION_STEP } from './repetir-clase.service';
+import { esModuloEvaluacion } from '@/lib/evaluacion';
 
 /**
  * Movimiento Académico (MOSAICO) — cambia el Módulo/Lección del alumno DENTRO de su curso.
@@ -81,7 +82,8 @@ function planificar(aca: Aca, bookings: Bk[], targetModulo: string, targetLeccio
       aDesaprobar = conOrden.filter(b => (b.lo as number) >= targetOrder && isAprobada(b));
     }
   }
-  const esEval = (b: Bk) => norm(b.sl) === EVAL_NORM;
+  // Evaluación = la declarada en NIVELES (su módulo lo es) o la sintética legacy.
+  const esEval = (b: Bk) => esModuloEvaluacion(b.sm) || norm(b.sl) === EVAL_NORM;
 
   return {
     bloqueadoWelcome, targetOrder, currentOrder, direction,

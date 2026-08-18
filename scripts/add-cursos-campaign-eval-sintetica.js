@@ -1,5 +1,5 @@
 /**
- * CURSOS_CAMPAIGN."evalModulo00" — ¿este salón lleva evaluación del Modulo 00?
+ * CURSOS_CAMPAIGN."evalSinteticaPorModulo" — ¿este salón usa la secuencia LEGACY?
  *
  * `Modulo 00` es la INDUCCIÓN del curso (una o dos lecciones de bienvenida), y no
  * se evalúa. El generador de la secuencia metía una evaluación al final de TODOS
@@ -15,7 +15,7 @@
  * Backfill: `true` (conserva) si la sesión de evaluación del Modulo 00 ya ocurrió;
  * `false` (se corrige) si aún no. Los cursos nuevos nacen en `false`.
  *
- * Uso: node scripts/add-cursos-campaign-eval-modulo00.js [--apply]
+ * Uso: node scripts/add-cursos-campaign-eval-sintetica.js [--apply]
  */
 require('dotenv').config({ path: '.env.local' });
 const { Pool } = require('pg');
@@ -34,15 +34,15 @@ const pool = new Pool({
     // 1) La columna
     const tiene = await c.query(
       `SELECT 1 FROM information_schema.columns
-        WHERE table_name='CURSOS_CAMPAIGN' AND column_name='evalModulo00'`);
+        WHERE table_name='CURSOS_CAMPAIGN' AND column_name='evalSinteticaPorModulo'`);
     if (tiene.rowCount) {
-      console.log('  columna evalModulo00: ya existe');
+      console.log('  columna evalSinteticaPorModulo: ya existe');
     } else if (APPLY) {
       await c.query(`ALTER TABLE "CURSOS_CAMPAIGN"
-        ADD COLUMN IF NOT EXISTS "evalModulo00" BOOLEAN NOT NULL DEFAULT false`);
-      console.log('  columna evalModulo00: CREADA (default false)');
+        ADD COLUMN IF NOT EXISTS "evalSinteticaPorModulo" BOOLEAN NOT NULL DEFAULT false`);
+      console.log('  columna evalSinteticaPorModulo: CREADA (default false)');
     } else {
-      console.log('  columna evalModulo00: se crearía (BOOLEAN DEFAULT false)');
+      console.log('  columna evalSinteticaPorModulo: se crearía (BOOLEAN DEFAULT false)');
     }
 
     // 2) Qué salones la conservan: los que YA dictaron su evaluación de Modulo 00
@@ -63,16 +63,16 @@ const pool = new Pool({
     if (!APPLY) { console.log('\n  (dry-run: no se escribió nada)\n'); return; }
 
     const upd = await c.query(`
-      UPDATE "CURSOS_CAMPAIGN" cc SET "evalModulo00" = true
+      UPDATE "CURSOS_CAMPAIGN" cc SET "evalSinteticaPorModulo" = true
        WHERE EXISTS (SELECT 1 FROM "CALENDARIO" e
                       WHERE e."cursoCampaignId" = cc."_id"
                         AND e."sesionLeccion" = 'Evaluación'
                         AND e."sesionModulo" = 'Modulo 00'
                         AND e."dia" < NOW())`);
-    console.log(`\n  marcados evalModulo00=true (grandfathering): ${upd.rowCount}`);
+    console.log(`\n  marcados evalSinteticaPorModulo=true (grandfathering): ${upd.rowCount}`);
 
     const resumen = await c.query(
-      `SELECT "evalModulo00", COUNT(*)::int n FROM "CURSOS_CAMPAIGN" GROUP BY 1 ORDER BY 1`);
+      `SELECT "evalSinteticaPorModulo", COUNT(*)::int n FROM "CURSOS_CAMPAIGN" GROUP BY 1 ORDER BY 1`);
     console.table(resumen.rows);
     console.log('');
   } finally {

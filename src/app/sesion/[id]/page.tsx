@@ -18,6 +18,7 @@ import SessionStudentsTab from '@/components/session/SessionStudentsTab'
 import SessionMaterialTab from '@/components/session/SessionMaterialTab'
 import SessionAdvisorMaterialTab from '@/components/session/SessionAdvisorMaterialTab'
 import { getSessionWindow, EXPIRED_MESSAGE, ATTENDANCE_WINDOW_MIN } from '@/lib/session-window'
+import { esSesionEvaluacion, esModuloEvaluacion } from '@/lib/evaluacion'
 
 interface CalendarioEvent {
   _id: string
@@ -374,9 +375,13 @@ export default function SesionPage() {
                 <h1 className="text-2xl font-bold text-gray-900">
                   {evento.tituloONivel} - {evento.nombreEvento}
                 </h1>
-                {evento.sesionLeccion === 'Evaluación' && (
+                {esSesionEvaluacion(evento.sesionModulo, evento.sesionLeccion) && (
                   <div className="mt-2 inline-flex items-center gap-2 rounded-lg bg-purple-50 border border-purple-200 px-3 py-1.5">
-                    <span className="text-sm font-semibold text-purple-800">🎓 Evaluación del {evento.sesionModulo || 'módulo'}</span>
+                    <span className="text-sm font-semibold text-purple-800">
+                      🎓 {esModuloEvaluacion(evento.sesionModulo)
+                        ? evento.sesionModulo
+                        : `Evaluación del ${evento.sesionModulo || 'módulo'}`}
+                    </span>
                     <span className="text-xs text-purple-600">— marca asistencia y aprueba (o "No aprobó") a cada alumno. Al aprobar la evaluación, el alumno avanza al módulo siguiente.</span>
                   </div>
                 )}
