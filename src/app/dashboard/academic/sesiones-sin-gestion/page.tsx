@@ -102,6 +102,7 @@ export default function SesionesSinGestionPage() {
   const [endDate, setEndDate] = useState<string>(yesterdayLocal())
   const [advisorId, setAdvisorId] = useState<string>('')
   const [tipo, setTipo] = useState<string>('')
+  const [campaign, setCampaign] = useState<string>('')
 
   const [advisors, setAdvisors] = useState<AdvisorOption[]>([])
   const [advisorsLoading, setAdvisorsLoading] = useState(true)
@@ -164,20 +165,34 @@ export default function SesionesSinGestionPage() {
   // Carga inicial con defaults (ayer)
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Campañas presentes en lo cargado. Se arma con TODAS las filas del rango (no
+  // con las ya filtradas), así el desplegable no se vacía al elegir una.
+  const campanias = useMemo(() => {
+    const set = new Set(items.map(i => (i.campaign || '').trim()).filter(Boolean))
+    return Array.from(set).sort()
+  }, [items])
+
+  // El filtro de campaña se aplica en el cliente: las filas del rango ya vienen
+  // todas, y así los KPIs y el contador de la pestaña se recalculan solos.
+  const itemsFiltrados = useMemo(
+    () => (campaign ? items.filter(i => (i.campaign || '').trim() === campaign) : items),
+    [items, campaign])
+
   // KPIs derivados
   const stats = useMemo(() => {
-    const total = items.length
-    const sinAsistencia = items.filter(i => i.asistioMarcados === 0).length
-    const conAsistenciaParcial = items.filter(i => i.asistioMarcados > 0 && !i.inscritos).length
-    const advisorsDistintos = new Set(items.map(i => i.advisorId || '__')).size
+    const total = itemsFiltrados.length
+    const sinAsistencia = itemsFiltrados.filter(i => i.asistioMarcados === 0).length
+    const conAsistenciaParcial = itemsFiltrados.filter(i => i.asistioMarcados > 0 && !i.inscritos).length
+    const advisorsDistintos = new Set(itemsFiltrados.map(i => i.advisorId || '__')).size
     return { total, sinAsistencia, conAsistenciaParcial, advisorsDistintos }
-  }, [items])
+  }, [itemsFiltrados])
 
   const resetToDefault = () => {
     setStartDate(yesterdayLocal())
     setEndDate(yesterdayLocal())
     setAdvisorId('')
     setTipo('')
+    setCampaign('')
   }
 
   return (
@@ -202,7 +217,7 @@ export default function SesionesSinGestionPage() {
 
           {/* Filtros */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
               <div>
                 <label htmlFor="start-date" className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
                 <input
@@ -230,6 +245,19 @@ export default function SesionesSinGestionPage() {
                 >
                   <option value="">Todos</option>
                   {advisors.map(a => <option key={a._id} value={a._id}>{a.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="campaign-select" className="block text-xs font-medium text-gray-600 mb-1">Campaña</label>
+                <select
+                  id="campaign-select"
+                  value={campaign}
+                  onChange={e => setCampaign(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  disabled={campanias.length === 0}
+                >
+                  <option value="">Todas</option>
+                  {campanias.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
@@ -281,7 +309,7 @@ export default function SesionesSinGestionPage() {
           <div className="border-b border-gray-200 flex gap-1">
             <button type="button" onClick={() => setTab('academicas')}
               className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'academicas' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              Sesiones académicas ({items.length})
+              Sesiones académicas ({itemsFiltrados.length})
             </button>
             <button type="button" onClick={() => setTab('admin')}
               className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'admin' ? 'border-violet-600 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -360,7 +388,7 @@ export default function SesionesSinGestionPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             {loading ? (
               <p className="p-8 text-center text-sm text-gray-400">Cargando…</p>
-            ) : items.length === 0 ? (
+            ) : itemsFiltrados.length === 0 ? (
               <div className="p-10 text-center">
                 <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-100 rounded-full mb-3">
                   <span className="text-2xl">✓</span>
@@ -382,7 +410,7 @@ export default function SesionesSinGestionPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(it => {
+                  {itemsFiltrados.map(it => {
                     const dias = diasDesde(it.fechaEvento)
                     const sinAsistencia = it.asistioMarcados === 0
                     return (
