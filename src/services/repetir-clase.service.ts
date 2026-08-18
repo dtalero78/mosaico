@@ -3,6 +3,7 @@ import { query, queryMany, queryOne } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
 import { ValidationError, NotFoundError } from '@/lib/errors';
+import { asignarLeccionesImpulsa } from './impulsa-calendario.service';
 
 function addDaysISO(iso: string, days: number): string {
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
@@ -24,6 +25,13 @@ export interface LeccionSeq { code: string; step: string; esEvaluacion?: boolean
 /** Nombre de lección con que se marca la sesión de EVALUACIÓN de cada módulo. */
 export const EVALUACION_STEP = 'Evaluación';
 
+/**
+ * El módulo de INDUCCIÓN del curso (bienvenida / presentación del método). No se
+ * evalúa: no hay contenido que aprobar, y su evaluación empujaba una posición
+ * toda la secuencia. Los 5 cursos MOSAICO lo llaman igual.
+ */
+export const MODULO_INDUCCION = 'Modulo 00';
+
 /** Secuencia expandida = lecciones base + repeticiones autorizadas insertadas. */
 export function expandirSecuencia(base: LeccionSeq[], repeticiones: Array<{ modulo: string; leccion: string }>): LeccionSeq[] {
   const seq = [...base];
@@ -41,20 +49,27 @@ export function expandirSecuencia(base: LeccionSeq[], repeticiones: Array<{ modu
  * La evaluación es una sesión EXTRA: ocupa un slot de la secuencia (empuja las
  * siguientes lecciones un lugar), por eso los cursos tienen sesiones de sobra.
  */
-export async function leccionesBaseCurso(tipoCurso: string): Promise<LeccionSeq[]> {
+export async function leccionesBaseCurso(tipoCurso: string, evalModuloInduccion = false): Promise<LeccionSeq[]> {
   const rows = await queryMany<{ code: string; step: string }>(
     `SELECT "code","step" FROM "NIVELES" WHERE "curso"=$1 AND "step" <> 'WELCOME' ORDER BY "orden" NULLS LAST, "step"`, [tipoCurso]
   );
+  // La inducción no lleva evaluación, salvo en los salones que ya la dictaron
+  // (grandfathering por `CURSOS_CAMPAIGN."evalModulo00"`): quitársela ahí correría
+  // una posición sus clases ya dictadas.
+  const seEvalua = (code: string) => evalModuloInduccion || code !== MODULO_INDUCCION;
+
   const seq: LeccionSeq[] = [];
   let prevCode: string | null = null;
   for (const r of rows) {
-    if (prevCode !== null && r.code !== prevCode) {
+    if (prevCode !== null && r.code !== prevCode && seEvalua(prevCode)) {
       seq.push({ code: prevCode, step: EVALUACION_STEP, esEvaluacion: true }); // eval del módulo que cierra
     }
     seq.push({ code: r.code, step: r.step });
     prevCode = r.code;
   }
-  if (prevCode !== null) seq.push({ code: prevCode, step: EVALUACION_STEP, esEvaluacion: true }); // eval del último módulo
+  if (prevCode !== null && seEvalua(prevCode)) {
+    seq.push({ code: prevCode, step: EVALUACION_STEP, esEvaluacion: true }); // eval del último módulo
+  }
   return seq;
 }
 
@@ -64,12 +79,27 @@ export async function leccionesBaseCurso(tipoCurso: string): Promise<LeccionSeq[
  * NO crea sesiones nuevas ni extiende — eso lo hace la autorización.
  */
 export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<number> {
-  const cc = await queryOne<{ tipoCurso: string; historicRepet: any }>(
-    `SELECT "tipoCurso","historicRepet" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
-  );
+  const cc = await queryOne<{ tipoCurso: string; historicRepet: any; evalModulo00: boolean | null }>(
+    `SELECT "tipoCurso","historicRepet",
+            COALESCE("evalModulo00", false) AS "evalModulo00"
+       FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
+  ).catch(() => queryOne<{ tipoCurso: string; historicRepet: any; evalModulo00: boolean | null }>(
+    `SELECT "tipoCurso","historicRepet", false AS "evalModulo00" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
+  ));
   if (!cc) return 0;
 
-  const base = await leccionesBaseCurso(cc.tipoCurso);
+  // IMPULSA no sigue la secuencia lección-a-lección de los cursos MOSAICO: sus
+  // sesiones son de tres tipos (SESSION / ENTRENAMIENTO / EVALUACION) y cada uno
+  // avanza por su propia lista de módulos. Tiene asignador propio; el genérico le
+  // pisaría las etiquetas.
+  if (String(cc.tipoCurso || '').toUpperCase() === 'IMPULSA') {
+    await asignarLeccionesImpulsa(cursoCampaignId);
+    const n = await queryOne<{ n: number }>(
+      `SELECT COUNT(*)::int n FROM "CALENDARIO" WHERE "cursoCampaignId"=$1`, [cursoCampaignId]);
+    return n?.n || 0;
+  }
+
+  const base = await leccionesBaseCurso(cc.tipoCurso, cc.evalModulo00 === true);
   const hist = Array.isArray(cc.historicRepet) ? cc.historicRepet : [];
   const reps = hist.filter((h: any) => h?.modulo && h?.leccion).map((h: any) => ({ modulo: h.modulo, leccion: h.leccion }));
   const seq = expandirSecuencia(base, reps);
@@ -137,8 +167,10 @@ export async function autorizarRepetir(eventoId: string, comentario: string, aut
   );
 
   // 2) ¿Faltan sesiones? needed = lecciones base + repeticiones autorizadas.
-  const base = await leccionesBaseCurso(ev.tipoCurso);
-  const histRow = await queryOne<any>(`SELECT "historicRepet" FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`, [ev.cursoCampaignId]);
+  const histRow = await queryOne<any>(
+    `SELECT "historicRepet", COALESCE("evalModulo00", false) AS "evalModulo00" FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`,
+    [ev.cursoCampaignId]);
+  const base = await leccionesBaseCurso(ev.tipoCurso, histRow?.evalModulo00 === true);
   const hist = Array.isArray(histRow?.historicRepet) ? histRow.historicRepet : [];
   const needed = base.length + hist.filter((h: any) => h?.modulo && h?.leccion).length;
   const curN = (await queryOne<{ n: number }>(`SELECT COUNT(*)::int n FROM "CALENDARIO" WHERE "cursoCampaignId" = $1`, [ev.cursoCampaignId]))?.n || 0;

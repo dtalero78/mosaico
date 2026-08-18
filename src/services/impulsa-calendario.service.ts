@@ -26,7 +26,7 @@ const nombreEventoDe = (ev: EventoImpulsa, curso: CursoImpulsa): string =>
  *   SESSION → "Modulo NN" · ENTRENAMIENTO → "Entrenamiento" · EVALUACION → "Evaluación".
  * Así la pestaña Material y el display resuelven la lección de cada sesión.
  */
-async function asignarLeccionesImpulsa(cursoCampaignId: string): Promise<void> {
+export async function asignarLeccionesImpulsa(cursoCampaignId: string): Promise<void> {
   const catLec = (code: string) => /entren/i.test(code) ? 'ENTREN' : /evaluac/i.test(code) ? 'EVALUAC' : 'MODULO';
   const catEv = (tipo: string) => {
     const t = String(tipo || '').toUpperCase();
