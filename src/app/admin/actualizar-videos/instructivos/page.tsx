@@ -20,6 +20,9 @@ export default function ActualizarVideosInstructivosPage() {
   const [instructivos, setInstructivos] = useState<Instructivo[]>([])
   const [loading, setLoading]           = useState(true)
   const [uploading, setUploading]       = useState<number | null>(null)
+  // Instructivo recién creado: se resalta para que se vea DÓNDE se sube el video,
+  // que es el paso siguiente y no está en el formulario de alta.
+  const [recienCreado, setRecienCreado] = useState<number | null>(null)
   const [editing, setEditing]           = useState<number | null>(null)
   const [editState, setEditState]       = useState<EditState>({ title: '', description: '' })
   const [previewKey, setPreviewKey]     = useState<string | null>(null)   // Spaces key or static URL
@@ -90,10 +93,16 @@ export default function ActualizarVideosInstructivosPage() {
       })
       const d = await r.json()
       if (!d.success) throw new Error(d.error || 'Error')
-      toast.success('Instructivo agregado')
+      toast.success('Instructivo creado — ahora súbele el video')
       setAddingNew(false)
       setNewForm({ title: '', description: '' })
       await loadInstructivos()
+      setRecienCreado(nextId)
+      // Llevar la vista a su tarjeta: el botón de subir está ahí, no arriba.
+      setTimeout(() => {
+        document.getElementById(`instructivo-${nextId}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
     } catch (e: any) { toast.error(e.message || 'Error al agregar') }
   }
 
@@ -112,6 +121,7 @@ export default function ActualizarVideosInstructivosPage() {
       const d = await r.json()
       if (!d.success) throw new Error(d.error || 'Error')
       toast.success('Video subido correctamente')
+      setRecienCreado(null)
       await loadInstructivos()
     } catch (e: any) { toast.error(e.message || 'Error al subir video') }
     finally { setUploading(null) }
@@ -236,13 +246,17 @@ export default function ActualizarVideosInstructivosPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                El <strong>video se sube después de guardar</strong>: al crearlo aparece su tarjeta abajo,
+                con el botón <strong>“Subir Video”</strong>.
+              </div>
               <div className="flex gap-3 pt-1">
                 <button
                   type="button"
                   onClick={handleAddNew}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <CheckIcon className="h-4 w-4" /> Guardar
+                  <CheckIcon className="h-4 w-4" /> Crear y subir el video
                 </button>
                 <button
                   type="button"
@@ -264,7 +278,15 @@ export default function ActualizarVideosInstructivosPage() {
         )}
 
         {instructivos.map(item => (
-          <div key={item.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div
+            key={item.id}
+            id={`instructivo-${item.id}`}
+            className={`bg-white rounded-xl shadow-sm overflow-hidden ${
+              recienCreado === item.id
+                ? 'border-2 border-blue-500 ring-2 ring-blue-200'
+                : 'border border-gray-200'
+            }`}
+          >
             {/* Card header */}
             <div className="bg-blue-600 px-6 py-4 flex items-center gap-3">
               <VideoCameraIcon className="h-5 w-5 text-white" />
@@ -341,7 +363,11 @@ export default function ActualizarVideosInstructivosPage() {
                 <button type="button"
                   onClick={() => fileInputRefs.current[item.id]?.click()}
                   disabled={uploading === item.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className={`flex items-center gap-2 px-4 py-2 text-white text-sm rounded-lg disabled:opacity-50 transition-colors ${
+                    item.videoKey
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-blue-600 hover:bg-blue-700 ring-2 ring-blue-300 ring-offset-1 font-semibold'
+                  }`}
                 >
                   {uploading === item.id
                     ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Subiendo...</>
