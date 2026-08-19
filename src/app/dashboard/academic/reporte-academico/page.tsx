@@ -518,10 +518,10 @@ export default function ReporteAcademicoPage() {
                       </button>
                     </div>
                     <div className="px-4 py-3">
-                      <div className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold mb-1">Actividad Individual</div>
+                      <div className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold mb-1">Actividades de Práctica Individual</div>
                       <textarea value={notas[r.academicaId] ?? ''} onChange={e => { setNotas(p => ({ ...p, [r.academicaId]: e.target.value })); setDirty(true) }}
                         readOnly={!puedeEditar}
-                        placeholder="Escribe la actividad individual de la semana…" className="w-full min-h-[76px] resize-y border border-gray-300 rounded-lg px-3 py-2 text-[13px]" />
+                        placeholder="Escribe las actividades de práctica individual de la semana…" className="w-full min-h-[76px] resize-y border border-gray-300 rounded-lg px-3 py-2 text-[13px]" />
                       <p className="only-print text-[13px] text-gray-800 whitespace-pre-wrap">{notas[r.academicaId]}</p>
                       <button onClick={() => guardarNota(r)} disabled={savingNota === r.academicaId} className="no-print mt-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-50">
                         {savingNota === r.academicaId ? 'Guardando…' : 'Guardar'}

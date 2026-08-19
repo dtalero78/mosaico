@@ -101,6 +101,6 @@ export function buildReporteIndividualHtml(row: ReporteIndividualRow, meta: Repo
     </div>
 
     ${row.comentarioIA ? `<div class="box"><h4>Comentario IA</h4><p>${esc(row.comentarioIA)}</p></div>` : ''}
-    ${row.notaGuia ? `<div class="box"><h4>Actividad Individual</h4><p>${esc(row.notaGuia)}</p></div>` : ''}
+    ${row.notaGuia ? `<div class="box"><h4>Actividades de Práctica Individual</h4><p>${esc(row.notaGuia)}</p></div>` : ''}
   </div></body></html>`;
 }
