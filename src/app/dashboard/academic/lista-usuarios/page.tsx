@@ -100,11 +100,18 @@ function ListaUsuariosContent() {
 
   const aplicar = () => fetchData({ campaign, curso, salon, horario, guia, startDate, endDate })
 
-  // El desplegable muestra los salones de la campaña y curso elegidos, con su
-  // horario. Sin esos filtros lista todos, y el horario los desambigua.
-  const salonesVisibles = salones.filter(s =>
-    (!campaign || s.campaign === campaign) && (!curso || s.curso === curso))
   const salonKey = (s: SalonOpt) => `${s.salon}||${s.horario || ''}`
+
+  // El desplegable muestra los salones de la campaña y curso elegidos, con su
+  // horario. Se DEDUPLICA por (salón, horario) porque es lo único que viaja al
+  // filtro: el mismo "01 · LUN-MIÉ 17:00-18:00" existe en 9 combinaciones de
+  // campaña y curso, y sin deduplicar salían 9 opciones idénticas e inservibles.
+  const salonesVisibles = (() => {
+    const vistos = new Set<string>()
+    return salones
+      .filter(s => (!campaign || s.campaign === campaign) && (!curso || s.curso === curso))
+      .filter(s => { const k = salonKey(s); if (vistos.has(k)) return false; vistos.add(k); return true })
+  })()
   const seleccionado = salon ? `${salon}||${horario}` : ''
   const borrar = () => {
     setCampaign(''); setCurso(''); setSalon(''); setHorario(''); setGuia(''); setStartDate(''); setEndDate('')
