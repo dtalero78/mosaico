@@ -29,6 +29,29 @@ interface ActiveField {
 
 const TF_OPTIONS = ['Verdadero', 'Falso'];
 
+/**
+ * Punto de inserción entre preguntas: una línea discreta que al pasar por encima
+ * ofrece meter una pregunta AHÍ. Con cuestionarios de 30+ preguntas, tener que
+ * agregarlas siempre al final y arrastrarlas no es viable.
+ */
+function InsertarAqui({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="group relative h-6 my-1 flex items-center justify-center">
+      <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-gray-200 group-hover:border-indigo-300" />
+      <button
+        type="button"
+        onClick={onClick}
+        title="Insertar una pregunta aquí"
+        className="relative z-10 px-2 py-0.5 text-[11px] rounded-full border border-gray-200 bg-white text-gray-400
+                   opacity-0 group-hover:opacity-100 focus:opacity-100
+                   hover:border-indigo-400 hover:text-indigo-600 transition-opacity"
+      >
+        + Insertar pregunta aquí
+      </button>
+    </div>
+  );
+}
+
 export function emptyManualQuestion(id: number): ManualQuestion {
   return { id, type: 'multiple_choice', question: '', options: ['', '', '', ''], correctAnswer: '', explanation: '' };
 }
@@ -119,11 +142,24 @@ export default function ManualQuestionsEditor({
     setQuestion(qi, { options, correctAnswer });
   };
 
-  const addQuestion = () => {
+  /** Inserta una pregunta en la posición `index` (0 = antes de la primera). */
+  const insertQuestionAt = (index: number) => {
     const nextId = (value.reduce((m, q) => Math.max(m, q.id), 0) || 0) + 1;
-    update([...value, emptyManualQuestion(nextId)]);
+    const i = Math.max(0, Math.min(index, value.length));
+    update([...value.slice(0, i), emptyManualQuestion(nextId), ...value.slice(i)]);
   };
+  const addQuestion = () => insertQuestionAt(value.length);
   const removeQuestion = (qi: number) => update(value.filter((_, i) => i !== qi));
+
+  /** Mueve la pregunta `qi` a la posición `destino` (1-based, como se numera en pantalla). */
+  const moveQuestionTo = (qi: number, destino: number) => {
+    const to = Math.max(0, Math.min(destino - 1, value.length - 1));
+    if (to === qi) return;
+    const qs = [...value];
+    const [q] = qs.splice(qi, 1);
+    qs.splice(to, 0, q);
+    update(qs);
+  };
 
   const trackFocus = (el: HTMLInputElement | HTMLTextAreaElement, qi: number, kind: FieldKind, oj?: number) => {
     activeRef.current = { el, qi, kind, oj };
@@ -168,11 +204,43 @@ export default function ManualQuestionsEditor({
         opción/campo enfocado de esa pregunta, o al final de su enunciado.
       </p>
 
+      {/* Punto de inserción antes de la primera pregunta */}
+      {value.length > 0 && <InsertarAqui onClick={() => insertQuestionAt(0)} />}
+
       {value.map((q, qi) => (
-        <div key={qi} className="border border-gray-200 rounded-xl p-4 bg-white">
+        <div key={qi}>
+        <div className="border border-gray-200 rounded-xl p-4 bg-white">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-gray-700">Pregunta {qi + 1}</span>
+              <span className="text-sm font-semibold text-gray-700">Pregunta</span>
+              {/* Posición: se puede subir/bajar una, o teclear a qué número va —
+                  con 36 preguntas, llegar a la 3 desde la 30 a flechazos no sirve. */}
+              <div className="flex items-center gap-0.5">
+                <button type="button" title="Subir" disabled={qi === 0}
+                  onClick={() => moveQuestionTo(qi, qi)}
+                  className="px-1 text-gray-400 hover:text-indigo-600 disabled:opacity-30 disabled:hover:text-gray-400">▲</button>
+                <input
+                  type="number" min={1} max={value.length}
+                  // No controlado a propósito: mover en cada tecla haría saltar la
+                  // pregunta al escribir el primer dígito de un número de dos.
+                  key={`pos-${qi}-${value.length}`}
+                  defaultValue={qi + 1}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+                  }}
+                  onBlur={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    if (Number.isNaN(n)) { e.target.value = String(qi + 1); return; }
+                    moveQuestionTo(qi, n);
+                  }}
+                  title="Escribe el número al que quieres moverla y pulsa Enter"
+                  className="w-12 text-center text-sm font-semibold border border-gray-200 rounded-md px-1 py-0.5
+                             focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <button type="button" title="Bajar" disabled={qi === value.length - 1}
+                  onClick={() => moveQuestionTo(qi, qi + 2)}
+                  className="px-1 text-gray-400 hover:text-indigo-600 disabled:opacity-30 disabled:hover:text-gray-400">▼</button>
+              </div>
               <select value={q.type} onChange={(e) => setType(qi, e.target.value as any)}
                 className="text-xs border border-gray-300 rounded-md px-2 py-1">
                 <option value="multiple_choice">Opción múltiple</option>
@@ -293,6 +361,9 @@ export default function ManualQuestionsEditor({
             placeholder="Se muestra al estudiante como feedback"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
+        </div>
+        {/* Punto de inserción entre esta pregunta y la siguiente */}
+        <InsertarAqui onClick={() => insertQuestionAt(qi + 1)} />
         </div>
       ))}
 
