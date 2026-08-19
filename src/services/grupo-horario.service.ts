@@ -2,7 +2,7 @@ import 'server-only';
 import crypto from 'crypto';
 import { query } from '@/lib/postgres';
 import { ValidationError, NotFoundError } from '@/lib/errors';
-import { motivoNoAgrupable, MAX_CURSOS_GRUPO } from '@/lib/grupo-horario';
+import { motivoNoAgrupable, MAX_CURSOS_GRUPO, guiaDelGrupo, etiquetaCurso } from '@/lib/grupo-horario';
 import { chocanCursos, describirColision, guiaAsignado } from '@/services/colision-guia.service';
 import { regenerarCursoPreservandoEstado } from '@/services/cursos-campaign-eventos.service';
 
@@ -54,6 +54,8 @@ export async function unirCursosEnGrupo(cursoIds: string[]): Promise<{
   cursos: CursoGrupo[];
   eventosRegenerados: number;
   bookingsRegenerados: number;
+  /** Cursos a los que se les asignó el guía del grupo por no tener ninguno. */
+  guiaAsignadoA: string[];
 }> {
   const idsUnicos = Array.from(new Set((cursoIds || []).map(s => String(s || '').trim()).filter(Boolean)));
   if (idsUnicos.length < 2) throw new ValidationError('Elige al menos 2 cursos para unir.');
@@ -78,6 +80,20 @@ export async function unirCursosEnGrupo(cursoIds: string[]): Promise<{
   if (motivo) throw new ValidationError(motivo);
 
   const grupoHorarioId = gruposPrevios[0] || crypto.randomUUID();
+
+  // Los cursos sin guía heredan el del grupo: unir salones ES declarar que ese
+  // guía los dicta todos. Se hace ANTES de regenerar, para que sus eventos nazcan
+  // ya con el guía correcto (si no, saldrían sin sala de Zoom).
+  const guia = guiaDelGrupo(cursos);
+  const sinGuia = cursos.filter(c => !String(c.guia ?? '').trim());
+  const guiaAsignadoA: string[] = [];
+  if (guia && sinGuia.length) {
+    await query(
+      `UPDATE "CURSOS_CAMPAIGN" SET "guia" = $1, "_updatedDate" = NOW() WHERE "_id" = ANY($2)`,
+      [guia, sinGuia.map(c => c._id)]
+    );
+    for (const c of sinGuia) { c.guia = guia; guiaAsignadoA.push(etiquetaCurso(c)); }
+  }
 
   // Al crecer un grupo hay que contar también a los miembros que NO vienen en la
   // lista, o se colaría un cuarto salón mandando sólo dos de los tres actuales.
@@ -110,7 +126,7 @@ export async function unirCursosEnGrupo(cursoIds: string[]): Promise<{
     bookingsRegenerados += r.bookings;
   }
 
-  return { grupoHorarioId, cursos: await cargarCursos(idsUnicos), eventosRegenerados, bookingsRegenerados };
+  return { grupoHorarioId, cursos: await cargarCursos(idsUnicos), eventosRegenerados, bookingsRegenerados, guiaAsignadoA };
 }
 
 /**

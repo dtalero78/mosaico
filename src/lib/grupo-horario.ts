@@ -39,8 +39,13 @@ export interface CursoAgrupable {
 /**
  * ¿Se pueden agrupar estos cursos? (null = sí)
  *
- * Reglas: misma campaña, MISMO horario (decisión del usuario), mismo guía,
+ * Reglas: misma campaña, MISMO horario (decisión del usuario), un solo guía,
  * máximo 3, sin repetir el mismo curso, y ninguno puede estar ya en otro grupo.
+ *
+ * Un curso SIN guía no bloquea: unir salones es justamente declarar que ese guía
+ * los dicta todos, así que hereda el del grupo (ver `guiaDelGrupo`). Lo que sí se
+ * rechaza es que dos cursos traigan guías DISTINTOS — eso sería quitarle el curso
+ * a alguien sin decirlo.
  * NO se restringe qué tipo de curso va con cuál — queda a criterio del admin
  * (lo habitual es DANSHI con SENPAI, pero no se impone).
  */
@@ -57,19 +62,30 @@ export function motivoNoAgrupable(cursos: CursoAgrupable[]): string | null {
     if (!norm(c.campaign) || !norm(c.tipoCurso) || !norm(c.horarioCurso)) {
       return 'A alguno de los cursos le falta campaña, curso u horario.';
     }
-    if (!norm(c.guia)) return 'Todos los cursos del grupo deben tener guía asignado.';
     if (norm(c.campaign) !== norm(base.campaign)) return 'Los cursos deben ser de la misma campaña.';
     if (norm(c.horarioCurso) !== norm(base.horarioCurso)) {
       return `Los cursos del grupo deben coincidir en horario (${norm(base.horarioCurso)}).`;
     }
-    if (norm(c.guia) !== norm(base.guia)) return 'Los cursos del grupo deben tener el mismo guía.';
   }
+
+  const guias = Array.from(new Set(cursos.map(c => norm(c.guia)).filter(Boolean)));
+  if (guias.length === 0) return 'Ninguno de los cursos tiene guía: asígnale uno al principal antes de unirlos.';
+  if (guias.length > 1) return 'Los cursos del grupo deben tener el mismo guía.';
 
   // Un curso es una fila de CURSOS_CAMPAIGN: repetir la misma sería agrupar algo consigo mismo.
   const claves = cursos.map(c => norm(c._id) || `${norm(c.tipoCurso)}|${norm(c.salon)}`);
   if (new Set(claves).size !== claves.length) return 'Hay un curso repetido en el grupo.';
 
   return null;
+}
+
+/**
+ * El guía del grupo: el único no vacío entre sus cursos. Los que no lo tengan lo
+ * heredan al unirse (`unirCursosEnGrupo`), que es lo que el admin está declarando.
+ */
+export function guiaDelGrupo(cursos: CursoAgrupable[]): string | null {
+  const guias = Array.from(new Set(cursos.map(c => String(c.guia ?? '').trim()).filter(Boolean)));
+  return guias.length === 1 ? guias[0] : null;
 }
 
 /** Etiqueta corta de un curso para mensajes y para la pestaña Colisiones. */

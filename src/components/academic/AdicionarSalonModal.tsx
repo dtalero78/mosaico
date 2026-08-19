@@ -59,6 +59,8 @@ export default function AdicionarSalonModal({
     && c.campaign === padre.campaign
     && String(c.horarioCurso || '').trim() === String(padre.horarioCurso || '').trim()
     && !c.grupoHorarioId
+    // Sin guía (lo hereda) o con el MISMO. Con otro guía sería quitarle el curso.
+    && (!String(c.guia || '').trim() || String(c.guia).trim() === String(padre.guia || '').trim())
   ), [cursos, padre, yaEn])
 
   const tipos = useMemo(
@@ -125,6 +127,18 @@ export default function AdicionarSalonModal({
         </ul>
 
         {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
+
+        {(() => {
+          const elegido = candidatos.find(c => c._id === cursoSel)
+          if (!elegido || String(elegido.guia || '').trim()) return null
+          return (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <strong>{elegido.tipoCurso} · Salón {elegido.salon || '—'}</strong> no tiene guía asignado.
+              Al unirlo se le asigna {guiaNombre ? <strong>{guiaNombre}</strong> : 'el guía del grupo'},
+              que es lo que significa dictar los dos salones en el mismo bloque.
+            </p>
+          )
+        })()}
 
         {lleno ? (
           <p className="mt-4 text-sm text-gray-600">
