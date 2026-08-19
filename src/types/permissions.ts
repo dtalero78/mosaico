@@ -377,6 +377,11 @@ export enum ComercialPermission {
   CONSULTA_CURSOS = 'COMERCIAL.CONSULTA_CURSOS', // consulta de cursos de campaña (read-only)
   CONSULTA_CURSOS_EXPORTAR = 'COMERCIAL.CONSULTA_CURSOS.EXPORTAR', // botón descargar CSV
   GESTION_CONTRATO = 'COMERCIAL.GESTION_CONTRATO.VER', // contratos firmados sin aprobar (adjuntar docs / dejar listo)
+  // Botón amarillo "Contrato Para Aprobación" del detalle del contrato. Permiso
+  // PROPIO: antes compartía el de Gestión Contrato, y quitar esa pantalla a un rol
+  // le quitaba también este botón, que es otra cosa (marca el contrato para que
+  // salga en el Centro de Aprobación; no reserva cupo).
+  CONTRATO_LISTO_APROBACION = 'COMERCIAL.CONTRATO.LISTO_APROBACION',
   // Autorizar que un beneficiario entre a un salón LLENO al dejar el contrato listo.
   // Aparte de VER a propósito: es ampliar el salón de hecho, y el comercial sólo
   // debería poder cambiarlo de horario.

@@ -15,7 +15,7 @@ import { esAprobado } from '@/lib/estados';
  * estaba en LISTO, conserva la marca original.
  */
 export const POST = handlerWithAuth(async (_request, { params }, session) => {
-  await requirePermission(session, ComercialPermission.GESTION_CONTRATO);
+  await requirePermission(session, ComercialPermission.CONTRATO_LISTO_APROBACION);
   const titular = await queryOne<{ _id: string; tipoUsuario: string; aprobacion: string | null; listoAprobacion: string | null; contrato: string | null }>(
     `SELECT "_id", "tipoUsuario", "aprobacion", "listoAprobacion"::text, "contrato" FROM "PEOPLE" WHERE "_id" = $1`,
     [params.id]

@@ -1000,6 +1000,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/comercial/gestion-contrato. Lista de contratos firmados sin aprobar (nombre, contrato, fecha, estado) con opciones de adjuntar documentos y "dejar listo".',
   },
   {
+    code: ComercialPermission.CONTRATO_LISTO_APROBACION,
+    module: Module.COMERCIAL,
+    section: 'Contrato',
+    name: 'Botón "Contrato Para Aprobación"',
+    description: 'Botón amarillo del detalle del contrato que lo marca como LISTO para que aparezca en el Centro de Aprobación. Es OTRA cosa que Gestión Contrato: no reserva el cupo del salón. Tiene permiso propio para poder ocultar esa pantalla a un rol sin quitarle también este botón.',
+  },
+  {
     code: ComercialPermission.GESTION_CONTRATO_SOBRECUPO,
     module: Module.COMERCIAL,
     section: 'Gestión Contrato',
