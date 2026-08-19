@@ -111,6 +111,7 @@ export const GET = handler(async (
           "horarioCurso",
           "campaign",
           "cupoLiberado",
+          "fechaOnHold",
           "_createdDate"
         FROM "PEOPLE"
         WHERE "contrato" = $1
@@ -161,6 +162,8 @@ export const GET = handler(async (
           campaign: ben.campaign,
           // Cupo del alumno en su salón: false = lo ocupa; true = lo liberó un admin.
           cupoLiberado: ben.cupoLiberado === true,
+          // El OnHold también suelta el asiento: la ficha lo muestra en el badge.
+          fechaOnHold: ben.fechaOnHold || null,
           existeEnAcademica: !!academicCheck,
           _createdDate: ben._createdDate,
         });

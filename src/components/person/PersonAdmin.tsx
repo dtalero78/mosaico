@@ -7,6 +7,7 @@ import { formatDate } from '@/lib/utils'
 import { UserPlusIcon } from '@heroicons/react/24/outline'
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
 import { PermissionGuard } from '@/components/permissions'
+import { contratoRetieneCupo, motivoLiberadoPorContrato } from '@/lib/cupo-estados'
 import { PersonPermission } from '@/types/permissions'
 import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
 import { generateUserLogin } from '@/lib/user-login'
@@ -54,6 +55,12 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     beneficiariesCount: beneficiaries?.length || 0,
     beneficiaries
   })
+  // El estado del CONTRATO vive en el titular (`person`), no en cada beneficiario:
+  // si ya está Retractado / Devuelto / Rechazado / Contrato nulo, sus alumnos no
+  // ocupan asiento aunque cada uno figure como "Aprobado".
+  const contratoRetiene = contratoRetieneCupo(person.aprobacion)
+  const motivoContrato = motivoLiberadoPorContrato(person.aprobacion)
+
   const [selectedEstado, setSelectedEstado] = useState(person.aprobacion || 'Pendiente')
   // El desplegable escribe `aprobacion`; el badge muestra el estado REAL, que
   // mientras Comercial no cierre el contrato es "En Gestión" (cupo sin reservar).
@@ -1219,15 +1226,25 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     {/* Cupo del alumno en su salón. Se reserva al crear el contrato
                         y se libera al cambiar el estado, al inactivarlo, en OnHold
                         o a mano con el botón de abajo. */}
-                    {(cupoLocal[beneficiary._id] ?? (beneficiary as any).cupoLiberado === true) ? (
-                      <span className="badge bg-gray-200 text-gray-700" title="No ocupa cupo en el salón">
-                        Cupo liberado
-                      </span>
-                    ) : (
-                      <span className="badge bg-emerald-100 text-emerald-700" title="Ocupa un cupo en el salón">
-                        Cupo asignado
-                      </span>
-                    )}
+                    {(() => {
+                      const liberadoManual = cupoLocal[beneficiary._id] ?? (beneficiary as any).cupoLiberado === true
+                      // El asiento también se suelta SOLO: por el estado del contrato
+                      // o por OnHold. El badge debe reflejarlo, no sólo el botón.
+                      const motivo = liberadoManual ? 'lo liberó un administrador'
+                        : motivoContrato ? motivoContrato
+                        : (beneficiary as any).fechaOnHold ? 'está en OnHold'
+                        : null
+                      return motivo ? (
+                        <span className="badge bg-gray-200 text-gray-700"
+                          title={"No ocupa cupo en el salón: " + motivo}>
+                          Cupo liberado
+                        </span>
+                      ) : (
+                        <span className="badge bg-emerald-100 text-emerald-700" title="Ocupa un cupo en el salón">
+                          Cupo asignado
+                        </span>
+                      )
+                    })()}
                     {beneficiary.estado === 'Aprobado' && whatsappSent && (
                       <div className="flex items-center space-x-1 text-green-600 bg-green-100 px-2 py-1 rounded" title="WhatsApp enviado">
                         <span className="text-sm">📱✅ WhatsApp Enviado</span>
@@ -1249,14 +1266,20 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     {(() => {
                       const liberado = cupoLocal[beneficiary._id] ?? (beneficiary as any).cupoLiberado === true
                       const aprobado = isBeneficiaryApproved(beneficiary)
-                      const bloqueado = aprobado && !liberado
+                      // Con el contrato ya Retractado / Devuelto / Rechazado /
+                      // Contrato nulo el asiento está suelto por regla: bloquear
+                      // aquí impedía registrar algo que en los hechos ya pasó.
+                      const bloqueado = aprobado && !liberado && contratoRetiene
                       return (
                         <button
                           onClick={() => liberado ? handleAsignarCupo(beneficiary) : handleLiberarCupo(beneficiary)}
                           disabled={bloqueado || cupoBusy === beneficiary._id}
                           title={bloqueado
                             ? 'Contrato aprobado: el cupo queda asignado. Cambia primero el estado del contrato para liberarlo.'
-                            : liberado ? 'Asignar cupo: elige campaña, curso y salón con disponibilidad' : 'Liberar el cupo de este alumno'}
+                            : liberado ? 'Asignar cupo: elige campaña, curso y salón con disponibilidad'
+                            : motivoContrato
+                            ? "El cupo ya está suelto porque " + motivoContrato + "; esto lo deja registrado."
+                            : 'Liberar el cupo de este alumno'}
                           className={`inline-flex items-center px-4 py-1.5 border text-sm font-medium rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             liberado
                               ? 'border-emerald-600 text-emerald-600 bg-white hover:bg-emerald-600 hover:text-white'

@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { PersonPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ForbiddenError } from '@/lib/errors';
+import { contratoRetieneCupo } from '@/lib/cupo-estados';
 import { query, queryOne } from '@/lib/postgres';
 
 /**
@@ -49,8 +50,17 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
     throw new ValidationError('El cupo es del beneficiario, no del titular.');
   }
 
+  // El bloqueo mira el estado del CONTRATO, que vive en el titular. Si el contrato
+  // ya está Retractado / Devuelto / Rechazado / Contrato nulo, el cupo YA está
+  // suelto por regla, así que negar la liberación bloqueaba algo ya hecho.
+  const titularContrato = await queryOne<{ aprobacion: string | null }>(
+    `SELECT "aprobacion" FROM "PEOPLE"
+      WHERE "contrato" = $1 AND "tipoUsuario" = 'TITULAR' LIMIT 1`,
+    [persona.contrato]
+  );
+  const contratoRetiene = contratoRetieneCupo(titularContrato?.aprobacion);
   const aprobado = APROBADOS.includes(String(persona.aprobacion || '').trim().toLowerCase());
-  if (liberar && aprobado) {
+  if (liberar && aprobado && contratoRetiene) {
     throw new ForbiddenError(
       'El contrato está aprobado: el cupo queda asignado. Cambia primero el estado del contrato para poder liberarlo.'
     );

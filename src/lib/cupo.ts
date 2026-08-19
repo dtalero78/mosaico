@@ -42,7 +42,8 @@ import 'server-only';
  * `Devuelto` entró en agosto-2026 — antes retenía el cupo, y un contrato devuelto
  * dejaba el salón bloqueado sin que nadie estuviera ocupándolo.
  */
-export const ESTADOS_LIBERAN_CUPO = ['devuelto', 'rechazado', 'retractado', 'contrato nulo'] as const;
+export { ESTADOS_LIBERAN_CUPO } from './cupo-estados';
+import { ESTADOS_LIBERAN_CUPO } from './cupo-estados';
 
 /**
  * Fragmento SQL booleano: TRUE si el beneficiario con alias `<alias>` OCUPA cupo,
