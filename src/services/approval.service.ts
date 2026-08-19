@@ -82,10 +82,14 @@ export function motivoNoAprobable(person: {
   tipoCurso?: string | null;
   horarioCurso?: string | null;
 }): string | null {
-  if (person.cupoLiberado === true) return 'Cupo liberado: no pertenece a ningún salón.';
+  // Los mensajes dicen QUÉ HACER, no sólo qué falta: el usuario que choca con esto
+  // está intentando aprobar y necesita saber que la salida es "Asignar cupo".
+  if (person.cupoLiberado === true) {
+    return 'Cupo liberado: no ocupa asiento en ningún salón. Usa "Asignar cupo" en su ficha para devolverle uno y vuelve a aprobar.';
+  }
   const falta = (v: any) => !String(v ?? '').trim();
   if (falta(person.campaign) || falta(person.tipoCurso) || falta(person.horarioCurso)) {
-    return 'Sin curso asignado (campaña, curso u horario).';
+    return 'Sin curso asignado (campaña, curso u horario). Usa "Asignar cupo" en su ficha para elegirle campaña, curso y salón, y vuelve a aprobar.';
   }
   return null;
 }
