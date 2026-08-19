@@ -1,16 +1,24 @@
 /**
  * Duración de eventos de CALENDARIO.
  *
- * MOSAICO no persiste la duración de los eventos: se DERIVA del `tipo`.
- * Todos los eventos duran 60 minutos EXCEPTO los de tipo `NIVELACION`,
- * que duran 30 minutos. Este helper es la única fuente de verdad para
- * calcular la hora de fin / duración en render (rango inicio–fin) y en
- * los chequeos de solape (admin-events).
+ * La duración sale del HORARIO del curso, que el evento guarda en
+ * `nombreEvento` ("LUN-MIÉ 19:15-20:05" → 50 min). Se lee con
+ * `parseHorarioRango`, el mismo parser con el que se generaron los eventos, así
+ * que la hora de fin que se pinta es la que declara el curso.
+ *
+ * Sin horario legible se cae al `tipo`: NIVELACION 30, ENTRENAMIENTO/EVALUACION
+ * (IMPULSA) 150, el resto 60. Antes ESA era la única fuente, y como asumía 60 min
+ * para toda sesión, pintaba mal el fin de los cursos que no duran una hora — las
+ * clases de 50 min salían 10 minutos largas y las de sábado (2 h), una hora cortas.
+ *
+ * Este helper es la única fuente de verdad para la hora de fin / duración, tanto
+ * en render (rango inicio–fin) como en los chequeos de solape.
  *
  * Client + server safe (sin 'server-only'): lo usan tanto los componentes
  * del calendario como los repositorios/servicios.
  */
 import { format } from 'date-fns';
+import { parseHorarioRango } from './cursos-campaign';
 
 export const NIVELACION_DURATION_MIN = 30;
 export const DEFAULT_EVENT_DURATION_MIN = 60;
@@ -23,15 +31,20 @@ const DURATION_BY_TIPO: Record<string, number> = {
   EVALUACION: IMPULSA_LARGO_DURATION_MIN,
 };
 
-/** Minutos de duración de un evento según su tipo. NIVELACION→30, ENTRENAMIENTO/EVALUACION→150, resto→60. */
-export function eventDurationMin(tipo?: string | null): number {
+/**
+ * Minutos que dura el evento. Manda el `horario` del curso si es legible
+ * ("MAR-JUE 19:00-19:50" → 50); si no, el `tipo`.
+ */
+export function eventDurationMin(tipo?: string | null, horario?: string | null): number {
+  const rango = horario ? parseHorarioRango(horario) : null;
+  if (rango) return rango.finMin - rango.inicioMin;
   return DURATION_BY_TIPO[String(tipo || '').toUpperCase()] ?? DEFAULT_EVENT_DURATION_MIN;
 }
 
-/** Fecha/hora de fin del evento (inicio + duración según tipo). */
-export function eventEndDate(dia: Date | string, tipo?: string | null): Date {
+/** Fecha/hora de fin del evento (inicio + su duración). */
+export function eventEndDate(dia: Date | string, tipo?: string | null, horario?: string | null): Date {
   const start = typeof dia === 'string' ? new Date(dia) : dia;
-  return new Date(start.getTime() + eventDurationMin(tipo) * 60_000);
+  return new Date(start.getTime() + eventDurationMin(tipo, horario) * 60_000);
 }
 
 /**
@@ -41,8 +54,9 @@ export function eventEndDate(dia: Date | string, tipo?: string | null): Date {
 export function formatEventTimeRange(
   dia: Date | string,
   tipo?: string | null,
+  horario?: string | null,
   fmt: string = 'HH:mm',
 ): string {
   const start = typeof dia === 'string' ? new Date(dia) : dia;
-  return `${format(start, fmt)} – ${format(eventEndDate(dia, tipo), fmt)}`;
+  return `${format(start, fmt)} – ${format(eventEndDate(dia, tipo, horario), fmt)}`;
 }

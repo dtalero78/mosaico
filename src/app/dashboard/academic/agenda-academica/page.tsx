@@ -580,7 +580,7 @@ export default function AgendaAcademicaPage() {
                             {(event.evento || event.tipo) === 'CLUB' ? 'TALLER' : (event.evento || event.tipo)} - {event.tituloONivel}
                           </div>
                           <div className="truncate opacity-75 font-medium">
-                            {formatEventTimeRange(event.dia, event.tipo || event.evento)}
+                            {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento)}
                           </div>
                           {event.nombreEvento && (
                             <div className="truncate opacity-75">

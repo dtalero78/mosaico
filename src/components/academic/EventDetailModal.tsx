@@ -256,7 +256,7 @@ export default function EventDetailModal({ event, isOpen, onClose, advisors, adv
                 <div className="flex items-center gap-2">
                   <ClockIcon className="h-4 w-4 text-gray-500" />
                   <span className="text-sm">
-                    {formatEventTimeRange(event.dia, event.tipo || event.evento)}
+                    {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento)}
                     {(event.evento || event.tipo) === 'NIVELACION' && (
                       <span className="ml-2 text-xs text-amber-700">(30 min)</span>
                     )}

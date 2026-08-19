@@ -392,7 +392,7 @@ export default function SesionPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <ClockIcon className="h-4 w-4" />
-                    <span>{formatEventTimeRange(evento.dia, evento.tipo || evento.evento)}</span>
+                    <span>{formatEventTimeRange(evento.dia, evento.tipo || evento.evento, evento.nombreEvento)}</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <UserGroupIcon className="h-4 w-4" />
