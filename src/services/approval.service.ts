@@ -171,8 +171,28 @@ export async function approveOnePerson(
     }
 
     const setClause = extraFields.length > 0 ? `, ${extraFields.join(', ')}` : '';
+    // El asiento queda CONFIRMADO al aprobar. Un alumno aprobado, activo y con
+    // curso ocupa el salón de hecho —se le generan sus clases aquí mismo—, así
+    // que dejarlo sin confirmar hacía que los contadores mostraran un asiento
+    // libre que no existía, y el salón admitía uno más del que cabe. Pasó con un
+    // contrato creado justo entre el backfill de cupos y el despliegue de la
+    // reserva. No se valida el cupo aquí: eso ya ocurrió al asignarle el salón y
+    // al dejar el contrato listo; esto sólo hace visible lo que ya ocupa.
+    // La reserva temporal se limpia — a partir de ahora el asiento es firme.
     await query(
-      `UPDATE "PEOPLE" SET "aprobacion" = 'Aprobado', "estado" = 'ACTIVA', "estadoInactivo" = false${setClause}, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      `UPDATE "PEOPLE"
+          SET "aprobacion" = 'Aprobado', "estado" = 'ACTIVA', "estadoInactivo" = false${setClause},
+              "cupoConfirmado" = CASE WHEN "tipoCurso" IS NOT NULL AND "horarioCurso" IS NOT NULL
+                                        AND "cupoLiberado" IS NOT TRUE THEN true ELSE "cupoConfirmado" END,
+              "cupoConfirmadoPor" = CASE WHEN "cupoConfirmado" IS NOT TRUE AND "tipoCurso" IS NOT NULL
+                                           AND "horarioCurso" IS NOT NULL AND "cupoLiberado" IS NOT TRUE
+                                         THEN 'aprobación' ELSE "cupoConfirmadoPor" END,
+              "cupoConfirmadoEn" = CASE WHEN "cupoConfirmado" IS NOT TRUE AND "tipoCurso" IS NOT NULL
+                                          AND "horarioCurso" IS NOT NULL AND "cupoLiberado" IS NOT TRUE
+                                        THEN NOW() ELSE "cupoConfirmadoEn" END,
+              "cupoReservadoHasta" = NULL,
+              "_updatedDate" = NOW()
+        WHERE "_id" = $1`,
       [personId, ...extraValues]
     );
   } else {
