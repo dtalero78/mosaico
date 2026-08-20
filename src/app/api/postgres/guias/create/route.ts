@@ -1,6 +1,7 @@
 import 'server-only';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { ValidationError, ConflictError } from '@/lib/errors';
+import { normalizarSalaZoom, esSalaZoomValida, MENSAJE_ZOOM_INVALIDO } from '@/lib/zoom-link';
 import { AdvisorRepository } from '@/repositories/advisor.repository';
 import { ids } from '@/lib/id-generator';
 import { queryOne } from '@/lib/postgres';
@@ -23,7 +24,10 @@ export const POST = handler(async (request: Request) => {
 
   const emailLower = email.trim().toLowerCase();
   const numeroIdNorm = body.numeroId?.trim().toUpperCase() || null;
-  const zoomNorm = body.zoom?.trim() || null;
+  // La sala se normaliza (el /s/ del anfitrión pasa a /j/) y se valida: un
+  // enlace de chat o la portada de Zoom dejan al alumno sin poder entrar.
+  const zoomNorm = normalizarSalaZoom(body.zoom) || null;
+  if (zoomNorm && !esSalaZoomValida(zoomNorm)) throw new ValidationError(MENSAJE_ZOOM_INVALIDO);
 
   // --- Validación de duplicados (3 dimensiones) ---
   // Mensaje específico para que el usuario sepa qué campo limpiar.
@@ -81,7 +85,7 @@ export const POST = handler(async (request: Request) => {
     primerApellido: primerApellido.trim(),
     nombreCompleto,
     email: email.trim().toLowerCase(),
-    zoom: body.zoom?.trim() || undefined,
+    zoom: zoomNorm || undefined,
     telefono: body.telefono?.trim() || undefined,
     pais: body.pais?.trim() || undefined,
     domicilio: body.domicilio?.trim() || undefined,

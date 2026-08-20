@@ -2,6 +2,7 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query, queryOne } from '@/lib/postgres';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
+import { normalizarSalaZoom, esSalaZoomValida, MENSAJE_ZOOM_INVALIDO } from '@/lib/zoom-link';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 
@@ -41,8 +42,8 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   const id = ctx?.params?.id;
   if (!id) throw new ValidationError('id requerido');
 
-  const cur = await queryOne<{ _id: string; usuarioRolId: string | null; email: string }>(
-    `SELECT "_id","usuarioRolId","email" FROM "GUIAS" WHERE "_id" = $1`,
+  const cur = await queryOne<{ _id: string; usuarioRolId: string | null; email: string; zoom: string | null }>(
+    `SELECT "_id","usuarioRolId","email","zoom" FROM "GUIAS" WHERE "_id" = $1`,
     [id]
   );
   if (!cur) throw new NotFoundError('Guía no encontrado');
@@ -58,7 +59,10 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   const telefono = body.telefono != null ? String(body.telefono).trim() || null : null;
   const pais = body.pais != null ? String(body.pais).trim() || null : null;
   const domicilio = body.domicilio != null ? String(body.domicilio).trim() || null : null;
-  const zoom = body.zoom != null ? String(body.zoom).trim() || null : null;
+  // La sala se normaliza (el enlace del anfitrión /s/ pasa a /j/) y se valida:
+  // un enlace de chat o la portada de Zoom dejan al alumno sin poder entrar.
+  const zoom = body.zoom != null ? (normalizarSalaZoom(body.zoom) || null) : null;
+  if (zoom && !esSalaZoomValida(zoom)) throw new ValidationError(MENSAJE_ZOOM_INVALIDO);
   const fechaNacimiento = /^\d{4}-\d{2}-\d{2}$/.test(body.fechaNacimiento || '') ? body.fechaNacimiento : null;
   const fotoKey = body.fotoKey ? String(body.fotoKey).trim() : null; // solo si se subió nueva
   const clave = body.clave ? String(body.clave).trim() : null;       // solo si se cambia
@@ -85,6 +89,23 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
      WHERE "_id"=$1`,
     [id, primerNombre, primerApellido, nombreCompleto, email, telefono, pais, domicilio, zoom, fechaNacimiento, fotoKey, clave]
   );
+
+  // Si la sala CAMBIÓ, se lleva a las clases FUTURAS del guía: los eventos ya
+  // creados guardan su propia copia del enlace, así que sin esto corregir la
+  // ficha no arreglaba nada — el alumno seguía abriendo el enlace viejo. Las
+  // clases pasadas se dejan como están: son historia y ya nadie entra.
+  if (zoom && zoom !== String(cur.zoom || '').trim()) {
+    const ev = await query<{ _id: string }>(
+      `UPDATE "CALENDARIO" SET "linkZoom"=$2, "_updatedDate"=NOW()
+        WHERE "advisor"=$1 AND "dia" >= NOW() RETURNING "_id"`, [id, zoom]);
+    const ids = (ev.rows || []).map(r => r._id);
+    if (ids.length) {
+      await query(
+        `UPDATE "ACADEMICA_BOOKINGS" SET "linkZoom"=$2, "_updatedDate"=NOW()
+          WHERE "eventoId" = ANY($1::text[]) OR "idEvento" = ANY($1::text[])`, [ids, zoom]);
+    }
+    console.log(`🔗 [Guía] sala actualizada en ${ids.length} evento(s) futuro(s)`);
+  }
 
   // Sincronizar la cuenta de login.
   if (cur.usuarioRolId) {
