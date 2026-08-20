@@ -24,7 +24,7 @@ const pool = new Pool({
 });
 
 const SQL = `
-  SELECT b."numeroId",
+  SELECT COALESCE(NULLIF(b."numeroId",''),'(sin documento)') AS "numeroId",
          TRIM(CONCAT_WS(' ', b."primerNombre", b."primerApellido")) AS alumno,
          b."tipoCurso" || ' · ' || COALESCE(b."salon",'—') || ' · ' || b."horarioCurso"
            || ' (' || b."campaign" || ')' AS "suFicha",
@@ -36,12 +36,14 @@ const SQL = `
             OR COALESCE(k."advisorAnotaciones",'') <> '')::int AS "conHistoria",
          MIN(TO_CHAR(e."dia" AT TIME ZONE 'America/Santiago','YYYY-MM-DD')) AS "primera"
     FROM "ACADEMICA" a
-    JOIN "PEOPLE" b ON b."numeroId" = a."numeroId" AND b."tipoUsuario" = 'BENEFICIARIO'
+    JOIN "PEOPLE" b ON (a."peopleId" = b."_id"
+                     OR (COALESCE(a."peopleId",'') = '' AND COALESCE(a."numeroId",'') <> ''
+                         AND b."numeroId" = a."numeroId"))
+                   AND b."tipoUsuario" = 'BENEFICIARIO'
     JOIN "ACADEMICA_BOOKINGS" k ON (k."idEstudiante" = a."_id" OR k."studentId" = a."_id")
     JOIN "CALENDARIO" e ON e."_id" = k."eventoId"
     JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = e."cursoCampaignId"
-   WHERE COALESCE(b."contrato",'') NOT LIKE 'PRB-%'
-     AND COALESCE(b."numeroId",'') <> ''
+   WHERE COALESCE(b."contrato",'') NOT LIKE 'PRB-%'
      AND e."dia" >= NOW()
      AND NOT (cc."campaign" = b."campaign"
           AND cc."tipoCurso" = b."tipoCurso"
@@ -65,7 +67,10 @@ const SQL = `
   const hist = (await pool.query(`
     SELECT COUNT(*)::int n, COUNT(DISTINCT a."_id")::int alumnos
       FROM "ACADEMICA" a
-      JOIN "PEOPLE" b ON b."numeroId" = a."numeroId" AND b."tipoUsuario" = 'BENEFICIARIO'
+      JOIN "PEOPLE" b ON (a."peopleId" = b."_id"
+                     OR (COALESCE(a."peopleId",'') = '' AND COALESCE(a."numeroId",'') <> ''
+                         AND b."numeroId" = a."numeroId"))
+                   AND b."tipoUsuario" = 'BENEFICIARIO'
       JOIN "ACADEMICA_BOOKINGS" k ON (k."idEstudiante" = a."_id" OR k."studentId" = a."_id")
       JOIN "CALENDARIO" e ON e."_id" = k."eventoId"
       JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = e."cursoCampaignId"

@@ -4,6 +4,8 @@ import { requirePermission } from '@/lib/api-permissions';
 import { PersonPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { contratoRetieneCupo } from '@/lib/cupo-estados';
+import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service';
+import { esAprobadoSql } from '@/lib/estados';
 import { query, queryOne } from '@/lib/postgres';
 
 /**
@@ -21,12 +23,17 @@ import { query, queryOne } from '@/lib/postgres';
  */
 const APROBADOS = ['aprobado', 'aprobada'];
 /**
- * Únicos estados del contrato en los que se puede volver a asignar un cupo.
- * Con el contrato Rechazado/Retractado/Contrato nulo NO se reasigna: habría que
- * revivir un contrato anulado por la puerta de atrás. Aprobado tampoco entra
- * aquí, porque ahí el cupo ya está tomado y bloqueado.
+ * Estados del contrato en los que se puede volver a asignar un cupo.
+ *
+ * Con el contrato Rechazado / Retractado / Contrato nulo NO se reasigna: sería
+ * revivir un contrato anulado por la puerta de atrás.
+ *
+ * **Aprobado SÍ entra.** Antes no, con el argumento de que ahí el cupo ya está
+ * tomado — pero un aprobado al que se le soltó el asiento quedaba sin salida: no
+ * se le podía devolver, y sin cupo tampoco se le puede aprobar de nuevo. Es el
+ * mismo callejón que tenía "Liberar cupo".
  */
-const PERMITEN_ASIGNAR = ['pendiente', 'devuelto'];
+const PERMITEN_ASIGNAR = ['pendiente', 'devuelto', 'aprobado', 'aprobada'];
 
 export const POST = handlerWithAuth(async (request, ctx, session) => {
   // Mismo permiso que "Inactivar" del beneficiario, que es la otra vía de liberar
@@ -40,6 +47,7 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
 
   const persona = await queryOne<any>(
     `SELECT "_id","tipoUsuario","aprobacion","contrato","campaign","tipoCurso","horarioCurso","salon",
+            "numeroId","primerNombre","primerApellido","celular","plataforma",
             "cupoLiberado",
             TRIM(CONCAT_WS(' ', "primerNombre", "primerApellido")) AS nombre
        FROM "PEOPLE" WHERE "_id" = $1`,
@@ -59,6 +67,12 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
     [persona.contrato]
   );
   const contratoRetiene = contratoRetieneCupo(titularContrato?.aprobacion);
+
+  // Sus fichas académicas: los agendamientos cuelgan del ACADEMICA._id, y un
+  // beneficiario puede tener más de una fila si su documento está duplicado.
+  const academicaIds = (await query<{ _id: string }>(
+    `SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = $1`, [persona.numeroId]
+  )).rows.map(r => r._id);
   const aprobado = APROBADOS.includes(String(persona.aprobacion || '').trim().toLowerCase());
   if (liberar && aprobado && contratoRetiene) {
     throw new ForbiddenError(
@@ -90,8 +104,28 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
       [id]
     ).catch(() => { /* best-effort: puede no tener ficha aún */ });
 
+    // Soltar el salón es soltar también sus clases FUTURAS: si ya no ocupa asiento,
+    // no debe seguir en la lista de su guía. Las PASADAS se conservan — son su
+    // historia. Misma regla que "Cambio Académico".
+    const soltadas = await query(
+      `DELETE FROM "ACADEMICA_BOOKINGS" b
+        USING "CALENDARIO" c
+        WHERE (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
+          AND c."dia" >= NOW()
+          AND (b."idEstudiante" = ANY($1::text[]) OR b."studentId" = ANY($1::text[]))
+        RETURNING c."_id" AS evid`,
+      [academicaIds]
+    );
+    const evs = Array.from(new Set((soltadas.rows || []).map((r: any) => r.evid).filter(Boolean)));
+    if (evs.length) {
+      await query(
+        `UPDATE "CALENDARIO" SET "inscritos" = GREATEST(0, COALESCE("inscritos",0) - 1), "_updatedDate" = NOW()
+          WHERE "_id" = ANY($1::text[])`, [evs]);
+    }
+
     return successResponse({
       ok: true, cupoLiberado: true, nombre: persona.nombre,
+      clasesSoltadas: soltadas.rowCount ?? 0,
       cursoBorrado: {
         campaign: persona.campaign || null, tipoCurso: persona.tipoCurso || null,
         horarioCurso: persona.horarioCurso || null, salon: persona.salon || null,
@@ -164,9 +198,32 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
     [destino.campaign, destino.salon || null, id]
   ).catch(() => { /* best-effort: puede no tener ficha aún */ });
 
+  // Si el contrato YA está aprobado y el alumno activo, las clases del salón nuevo
+  // se generan aquí mismo: sin esto quedaba asignado a un salón y con cero clases,
+  // y había que ir a Mantenimiento › Booking a repararlo a mano. Si aún no está
+  // aprobado no se generan — las crea la aprobación, que es su momento.
+  const elegible = await queryOne<{ ok: boolean }>(
+    `SELECT (b."estadoInactivo" IS NOT TRUE AND ${esAprobadoSql('t."aprobacion"')}) AS ok
+       FROM "PEOPLE" b
+       LEFT JOIN "PEOPLE" t ON t."contrato" = b."contrato" AND t."tipoUsuario" = 'TITULAR'
+      WHERE b."_id" = $1`, [id]);
+
+  let clasesCreadas = 0;
+  if (elegible?.ok === true && academicaIds.length) {
+    // Sólo FUTURAS: crear las ya dictadas lo dejaría marcado ausente en clases
+    // donde nunca estuvo inscrito.
+    clasesCreadas = await generarBookingsBeneficiario(
+      academicaIds[0],
+      { ...persona, ...destino },
+      { soloFuturos: true, agendadoPor: `Asignar cupo (${email})` }
+    ).catch(() => 0);
+  }
+
   return successResponse({
     ok: true, cupoLiberado: false, nombre: persona.nombre,
     destino, cupos: curso.cupos, ocupados: curso.ocupados + 1,
-    requiereAprobacion: true,
+    clasesCreadas,
+    // Sin aprobar, el paso siguiente sigue siendo aprobarlo (ahí se generan).
+    requiereAprobacion: elegible?.ok !== true,
   });
 });
