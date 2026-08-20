@@ -5,6 +5,7 @@
  */
 
 import 'server-only';
+import { enlaceClaseSql } from '@/lib/zoom-link';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { BaseRepository } from './base.repository';
 import { buildDynamicWhere, WhereFilter } from '@/lib/query-builder';
@@ -101,7 +102,10 @@ class CalendarioRepositoryClass extends BaseRepository {
 
     return queryMany(
       `SELECT c."_id", c."tipo", c."fecha", c."hora", c."advisor", c."nivel", c."step",
-              c."club", c."titulo", c."observaciones", c."linkZoom", c."limiteUsuarios",
+              c."club", c."titulo", c."observaciones", c."limiteUsuarios",
+              -- El enlace de la clase es la sala de su guía; la copia del evento
+              -- queda de respaldo (eventos sin guía o guía sin sala cargada).
+              ${enlaceClaseSql('a', 'c."linkZoom"')} as "linkZoom",
               c."inscritos", c."origen", c."dia", c."evento", c."nombreEvento", c."tituloONivel",
               c."campaign", c."curso", c."salon",
               c."eventoCompartidoId",

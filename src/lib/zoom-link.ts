@@ -40,3 +40,22 @@ export function esSalaZoomValida(url: unknown): boolean {
 export const MENSAJE_ZOOM_INVALIDO =
   'El enlace de Zoom debe ser el de la sala (…zoom.us/j/NÚMERO o …zoom.us/my/NOMBRE). '
   + 'El enlace de chat o de contacto no sirve: al alumno le abre "Enviar solicitud de contacto" en vez de la clase.';
+
+/**
+ * El enlace de una clase ES la sala de su guía.
+ *
+ * Cada evento y cada agendamiento guardan una copia del enlace del momento en que
+ * se crearon. Corregir la sala en la ficha del guía no las tocaba, así que el
+ * alumno seguía abriendo el enlace viejo — así acabaron 132 alumnos con un enlace
+ * de chat en vez de su clase, y no había forma de arreglarlo desde la interfaz.
+ *
+ * Ahora se resuelve AL LEER: manda la ficha del guía y la copia queda de
+ * respaldo, para los eventos sin guía o cuyo guía no tiene sala cargada. Con eso,
+ * cambiar la sala en la ficha arregla todas sus clases en el acto.
+ *
+ * @param guia   alias de la tabla GUIAS en la consulta
+ * @param copia  expresión con el enlace guardado (respaldo)
+ */
+export function enlaceClaseSql(guia: string, copia: string): string {
+  return `COALESCE(NULLIF(TRIM(${guia}."zoom"), ''), ${copia})`;
+}

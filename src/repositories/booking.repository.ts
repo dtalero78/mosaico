@@ -5,6 +5,7 @@
  */
 
 import 'server-only';
+import { enlaceClaseSql } from '@/lib/zoom-link';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { BaseRepository } from './base.repository';
@@ -26,7 +27,8 @@ class BookingRepositoryClass extends BaseRepository {
               ab."hePuntualidad", ab."heAsignacion", ab."daDominio", ab."daDesafio",
               ab."acPermanencia", ab."acRespeto", ab."acDisposicion",
               ab."anotaciones", ab."comentarios", ab."advisorAnotaciones", ab."actividadPropuesta",
-              ab."linkZoom", ab."asignadoPor", ab."origen", ab."agendadoPor",
+              ${enlaceClaseSql('ge', `COALESCE(ce."linkZoom", ab."linkZoom")`)} AS "linkZoom",
+              ab."asignadoPor", ab."origen", ab."agendadoPor",
               ab."agendadoPorEmail", ab."agendadoPorRol", ab."fechaAgendamiento",
               ab."fechaEvento", ab."tipoEvento", ab."nombreEvento", ab."tituloONivel",
               ab."_createdDate", ab."_updatedDate",
@@ -34,6 +36,8 @@ class BookingRepositoryClass extends BaseRepository {
               p."email", p."celular", p."numeroId", p."tipoUsuario"
        FROM "ACADEMICA_BOOKINGS" ab
        LEFT JOIN "PEOPLE" p ON ab."studentId" = p."_id"
+       LEFT JOIN "CALENDARIO" ce ON ce."_id" = ab."eventoId"
+       LEFT JOIN "GUIAS" ge ON ge."_id" = ce."advisor"
        WHERE ab."eventoId" = $1
        ORDER BY p."primerNombre" ASC, p."primerApellido" ASC
        LIMIT $2`,
@@ -138,13 +142,16 @@ class BookingRepositoryClass extends BaseRepository {
               c."sesionModulo", c."sesionLeccion",
               b."asistencia", b."asistio", b."participacion", b."noAprobo",
               b."cancelo", b."calificacion", b."anotaciones", b."comentarios", b."advisorAnotaciones",
-              b."actividadPropuesta", b."linkZoom", b."asignadoPor", b."origen",
+              b."actividadPropuesta",
+              ${enlaceClaseSql('ge', `COALESCE(c."linkZoom", b."linkZoom")`)} AS "linkZoom",
+              b."asignadoPor", b."origen",
               b."agendadoPor", b."agendadoPorEmail", b."agendadoPorRol",
               b."fechaAgendamiento", b."fechaEvento", b."tipoEvento", b."nombreEvento", b."tituloONivel",
               b."_createdDate", b."_updatedDate"
        FROM "ACADEMICA_BOOKINGS" b
        LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
        LEFT JOIN "GUIAS" adv ON adv."_id" = b."advisor"
+       LEFT JOIN "GUIAS" ge ON ge."_id" = c."advisor"
        WHERE b."idEstudiante" = ANY($1::text[])
           OR b."studentId"    = ANY($1::text[])
        ORDER BY b."fechaEvento" DESC, b."hora" DESC
@@ -446,10 +453,13 @@ class BookingRepositoryClass extends BaseRepository {
               COALESCE(c."step", ab."step") AS "step",
               COALESCE(c."nombreEvento", ab."nombreEvento") AS "nombreEvento",
               a."nombreCompleto" as "advisorNombre",
-              c."linkZoom" as "eventLinkZoom"
+              -- El enlace sale de la ficha del guía DEL EVENTO; la copia del
+              -- evento y la del agendamiento quedan de respaldo.
+              ${enlaceClaseSql('ge', `COALESCE(c."linkZoom", ab."linkZoom")`)} as "eventLinkZoom"
        FROM "ACADEMICA_BOOKINGS" ab
        LEFT JOIN "GUIAS" a ON ab."advisor" = a."_id"
        LEFT JOIN "CALENDARIO" c ON (ab."eventoId" = c."_id" OR ab."idEvento" = c."_id")
+       LEFT JOIN "GUIAS" ge ON ge."_id" = c."advisor"
        WHERE (ab."idEstudiante" = $1 OR ab."studentId" = $1)
          AND ab."cancelo" = false
          AND ab."fechaEvento" >= NOW() - INTERVAL '15 minutes'
