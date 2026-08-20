@@ -253,6 +253,32 @@ export async function marcarListoConCupo(opts: {
           `UPDATE "ACADEMICA" SET "campaign"=$2, "salon"=$3, "_updatedDate"=NOW() WHERE "numeroId"=$1`,
           [b.numeroId, d.campaign, salon]
         ).catch(() => {});
+        // Si el alumno YA tenía clases (contrato aprobado antes de re-marcar
+        // listo), las del salón viejo se sueltan aquí. Hoy no ocurre —a esta
+        // altura el contrato no está aprobado y no hay ninguna, verificado en los
+        // 7 casos vigentes—, pero mover el curso sin mover las clases es el fallo
+        // que ya dejó alumnos en dos salones a la vez; la regla queda pareja en
+        // los tres sitios que escriben el curso.
+        const soltadas = await client.query(
+          `DELETE FROM "ACADEMICA_BOOKINGS" k
+            USING "CALENDARIO" c, "ACADEMICA" a
+            WHERE (c."_id" = k."eventoId" OR c."_id" = k."idEvento")
+              AND c."dia" >= NOW()
+              AND (k."idEstudiante" = a."_id" OR k."studentId" = a."_id")
+              AND a."peopleId" = $1
+              AND c."cursoCampaignId" = (
+                SELECT cc."_id" FROM "CURSOS_CAMPAIGN" cc
+                 WHERE cc."campaign" = $2 AND cc."tipoCurso" = $3 AND cc."horarioCurso" = $4 LIMIT 1)
+            RETURNING c."_id" AS evid`,
+          [b._id, b.campaign, b.tipoCurso, b.horarioCurso]
+        ).catch(() => ({ rows: [] as any[] }));
+        const evs = Array.from(new Set((soltadas.rows || []).map((r: any) => r.evid).filter(Boolean)));
+        if (evs.length) {
+          await client.query(
+            `UPDATE "CALENDARIO" SET "inscritos" = GREATEST(0, COALESCE("inscritos",0) - 1), "_updatedDate"=NOW()
+              WHERE "_id" = ANY($1::text[])`, [evs]);
+        }
+
         if (b.horarioCurso !== d.horarioCurso || b.tipoCurso !== d.tipoCurso) {
           movidos.push({
             nombre: nombreDe(b),
