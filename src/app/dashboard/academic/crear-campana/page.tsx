@@ -62,6 +62,8 @@ function CrearCampanaContent() {
   const [colGuia, setColGuia] = useState('')
   // Gestión: campaña seleccionada en el dropdown ('' | '__NEW__' | nombre) + modal de curso
   const [gestionSel, setGestionSel] = useState('')
+  // Filtro de curso de la pestaña Gestión ('' = todos)
+  const [gestionCurso, setGestionCurso] = useState('')
   const [showCursoModal, setShowCursoModal] = useState(false)
   // Curso con alumnos al que le cambian horario/salón/tipo: hay que explicar las
   // consecuencias antes de mover sus fichas.
@@ -439,8 +441,14 @@ function CrearCampanaContent() {
     const rows = cursosDeCampania(nombre)
     return detalleCurso ? rows.filter((r: any) => String(r.tipoCurso || '') === detalleCurso) : rows
   }
+  // Filas de Gestión acotadas por el filtro de tipo de curso ('' = todos)
+  const cursosGestion = (nombre: string) => {
+    const rows = cursosDeCampania(nombre)
+    return gestionCurso ? rows.filter((r: any) => String(r.tipoCurso || '') === gestionCurso) : rows
+  }
   // Al cambiar de campaña (o volver a las tarjetas) se limpia el filtro de curso
   useEffect(() => { setDetalleCurso('') }, [detalleCampaign])
+  useEffect(() => { setGestionCurso('') }, [gestionSel])
 
   // Abrir el modal "Agregar/Editar curso". mode 'existing' agrega a la campaña
   // seleccionada (POST inmediato); 'draft' arma la lista de una campaña nueva.
@@ -576,6 +584,19 @@ function CrearCampanaContent() {
               <option value="__NEW__">➕ Crear campaña</option>
               {campaniasOrdenadas.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            {gestionSel && gestionSel !== '__NEW__' && (
+              <select
+                value={gestionCurso}
+                onChange={e => setGestionCurso(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm min-w-[180px] focus:ring-2 focus:ring-primary-500"
+                title="Filtrar por tipo de curso"
+              >
+                {/* Los cursos salen de la propia campaña, no del catálogo completo:
+                    así no se ofrece una opción que dejaría la tabla vacía. */}
+                <option value="">Todos los cursos</option>
+                {tiposDeCampania(gestionSel).map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
             {gestionSel && gestionSel !== '__NEW__' && existing.length > 0 && (
               <button type="button" onClick={handleCSV}
                 className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
@@ -661,7 +682,10 @@ function CrearCampanaContent() {
         {gestionSel && gestionSel !== '__NEW__' && (
           <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Cursos de {gestionSel} ({cursosDeCampania(gestionSel).length})</h2>
+              <h2 className="text-lg font-semibold">
+                Cursos de {gestionSel} ({cursosGestion(gestionSel).length}
+                {gestionCurso ? ` de ${cursosDeCampania(gestionSel).length}` : ''})
+              </h2>
               <button type="button" onClick={() => openCursoModal('existing')}
                 className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
                 <PlusIcon className="h-4 w-4 mr-1" /> Agregar curso
@@ -675,7 +699,7 @@ function CrearCampanaContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {cursosDeCampania(gestionSel).map((r: any) => {
+                  {cursosGestion(gestionSel).map((r: any) => {
                     const full = (r.usuInscritos ?? 0) >= (r.numeroUsuarios ?? 0) && (r.numeroUsuarios ?? 0) > 0
                     const est = rowEstado(r)
                     return (
