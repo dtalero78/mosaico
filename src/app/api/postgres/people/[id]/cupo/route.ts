@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { PersonPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { contratoRetieneCupo } from '@/lib/cupo-estados';
+import { RESERVA_CUPO_MIN } from '@/lib/cupo';
 import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service';
 import { esAprobadoSql } from '@/lib/estados';
 import { query, queryOne } from '@/lib/postgres';
@@ -92,6 +93,7 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
     await query(
       `UPDATE "PEOPLE"
           SET "cupoLiberado" = true, "cupoLiberadoPor" = $1, "cupoLiberadoEn" = NOW(),
+            "cupoReservadoHasta" = NULL,
               "campaign" = NULL, "tipoCurso" = NULL, "horarioCurso" = NULL, "salon" = NULL,
               "_updatedDate" = NOW()
         WHERE "_id" = $2`,
@@ -187,9 +189,12 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
     `UPDATE "PEOPLE"
         SET "campaign" = $1, "tipoCurso" = $2, "horarioCurso" = $3, "salon" = $4,
             "cupoLiberado" = false, "cupoLiberadoPor" = NULL, "cupoLiberadoEn" = NULL,
+            -- Al reasignar se renueva la espera: el asiento queda tomado mientras
+            -- se cierra el contrato, igual que al crearlo.
+            "cupoReservadoHasta" = NOW() + ($6 || ' minutes')::interval,
             "_updatedDate" = NOW()
       WHERE "_id" = $5`,
-    [destino.campaign, destino.tipoCurso, destino.horarioCurso, destino.salon || null, id]
+    [destino.campaign, destino.tipoCurso, destino.horarioCurso, destino.salon || null, id, String(RESERVA_CUPO_MIN)]
   );
   // ACADEMICA sigue al beneficiario (si ya tiene ficha académica).
   await query(

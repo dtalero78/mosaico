@@ -50,8 +50,15 @@ import { ESTADOS_LIBERAN_CUPO } from './cupo-estados';
  * es decir, su contrato (titular) NO está en un estado liberador.
  * `alias` es el alias de la fila PEOPLE (beneficiario) en la query que lo invoca.
  */
+/**
+ * Minutos que dura la reserva temporal del cupo al crear el contrato. Pasado ese
+ * plazo el asiento se suelta SOLO: la ocupación se calcula al leer, así que la
+ * reserva caduca por su propia fecha — no hay cron que la limpie.
+ */
+export const RESERVA_CUPO_MIN = 60;
+
 export function cupoOcupadoSql(alias: string): string {
-  return `(${alias}."cupoConfirmado" IS TRUE
+  return `((${alias}."cupoConfirmado" IS TRUE OR ${alias}."cupoReservadoHasta" > NOW())
     AND ${alias}."fechaOnHold" IS NULL
     AND ${alias}."cupoLiberado" IS NOT TRUE
     AND NOT (${alias}."estadoInactivo" IS TRUE AND COALESCE(${alias}."suspenddata"->>'accion', '') = 'INACTIVACION')

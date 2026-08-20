@@ -27,6 +27,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { fillContractTemplate, type ConsentDisplay } from '@/lib/contract-template-filler'
 import { templatePlataformaFor } from '@/lib/contract-template'
+import ReservaCupoBanner from '@/components/comercial/ReservaCupoBanner'
 import { isContratoPrueba } from '@/components/common/ContratoPruebaBadge'
 
 // ── Field definitions ──
@@ -746,6 +747,9 @@ export default function ContratoDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Reserva del cupo: cuenta atrás mientras el contrato no está listo */}
+          <ReservaCupoBanner beneficiarios={beneficiarios} yaListo={yaListo} />
 
           {/* Consent status banner */}
           {consentStatus?.hasConsent && consentStatus.consent && (

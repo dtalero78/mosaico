@@ -74,13 +74,20 @@ async function lockSalon(client: any, campaign: string, tipoCurso: string, horar
 }
 
 /** Cuenta cuántos asientos están tomados AHORA en ese salón. */
-async function contarOcupados(client: any, campaign: string, tipoCurso: string, horarioCurso: string): Promise<number> {
+async function contarOcupados(
+  client: any, campaign: string, tipoCurso: string, horarioCurso: string, excluir: string[] = []
+): Promise<number> {
+  // `excluir` son los beneficiarios que se están confirmando AHORA. Su reserva
+  // temporal ya los cuenta como ocupantes, y el bucle les vuelve a sumar un
+  // asiento al repartirlos: sin excluirlos, un contrato se rechazaría a sí mismo
+  // por su propia reserva.
   const r = await client.query(
     `SELECT COUNT(*)::int AS n FROM "PEOPLE" pe
       WHERE pe."tipoUsuario" = 'BENEFICIARIO'
         AND pe."campaign" = $1 AND pe."tipoCurso" = $2 AND pe."horarioCurso" = $3
+        AND pe."_id" <> ALL($4::text[])
         AND ${cupoOcupadoSql('pe')}`,
-    [campaign, tipoCurso, horarioCurso]
+    [campaign, tipoCurso, horarioCurso, excluir]
   );
   return Number(r.rows[0]?.n ?? 0);
 }
@@ -205,7 +212,10 @@ export async function marcarListoConCupo(opts: {
       const { cupos, salon, existe } = await cuposDe(client, d.campaign, d.tipoCurso, d.horarioCurso);
       if (!existe) throw new ValidationError(`El curso ${d.tipoCurso} ${d.horarioCurso} no existe en la campaña ${d.campaign}.`);
 
-      if (!ocupadosPorSalon.has(key)) ocupadosPorSalon.set(key, await contarOcupados(client, d.campaign, d.tipoCurso, d.horarioCurso));
+      if (!ocupadosPorSalon.has(key)) {
+        ocupadosPorSalon.set(key, await contarOcupados(
+          client, d.campaign, d.tipoCurso, d.horarioCurso, provisionales.map((p: any) => p._id)));
+      }
       const ocupados = ocupadosPorSalon.get(key)!;
       const cabe = cupos === 0 || ocupados < cupos;
 
@@ -292,6 +302,8 @@ export async function marcarListoConCupo(opts: {
       await client.query(
         `UPDATE "PEOPLE"
             SET "cupoConfirmado" = true, "cupoConfirmadoPor" = $2, "cupoConfirmadoEn" = NOW(),
+                -- Confirmado el asiento, la reserva temporal sobra.
+                "cupoReservadoHasta" = NULL,
                 "sobrecupoAutorizado" = $3,
                 "sobrecupoAutorizadoPor" = CASE WHEN $3 THEN $2 ELSE "sobrecupoAutorizadoPor" END,
                 "sobrecupoAutorizadoEn"  = CASE WHEN $3 THEN NOW() ELSE "sobrecupoAutorizadoEn" END,

@@ -8,7 +8,7 @@ import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
 import { resolverLiderComercial, type LiderComercial } from '@/lib/crm';
 import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 import { apoderadoPorDefectoEsTitular, resolverApoderado } from '@/lib/apoderado';
-import { cupoOcupadoSql } from '@/lib/cupo';
+import { cupoOcupadoSql, RESERVA_CUPO_MIN } from '@/lib/cupo';
 import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
 
 /**
@@ -252,9 +252,15 @@ export async function insertBeneficiarioTx(
       "tipoUsuario", "contrato", "plataforma", "estadoInactivo",
       "vigencia", "fechaContrato", "finalContrato", "tipoCurso", "horarioCurso", "campaign", "salon", "nivel", "step", "userLogin",
       "apoderado", "apoderadoTelefono", "apoderadoMail", "origen",
-      "cupoConfirmado", "cupoConfirmadoPor", "cupoConfirmadoEn", "_createdDate", "_updatedDate")
+      "cupoConfirmado", "cupoConfirmadoPor", "cupoConfirmadoEn", "cupoReservadoHasta", "_createdDate", "_updatedDate")
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$25,$26,$10,'BENEFICIARIO',$11,$12,true,$13,NOW(),$14::date,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'POSTGRES',
-             $27, CASE WHEN $27 THEN $28 ELSE NULL END, CASE WHEN $27 THEN NOW() ELSE NULL END, NOW(),NOW()) RETURNING *`,
+             $27, CASE WHEN $27 THEN $28 ELSE NULL END, CASE WHEN $27 THEN NOW() ELSE NULL END,
+             -- El asiento queda RESERVADO mientras se cierra el contrato. Si no se
+             -- marca listo dentro del plazo, caduca solo (la ocupación se calcula
+             -- al leer). Las altas de back-office ya confirman el cupo, así que no
+             -- necesitan reserva.
+             CASE WHEN $27 THEN NULL ELSE NOW() + ($29 || ' minutes')::interval END,
+             NOW(),NOW()) RETURNING *`,
     [benefId, b.numeroId, b.primerNombre, b.segundoNombre || null,
      b.primerApellido, b.segundoApellido || null,
      b.email || null, b.celular || null, b.fechaNacimiento || null, titularId,
@@ -262,7 +268,7 @@ export async function insertBeneficiarioTx(
      b.tipoCurso || null, b.horarioCurso || null, b.campaign || null, salon, realNivel, realStep, userLogin,
      apoderado, apoderadoTelefono, apoderadoMail,
      b.domicilio || null, b.ciudad || null,
-     confirmarCupo, args.confirmadoPor || 'creacion']
+     confirmarCupo, args.confirmadoPor || 'creacion', String(RESERVA_CUPO_MIN)]
   );
 
   // 2. ACADEMICA del beneficiario — INACTIVO, nace en el curso puente WELCOME.
