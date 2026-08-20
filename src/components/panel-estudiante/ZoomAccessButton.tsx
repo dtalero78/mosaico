@@ -33,8 +33,12 @@ function IconoActivo({ size = 52 }: { size?: number }) {
         <rect x="17" y="24" width="21" height="16" rx="5.5" />
         <path d="M40 30.5l7.5-4.6c.7-.4 1.5.1 1.5.9v10.4c0 .8-.8 1.3-1.5.9L40 33.5z" />
       </g>
-      <circle cx="49" cy="15" r="10" fill="#ffffff" />
-      <circle cx="49" cy="15" r="7.6" fill="#f97316" />
+      {/* Distintivo de "listo": círculo verde con visto, sobre un anillo blanco
+          que lo despega del azul del fondo. */}
+      <circle cx="49" cy="15" r="10.5" fill="#ffffff" />
+      <circle cx="49" cy="15" r="8.4" fill="#22c55e" />
+      <path d="M45 15.2l2.8 2.8 5.2-5.4" fill="none" stroke="#ffffff" strokeWidth="2.4"
+            strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

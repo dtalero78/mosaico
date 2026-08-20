@@ -44,7 +44,7 @@ import ClassHistory from '@/components/panel-estudiante/ClassHistory'
 import JumpExamBanner from '@/components/panel-estudiante/JumpExamBanner'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission } from '@/types/permissions'
-import { ZOOM_ABRE_MIN_ANTES, ZOOM_CIERRA_MIN_DESPUES } from '@/lib/zoom-window'
+import { ZOOM_ABRE_MIN_ANTES, ZOOM_CIERRA_MIN_DESPUES, MENSAJE_ZOOM_LISTO, MENSAJE_ZOOM_ESPERA } from '@/lib/zoom-window'
 
 // La ventana de conexión a Zoom vive en `lib/zoom-window` (cliente+servidor),
 // para que el número no quede escrito por separado en la lógica y en el texto.
@@ -470,10 +470,12 @@ function PanelEstudianteContent() {
                   {zoomLink ? (
                     <div className="mt-1 flex items-center gap-3">
                       <ZoomAccessButton zoomLink={zoomLink} disponible={showZoom} />
-                      {/* El aviso se mantiene visible en los dos estados, y el
-                          número sale de la constante para que no se despegue. */}
-                      <p className="text-sm text-gray-600">
-                        Enlace disponible {ZOOM_ABRE_MIN_ANTES} min antes, recuerda refrescar el navegador
+                      {/* El aviso se mantiene visible en los dos estados, pero
+                          dice cosas distintas: esperando vs listo para entrar.
+                          En verde cuando ya se puede, a juego con el visto del
+                          ícono. Los minutos salen de las constantes. */}
+                      <p className={`text-sm font-semibold leading-snug ${showZoom ? 'text-emerald-700' : 'text-primary-800'}`}>
+                        {showZoom ? MENSAJE_ZOOM_LISTO : MENSAJE_ZOOM_ESPERA}
                       </p>
                     </div>
                   ) : (

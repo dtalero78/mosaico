@@ -19,6 +19,16 @@ export const ZOOM_ABRE_MIN_ANTES = 10;
 /** Minutos DESPUÉS del inicio en que se deja de ofrecer. */
 export const ZOOM_CIERRA_MIN_DESPUES = 15;
 
+/**
+ * Lo que se le dice al alumno en cada estado. Vive aquí, con las constantes, para
+ * que los minutos del texto no puedan despegarse de los de la lógica.
+ */
+export const MENSAJE_ZOOM_LISTO =
+  `Enlace listo, disponible por ${ZOOM_CIERRA_MIN_DESPUES} minutos después del inicio, da click en el icono`;
+
+export const MENSAJE_ZOOM_ESPERA =
+  `Enlace disponible ${ZOOM_ABRE_MIN_ANTES} min antes, recuerda refrescar el navegador`;
+
 /** ¿Se puede entrar a Zoom ahora mismo para una sesión que empieza en `inicioMs`? */
 export function zoomDisponible(inicioMs: number, ahoraMs: number = Date.now()): boolean {
   return ahoraMs >= inicioMs - ZOOM_ABRE_MIN_ANTES * 60_000
