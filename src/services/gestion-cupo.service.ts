@@ -2,6 +2,7 @@ import 'server-only';
 import { query, transaction } from '@/lib/postgres';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { cupoOcupadoSql } from '@/lib/cupo';
+import { lockSalon } from '@/services/cupo-guard.service';
 
 /**
  * Confirmación del CUPO al marcar un contrato como "listo" (Gestión Contrato).
@@ -67,11 +68,8 @@ const nombreDe = (r: any) =>
  * vez leerían "queda 1" los dos y lo tomarían los dos. `hashtext` reduce la
  * terna a un entero, que es lo que acepta el lock.
  */
-async function lockSalon(client: any, campaign: string, tipoCurso: string, horarioCurso: string) {
-  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
-    `cupo:${campaign}|${tipoCurso}|${horarioCurso}`,
-  ]);
-}
+// (vive en cupo-guard.service para que TODAS las vías tomen el MISMO lock: dos
+// claves construidas por separado no se excluirían entre sí.)
 
 /** Cuenta cuántos asientos están tomados AHORA en ese salón. */
 async function contarOcupados(

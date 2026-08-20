@@ -1,5 +1,6 @@
 import 'server-only';
 import { query, queryOne, queryMany, transaction } from '@/lib/postgres';
+import { asegurarCupoSalon } from '@/services/cupo-guard.service';
 import { ids } from '@/lib/id-generator';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { esAprobadoSql } from '@/lib/estados';
@@ -127,6 +128,16 @@ export async function cambiarCursoAcademico(academicaId: string, input: CambioAc
   let bookingsCreados = 0;
 
   await transaction(async (client) => {
+    // 1) El salón destino tiene que tener sitio. Faltaba: este era el ÚNICO
+    //    camino que metía a un alumno en un salón sin comprobar el cupo — el
+    //    modal marcaba "LLENO" pero no lo impedía, ni aquí ni en el navegador.
+    //    Se excluye al propio alumno: si se queda en el mismo salón (cambia de
+    //    lección, no de aula) ya está contado y se rechazaría a sí mismo.
+    await asegurarCupoSalon(client, { campaign, tipoCurso, horarioCurso }, {
+      excluir: per._id ? [per._id] : [],
+      contexto: 'para mover a otro salón hay que ampliarlo en Académico › Campañas',
+    });
+
     // 2) Cupos: −1 viejo, +1 nuevo
     if (oldCursoId) {
       await client.query(`UPDATE "CURSOS_CAMPAIGN" SET "usuInscritos" = GREATEST(0, COALESCE("usuInscritos",0) - 1), "_updatedDate"=NOW() WHERE "_id"=$1`, [oldCursoId]);

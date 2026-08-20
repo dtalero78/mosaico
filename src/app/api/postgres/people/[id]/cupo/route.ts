@@ -7,7 +7,8 @@ import { contratoRetieneCupo } from '@/lib/cupo-estados';
 import { RESERVA_CUPO_MIN } from '@/lib/cupo';
 import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service';
 import { esAprobadoSql } from '@/lib/estados';
-import { query, queryOne } from '@/lib/postgres';
+import { query, queryOne, transaction } from '@/lib/postgres';
+import { asegurarCupoSalon } from '@/services/cupo-guard.service';
 
 /**
  * POST /api/postgres/people/[id]/cupo   (id = PEOPLE._id del BENEFICIARIO)
@@ -159,43 +160,38 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
     throw new ValidationError('Falta la campaña, el curso o el horario del salón destino.');
   }
 
-  // El curso destino debe existir, estar activo y TENER cupo disponible.
-  const curso = await queryOne<{ cupos: number; ocupados: number }>(
-    `SELECT COALESCE(cc."numeroUsuarios",0)::int AS cupos,
-            (SELECT COUNT(*)::int FROM "PEOPLE" p
-              WHERE p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
-                AND p."campaign" = cc."campaign"
-                AND UPPER(p."tipoCurso") = UPPER(cc."tipoCurso")
-                AND p."horarioCurso" = cc."horarioCurso"
-                AND p."_id" <> $4
-                AND p."cupoLiberado" IS NOT TRUE
-                AND p."fechaOnHold" IS NULL) AS ocupados
-       FROM "CURSOS_CAMPAIGN" cc
-      WHERE cc."campaign" = $1 AND UPPER(cc."tipoCurso") = UPPER($2)
-        AND cc."horarioCurso" = $3 AND cc."activa" = true
-      LIMIT 1`,
-    [destino.campaign, destino.tipoCurso, destino.horarioCurso, id]
+  // El curso destino debe existir y estar activo.
+  const existe = await queryOne<{ salon: string | null }>(
+    `SELECT "salon" FROM "CURSOS_CAMPAIGN"
+      WHERE "campaign" = $1 AND UPPER("tipoCurso") = UPPER($2)
+        AND "horarioCurso" = $3 AND "activa" = true LIMIT 1`,
+    [destino.campaign, destino.tipoCurso, destino.horarioCurso]
   );
-  if (!curso) throw new ValidationError('El curso/salón destino no existe o no está activo.');
-  if (curso.cupos > 0 && curso.ocupados >= curso.cupos) {
-    throw new ValidationError(
-      `El salón destino ya está lleno (${curso.ocupados}/${curso.cupos}). Elige otro con disponibilidad.`
-    );
-  }
+  if (!existe) throw new ValidationError('El curso/salón destino no existe o no está activo.');
 
-  // Se mueve al beneficiario al destino y se le devuelve el cupo. Queda PENDIENTE:
-  // el paso siguiente es aprobarlo (el cupo ya cuenta, como cualquier pendiente).
-  await query(
-    `UPDATE "PEOPLE"
-        SET "campaign" = $1, "tipoCurso" = $2, "horarioCurso" = $3, "salon" = $4,
-            "cupoLiberado" = false, "cupoLiberadoPor" = NULL, "cupoLiberadoEn" = NULL,
-            -- Al reasignar se renueva la espera: el asiento queda tomado mientras
-            -- se cierra el contrato, igual que al crearlo.
-            "cupoReservadoHasta" = NOW() + ($6 || ' minutes')::interval,
-            "_updatedDate" = NOW()
-      WHERE "_id" = $5`,
-    [destino.campaign, destino.tipoCurso, destino.horarioCurso, destino.salon || null, id, String(RESERVA_CUPO_MIN)]
-  );
+  // Comprobar el cupo y tomar el asiento van JUNTOS, con el salón bloqueado: entre
+  // una cosa y otra otro podría llevarse el último lugar. Se excluye al propio
+  // alumno — si vuelve al salón donde ya figura, se contaría a sí mismo.
+  const curso = await transaction(async (client) => {
+    const r = await asegurarCupoSalon(client, destino, {
+      excluir: [id],
+      contexto: 'elige otro horario con disponibilidad',
+    });
+    // Se mueve al beneficiario al destino y se le devuelve el cupo. Queda PENDIENTE:
+    // el paso siguiente es aprobarlo (el cupo ya cuenta, como cualquier pendiente).
+    await client.query(
+      `UPDATE "PEOPLE"
+          SET "campaign" = $1, "tipoCurso" = $2, "horarioCurso" = $3, "salon" = $4,
+              "cupoLiberado" = false, "cupoLiberadoPor" = NULL, "cupoLiberadoEn" = NULL,
+              -- Al reasignar se renueva la espera: el asiento queda tomado mientras
+              -- se cierra el contrato, igual que al crearlo.
+              "cupoReservadoHasta" = NOW() + ($6 || ' minutes')::interval,
+              "_updatedDate" = NOW()
+        WHERE "_id" = $5`,
+      [destino.campaign, destino.tipoCurso, destino.horarioCurso, destino.salon || null, id, String(RESERVA_CUPO_MIN)]
+    );
+    return r;
+  });
   // ACADEMICA sigue al beneficiario (si ya tiene ficha académica).
   await query(
     `UPDATE "ACADEMICA" SET "campaign" = $1, "salon" = $2, "_updatedDate" = NOW()

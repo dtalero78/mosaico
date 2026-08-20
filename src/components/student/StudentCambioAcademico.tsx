@@ -131,8 +131,10 @@ export default function StudentCambioAcademico({ studentId, studentName, current
                     {salones.map(r => {
                       const k = `${r.horarioCurso}||${r.salon || ''}`
                       const lleno = r.usuInscritos >= r.numeroUsuarios && r.numeroUsuarios > 0
-                      return <option key={k} value={k}>
-                        Salón {r.salon || '—'} · {r.horarioCurso} ({r.usuInscritos}/{r.numeroUsuarios}{lleno ? ' · LLENO' : ''})
+                      // El salón lleno se deshabilita, no sólo se etiqueta: antes se podía
+                      // elegir igual y el movimiento pasaba, dejando el salón en sobrecupo.
+                      return <option key={k} value={k} disabled={lleno}>
+                        Salón {r.salon || '—'} · {r.horarioCurso} ({r.usuInscritos}/{r.numeroUsuarios}{lleno ? ' · SIN CUPO' : ''})
                       </option>
                     })}
                   </select>

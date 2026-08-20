@@ -4,8 +4,6 @@ import { requirePermission } from '@/lib/api-permissions';
 import { PersonPermission } from '@/types/permissions';
 import { query, queryOne, transaction } from '@/lib/postgres';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
-import { cupoOcupadoSql } from '@/lib/cupo';
-import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
 import {
   insertBeneficiarioTx,
   incrementarCupoCurso,
@@ -69,16 +67,8 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
 
   // El curso debe existir en la campaña y estar activo.
   const curso = await queryOne<any>(
-    `SELECT "salon", COALESCE("numeroUsuarios",0) AS cupos,
-            -- inscritos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
-            (SELECT COUNT(*)::int FROM "PEOPLE" pe
-               WHERE pe."tipoUsuario"='BENEFICIARIO'
-                 AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign"
-                 AND pe."tipoCurso" = "CURSOS_CAMPAIGN"."tipoCurso"
-                 AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso"
-                 AND ${cupoOcupadoSql('pe')}) AS inscritos
-     FROM "CURSOS_CAMPAIGN"
-     WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "activa"=true LIMIT 1`,
+    `SELECT "salon" FROM "CURSOS_CAMPAIGN"
+      WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "activa"=true LIMIT 1`,
     [body.campaign, body.tipoCurso, body.horarioCurso]
   );
   if (!curso) {
@@ -88,12 +78,13 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   // está cerrado (listo o aprobado). Si el contrato sigue en gestión comercial,
   // su curso es provisional como el de sus hermanos y el cupo se toma cuando se
   // deje listo — y ahí se valida para todos juntos.
+  //
+  // El cupo NO se comprueba aquí: lo hace `insertBeneficiarioTx` dentro de la
+  // transacción y con el salón bloqueado. Validarlo antes, fuera, dejaba una
+  // ventana en la que otro podía llevarse el asiento entre la comprobación y el
+  // alta.
   const contratoCerrado = titular.gestionContratoListo === true
     || ['aprobado', 'aprobada'].includes(String(titular.aprobacion || '').trim().toLowerCase());
-
-  if (contratoCerrado && curso.cupos > 0 && curso.inscritos >= curso.cupos) {
-    throw new ValidationError(`${MENSAJE_SIN_CUPO} (${body.tipoCurso} ${body.horarioCurso}${curso.salon ? ` · Salón ${curso.salon}` : ''}: ${curso.inscritos}/${curso.cupos})`);
-  }
 
   const b: BeneficiarioInput = {
     primerNombre: body.primerNombre,

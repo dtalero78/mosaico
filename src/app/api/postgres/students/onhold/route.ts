@@ -5,7 +5,6 @@ import { activateOnHold, deactivateOnHold } from '@/services/contract.service';
 import { cambiarCursoAcademico } from '@/services/cambio-academico.service';
 import { ValidationError } from '@/lib/errors';
 import { queryOne } from '@/lib/postgres';
-import { cupoOcupadoSql } from '@/lib/cupo';
 
 /**
  * POST /api/postgres/students/onhold
@@ -52,21 +51,15 @@ export const POST = handlerWithAuth(async (request, context, session) => {
     if (!campaign || !tipoCurso || !horarioCurso) {
       throw new ValidationError('Debe indicar campaña, curso y salón destino para reactivar.');
     }
-    // Validar que el curso destino exista y tenga cupo disponible (regla lib/cupo).
     const dest = await queryOne<any>(
-      `SELECT COALESCE("numeroUsuarios",0) AS cupos,
-              (SELECT COUNT(*)::int FROM "PEOPLE" pe
-                 WHERE pe."tipoUsuario"='BENEFICIARIO'
-                   AND pe."campaign"=$1 AND pe."tipoCurso"=$2 AND pe."horarioCurso"=$3
-                   AND ${cupoOcupadoSql('pe')}) AS ocupados
-         FROM "CURSOS_CAMPAIGN"
+      `SELECT 1 FROM "CURSOS_CAMPAIGN"
         WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "activa"=true LIMIT 1`,
       [campaign, tipoCurso, horarioCurso]
     );
     if (!dest) throw new ValidationError(`El curso ${tipoCurso} ${horarioCurso} no existe en la campaña ${campaign}.`);
-    if (dest.cupos > 0 && dest.ocupados >= dest.cupos) {
-      throw new ValidationError(`El curso destino ${tipoCurso} ${horarioCurso} (${campaign}) está lleno (${dest.ocupados}/${dest.cupos}). Elige otro con cupo.`);
-    }
+    // El cupo lo valida `cambiarCursoAcademico` dentro de su transacción y con el
+    // salón bloqueado — comprobarlo aquí, fuera, dejaba pasar dos reactivaciones
+    // simultáneas al último asiento.
     // Mover al destino (PEOPLE/ACADEMICA/lección/bookings) antes de reactivar.
     movido = await cambiarCursoAcademico(
       body.academicaId,

@@ -8,7 +8,8 @@ import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
 import { resolverLiderComercial, type LiderComercial } from '@/lib/crm';
 import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 import { apoderadoPorDefectoEsTitular, resolverApoderado } from '@/lib/apoderado';
-import { cupoOcupadoSql, RESERVA_CUPO_MIN } from '@/lib/cupo';
+import { RESERVA_CUPO_MIN } from '@/lib/cupo';
+import { asegurarCupoSalon } from '@/services/cupo-guard.service';
 import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
 
 /**
@@ -172,21 +173,12 @@ export async function insertBeneficiarioTx(
     // después se resuelven cambiando el horario.
     // El conteo corre dentro de la MISMA transacción, así que dos hermanos del
     // mismo contrato al mismo curso se cuentan uno tras otro.
-    const cupos = Number(cr.rows[0]?.cupos ?? 0);
-    if (confirmarCupo && cupos > 0) {
-      const oc = await client.query(
-        `SELECT COUNT(*)::int AS n FROM "PEOPLE" pe
-          WHERE pe."tipoUsuario" = 'BENEFICIARIO'
-            AND pe."campaign" = $1 AND pe."tipoCurso" = $2 AND pe."horarioCurso" = $3
-            AND ${cupoOcupadoSql('pe')}`,
-        [b.campaign, b.tipoCurso, b.horarioCurso]
-      );
-      const inscritos = Number(oc.rows[0]?.n ?? 0);
-      if (inscritos >= cupos) {
-        throw new ValidationError(
-          `${MENSAJE_SIN_CUPO} (${b.tipoCurso} ${b.horarioCurso}${salon ? ` · Salón ${salon}` : ''}: ${inscritos}/${cupos})`
-        );
-      }
+    if (confirmarCupo) {
+      // El guard bloquea el salón antes de contar: sin el lock, dos altas
+      // simultáneas al último asiento lo leerían libre las dos.
+      await asegurarCupoSalon(client, {
+        campaign: b.campaign, tipoCurso: b.tipoCurso, horarioCurso: b.horarioCurso,
+      });
     }
   }
 
