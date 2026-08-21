@@ -80,8 +80,31 @@ function LeccionEditor({
     setPreguntas(leccion.preguntasManual || [])
     setMinutos(Number(leccion.evaluacionMinutos) > 0 ? Number(leccion.evaluacionMinutos) : 30)
     setCuestionarios(buildCuestFromLeccion())
+    limpio.current = huella()   // lo recién cargado ES el punto de partida
+    setSucio(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leccion])
+
+  // ── Aviso de cambios sin guardar ──
+  // Todo lo que se edita (borrar un cuestionario, mover una pregunta, escribir una
+  // ecuación) vive sólo en pantalla hasta pulsar Guardar. Salir sin guardar lo
+  // perdía en silencio, sin dejar rastro de que hubo un cambio.
+  const huella = () => JSON.stringify({ description, contenido, wordwall, wordwallNombre, modo, minutos, preguntas, cuestionarios })
+  const limpio = useRef<string>('')
+  const [sucio, setSucio] = useState(false)
+  useEffect(() => {
+    if (!limpio.current) { limpio.current = huella(); return }
+    setSucio(huella() !== limpio.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, contenido, wordwall, wordwallNombre, modo, minutos, preguntas, cuestionarios])
+  useEffect(() => {
+    if (!sucio) return
+    const avisar = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', avisar)
+    return () => window.removeEventListener('beforeunload', avisar)
+  }, [sucio])
+  /** Tras guardar, lo que hay en pantalla pasa a ser el nuevo punto de partida. */
+  const marcarGuardado = () => { limpio.current = huella(); setSucio(false) }
 
   // ── Multi-cuestionario (solo módulos EVALUACIÓN) ──
   const addCuestionario = () => setCuestionarios((cs) => [
@@ -105,7 +128,7 @@ function LeccionEditor({
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
       toast.success(`Evaluación de ${leccion.step} guardada (${cuestionarios.length} cuestionario(s))`)
-      onSaved()
+      marcarGuardado(); onSaved()
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar la evaluación')
     } finally {
@@ -126,7 +149,7 @@ function LeccionEditor({
       if (r.error) throw new Error(r.error)
       setModo('IA'); setPreguntas([]); setCuestionarios([])
       toast.success(`Evaluación de ${leccion.step} borrada`)
-      onSaved()
+      marcarGuardado(); onSaved()
     } catch (e: any) {
       toast.error(e?.message || 'Error al borrar la evaluación')
     } finally {
@@ -148,7 +171,7 @@ function LeccionEditor({
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
       toast.success(`Evaluación de ${leccion.step} guardada (${modo})`)
-      onSaved()
+      marcarGuardado(); onSaved()
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar evaluación')
     } finally {
@@ -189,7 +212,7 @@ function LeccionEditor({
       }).then((x) => x.json())
       if (r.error) throw new Error(r.error)
       toast.success(`${leccion.step} guardada`)
-      onSaved()
+      marcarGuardado(); onSaved()
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar')
     } finally {
@@ -201,6 +224,13 @@ function LeccionEditor({
     <div className="border border-gray-200 rounded-xl p-4 bg-white">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-gray-900">{leccion.step}</h3>
+        {/* Lo editado vive sólo en pantalla hasta pulsar Guardar; el aviso hace
+            visible que hay algo pendiente antes de cambiar de lección o cerrar. */}
+        {sucio && (
+          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-[11px] font-semibold">
+            ● Cambios sin guardar
+          </span>
+        )}
       </div>
       <label className="block text-xs font-medium text-gray-500 mb-1">Descripción (título de la lección)</label>
       <input value={description} onChange={(e) => setDescription(e.target.value)}

@@ -54,7 +54,10 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
   const cuestionarios: Cuest[] = Array.isArray(d.cuestionarios) ? d.cuestionarios : []
   const pendientes = cuestionarios.filter((c) => !c.resuelto)
   const siguiente = pendientes[0] || null
-  const idxDe = (c: Cuest | null) => (c ? cuestionarios.findIndex((x) => x.id === c.id) : -1)
+  // Dos lecciones del mismo módulo pueden traer cada una un "c1", así que la
+  // identidad es (lección, id) — con el id a secas se confundirían entre ellas.
+  const claveDe = (c: { step?: string; id: string }) => `${c.step || ''}::${c.id}`
+  const idxDe = (c: Cuest | null) => (c ? cuestionarios.findIndex((x) => claveDe(x) === claveDe(c)) : -1)
 
   const [phase, setPhase] = useState<'idle' | 'confirm' | 'eval' | 'done'>('idle')
   const [activo, setActivo] = useState<Cuest | null>(null)
@@ -130,6 +133,7 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
   const mmss = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`
   const total = cuestionarios.length
   const hechos = cuestionarios.filter((c) => c.resuelto).length
+  const variasLecciones = new Set(cuestionarios.map((c) => c.step || '')).size > 1
   const idxActivo = idxDe(activo)
 
   return (
@@ -179,12 +183,12 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
 
           <ul className="mt-3 space-y-2">
             {cuestionarios.map((c, i) => {
-              const esSiguiente = siguiente?.id === c.id
+              const esSiguiente = !!siguiente && claveDe(siguiente) === claveDe(c)
               const estilo = c.aprobado ? 'border-emerald-200 bg-emerald-50'
                 : c.agotado ? 'border-red-200 bg-red-50'
                 : esSiguiente ? 'border-orange-300 bg-white' : 'border-gray-200 bg-white/60'
               return (
-                <li key={c.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${estilo}`}>
+                <li key={claveDe(c)} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${estilo}`}>
                   {c.aprobado ? <CheckCircleIcon className="h-5 w-5 text-emerald-600 shrink-0" />
                     : c.agotado ? <XCircleIcon className="h-5 w-5 text-red-500 shrink-0" />
                     : esSiguiente ? <ClipboardDocumentCheckIcon className="h-5 w-5 text-orange-500 shrink-0" />
@@ -192,6 +196,9 @@ export default function EvaluacionCard({ tipo, titulo, tono = 'orange' }: { tipo
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-800 truncate">{c.titulo || `Cuestionario ${i + 1}`}</p>
                     <p className="text-[11px] text-gray-500">
+                      {/* Cuando el módulo reparte sus cuestionarios en varias
+                          lecciones, se dice de cuál viene cada uno. */}
+                      {variasLecciones && c.step ? <>{c.step} · </> : null}
                       {c.preguntas.length} preg · {c.minutos} min
                       {c.intentos > 0 ? ` · ${c.intentos}/${c.intentosMax} intentos · mejor ${c.mejor}%` : ''}
                     </p>

@@ -64,35 +64,49 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
       )).rows as any[]
 
   if (actualEsEval) {
-    const actual = esLeccion
-      ? (evals[0] || null)
-      : (evals.find(e => e.code === nivel && e.step === step) || evals.find(e => e.code === nivel))
-    const cuestionarios = deriveCuestionarios(actual || {})
+    // Un módulo evaluable puede repartir su contenido en VARIAS lecciones (en
+    // IMPULSA, "Entrenamiento 01" son las lecciones 06 y 07, que se ven en una
+    // misma clase). El alumno no avanza de lección dentro del módulo —el avance
+    // automático salta de módulo a módulo—, así que mirar sólo su lección dejaba
+    // los cuestionarios de las demás fuera de su alcance para siempre.
+    // Se ofrecen los del MÓDULO entero, en orden de lección, y cada uno recuerda
+    // de qué lección viene para calificarlo contra ella.
+    const filasModulo = esLeccion
+      ? (evals[0] ? [evals[0]] : [])
+      : evals.filter(e => e.code === nivel).sort((a, b) => Number(a.orden ?? 0) - Number(b.orden ?? 0))
+    const cuestionarios = filasModulo.flatMap((fila: any) =>
+      deriveCuestionarios(fila).map(c => ({ ...c, code: fila.code as string, step: fila.step as string }))
+    )
     const tieneEvaluacion = cuestionarios.length > 0
 
     const MAX_INTENTOS = 3
-    const prev = (await query<{ cuestionarioId: string | null; porcentaje: number | null; aprobado: boolean | null; score: number; total: number }>(
-      `SELECT "cuestionarioId","porcentaje","aprobado","score","total" FROM "EVALUACION_RESPUESTAS"
-        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "step"=$4 AND "enviadaEn" IS NOT NULL`,
-      [student.academicaId, curso, nivel, step]
+    const prev = (await query<{ step: string; cuestionarioId: string | null; porcentaje: number | null; aprobado: boolean | null; score: number; total: number }>(
+      `SELECT "step","cuestionarioId","porcentaje","aprobado","score","total" FROM "EVALUACION_RESPUESTAS"
+        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "enviadaEn" IS NOT NULL`,
+      [student.academicaId, curso, nivel]
     )).rows
     // Compat: filas antiguas sin cuestionarioId → cuentan como el primer cuestionario.
-    const primerId = cuestionarios[0]?.id || 'c1'
-    // Estado por cuestionario: intentos usados, mejor %, aprobado, agotado (3 sin aprobar).
+    // La clave lleva la LECCIÓN: dos lecciones del mismo módulo pueden traer cada
+    // una un cuestionario "c1", y con la clave a secas se pisarían entre ellas.
+    const clave = (stepC: string, id: string) => `${stepC}::${id}`
+    const primerIdDe = (stepC: string) => cuestionarios.find(c => c.step === stepC)?.id || 'c1'
     const estadoPorId: Record<string, { intentos: number; aprobado: boolean; mejor: number; agotado: boolean }> = {}
-    for (const c of cuestionarios) estadoPorId[c.id] = { intentos: 0, aprobado: false, mejor: 0, agotado: false }
+    for (const c of cuestionarios) estadoPorId[clave(c.step, c.id)] = { intentos: 0, aprobado: false, mejor: 0, agotado: false }
     for (const r of prev) {
-      const id = r.cuestionarioId || primerId
-      const e = estadoPorId[id]; if (!e) continue
+      const id = r.cuestionarioId || primerIdDe(r.step)
+      const e = estadoPorId[clave(r.step, id)]; if (!e) continue
       e.intentos++
       const pct = Number(r.porcentaje) || (Number(r.total) ? Math.round(Number(r.score) * 100 / Number(r.total)) : 0)
       if (pct > e.mejor) e.mejor = pct
       if (r.aprobado || pct >= 60) e.aprobado = true
     }
-    for (const id of Object.keys(estadoPorId)) { const e = estadoPorId[id]; e.agotado = !e.aprobado && e.intentos >= MAX_INTENTOS }
-    // "resuelto" = aprobado o agotó los intentos. La evaluación está completa si todos resueltos.
-    const resuelto = (id: string) => estadoPorId[id].aprobado || estadoPorId[id].agotado
-    const completa = tieneEvaluacion && cuestionarios.every(c => resuelto(c.id))
+    for (const k of Object.keys(estadoPorId)) { const e = estadoPorId[k]; e.agotado = !e.aprobado && e.intentos >= MAX_INTENTOS }
+    // "resuelto" = aprobado o agotó los intentos. El módulo está completo si lo están todos.
+    const resuelto = (c: { step: string; id: string }) => {
+      const e = estadoPorId[clave(c.step, c.id)]
+      return !!e && (e.aprobado || e.agotado)
+    }
+    const completa = tieneEvaluacion && cuestionarios.every(resuelto)
 
     // Guía del alumno (para el modal "sigue las instrucciones de tu guía, X").
     let guiaNombre = ''
@@ -111,8 +125,13 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
       evalCode: nivel,
       evalNum: extraNum(nivel),
       tieneEvaluacion,
-      cuestionarios: (tieneEvaluacion ? sanitizeCuestionarios(cuestionarios) : []).map((c) => ({
-        ...c, ...estadoPorId[c.id], resuelto: resuelto(c.id), intentosMax: MAX_INTENTOS,
+      cuestionarios: (tieneEvaluacion ? sanitizeCuestionarios(cuestionarios) : []).map((c: any, i) => ({
+        ...c,
+        // `code`/`step` viajan de vuelta al enviarlo: así se califica contra su
+        // propia lección y no contra la que el alumno tenga marcada.
+        code: cuestionarios[i].code, step: cuestionarios[i].step,
+        ...estadoPorId[clave(cuestionarios[i].step, cuestionarios[i].id)],
+        resuelto: resuelto(cuestionarios[i]), intentosMax: MAX_INTENTOS,
       })),
       completa,
       guiaNombre,

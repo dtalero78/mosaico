@@ -54,7 +54,12 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
       [curso, nivel, step, nivelActual, stepActual]
     )
     if (ordenes?.ordenDestino == null) throw new ValidationError('Esa lección no existe en tu curso.')
-    if (ordenes?.ordenActual == null || Number(ordenes.ordenDestino) > Number(ordenes.ordenActual)) {
+    // Dentro del MÓDULO en curso sí se admite una lección posterior: el alumno no
+    // avanza de lección dentro del módulo (el avance salta de módulo a módulo), y
+    // sus lecciones se dictan juntas. Fuera del módulo sigue valiendo la regla de
+    // "sólo lo ya alcanzado".
+    const mismoModulo = pedidoCode === nivelActual
+    if (!mismoModulo && (ordenes?.ordenActual == null || Number(ordenes.ordenDestino) > Number(ordenes.ordenActual))) {
       throw new ValidationError('Aún no has llegado a esa lección.')
     }
   }
