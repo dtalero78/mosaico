@@ -3,6 +3,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { StudentPermission } from '@/types/permissions';
 import { activateOnHold, deactivateOnHold } from '@/services/contract.service';
 import { cambiarCursoAcademico } from '@/services/cambio-academico.service';
+import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service';
 import { ValidationError } from '@/lib/errors';
 import { queryOne } from '@/lib/postgres';
 
@@ -34,8 +35,13 @@ export const POST = handlerWithAuth(async (request, context, session) => {
 
     return successResponse({
       student: result.student,
-      message: 'OnHold activado exitosamente',
+      // El alumno suelta el salón: se dice cuántas clases se le quitaron para que
+      // la pantalla pueda mostrarlo y no parezca que se perdieron solas.
+      message: result.clasesSoltadas
+        ? `OnHold activado — soltó su salón y ${result.clasesSoltadas} clase(s) por dictar`
+        : 'OnHold activado — soltó su salón',
       onHoldEntry: result.onHoldEntry,
+      clasesSoltadas: result.clasesSoltadas ?? 0,
     });
   }
 
@@ -70,12 +76,34 @@ export const POST = handlerWithAuth(async (request, context, session) => {
 
   const result = await deactivateOnHold(body.studentId);
 
+  // Las clases del curso nuevo se generan AQUÍ, con el alumno ya reactivado.
+  // El movimiento ocurre antes —para que un destino sin cupo lo deje en OnHold en
+  // vez de reactivado y sin salón—, pero en ese momento sigue inactivo y
+  // `cambiarCursoAcademico` no le agenda nada: volvía del OnHold con cero clases.
+  let clasesCreadas = 0;
+  if (destino && body.academicaId) {
+    const p = await queryOne<any>(
+      `SELECT "_id","numeroId","primerNombre","primerApellido","celular","plataforma","contrato",
+              "campaign","tipoCurso","horarioCurso","salon"
+         FROM "PEOPLE" WHERE "numeroId" = (SELECT "numeroId" FROM "ACADEMICA" WHERE "_id" = $1)
+          AND "tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA') LIMIT 1`,
+      [body.academicaId]
+    );
+    if (p) {
+      clasesCreadas = await generarBookingsBeneficiario(body.academicaId, p, {
+        soloFuturos: true,
+        agendadoPor: `Reactivación desde OnHold (${session.user?.email || 'admin'})`,
+      }).catch(() => 0);
+    }
+  }
+
   return successResponse({
     student: result.student,
     message: destino
-      ? 'OnHold desactivado: estudiante movido al curso destino y contrato extendido.'
+      ? `OnHold desactivado: movido al curso destino${clasesCreadas ? ` con ${clasesCreadas} clase(s)` : ''} y contrato extendido.`
       : 'OnHold desactivado y contrato extendido automáticamente',
     extension: result.extension,
     movido,
+    clasesCreadas,
   });
 });

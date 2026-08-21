@@ -154,7 +154,11 @@ export default function StudentOnHold({
       `  • Fecha Inicio: ${new Date(fechaOnHold).toLocaleDateString('es-ES')}\n` +
       `  • Fecha Fin: ${new Date(fechaFinOnHold).toLocaleDateString('es-ES')}\n` +
       `  • Duración: ${diasOnHold} días\n\n` +
-      `Esta acción INACTIVARÁ al estudiante en ACADEMICA durante este período.`
+      `El estudiante SUELTA su salón:\n` +
+      `  • Deja de ocupar cupo y se le borra el curso.\n` +
+      `  • Se le quitan las clases que aún no ha tenido (las ya dictadas se conservan).\n` +
+      `  • Al reactivarlo habrá que asignarle curso y salón NUEVOS, con cupo.\n\n` +
+      `También quedará inactivo y sin acceso durante el período.`
     )
 
     if (!confirmed) return
