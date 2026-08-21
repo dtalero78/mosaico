@@ -98,6 +98,8 @@ export async function createAdminEvents(opts: {
   fechaInicio: string;
   horas: number;
   createdBy: string | null;
+  /** Guía que aloja: su sala de Zoom es el enlace del evento. Opcional. */
+  anfitrionId?: string | null;
 }): Promise<{ eventGroupId: string; count: number }> {
   if (!ADMIN_EVENT_TIPOS.includes(opts.tipo)) {
     throw new ValidationError(`tipo inválido: ${opts.tipo}`);
@@ -137,6 +139,7 @@ export async function createAdminEvents(opts: {
     fechaInicio: opts.fechaInicio,
     horas: opts.horas,
     createdBy: opts.createdBy,
+    anfitrionId: opts.anfitrionId || null,
   }));
   const count = await AdminEventsRepository.bulkInsert(rows);
   return { eventGroupId, count };

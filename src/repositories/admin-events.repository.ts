@@ -28,6 +28,8 @@ export interface AdminEventRow {
   timeout: string | null;
   notas: string | null;
   motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR' | null;
+  /** Guía que pone la sala; el enlace se resuelve de su ficha al leer. */
+  anfitrionId?: string | null;
   createdBy: string | null;
   _createdDate: string;
   _updatedDate: string;
@@ -35,6 +37,9 @@ export interface AdminEventRow {
 
 export interface AdminEventWithAdvisor extends AdminEventRow {
   advisorNombre: string | null;
+  anfitrionNombre?: string | null;
+  /** Sala del anfitrión, resuelta al leer desde `GUIAS.zoom`. */
+  linkZoom?: string | null;
 }
 
 export const AdminEventsRepository = {
@@ -50,18 +55,20 @@ export const AdminEventsRepository = {
     fechaInicio: string;
     horas: number;
     createdBy: string | null;
+    /** Guía que pone la sala del evento (su `GUIAS.zoom`). */
+    anfitrionId?: string | null;
   }>): Promise<number> {
     if (rows.length === 0) return 0;
     const values: string[] = [];
     const params: any[] = [];
     let p = 1;
     for (const r of rows) {
-      values.push(`($${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++})`);
-      params.push(r._id, r.eventGroupId, r.advisorId, r.tipo, r.titulo, r.descripcion, r.fechaInicio, r.horas, r.createdBy);
+      values.push(`($${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++})`);
+      params.push(r._id, r.eventGroupId, r.advisorId, r.tipo, r.titulo, r.descripcion, r.fechaInicio, r.horas, r.createdBy, r.anfitrionId ?? null);
     }
     const res = await query(
       `INSERT INTO "ADMIN_EVENTS"
-         ("_id","eventGroupId","advisorId","tipo","titulo","descripcion","fechaInicio","horas","createdBy")
+         ("_id","eventGroupId","advisorId","tipo","titulo","descripcion","fechaInicio","horas","createdBy","anfitrionId")
        VALUES ${values.join(', ')}`,
       params,
     );
@@ -100,9 +107,12 @@ export const AdminEventsRepository = {
       conds.push(`ae."registrado" = $${p++}`); params.push(opts.registrado);
     }
     return queryMany<AdminEventWithAdvisor>(
-      `SELECT ae.*, adv."nombreCompleto" AS "advisorNombre"
+      `SELECT ae.*, adv."nombreCompleto" AS "advisorNombre",
+              anf."nombreCompleto" AS "anfitrionNombre",
+              NULLIF(TRIM(anf."zoom"), '') AS "linkZoom"
        FROM "ADMIN_EVENTS" ae
        LEFT JOIN "GUIAS" adv ON adv."_id" = ae."advisorId"
+       LEFT JOIN "GUIAS" anf ON anf."_id" = ae."anfitrionId"
        WHERE ${conds.join(' AND ')}
        ORDER BY ae."fechaInicio" DESC, adv."nombreCompleto" ASC NULLS LAST
        LIMIT 2000`,
@@ -117,11 +127,14 @@ export const AdminEventsRepository = {
     const from = new Date(Date.UTC(year, month - 1, 1)).toISOString();
     const to   = new Date(Date.UTC(year, month, 1)).toISOString();
     return queryMany<AdminEventRow>(
-      `SELECT * FROM "ADMIN_EVENTS"
-       WHERE "advisorId" = $1
-         AND "fechaInicio" >= $2::timestamptz
-         AND "fechaInicio" <  $3::timestamptz
-       ORDER BY "fechaInicio" ASC`,
+      `SELECT ae.*, anf."nombreCompleto" AS "anfitrionNombre",
+              NULLIF(TRIM(anf."zoom"), '') AS "linkZoom"
+         FROM "ADMIN_EVENTS" ae
+         LEFT JOIN "GUIAS" anf ON anf."_id" = ae."anfitrionId"
+       WHERE ae."advisorId" = $1
+         AND ae."fechaInicio" >= $2::timestamptz
+         AND ae."fechaInicio" <  $3::timestamptz
+       ORDER BY ae."fechaInicio" ASC`,
       [advisorId, from, to],
     );
   },

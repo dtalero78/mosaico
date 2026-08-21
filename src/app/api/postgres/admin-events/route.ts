@@ -54,8 +54,12 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   const createdBy = (session?.user as any)?.email ?? null;
 
+  // Guía anfitrión: su sala de Zoom es por donde entran los convocados. Se guarda
+  // el guía, no el enlace, para que si corrige su sala el evento la siga.
+  const anfitrionId = String(body?.anfitrionId || '').trim() || null;
+
   const result = await createAdminEvents({
-    advisorIds, tipo, titulo, descripcion, fechaInicio, horas, createdBy,
+    advisorIds, tipo, titulo, descripcion, fechaInicio, horas, createdBy, anfitrionId,
   });
   return successResponse(result);
 });

@@ -92,6 +92,8 @@ export default function EventosAdministrativosPage() {
     horas: 1,
     asignarTodos: false,
     advisorIds: [] as string[],
+    /** Guía cuya sala de Zoom se usa como enlace del evento. */
+    anfitrionId: '',
   })
   const [submitting, setSubmitting] = useState(false)
   const [conflicts, setConflicts] = useState<ConflictDetail[]>([])
@@ -147,7 +149,7 @@ export default function EventosAdministrativosPage() {
     setForm({
       tipo: 'TRAINING', titulo: '', descripcion: '',
       fecha: todayLocal(), hora: '09:00', horas: 1,
-      asignarTodos: false, advisorIds: [],
+      asignarTodos: false, advisorIds: [], anfitrionId: '',
     })
     setConflicts([]); setConflictsChecked(false)
     setCreating(true)
@@ -213,6 +215,7 @@ export default function EventosAdministrativosPage() {
           descripcion: form.descripcion.trim() || null,
           fechaInicio: fechaInicioISO,
           horas: form.horas,
+          anfitrionId: form.anfitrionId || null,
         }),
       })
       const j = await r.json()
@@ -461,6 +464,24 @@ export default function EventosAdministrativosPage() {
                       {[1, 2, 3, 4, 5, 6, 7, 8].map(h => <option key={h} value={h}>{h} hora{h > 1 ? 's' : ''}</option>)}
                     </select>
                   </div>
+                </div>
+
+                {/* Sala del evento: se elige un guía y se usa SU sala de Zoom, en vez
+                    de pegar un enlace — así, si corrige su sala, el evento la sigue. */}
+                <div>
+                  <label htmlFor="anfitrion" className="block text-xs font-medium text-gray-700 mb-1">
+                    Sala de Zoom (opcional)
+                  </label>
+                  <select id="anfitrion" value={form.anfitrionId}
+                    onChange={e => setForm(f => ({ ...f, anfitrionId: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" disabled={advisorsLoading}>
+                    <option value="">Sin enlace</option>
+                    {advisors.map(a => <option key={a._id} value={a._id}>Sala de {a.nombre}</option>)}
+                  </select>
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    Se usa la sala del guía elegido. Los convocados verán el botón para entrar
+                    desde su panel. Si el guía no tiene sala cargada, el evento queda sin enlace.
+                  </p>
                 </div>
 
                 {/* Título + descripción */}

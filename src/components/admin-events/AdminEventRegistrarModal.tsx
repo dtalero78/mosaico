@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
-import { XMarkIcon, ClockIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, ClockIcon, VideoCameraIcon } from '@heroicons/react/24/outline'
 import {
   getAdminEventWindow,
   ADMIN_EVENT_TIPO_META,
@@ -30,6 +30,9 @@ interface AdminEventDetail {
   tipo: AdminEventTipo
   titulo: string | null
   descripcion: string | null
+  /** Sala del guía anfitrión, resuelta al leer. Puede no haberla. */
+  linkZoom?: string | null
+  anfitrionNombre?: string | null
   fechaInicio: string
   horas: number
   registrado: boolean
@@ -142,6 +145,16 @@ export default function AdminEventRegistrarModal({
             <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
+
+        {/* Entrada al evento: la sala del guía anfitrión. Sin anfitrión no hay
+            enlace y no se muestra nada — un botón muerto confunde más que su ausencia. */}
+        {event.linkZoom && (
+          <a href={event.linkZoom} target="_blank" rel="noopener noreferrer"
+            className="mb-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+            <VideoCameraIcon className="h-5 w-5" />
+            Entrar al evento{event.anfitrionNombre ? ` · sala de ${event.anfitrionNombre}` : ''}
+          </a>
+        )}
 
         {/* Info detalle */}
         <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1 mb-4 border border-gray-200">
