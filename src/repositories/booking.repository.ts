@@ -81,10 +81,33 @@ class BookingRepositoryClass extends BaseRepository {
               COALESCE(a."email", p."email") as "studentEmail",
               COALESCE(p."plataforma", a."plataforma") as "studentPlataforma",
               p."estadoInactivo" as "studentInactivo", p."vigencia" as "studentVigencia",
-              p."finalContrato" as "studentFinalContrato"
+              p."finalContrato" as "studentFinalContrato",
+              -- Cómo le fue en su clase ANTERIOR de este mismo curso: el Guía ve al
+              -- abrir al alumno si viene de una falta, sin salir a buscarlo al
+              -- historial. Sólo clases ya dictadas y no canceladas por el alumno.
+              ant."dia" AS "prevFecha",
+              ant."asistio" AS "prevAsistio",
+              ant."step" AS "prevLeccion"
        FROM "ACADEMICA_BOOKINGS" b
        LEFT JOIN "ACADEMICA" a ON b."idEstudiante" = a."_id"
        LEFT JOIN "PEOPLE" p ON a."numeroId" = p."numeroId"
+       LEFT JOIN "CALENDARIO" ev ON ev."_id" = $1
+       LEFT JOIN LATERAL (
+         SELECT c2."dia",
+                (COALESCE(k."asistio",false) OR COALESCE(k."asistencia",false)) AS "asistio",
+                COALESCE(c2."sesionLeccion", k."step") AS "step"
+           FROM "ACADEMICA_BOOKINGS" k
+           JOIN "CALENDARIO" c2 ON (c2."_id" = k."eventoId" OR c2."_id" = k."idEvento")
+          WHERE (k."idEstudiante" = b."idEstudiante" OR k."studentId" = b."studentId")
+            AND c2."_id" <> $1
+            AND c2."dia" < COALESCE(ev."dia", NOW())
+            AND COALESCE(k."cancelo", false) = false
+            -- Del MISMO curso, para no mostrarle la falta de otro salón. Si el
+            -- evento no cuelga de un curso, se mira su historial sin acotar.
+            AND (ev."cursoCampaignId" IS NULL OR c2."cursoCampaignId" = ev."cursoCampaignId")
+          ORDER BY c2."dia" DESC
+          LIMIT 1
+       ) ant ON TRUE
        WHERE (b."eventoId" = $1 OR b."idEvento" = $1)
          AND (b."cancelo" IS NULL OR b."cancelo" = false)
          -- El roster del Guía = los que OCUPAN cupo. Si el contrato se retractó

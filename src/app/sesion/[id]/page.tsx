@@ -83,6 +83,10 @@ interface ClassRecord {
   acDisposicion?: boolean
   nivel?: string
   step?: string
+  /** Cómo le fue en su clase ANTERIOR de este curso (aviso de inasistencia al Guía). */
+  prevFecha?: string | null
+  prevAsistio?: boolean | null
+  prevLeccion?: string | null
 }
 
 interface StudentWithClass extends Student {
@@ -210,6 +214,10 @@ export default function SesionPage() {
               acDisposicion: booking.acDisposicion ?? false,
               nivel: booking.nivel,
               step: booking.step,
+              // Cómo le fue en su clase anterior de este curso (aviso al Guía).
+              prevFecha: booking.prevFecha ?? null,
+              prevAsistio: booking.prevAsistio ?? null,
+              prevLeccion: booking.prevLeccion ?? null,
             },
           }
         })

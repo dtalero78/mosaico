@@ -4,6 +4,7 @@ import { useState, useEffect, type ComponentType } from 'react'
 import toast from 'react-hot-toast'
 import {
   CheckCircleIcon,
+  XCircleIcon,
   UserGroupIcon,
   ChatBubbleLeftRightIcon,
   DocumentTextIcon,
@@ -48,6 +49,10 @@ interface ClassRecord {
   nivel?: string
   step?: string
   noAprobo?: boolean
+  /** Cómo le fue en su clase ANTERIOR de este curso (para el aviso de inasistencia). */
+  prevFecha?: string | null
+  prevAsistio?: boolean | null
+  prevLeccion?: string | null
 }
 
 interface StudentWithClass {
@@ -77,6 +82,37 @@ interface SessionStudentsTabProps {
   canMarkAttendance?: boolean
   /** Mensaje a mostrar en el banner cuando `!canMarkAttendance`. */
   attendanceLockedReason?: string | null
+}
+
+/**
+ * Cómo le fue al alumno en su clase ANTERIOR de este curso.
+ *
+ * El Guía necesita saber, al abrir a un alumno, si viene de faltar — hoy tenía que
+ * salir a buscarlo al historial. Mismo lenguaje que el óvalo del Reporte Académico:
+ * verde cumplió, rojo no. Sin clase anterior (su primera sesión) no se muestra
+ * nada: un indicador en gris se leería como una falta.
+ */
+function SesionAnteriorBadge({ rec }: { rec?: ClassRecord }) {
+  const fecha = rec?.prevFecha
+  if (!fecha) return null
+  const asistio = rec?.prevAsistio === true
+  const cuando = new Date(fecha).toLocaleDateString('es', {
+    day: 'numeric', month: 'short',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  })
+  const detalle = rec?.prevLeccion ? `${rec.prevLeccion} · ${cuando}` : cuando
+  return (
+    <span
+      title={`Clase anterior (${detalle}): ${asistio ? 'asistió' : 'no asistió'}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+        asistio ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                : 'border-red-300 bg-red-50 text-red-700'}`}
+    >
+      {asistio ? <CheckCircleIcon className="h-4 w-4" /> : <XCircleIcon className="h-4 w-4" />}
+      {asistio ? 'Asistió la clase anterior' : 'Faltó la clase anterior'}
+      <span className="font-normal opacity-80">· {cuando}</span>
+    </span>
+  )
 }
 
 /** Fila de criterio: casilla + ícono + texto (estilo ítem del sidebar). */
@@ -428,9 +464,12 @@ export default function SessionStudentsTab({
           <>
             {/* Información del estudiante */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                {selectedStudent.primerNombre} {selectedStudent.primerApellido}
-              </h2>
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {selectedStudent.primerNombre} {selectedStudent.primerApellido}
+                </h2>
+                <SesionAnteriorBadge rec={selectedStudent.classRecord} />
+              </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-600">Plataforma:</span>
