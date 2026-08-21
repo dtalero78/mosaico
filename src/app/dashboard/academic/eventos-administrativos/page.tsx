@@ -104,6 +104,77 @@ export default function EventosAdministrativosPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ kind: 'one' | 'group'; item: Item } | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  /**
+   * Un evento convocado a 25 guías son 25 filas en la tabla; la lista se leía como
+   * 25 reuniones distintas. Se agrupan por `eventGroupId` —una fila por evento— y
+   * el detalle de quién asistió se abre al hacer clic.
+   */
+  const grupos = useMemo(() => {
+    const m = new Map<string, { key: string; cabecera: Item; guias: Item[] }>()
+    for (const it of items) {
+      const g = m.get(it.eventGroupId)
+      if (g) g.guias.push(it)
+      else m.set(it.eventGroupId, { key: it.eventGroupId, cabecera: it, guias: [it] })
+    }
+    for (const g of m.values()) {
+      g.guias.sort((a, b) => (a.advisorNombre || '').localeCompare(b.advisorNombre || '', 'es'))
+    }
+    return Array.from(m.values())
+  }, [items])
+
+  /** El evento abierto en el detalle (se relee de `grupos` para reflejar los cambios). */
+  const [detalleKey, setDetalleKey] = useState<string | null>(null)
+  const detalle = useMemo(() => grupos.find(g => g.key === detalleKey) || null, [grupos, detalleKey])
+  const [registrando, setRegistrando] = useState<string | null>(null)
+
+  /** Hora de fin nominal del evento (HH:MM local) — es el Time Out que se registra. */
+  const finNominal = (fechaInicio: string, horas: number) => {
+    const fin = new Date(new Date(fechaInicio).getTime() + horas * 3600_000)
+    return `${String(fin.getHours()).padStart(2, '0')}:${String(fin.getMinutes()).padStart(2, '0')}`
+  }
+
+  /**
+   * Confirma la asistencia de un guía. Se registra con la hora de fin nominal:
+   * el coordinador no puede saber a qué minuto exacto salió cada uno, y esa es la
+   * duración que se le cuenta. El backend marca solo `GESTION_COORDINADOR` cuando
+   * se hace fuera de la ventana del guía, así que queda claro quién lo cerró.
+   */
+  const confirmarGuia = async (it: Item) => {
+    setRegistrando(it._id)
+    try {
+      const r = await fetch(`/api/postgres/admin-events/${it._id}/registrar`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeout: finNominal(it.fechaInicio, it.horas), notas: '' }),
+      })
+      const j = await r.json()
+      if (!r.ok || !j.success) throw new Error(j.error || 'No se pudo registrar')
+      await load()
+    } catch (e: any) {
+      setError(e.message)
+    } finally { setRegistrando(null) }
+  }
+
+  /** Confirma de una vez a todos los que siguen pendientes. */
+  const confirmarPendientes = async () => {
+    if (!detalle) return
+    const pend = detalle.guias.filter(g => !g.registrado)
+    if (!pend.length) return
+    setRegistrando('todos')
+    let ok = 0
+    for (const g of pend) {
+      try {
+        const r = await fetch(`/api/postgres/admin-events/${g._id}/registrar`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeout: finNominal(g.fechaInicio, g.horas), notas: '' }),
+        })
+        if ((await r.json())?.success) ok++
+      } catch { /* se sigue con los demás: uno que falle no debe frenar al resto */ }
+    }
+    setRegistrando(null)
+    if (ok < pend.length) setError(`Se confirmaron ${ok} de ${pend.length} guía(s).`)
+    await load()
+  }
+
   // Cargar advisors
   useEffect(() => {
     fetch('/api/postgres/guias')
@@ -331,7 +402,7 @@ export default function EventosAdministrativosPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             {loading ? (
               <p className="p-8 text-center text-sm text-gray-400">Cargando…</p>
-            ) : items.length === 0 ? (
+            ) : grupos.length === 0 ? (
               <div className="p-10 text-center text-sm text-gray-500">
                 Sin eventos administrativos en el rango. Crea el primero con el botón superior.
               </div>
@@ -341,17 +412,24 @@ export default function EventosAdministrativosPage() {
                   <tr className="text-xs text-gray-500 uppercase">
                     <th className="text-left font-medium px-3 py-2">Fecha · Hora</th>
                     <th className="text-left font-medium px-3 py-2 w-32">Tipo</th>
-                    <th className="text-left font-medium px-3 py-2">Título / Guía</th>
+                    <th className="text-left font-medium px-3 py-2">Título</th>
+                    <th className="text-center font-medium px-3 py-2 w-24">Guías</th>
                     <th className="text-center font-medium px-3 py-2 w-20">Horas</th>
-                    <th className="text-center font-medium px-3 py-2 w-32">Estado</th>
+                    <th className="text-center font-medium px-3 py-2 w-40">Registro</th>
                     <th className="text-right font-medium px-3 py-2 w-24">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(it => {
+                  {grupos.map(g => {
+                    const it = g.cabecera
                     const meta = ADMIN_EVENT_TIPO_META[it.tipo]
+                    const hechos = g.guias.filter(x => x.registrado).length
+                    const total = g.guias.length
+                    const todos = hechos === total
                     return (
-                      <tr key={it._id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                      <tr key={g.key} onClick={() => setDetalleKey(g.key)}
+                        className="border-b border-gray-50 last:border-0 hover:bg-primary-50/40 cursor-pointer"
+                        title="Ver quiénes asistieron y confirmar su registro">
                         <td className="px-3 py-2 text-sm text-gray-900 font-mono">{fechaCorta(it.fechaInicio)}</td>
                         <td className="px-3 py-2">
                           <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${meta.color} ${meta.textColor} border`}>
@@ -360,42 +438,25 @@ export default function EventosAdministrativosPage() {
                         </td>
                         <td className="px-3 py-2">
                           <div className="text-sm font-medium text-gray-900">{it.titulo || '—'}</div>
-                          <div className="text-xs text-gray-500">{it.advisorNombre || it.advisorId}</div>
+                          {it.descripcion && <div className="text-xs text-gray-500 truncate max-w-md">{it.descripcion}</div>}
                         </td>
+                        <td className="px-3 py-2 text-center text-sm text-gray-700">{total}</td>
                         <td className="px-3 py-2 text-center text-sm font-semibold text-gray-700">{it.horas}h</td>
                         <td className="px-3 py-2 text-center">
-                          {it.registrado ? (
-                            it.motivoCierre === 'GESTION_COORDINADOR' ? (
-                              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
-                                ✓ Por Coordinación
-                              </span>
-                            ) : (
-                              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
-                                ✓ Registrado
-                              </span>
-                            )
-                          ) : (
-                            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-                              Pendiente
-                            </span>
-                          )}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            todos ? 'bg-emerald-100 text-emerald-700'
+                              : hechos > 0 ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {todos ? `✓ ${total} registrados` : `${hechos} de ${total}`}
+                          </span>
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}>
                           <div className="inline-flex gap-1">
-                            {!it.registrado && (
-                              <button type="button"
-                                onClick={() => setDeleteTarget({ kind: 'one', item: it })}
-                                title="Eliminar solo este advisor"
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
-                            )}
-                            {!it.registrado && (
+                            {hechos === 0 && (
                               <button type="button"
                                 onClick={() => setDeleteTarget({ kind: 'group', item: it })}
-                                title="Eliminar grupo entero"
-                                className="px-2 py-1 text-[10px] text-gray-600 border border-gray-300 rounded hover:bg-gray-100">
-                                Grupo
+                                title="Eliminar el evento y todos sus guías"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                <TrashIcon className="h-4 w-4" />
                               </button>
                             )}
                           </div>
@@ -599,6 +660,94 @@ export default function EventosAdministrativosPage() {
         )}
 
         {/* Modal Eliminar */}
+        {/* Detalle del evento: quiénes fueron convocados y su registro.
+            El coordinador confirma desde aquí a quien no lo hizo a tiempo. */}
+        {detalle && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"
+            onClick={() => setDetalleKey(null)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+              onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${ADMIN_EVENT_TIPO_META[detalle.cabecera.tipo].color} ${ADMIN_EVENT_TIPO_META[detalle.cabecera.tipo].textColor} border`}>
+                      {ADMIN_EVENT_TIPO_META[detalle.cabecera.tipo].label}
+                    </span>
+                    <h3 className="text-lg font-semibold text-gray-900 truncate">
+                      {detalle.cabecera.titulo || 'Evento administrativo'}
+                    </h3>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {fechaCorta(detalle.cabecera.fechaInicio)} · {detalle.cabecera.horas}h ·
+                    {' '}termina {finNominal(detalle.cabecera.fechaInicio, detalle.cabecera.horas)}
+                  </p>
+                  {detalle.cabecera.descripcion && (
+                    <p className="text-sm text-gray-600 mt-1">{detalle.cabecera.descripcion}</p>
+                  )}
+                </div>
+                <button type="button" onClick={() => setDetalleKey(null)}
+                  className="text-gray-400 hover:text-gray-600 shrink-0">✕</button>
+              </div>
+
+              <div className="px-5 py-3 border-b bg-gray-50 flex items-center justify-between gap-3">
+                <p className="text-sm text-gray-600">
+                  <strong>{detalle.guias.filter(g => g.registrado).length}</strong> de{' '}
+                  <strong>{detalle.guias.length}</strong> guía(s) con el registro hecho
+                </p>
+                {detalle.guias.some(g => !g.registrado) && (
+                  <button type="button" onClick={confirmarPendientes} disabled={registrando !== null}
+                    className="px-3 py-1.5 text-sm rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-40">
+                    {registrando === 'todos' ? 'Confirmando…' : 'Confirmar los pendientes'}
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 py-3">
+                <ul className="divide-y divide-gray-100">
+                  {detalle.guias.map(g => (
+                    <li key={g._id} className="py-2.5 flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {g.advisorNombre || g.advisorId}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {g.registrado
+                            ? <>Time Out {g.timeout || '—'}{g.motivoCierre === 'GESTION_COORDINADOR' ? ' · cerrado por Coordinación' : ''}</>
+                            : 'Sin registrar'}
+                        </p>
+                      </div>
+                      {g.registrado ? (
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
+                          g.motivoCierre === 'GESTION_COORDINADOR'
+                            ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          ✓ Registrado
+                        </span>
+                      ) : (
+                        <button type="button" onClick={() => confirmarGuia(g)} disabled={registrando !== null}
+                          className="px-3 py-1 text-xs rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-40 shrink-0">
+                          {registrando === g._id ? 'Confirmando…' : 'Confirmar asistencia'}
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-[11px] text-gray-500">
+                  Se registra con la hora de fin del evento
+                  ({finNominal(detalle.cabecera.fechaInicio, detalle.cabecera.horas)}), que es la duración
+                  que se le cuenta al guía. Si se confirma después de que venció el plazo del guía,
+                  queda marcado como cerrado por Coordinación, para distinguirlo de lo que registró él.
+                </p>
+              </div>
+
+              <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
+                <button type="button" onClick={() => setDetalleKey(null)}
+                  className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100">
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {deleteTarget && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
