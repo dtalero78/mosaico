@@ -147,7 +147,16 @@ export default function EventosAdministrativosPage() {
         body: JSON.stringify({ timeout: finNominal(it.fechaInicio, it.horas), notas: '' }),
       })
       const j = await r.json()
-      if (!r.ok || !j.success) throw new Error(j.error || 'No se pudo registrar')
+      if (!r.ok || !j.success) {
+        // El guía pudo confirmar desde su panel mientras este modal estaba abierto:
+        // el backend lo rechaza (no se duplica), pero conviene decir por qué y
+        // refrescar para que la lista deje de ofrecer el botón.
+        const yaEstaba = /ya está registrado/i.test(String(j.error || ''))
+        await load()
+        throw new Error(yaEstaba
+          ? `${it.advisorNombre || 'Ese guía'} ya había confirmado su asistencia.`
+          : (j.error || 'No se pudo registrar'))
+      }
       await load()
     } catch (e: any) {
       setError(e.message)
@@ -167,7 +176,10 @@ export default function EventosAdministrativosPage() {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ timeout: finNominal(g.fechaInicio, g.horas), notas: '' }),
         })
-        if ((await r.json())?.success) ok++
+        const j = await r.json()
+        // Que uno ya estuviera registrado no es un fallo: es que el guía se
+        // adelantó, y su registro es el que vale.
+        if (j?.success || /ya está registrado/i.test(String(j?.error || ''))) ok++
       } catch { /* se sigue con los demás: uno que falle no debe frenar al resto */ }
     }
     setRegistrando(null)
@@ -711,16 +723,20 @@ export default function EventosAdministrativosPage() {
                           {g.advisorNombre || g.advisorId}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {g.registrado
-                            ? <>Time Out {g.timeout || '—'}{g.motivoCierre === 'GESTION_COORDINADOR' ? ' · cerrado por Coordinación' : ''}</>
-                            : 'Sin registrar'}
+                          {g.registrado ? <>Time Out {g.timeout || '—'}</> : 'Sin registrar'}
                         </p>
                       </div>
                       {g.registrado ? (
-                        <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
+                        /* En AMARILLO cuando lo confirmó el propio guía: no hay nada
+                           que hacer ahí. El verde queda sólo para el botón de acción,
+                           así no se confunde "ya está" con "falta confirmar". */
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 border ${
                           g.motivoCierre === 'GESTION_COORDINADOR'
-                            ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                          ✓ Registrado
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
+                          {g.motivoCierre === 'GESTION_COORDINADOR'
+                            ? '✓ Cerrado por Coordinación'
+                            : '✓ Confirmado por el guía'}
                         </span>
                       ) : (
                         <button type="button" onClick={() => confirmarGuia(g)} disabled={registrando !== null}
