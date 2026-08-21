@@ -175,7 +175,9 @@ export async function registrarAdminEvent(input: {
   if (!ws.isCoordinator) {
     // El advisor debe estar matcheado con ev.advisorId vía su email registrado en ADVISORS
     const adv = await queryOne<{ _id: string }>(
-      `SELECT "_id" FROM "GUIAS" WHERE LOWER("email") = LOWER($1) LIMIT 1`,
+      // TRIM además de LOWER: un espacio al borde del correo lo dejaría fuera
+      // con "tu email no está registrado", que es incomprensible para el guía.
+      `SELECT "_id" FROM "GUIAS" WHERE LOWER(TRIM("email")) = LOWER(TRIM($1)) LIMIT 1`,
       [input.sessionEmail],
     );
     if (!adv?._id) throw new ForbiddenError('Tu email no está registrado en ADVISORS');
