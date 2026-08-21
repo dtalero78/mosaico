@@ -93,3 +93,30 @@ export function etiquetaCurso(c: CursoAgrupable & { guiaNombre?: string | null }
   const partes = [c.tipoCurso, c.salon ? `Salón ${c.salon}` : null, c.horarioCurso].filter(Boolean);
   return partes.join(' · ');
 }
+
+/**
+ * ¿La colisión de guía se puede resolver UNIENDO los salones?
+ *
+ * Sólo si el choque es por el MISMO horario exacto y dentro de la misma campaña:
+ * eso significa que los dos cursos son literalmente la misma hora de clase, que es
+ * lo que un grupo de salón declara. Si sólo se solapan (19:00-20:00 contra
+ * 19:30-20:30) no hay un evento común que compartir, y la única salida sigue
+ * siendo cambiar el horario o el guía.
+ *
+ * No mira el tipo de curso (lo habitual es DANSHI con SENPAI, pero no se impone)
+ * ni el día de la semana — mismo criterio que la pestaña Colisiones, para que la
+ * misma acción no se comporte distinto según desde dónde se haga.
+ */
+export function colisionesUnibles(
+  curso: { campaign?: string | null; horarioCurso?: string | null },
+  colisiones: Array<{ campaign?: string | null; horarioCurso?: string | null }>
+): boolean {
+  const norm = (v: any) => String(v ?? '').trim().toUpperCase();
+  if (!colisiones.length) return false;
+  // 1 principal + hasta 2 adicionales: más de dos choques no caben en un grupo.
+  if (colisiones.length > MAX_CURSOS_GRUPO - 1) return false;
+  if (!norm(curso.campaign) || !norm(curso.horarioCurso)) return false;
+  return colisiones.every(c =>
+    norm(c.campaign) === norm(curso.campaign) && norm(c.horarioCurso) === norm(curso.horarioCurso)
+  );
+}

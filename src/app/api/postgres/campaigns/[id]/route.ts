@@ -9,7 +9,8 @@ import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso, eliminarEventosCurso, regenerarCursoPreservandoEstado, arrastrarAlumnosDelCurso } from '@/services/cursos-campaign-eventos.service';
 import { detectarColisionesGuia, mensajeColision, guiaAsignado } from '@/services/colision-guia.service';
-import { deshacerGrupo } from '@/services/grupo-horario.service';
+import { deshacerGrupo, unirCursosEnGrupo } from '@/services/grupo-horario.service';
+import { colisionesUnibles } from '@/lib/grupo-horario';
 
 /**
  * PATCH /api/postgres/campaigns/[id]  → edita un curso de campaña (CURSOS_CAMPAIGN).
@@ -78,6 +79,10 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   // instrucción explícita se rechaza y la UI pregunta.
   const cambiaHorario = horarioCurso !== row.horarioCurso;
   const accionGrupo = String(body._accionGrupoHorario || '').trim(); // 'propagar' | 'separar'
+  // "Unir salones" desde el modal de colisión: el choque de guía deja de ser un
+  // error y pasa a ser la declaración de que ese guía dicta los dos cursos a la vez.
+  const unirSalones = body._unirSalones === true;
+  let unirCon: string[] = [];
   if (row.grupoHorarioId && cambiaHorario && !accionGrupo) {
     const hermanos = (await query(
       `SELECT "_id","tipoCurso","salon","horarioCurso" FROM "CURSOS_CAMPAIGN"
@@ -148,12 +153,31 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
       grupoHorarioId: accionGrupo === 'separar' ? null : row.grupoHorarioId,
     });
     if (colisiones.length) {
-      throw new ConflictError(mensajeColision(colisiones), {
-        tipo: 'colision_guia',
-        cursoId: id,
-        curso: { tipoCurso, salon, horarioCurso, guia },
-        colisiones,
-      });
+      // Si el admin eligió UNIR SALONES, el choque deja de ser un problema: es
+      // justo lo que un grupo declara — el guía dicta una sola sesión para los dos
+      // cursos. Se valida ANTES de escribir; unir se hace después del UPDATE,
+      // cuando el curso ya tiene sus datos nuevos.
+      if (unirSalones) {
+        if (!colisionesUnibles({ campaign: row.campaign, horarioCurso }, colisiones)) {
+          throw new ValidationError(
+            'Sólo se pueden unir salones de la MISMA campaña y con el MISMO horario. '
+            + 'Aquí los horarios sólo se solapan, así que hay que cambiar el horario o el guía.'
+          );
+        }
+        unirCon = colisiones.map((c: any) => String(c._id || '')).filter(Boolean);
+        if (unirCon.length !== colisiones.length) {
+          throw new ValidationError('Alguno de los cursos en conflicto aún no existe: guárdalo primero y únelos desde la pestaña Colisiones.');
+        }
+      } else {
+        throw new ConflictError(mensajeColision(colisiones), {
+          tipo: 'colision_guia',
+          cursoId: id,
+          curso: { tipoCurso, salon, horarioCurso, guia },
+          colisiones,
+          // El modal ofrece "Unir salones" sólo cuando de verdad se puede.
+          unible: colisionesUnibles({ campaign: row.campaign, horarioCurso }, colisiones),
+        });
+      }
     }
   }
 
@@ -211,7 +235,7 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   // ─── Efecto de la decisión sobre el grupo de salón ───
   // Se aplica ANTES de regenerar los eventos de este curso, para que la
   // regeneración ya use el estado final (con grupo o sin él).
-  let grupoResultado: { accion: string; cursos: number } | null = null;
+  let grupoResultado: { accion: string; cursos: number; grupoHorarioId?: string } | null = null;
   if (row.grupoHorarioId && cambiaHorario && accionGrupo) {
     if (accionGrupo === 'propagar') {
       // El horario nuevo va para todo el grupo: siguen dictándose juntos.
@@ -259,6 +283,14 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   }
 
   await regenerarCursoPreservandoEstado(id);
+
+  // Unir va AL FINAL, cuando el curso ya tiene su horario y su guía nuevos: unir
+  // antes agruparía con los datos viejos. `unirCursosEnGrupo` regenera los eventos
+  // del grupo preservando la asistencia ya marcada.
+  if (unirSalones && unirCon.length) {
+    const r = await unirCursosEnGrupo([id, ...unirCon]);
+    grupoResultado = { accion: 'unir', cursos: r.cursos.length, grupoHorarioId: r.grupoHorarioId };
+  }
   return successResponse({ curso: upd.rows[0], grupo: grupoResultado, alumnosMovidos });
 });
 

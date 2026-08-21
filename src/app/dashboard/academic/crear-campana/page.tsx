@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
@@ -58,6 +58,9 @@ function CrearCampanaContent() {
   // horario o guía) y reintentar. No hay "guardar igual" — la idea es EVITAR
   // la asignación cruzada, no advertirla.
   const [colision, setColision] = useState<any | null>(null)
+  // "Unir salones": lo consume el siguiente guardado y se apaga solo. Va en un ref
+  // y no en el estado para que el reenvío lo lea ya puesto, sin esperar a repintar.
+  const unirRef = useRef(false)
   const [colHorario, setColHorario] = useState('')
   const [colGuia, setColGuia] = useState('')
   // Gestión: campaña seleccionada en el dropdown ('' | '__NEW__' | nombre) + modal de curso
@@ -211,7 +214,7 @@ function CrearCampanaContent() {
     try {
       const res = await fetch('/api/postgres/campaigns', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaign: campaign.trim(), inicioCampania: inicioCampania || null, finalCampaign: finalCampaign || null, cursos: lista }),
+        body: JSON.stringify({ campaign: campaign.trim(), inicioCampania: inicioCampania || null, finalCampaign: finalCampaign || null, cursos: lista, _unirSalones: unirRef.current }),
       })
       const d = await res.json()
       if (!res.ok) {
@@ -227,12 +230,55 @@ function CrearCampanaContent() {
   }
 
   /** Abre el modal de colisión con los valores que fallaron ya cargados. */
+  /** Manda UN curso a una campaña ya guardada ("+ curso"). Lo usan el reintento
+   *  del modal de colisión y "Unir salones". */
+  const reenviarCursoExistente = async (curso: any) => {
+    setSaving(true); setMsg(null)
+    try {
+      const g = campaniasAgg.find(x => x.campaign === gestionSel)
+      const res = await fetch('/api/postgres/campaigns', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaign: gestionSel,
+          inicioCampania: g?.rows?.[0]?.inicioCampania ? String(g.rows[0].inicioCampania).slice(0, 10) : null,
+          finalCampaign: g?.finalCampaign ? String(g.finalCampaign).slice(0, 10) : null,
+          cursos: [curso], _unirSalones: unirRef.current,
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        if (d?.detail?.tipo === 'colision_guia') { abrirColision({ ...d.detail, origen: 'existing', nuevo: curso }); return }
+        throw new Error(d.error || 'Error al agregar el curso')
+      }
+      setMsg({ type: 'ok', text: `Curso agregado a "${gestionSel}".` })
+      setShowCursoModal(false); setForm(EMPTY); loadExisting()
+    } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setSaving(false) }
+  }
+
   const abrirColision = (detalle: any) => {
     setColision(detalle)
     setColHorario(detalle?.curso?.horarioCurso || '')
     setColGuia(detalle?.curso?.guia || '')
   }
-  const cancelarColision = () => { setColision(null); setSaving(false); setRowBusy(false) }
+  const cancelarColision = () => { setColision(null); setSaving(false); setRowBusy(false); unirRef.current = false }
+  /**
+   * Unir salones: el choque deja de ser un error y pasa a declarar que ese guía
+   * dicta los dos cursos a la vez. Se reenvía el guardado TAL CUAL —sin tocar
+   * horario ni guía, que es justo lo que se quiere conservar— con la marca puesta.
+   */
+  const unirColision = async () => {
+    if (!colision?.unible) return
+    unirRef.current = true
+    const origen = colision.origen
+    const nuevo = colision.nuevo
+    const lista = colision.lista
+    setColision(null)
+    try {
+      if (origen === 'edit') await saveEdit()
+      else if (origen === 'existing') await reenviarCursoExistente(nuevo)
+      else await submit(lista || cursos)
+    } finally { unirRef.current = false }
+  }
   // Reintentar sin tocar nada dejaría el mismo cruce: el botón se deshabilita.
   const sinCambios = !!colision
     && colHorario === (colision.curso?.horarioCurso || '')
@@ -253,26 +299,7 @@ function CrearCampanaContent() {
       const corregido = { ...colision.nuevo, horarioCurso: colHorario, guia: colGuia }
       setForm((f) => ({ ...f, horarioCurso: colHorario, guia: colGuia }))
       setColision(null)
-      setSaving(true); setMsg(null)
-      try {
-        const g = campaniasAgg.find(x => x.campaign === gestionSel)
-        const res = await fetch('/api/postgres/campaigns', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            campaign: gestionSel,
-            inicioCampania: g?.rows?.[0]?.inicioCampania ? String(g.rows[0].inicioCampania).slice(0, 10) : null,
-            finalCampaign: g?.finalCampaign ? String(g.finalCampaign).slice(0, 10) : null,
-            cursos: [corregido],
-          }),
-        })
-        const d = await res.json()
-        if (!res.ok) {
-          if (d?.detail?.tipo === 'colision_guia') { abrirColision({ ...d.detail, origen: 'existing', nuevo: corregido }); return }
-          throw new Error(d.error || 'Error al agregar el curso')
-        }
-        setMsg({ type: 'ok', text: `Curso agregado a "${gestionSel}".` })
-        setShowCursoModal(false); setForm(EMPTY); loadExisting()
-      } catch (e: any) { setMsg({ type: 'err', text: e.message }) } finally { setSaving(false) }
+      await reenviarCursoExistente(corregido)
       return
     }
 
@@ -325,6 +352,8 @@ function CrearCampanaContent() {
         body: JSON.stringify({
           // Decisión sobre el grupo de salón cuando cambia el horario.
           _accionGrupoHorario: override?.accionGrupoHorario,
+          // "Unir salones" desde el modal de colisión.
+          _unirSalones: unirRef.current,
           // Confirmación de que los alumnos del curso se mueven con él.
           _arrastrarAlumnos: override?.arrastrarAlumnos === true,
           tipoCurso: editRow.tipoCurso, salon: editRow.salon,
@@ -472,7 +501,7 @@ function CrearCampanaContent() {
             campaign: gestionSel,
             inicioCampania: g?.rows?.[0]?.inicioCampania ? String(g.rows[0].inicioCampania).slice(0, 10) : null,
             finalCampaign: g?.finalCampaign ? String(g.finalCampaign).slice(0, 10) : null,
-            cursos: [nuevo],
+            cursos: [nuevo], _unirSalones: unirRef.current,
           }),
         })
         const d = await res.json()
@@ -1179,6 +1208,26 @@ function CrearCampanaContent() {
                 </p>
               )}
             </div>
+
+            {/* El cruce también se puede resolver UNIENDO los salones: el guía dicta
+                una sola sesión para los dos cursos, y la asistencia se sigue marcando
+                por curso. Sólo cuando los dos son de la misma campaña y el MISMO
+                horario — si apenas se solapan no hay un evento común que compartir. */}
+            {colision?.unible && (
+              <div className="px-5 pb-4">
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                  <p className="text-sm font-semibold text-indigo-900">¿Es la misma clase?</p>
+                  <p className="text-xs text-indigo-800/90 mt-0.5">
+                    Si el guía dicta los dos cursos a la vez, puedes <strong>unir los salones</strong> en vez de
+                    cambiar el horario: comparten la sesión y cada curso conserva su lista y su cupo.
+                  </p>
+                  <button type="button" onClick={unirColision} disabled={saving || rowBusy}
+                    className="mt-2 px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:opacity-40">
+                    {saving || rowBusy ? 'Uniendo…' : '🔗 Unir salones y guardar'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="px-5 py-3 border-t bg-gray-50 flex justify-end gap-3">
               <button type="button" onClick={cancelarColision}

@@ -10,6 +10,8 @@ import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso } from '@/services/cursos-campaign-eventos.service';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { detectarColisionesGuia, mensajeColision, guiaAsignado } from '@/services/colision-guia.service';
+import { unirCursosEnGrupo } from '@/services/grupo-horario.service';
+import { colisionesUnibles } from '@/lib/grupo-horario';
 
 /**
  * GET /api/postgres/campaigns  → lista de cursos/campañas (admin Crea Campaña).
@@ -44,7 +46,8 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.CAMPANA_CREAR);
-  const { campaign, inicioCampania, finalCampaign, cursos } = await request.json();
+  const body = await request.json();
+  const { campaign, inicioCampania, finalCampaign, cursos } = body;
 
   if (!campaign || !String(campaign).trim()) throw new ValidationError('El nombre de la campaña es obligatorio.');
   if (!Array.isArray(cursos) || cursos.length === 0) throw new ValidationError('Agregue al menos un curso a la campaña.');
@@ -55,13 +58,20 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const finalCamp  = isDate(finalCampaign) ? finalCampaign : null;
   const creados: any[] = [];
   // Cursos ya validados de ESTE envío, para detectar choques entre ellos.
-  const enLote: Array<{ guia: string | null; tipoCurso: string; salon: string | null; horarioCurso: string }> = [];
+  const enLote: Array<{ guia: string | null; tipoCurso: string; salon: string | null; horarioCurso: string; indice: number }> = [];
   // El INSERT va en una SEGUNDA pasada: primero se valida TODO el lote. Antes se
   // validaba e insertaba en el mismo bucle, así que un choque en el 3.º curso
   // dejaba los dos primeros ya creados — media campaña a medio hacer.
+  // "Unir salones": el choque de guía deja de ser un error y pasa a declarar que
+  // ese guía dicta los dos cursos a la vez. Como aquí el curso todavía NO existe,
+  // la unión se hace al final, cuando ya tiene id: por eso cada fila arrastra con
+  // quién debe unirse — un curso ya guardado (`unirCon`) o un compañero del propio
+  // lote (`unirConIndice`), que tampoco existe hasta que se inserta.
+  const unirSalones = body._unirSalones === true;
   const aInsertar: Array<{
     tipo: string; horario: string; salon: string | null; guia: string | null;
     inicioCurso: string | null; finalCurso: string | null; duracion: number; numeroUsuarios: number;
+    unirCon: string[]; unirConIndice: number[];
   }> = [];
 
   for (const [indice, c] of (cursos as any[]).entries()) {
@@ -89,15 +99,27 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       guia, campaign: nombre, tipoCurso: tipo, horarioCurso: horario, salon, inicioCurso, finalCurso,
       excluirClaveNatural: true,
     });
+    const unirCon: string[] = [];
+    const unirConIndice: number[] = [];
     if (colisiones.length) {
-      // El detalle alimenta el modal que corrige la colisión (cambiar horario o
-      // guía y reintentar): hace falta saber QUÉ curso del lote falló.
-      throw new ConflictError(mensajeColision(colisiones), {
-        tipo: 'colision_guia',
-        indice,
-        curso: { tipoCurso: tipo, salon, horarioCurso: horario, guia },
-        colisiones,
-      });
+      if (unirSalones && colisionesUnibles({ campaign: nombre, horarioCurso: horario }, colisiones)) {
+        const ids = colisiones.map((c: any) => String(c._id || '')).filter(Boolean);
+        if (ids.length !== colisiones.length) {
+          throw new ValidationError('Alguno de los cursos en conflicto aún no existe: guárdalo primero y únelos desde la pestaña Colisiones.');
+        }
+        unirCon.push(...ids);
+      } else {
+        // El detalle alimenta el modal que corrige la colisión (cambiar horario o
+        // guía y reintentar): hace falta saber QUÉ curso del lote falló.
+        throw new ConflictError(mensajeColision(colisiones), {
+          tipo: 'colision_guia',
+          indice,
+          curso: { tipoCurso: tipo, salon, horarioCurso: horario, guia },
+          colisiones,
+          // El modal ofrece "Unir salones" sólo cuando de verdad se puede.
+          unible: colisionesUnibles({ campaign: nombre, horarioCurso: horario }, colisiones),
+        });
+      }
     }
 
     // …y también contra los cursos del MISMO envío, que aún no están en la BD:
@@ -106,6 +128,16 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       l.guia && guia && l.guia === guia && horariosSeSolapan(l.horarioCurso, horario)
     );
     if (choqueEnLote) {
+      // Los dos cursos del choque son del MISMO envío y la misma campaña: unirlos
+      // sólo tiene sentido si además comparten el horario exacto.
+      const unibleEnLote = String(choqueEnLote.horarioCurso || '').trim().toUpperCase()
+        === String(horario || '').trim().toUpperCase();
+      if (unirSalones && unibleEnLote) {
+        unirConIndice.push(choqueEnLote.indice);
+        enLote.push({ guia, tipoCurso: tipo, salon, horarioCurso: horario, indice });
+        aInsertar.push({ tipo, horario, salon, guia, inicioCurso, finalCurso, duracion, numeroUsuarios, unirCon, unirConIndice });
+        continue;
+      }
       throw new ConflictError(
         `El guía quedaría con dos cursos a la misma hora en esta campaña: ${choqueEnLote.tipoCurso}${choqueEnLote.salon ? ` · ${choqueEnLote.salon}` : ''} · ${choqueEnLote.horarioCurso} y ${tipo}${salon ? ` · ${salon}` : ''} · ${horario}.`,
         {
@@ -117,11 +149,12 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
             horarioCurso: choqueEnLote.horarioCurso, inicioCurso: null, finalCurso: null,
             guiaNombre: null, vigenciaIndeterminada: false, mismoEnvio: true,
           }],
+          unible: unibleEnLote,
         }
       );
     }
-    enLote.push({ guia, tipoCurso: tipo, salon, horarioCurso: horario });
-    aInsertar.push({ tipo, horario, salon, guia, inicioCurso, finalCurso, duracion, numeroUsuarios });
+    enLote.push({ guia, tipoCurso: tipo, salon, horarioCurso: horario, indice });
+    aInsertar.push({ tipo, horario, salon, guia, inicioCurso, finalCurso, duracion, numeroUsuarios, unirCon, unirConIndice });
   }
 
   // Segunda pasada: ya sabemos que el lote completo es válido.
@@ -148,5 +181,22 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     });
   }
 
-  return successResponse({ campaign: nombre, creados: creados.length, cursos: creados });
+  // Unir va al FINAL, cuando todos los cursos del lote ya tienen id. Cada grupo
+  // se arma una sola vez: el curso recién creado más aquellos con los que choca
+  // (ya guardados o del propio lote, resueltos ahora por su posición).
+  const grupos: string[][] = [];
+  for (const [i, fila] of aInsertar.entries()) {
+    const destinos = [
+      ...fila.unirCon,
+      ...fila.unirConIndice.map(j => String(creados[j]?._id || '')).filter(Boolean),
+    ];
+    if (destinos.length) grupos.push([String(creados[i]._id), ...destinos]);
+  }
+  let unidos = 0;
+  for (const ids of grupos) {
+    await unirCursosEnGrupo(ids);
+    unidos += ids.length;
+  }
+
+  return successResponse({ campaign: nombre, creados: creados.length, cursos: creados, unidos });
 });
