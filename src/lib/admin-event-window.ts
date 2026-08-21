@@ -31,8 +31,23 @@
  * Cliente Y servidor (no `'server-only'`).
  */
 
-/** Margen post-fin: cuánto tiempo después del fin nominal queda abierta la ventana. */
+/**
+ * El registro de un evento administrativo sigue las MISMAS reglas que el de una
+ * sesión (decisión del usuario): abre a los `REGISTER_OPEN_MIN` del inicio y se
+ * cierra a los `REGISTER_CLOSE_MIN`. Se reutilizan las constantes de
+ * `session-window` en vez de copiar los números: si mañana se cambia la ventana de
+ * las sesiones, ésta la sigue — copiarlas es como se despegan las reglas.
+ *
+ * Antes la ventana era proporcional a la duración (abría al terminar el evento y
+ * duraba 90 min). Hoy todos duran 1 hora, así que el cambio sólo adelanta la
+ * apertura —de +60 a +30— y amplía el cierre de +150 min a 24 h.
+ */
+export { REGISTER_OPEN_MIN, REGISTER_CLOSE_MIN } from './session-window';
+
+/** @deprecated Se conserva por compatibilidad; la ventana ya no depende de este margen. */
 export const ADMIN_REGISTER_GRACE_MIN = 90;
+
+import { REGISTER_OPEN_MIN, REGISTER_CLOSE_MIN } from './session-window';
 
 const BYPASS_ROLES = new Set(['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN']);
 
@@ -85,8 +100,11 @@ export function getAdminEventWindow(
   const elapsedMs = now.getTime() - startMs;
   const minutesElapsed = Math.floor(elapsedMs / 60_000);
 
-  const openMin  = finNominalMin;
-  const closeMin = finNominalMin + ADMIN_REGISTER_GRACE_MIN;
+  // Mismas reglas que una sesión: se cuentan desde el INICIO del evento, no desde
+  // su fin. Registrar una reunión de la semana siguiente queda descartado solo,
+  // porque los minutos transcurridos serían negativos.
+  const openMin  = REGISTER_OPEN_MIN;
+  const closeMin = REGISTER_CLOSE_MIN;
 
   const inRegisterWindow = minutesElapsed >= openMin && minutesElapsed <= closeMin;
   const expired          = minutesElapsed > closeMin;

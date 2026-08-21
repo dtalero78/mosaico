@@ -24,6 +24,7 @@ import {
   ADMIN_EVENT_EXPIRED_MESSAGE,
   type AdminEventTipo,
 } from '@/lib/admin-event-window'
+import { REGISTER_CLOSE_MIN } from '@/lib/session-window'
 
 interface AdminEventDetail {
   _id: string
@@ -171,7 +172,7 @@ export default function AdminEventRegistrarModal({
         {/* Estado de ventana — solo si NO registrado */}
         {!event.registrado && (
           <>
-            {ws.isCoordinator && ws.minutesElapsed > ws.finNominalMin + 90 ? (
+            {ws.isCoordinator && ws.minutesElapsed > REGISTER_CLOSE_MIN ? (
               <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-3 mb-4 text-sm text-blue-900">
                 <strong>Gestionando como Coordinador</strong>: la ventana del advisor venció (
                 {ws.minutesElapsed} min desde el inicio). Quedará con motivo
@@ -203,8 +204,8 @@ export default function AdminEventRegistrarModal({
                     className="w-32 border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-mono"
                   />
                   <p className="text-[11px] text-gray-500 mt-1">
-                    Pre-llenado con la hora de fin nominal ({finNominalHHMM}).
-                    {!ws.isCoordinator && <> No puede ser anterior.</>}
+                    Pre-llenado con la hora de fin del evento ({finNominalHHMM}); ajústala si
+                    saliste antes.{!ws.isCoordinator && <> No puede ser anterior a la hora de inicio.</>}
                   </p>
                 </div>
                 <div>

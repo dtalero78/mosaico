@@ -3,7 +3,7 @@ import {
   getSessionWindow, ATTENDANCE_WINDOW_MIN, REGISTER_OPEN_MIN, REGISTER_CLOSE_MIN,
 } from '../../src/lib/session-window';
 import {
-  getAdminEventWindow, ADMIN_REGISTER_GRACE_MIN,
+  getAdminEventWindow,
 } from '../../src/lib/admin-event-window';
 import {
   zoomDisponible, ZOOM_ABRE_MIN_ANTES, ZOOM_CIERRA_MIN_DESPUES,
@@ -82,19 +82,25 @@ test.describe('Ventana de la sesión del guía', () => {
   });
 });
 
-test.describe('Ventana del evento administrativo — proporcional a su duración', () => {
-  test('un evento de 3 h no se registra a la media hora: hay que esperar a que termine', () => {
-    const w = getAdminEventWindow(INICIO, 'GUIA', en(50), 3);
-    expect(w.finNominalMin).toBe(180);
+test.describe('Ventana del evento administrativo — las mismas reglas que una sesión', () => {
+  test('no se registra antes de los 30 min, aunque el evento dure 3 h', () => {
+    const w = getAdminEventWindow(INICIO, 'GUIA', en(20), 3);
     expect(w.canRegister).toBe(false);
-    expect(w.minutesUntilRegister).toBe(130);
+    expect(w.minutesUntilRegister).toBe(10);
   });
 
-  test('se abre al terminar el evento y dura la gracia', () => {
-    expect(getAdminEventWindow(INICIO, 'GUIA', en(179), 3).canRegister).toBe(false);
-    expect(getAdminEventWindow(INICIO, 'GUIA', en(180), 3).canRegister).toBe(true);
-    expect(getAdminEventWindow(INICIO, 'GUIA', en(180 + ADMIN_REGISTER_GRACE_MIN), 3).canRegister).toBe(true);
-    expect(getAdminEventWindow(INICIO, 'GUIA', en(180 + ADMIN_REGISTER_GRACE_MIN + 1), 3).isExpired).toBe(true);
+  test('abre a los 30 min del INICIO — no hay que esperar a que termine', () => {
+    expect(getAdminEventWindow(INICIO, 'GUIA', en(29), 3).canRegister).toBe(false);
+    expect(getAdminEventWindow(INICIO, 'GUIA', en(30), 3).canRegister).toBe(true);
+    expect(getAdminEventWindow(INICIO, 'GUIA', en(REGISTER_CLOSE_MIN), 3).canRegister).toBe(true);
+    expect(getAdminEventWindow(INICIO, 'GUIA', en(REGISTER_CLOSE_MIN + 1), 3).isExpired).toBe(true);
+  });
+
+  test('la ventana es la MISMA que la de las sesiones', () => {
+    for (const horas of [1, 3, 8]) {
+      const w = getAdminEventWindow(INICIO, 'GUIA', en(REGISTER_OPEN_MIN), horas);
+      expect(w.canRegister).toBe(true);   // no depende de la duración
+    }
   });
 
   test('sin duración se asume 1 hora', () => {

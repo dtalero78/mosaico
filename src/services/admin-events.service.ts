@@ -13,6 +13,7 @@ import 'server-only';
 import crypto from 'crypto';
 import { ValidationError, ForbiddenError, NotFoundError, ConflictError } from '@/lib/errors';
 import { queryOne } from '@/lib/postgres';
+import { REGISTER_OPEN_MIN } from '@/lib/session-window';
 import { AdminEventsRepository, AdminEventRow, AdminEventWithAdvisor } from '@/repositories/admin-events.repository';
 import {
   AdminEventTipo,
@@ -171,6 +172,19 @@ export async function registrarAdminEvent(input: {
   // a las 3 horas después del inicio, cierra 90 min después).
   const ws = getAdminEventWindow(ev.fechaInicio, input.sessionRole, new Date(), ev.horas);
 
+  // Nadie confirma un evento que aún no ha empezado — ni el coordinador. Sin esta
+  // guarda, "Confirmar los pendientes" daba por cumplida una reunión de la semana
+  // siguiente: pasó con la del 28-ago, donde los 25 guías quedaron registrados en
+  // 3 segundos, una semana antes. La ventana normal (+30 min) lo cubre para el
+  // guía; el coordinador la bypassea, así que hace falta decirlo aquí.
+  if (ws.minutesElapsed < REGISTER_OPEN_MIN) {
+    const faltan = Math.max(0, REGISTER_OPEN_MIN - ws.minutesElapsed);
+    throw new ValidationError(
+      `El evento aún no ha empezado (o lleva menos de ${REGISTER_OPEN_MIN} min): `
+      + `no se puede confirmar la asistencia todavía${faltan ? ` — faltan ${faltan} min` : ''}.`,
+    );
+  }
+
   // Si NO es coordinator, validar ownership + ventana
   if (!ws.isCoordinator) {
     // El advisor debe estar matcheado con ev.advisorId vía su email registrado en ADVISORS
@@ -190,28 +204,28 @@ export async function registrarAdminEvent(input: {
       );
     }
 
-    // Defensa B: validar que el timeout no sea ANTES del fin nominal.
-    // El advisor podría cerrar más tarde (margen post-fin), pero nunca antes
-    // de que el evento haya terminado nominalmente.
-    const finNominalDate = new Date(new Date(ev.fechaInicio).getTime() + ws.finNominalMin * 60_000);
+    // Defensa B: el Time Out no puede ser anterior al INICIO del evento — la misma
+    // regla que en una sesión, donde el guía cierra cuando termina de dictarla y no
+    // se le exige esperar al fin nominal.
+    const inicioDate = new Date(ev.fechaInicio);
     const [hh, mm] = input.timeout.split(':').map(Number);
-    const timeoutDate = new Date(finNominalDate);
+    const timeoutDate = new Date(inicioDate);
     timeoutDate.setHours(hh, mm, 0, 0);
-    // Si timeout cae antes de fin nominal en el mismo día, ajustamos al día siguiente
-    // (caso raro: evento nocturno que cruza medianoche). Si igual queda antes, rechazamos.
-    if (timeoutDate < finNominalDate) {
-      const finHH = String(finNominalDate.getHours()).padStart(2, '0');
-      const finMM = String(finNominalDate.getMinutes()).padStart(2, '0');
+    if (timeoutDate < inicioDate) {
+      const iniHH = String(inicioDate.getHours()).padStart(2, '0');
+      const iniMM = String(inicioDate.getMinutes()).padStart(2, '0');
       throw new ValidationError(
-        `Time Out (${input.timeout}) no puede ser anterior a la hora de fin del evento (${finHH}:${finMM}).`,
+        `Time Out (${input.timeout}) no puede ser anterior a la hora de inicio del evento (${iniHH}:${iniMM}).`,
       );
     }
   }
 
-  // motivoCierre: si lo cierra coord y ya pasó la ventana → GESTION_COORDINADOR.
-  // El umbral ahora es relativo a la duración del evento.
+  // Quién lo cerró. Si lo hace un coordinador es SIEMPRE gestión suya, aunque sea
+  // dentro del plazo del guía: antes sólo se marcaba pasada la ventana, y el
+  // registro salía como "confirmado por el guía" cuando en realidad no lo había
+  // tocado — que es lo que hacía indistinguible un caso del otro en el detalle.
   const motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR' =
-    ws.isCoordinator && ws.minutesElapsed > ws.finNominalMin + 90 ? 'GESTION_COORDINADOR' : 'NORMAL';
+    ws.isCoordinator ? 'GESTION_COORDINADOR' : 'NORMAL';
 
   const notasFinal = (input.notas?.trim() || 'no hubo novedades');
 
