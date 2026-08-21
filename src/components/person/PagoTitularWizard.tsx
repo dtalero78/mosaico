@@ -6,6 +6,7 @@ import { XMarkIcon, ArrowUpTrayIcon, TrashIcon } from '@heroicons/react/24/outli
 import { api, handleApiError } from '@/hooks/use-api'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
+import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
 
 interface PagoTitularWizardProps {
   isOpen: boolean
@@ -348,7 +349,7 @@ export default function PagoTitularWizard({
     const input = document.createElement('input')
     input.type = 'file'
     input.multiple = true
-    input.accept = 'image/jpeg,image/jpg,image/png,image/webp,image/heic,application/pdf'
+    input.accept = ACCEPT_DOCUMENTOS
     input.style.display = 'none'
     document.body.appendChild(input)
     input.addEventListener('change', () => {

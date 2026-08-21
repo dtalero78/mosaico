@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { api, handleApiError } from '@/hooks/use-api'
+import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
 
 interface UploadDocButtonProps {
   /** PEOPLE._id where documents are stored. If null/empty, button is disabled. */
@@ -65,7 +66,7 @@ export default function UploadDocButton({
     const input = document.createElement('input')
     input.type = 'file'
     input.multiple = true
-    input.accept = 'image/jpeg,image/jpg,image/png,image/webp,image/heic,application/pdf'
+    input.accept = ACCEPT_DOCUMENTOS
     input.style.display = 'none'
     document.body.appendChild(input)
     input.addEventListener('change', () => {

@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { Person } from '@/types'
 import { formatDate } from '@/lib/utils'
-import { ArrowDownTrayIcon, ArrowUpTrayIcon, DocumentTextIcon, PhotoIcon } from '@heroicons/react/24/outline'
+import { ArrowDownTrayIcon, ArrowUpTrayIcon, DocumentTextIcon, PhotoIcon, SpeakerWaveIcon } from '@heroicons/react/24/outline'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import { api, handleApiError } from '@/hooks/use-api'
 import toast from 'react-hot-toast'
 import PersonContractViewer from './PersonContractViewer'
 import SuspendidaBadge from '@/components/common/SuspendidaBadge'
+import { ACCEPT_DOCUMENTOS, esAudio, esImagen, etiquetaDocumento } from '@/lib/documentos-adjuntos'
 
 interface PersonGeneralProps {
   person: Person
@@ -88,7 +89,7 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
     const input = document.createElement('input')
     input.type = 'file'
     input.multiple = true
-    input.accept = 'image/jpeg,image/jpg,image/png,image/webp,image/heic,application/pdf'
+    input.accept = ACCEPT_DOCUMENTOS
     input.style.display = 'none'
     document.body.appendChild(input)
     input.addEventListener('change', () => {
@@ -242,23 +243,33 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
               {docs.map((doc, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
                   <div className="flex items-center space-x-3">
-                    {doc.tipo?.startsWith('image/') ? (
+                    {esImagen(doc.tipo, doc.nombre) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={doc.url} alt={doc.nombre} className="h-12 w-12 rounded object-cover flex-shrink-0 border border-gray-200" />
+                    ) : esAudio(doc.tipo, doc.nombre) ? (
+                      <SpeakerWaveIcon className="h-8 w-8 text-indigo-500 flex-shrink-0" />
                     ) : (
                       <DocumentTextIcon className="h-8 w-8 text-red-400 flex-shrink-0" />
                     )}
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{doc.nombre}</p>
-                      <p className="text-xs text-gray-500">{doc.tipo?.startsWith('image/') ? 'Imagen' : 'PDF'}</p>
+                      <p className="text-xs text-gray-500">{etiquetaDocumento(doc.tipo, doc.nombre)}</p>
                     </div>
                   </div>
+                  {/* El audio se escucha aquí mismo: abrirlo en otra pestaña para oír
+                      una nota de voz de 20 segundos es una vuelta innecesaria. */}
+                  {esAudio(doc.tipo, doc.nombre) ? (
+                    <audio controls preload="none" src={doc.url} className="mt-2 w-full h-9">
+                      Tu navegador no puede reproducir este audio.
+                    </audio>
+                  ) : null}
                   <a
                     href={doc.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-2 text-sm text-primary-600 hover:text-primary-800 block"
                   >
-                    Ver documento
+                    {esAudio(doc.tipo, doc.nombre) ? 'Descargar audio' : 'Ver documento'}
                   </a>
                 </div>
               ))}

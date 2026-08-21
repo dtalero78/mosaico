@@ -29,6 +29,7 @@ import { fillContractTemplate, type ConsentDisplay } from '@/lib/contract-templa
 import { templatePlataformaFor } from '@/lib/contract-template'
 import ReservaCupoBanner from '@/components/comercial/ReservaCupoBanner'
 import { isContratoPrueba } from '@/components/common/ContratoPruebaBadge'
+import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
 
 // ── Field definitions ──
 
@@ -1208,7 +1209,7 @@ export default function ContratoDetailPage() {
                       const input = document.createElement('input')
                       input.type = 'file'
                       input.multiple = true
-                      input.accept = 'image/jpeg,image/jpg,image/png,image/webp,image/heic,application/pdf'
+                      input.accept = ACCEPT_DOCUMENTOS
                       input.style.display = 'none'
                       document.body.appendChild(input)
                       input.addEventListener('change', () => {
