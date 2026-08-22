@@ -1680,7 +1680,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                         </label>
                         <input
                           type="date"
-                          value={beneficiaryData.fechaNacimiento}
+                          value={(beneficiaryData.fechaNacimiento || '').slice(0, 10)}
                           onChange={(e) => handleBeneficiaryDataChange('fechaNacimiento', e.target.value)}
                           className="input-field"
                         />

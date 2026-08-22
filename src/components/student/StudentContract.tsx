@@ -489,7 +489,7 @@ export default function StudentContract({ student, contratoFinalizado = false }:
             <p className="text-xs font-medium text-gray-500 mb-0.5">Fecha inicial</p>
             <p className="text-sm font-semibold text-gray-900">
               {(student as any).fechaContrato
-                ? new Date((student as any).fechaContrato).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                ? new Date((student as any).fechaContrato).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
                 : '—'}
             </p>
           </div>

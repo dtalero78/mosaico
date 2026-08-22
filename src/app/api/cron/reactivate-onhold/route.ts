@@ -65,14 +65,16 @@ export async function GET(request: NextRequest) {
         try {
           console.log(`Cron reactivate-onhold: Reactivando estudiante ${student._id} - ${student.primerNombre} ${student.primerApellido}`)
 
-          const fechaOnHold = new Date(student.fechaOnHold)
-          const fechaFinOnHold = new Date(student.fechaFinOnHold)
+          // Las fechas son días puros ('YYYY-MM-DD'): la cuenta va en UTC para que
+          // no dependa de la zona del servidor.
+          const fechaOnHold = new Date(String(student.fechaOnHold).slice(0, 10) + 'T00:00:00Z')
+          const fechaFinOnHold = new Date(String(student.fechaFinOnHold).slice(0, 10) + 'T00:00:00Z')
           const diasPausados = Math.ceil((fechaFinOnHold.getTime() - fechaOnHold.getTime()) / (1000 * 60 * 60 * 24))
 
           let newFinalContrato = student.finalContrato
           if (student.finalContrato) {
-            const finalDate = new Date(student.finalContrato)
-            finalDate.setDate(finalDate.getDate() + diasPausados)
+            const finalDate = new Date(String(student.finalContrato).slice(0, 10) + 'T00:00:00Z')
+            finalDate.setUTCDate(finalDate.getUTCDate() + diasPausados)
             newFinalContrato = finalDate.toISOString().split('T')[0]
           }
 

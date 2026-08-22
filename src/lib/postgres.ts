@@ -10,6 +10,28 @@
 
 import 'server-only';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+// `types` no está en los tipos del paquete (ver src/types/pg-overrides.d.ts),
+// pero sí en el runtime: es la API con la que pg convierte cada tipo de columna.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pgTypes = require('pg').types as { setTypeParser: (oid: number, fn: (v: string) => any) => void };
+
+/**
+ * Una columna `date` vuelve como TEXTO 'YYYY-MM-DD', no como objeto `Date`.
+ *
+ * Por defecto el driver convierte un `date` en un `Date` a MEDIANOCHE DE LA ZONA
+ * DEL SERVIDOR. Al serializarlo a JSON eso se vuelve un instante — en producción,
+ * que corre en UTC, `1982-02-08` sale como `"1982-02-08T00:00:00.000Z"` — y el
+ * navegador de alguien en Chile o Colombia, que va detrás de UTC, lo pinta como
+ * el 7 de febrero. Una fecha de nacimiento no tiene hora ni zona: el día que se
+ * escribe es el día que debe verse, aquí y en cualquier país.
+ *
+ * Afecta a las 31 columnas `date` (nacimiento, contrato, inicio/fin de curso,
+ * OnHold, pagos…). El código que hacía `String(x).slice(0,10)` o `new Date(x)`
+ * sigue funcionando igual; lo que deja de existir es el desfase de un día.
+ *
+ * `1082` es el OID de `date` en PostgreSQL.
+ */
+pgTypes.setTypeParser(1082, (v) => v);
 
 // Connection pool configuration
 // Supports both DATABASE_URL (Digital Ocean) and individual POSTGRES_* variables

@@ -151,8 +151,8 @@ export default function StudentOnHold({
     const confirmed = window.confirm(
       `⚠️ ¿Está seguro que desea ACTIVAR el estado OnHold?\n\n` +
       `Período OnHold:\n` +
-      `  • Fecha Inicio: ${new Date(fechaOnHold).toLocaleDateString('es-ES')}\n` +
-      `  • Fecha Fin: ${new Date(fechaFinOnHold).toLocaleDateString('es-ES')}\n` +
+      `  • Fecha Inicio: ${new Date(fechaOnHold).toLocaleDateString('es-ES', { timeZone: 'UTC' })}\n` +
+      `  • Fecha Fin: ${new Date(fechaFinOnHold).toLocaleDateString('es-ES', { timeZone: 'UTC' })}\n` +
       `  • Duración: ${diasOnHold} días\n\n` +
       `El estudiante SUELTA su salón:\n` +
       `  • Deja de ocupar cupo y se le borra el curso.\n` +
@@ -483,7 +483,8 @@ export default function StudentOnHold({
                                 {new Date(entry.fechaOnHold).toLocaleDateString('es-ES', {
                                   year: 'numeric',
                                   month: 'long',
-                                  day: 'numeric'
+                                  day: 'numeric',
+                                  timeZone: 'UTC'
                                 })}
                               </span>
                             </div>
@@ -493,7 +494,8 @@ export default function StudentOnHold({
                                 {new Date(entry.fechaFinOnHold).toLocaleDateString('es-ES', {
                                   year: 'numeric',
                                   month: 'long',
-                                  day: 'numeric'
+                                  day: 'numeric',
+                                  timeZone: 'UTC'
                                 })}
                               </span>
                             </div>
