@@ -2,7 +2,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
-import { cursosDeFechas, regenerarUnCurso } from '@/services/festivos-personalizados.service';
+import { cursosDeFechas, impulsaEnFechas, regenerarUnCurso } from '@/services/festivos-personalizados.service';
 
 /**
  * Recolocar las clases que caen en un festivo declarado.
@@ -22,7 +22,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const fechas = raw.split(',').map((s) => s.trim()).filter(Boolean);
   if (!fechas.length) throw new ValidationError('Indica al menos una fecha.');
   if (fechas.length > 40) throw new ValidationError('Máximo 40 fechas por operación.');
-  return successResponse({ cursos: await cursosDeFechas(fechas) });
+  const [cursos, impulsa] = await Promise.all([cursosDeFechas(fechas), impulsaEnFechas(fechas)]);
+  return successResponse({ cursos, impulsa });
 });
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {

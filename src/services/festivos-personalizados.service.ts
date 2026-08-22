@@ -140,7 +140,16 @@ export async function eliminarFestivo(id: string): Promise<{ fecha: string }> {
   return row;
 }
 
-/** Cursos activos con clase en alguna de esas fechas — los que hay que recolocar. */
+/**
+ * Cursos activos con clase en alguna de esas fechas — los que hay que recolocar.
+ *
+ * IMPULSA queda FUERA: su calendario no sale del horario semanal sino de una
+ * configuración propia (sesiones L/M/V + entrenamientos y evaluaciones en fechas
+ * fijas), y regenerarlo con el motor de MOSAICO le borraría los entrenamientos y
+ * las evaluaciones y los reemplazaría por sesiones sueltas. Sus días sin clase se
+ * cargan en su propio asistente (Académico › Crear IMPULSA), y se listan aparte
+ * para que nadie crea que quedaron cubiertos.
+ */
 export async function cursosDeFechas(fechas: string[]) {
   const norm = fechas.map(normalizarFecha);
   const rows = await queryMany<{ _id: string; campaign: string; tipoCurso: string; salon: string | null }>(
@@ -148,12 +157,27 @@ export async function cursosDeFechas(fechas: string[]) {
        FROM "CALENDARIO" c
        JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
       WHERE c."fecha" = ANY($1::date[]) AND cc."activa" IS NOT FALSE
+        AND UPPER(cc."tipoCurso") <> 'IMPULSA'
       ORDER BY cc."campaign", cc."tipoCurso", cc."salon"`, [norm]
   );
   return rows.map((cc) => ({
     _id: cc._id,
     nombre: `${cc.campaign} ${cc.tipoCurso}/${cc.salon || '—'}`,
   }));
+}
+
+/** Clases de IMPULSA que caen en esas fechas — hay que resolverlas en su asistente. */
+export async function impulsaEnFechas(fechas: string[]) {
+  const norm = fechas.map(normalizarFecha);
+  return queryMany<{ fecha: string; hora: string | null; tipo: string; curso: string }>(
+    `SELECT c."fecha"::text AS "fecha", c."hora", c."tipo",
+            cc."campaign" || ' ' || cc."tipoCurso" || '/' || COALESCE(cc."salon",'—') AS "curso"
+       FROM "CALENDARIO" c
+       JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
+      WHERE c."fecha" = ANY($1::date[]) AND cc."activa" IS NOT FALSE
+        AND UPPER(cc."tipoCurso") = 'IMPULSA'
+      ORDER BY c."dia"`, [norm]
+  );
 }
 
 /**
@@ -164,12 +188,29 @@ export async function cursosDeFechas(fechas: string[]) {
  * segundo deja huérfanos los agendamientos de los alumnos.
  */
 export async function regenerarUnCurso(cursoId: string) {
+  const curso = await queryOne<{ tipoCurso: string }>(
+    `SELECT "tipoCurso" FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`, [cursoId]);
+  if (!curso) throw new NotFoundError('Curso', cursoId);
+  // Guarda dura, no sólo el filtro de la lista: el motor de MOSAICO reconstruye el
+  // calendario desde el horario semanal, y en un curso IMPULSA eso borraría sus
+  // entrenamientos y evaluaciones.
+  if (String(curso.tipoCurso || '').toUpperCase() === 'IMPULSA') {
+    throw new ValidationError(
+      'IMPULSA no se regenera desde aquí: su calendario se materializa en Académico › Crear IMPULSA, con sus propios días sin clase.'
+    );
+  }
   const { regenerarCursoPreservandoEstado } = await import('./cursos-campaign-eventos.service');
   const r = await regenerarCursoPreservandoEstado(cursoId);
   return { eventos: r.eventos, bookings: r.bookings, alumnos: r.alumnos };
 }
 
-/** Festivos declarados que todavía tienen clases agendadas — falta regenerar. */
+/**
+ * Festivos declarados que todavía tienen clases agendadas — falta recolocarlas.
+ *
+ * Excluye IMPULSA por la misma razón que `cursosDeFechas`: sus clases no se pueden
+ * recolocar desde aquí, así que contarlas dejaría un pendiente que el botón nunca
+ * puede resolver. Se listan aparte, con su propia explicación.
+ */
 export async function festivosConSesionesPendientes(): Promise<Array<{ fecha: string; motivo: string; sesiones: number }>> {
   const festivos = await listarFestivos();
   if (!festivos.length) return [];
@@ -178,6 +219,7 @@ export async function festivosConSesionesPendientes(): Promise<Array<{ fecha: st
        FROM "CALENDARIO" c
        JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
       WHERE c."fecha" = ANY($1::date[]) AND cc."activa" IS NOT FALSE
+        AND UPPER(cc."tipoCurso") <> 'IMPULSA'
       GROUP BY 1`, [festivos.map((f) => f.fecha)]
   );
   const byFecha = new Map(rows.map((r) => [String(r.fecha).slice(0, 10), r.n]));

@@ -30,6 +30,7 @@ interface Preview {
 }
 interface Pendiente { fecha: string; motivo: string; sesiones: number }
 interface CursoRegen { _id: string; nombre: string }
+interface ClaseImpulsa { fecha: string; hora: string | null; tipo: string; curso: string }
 interface ResRegen { curso: string; eventos?: number; bookings?: number; error?: string }
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
@@ -63,6 +64,7 @@ export default function FestivosPage() {
   const [resultados, setResultados] = useState<ResRegen[] | null>(null)
   const [confirmarRegen, setConfirmarRegen] = useState(false)
   const [avance, setAvance] = useState<{ hechos: number; total: number; actual: string } | null>(null)
+  const [impulsa, setImpulsa] = useState<ClaseImpulsa[]>([])
 
   const cargar = async () => {
     setCargando(true)
@@ -134,6 +136,7 @@ export default function FestivosPage() {
       const jl = await rl.json()
       if (!rl.ok) throw new Error(jl?.error || 'No se pudo listar los cursos')
       const cursos: CursoRegen[] = jl.cursos || []
+      setImpulsa(jl.impulsa || [])
       setAvance({ hechos: 0, total: cursos.length, actual: '' })
 
       for (let i = 0; i < cursos.length; i++) {
@@ -310,6 +313,24 @@ export default function FestivosPage() {
                 <div className="bg-amber-500 h-2.5 rounded-full transition-all"
                   style={{ width: `${avance.total ? Math.round((avance.hechos / avance.total) * 100) : 0}%` }} />
               </div>
+            </div>
+          )}
+
+          {impulsa.length > 0 && (
+            <div className="bg-sky-50 border border-sky-200 rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-sky-900">IMPULSA se resuelve aparte</h2>
+              <p className="text-sky-800 mt-1">
+                IMPULSA no arma su calendario con el horario semanal sino con su propia
+                configuración (sesiones L-M-V más entrenamientos y evaluaciones en fechas fijas),
+                así que no se puede recolocar desde aquí — se le borrarían los entrenamientos.
+                Estas {impulsa.length} clase(s) siguen en pie; hay que cargar el día sin clase en
+                <strong> Académico › Crear IMPULSA</strong>.
+              </p>
+              <ul className="mt-3 text-sm text-sky-900">
+                {impulsa.map((c, i) => (
+                  <li key={i}>· {fmtLargo(c.fecha)} {c.hora || ''} — {c.tipo} · {c.curso}</li>
+                ))}
+              </ul>
             </div>
           )}
 

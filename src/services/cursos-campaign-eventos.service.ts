@@ -196,7 +196,15 @@ export interface RegenResult {
  * Los alumnos se derivan de PEOPLE (beneficiarios aprobados del curso), no de los
  * bookings — así es robusto aunque los bookings se hayan borrado.
  */
-export async function regenerarCursoPreservandoEstado(cursoId: string): Promise<RegenResult> {
+export async function regenerarCursoPreservandoEstado(
+  cursoId: string,
+  /**
+   * Cómo se rehacen los eventos. Por defecto el motor de MOSAICO (horario semanal).
+   * IMPULSA pasa el suyo: su calendario son sesiones L-M-V más entrenamientos y
+   * evaluaciones en fechas fijas, y rehacerlo con el de MOSAICO se los borraría.
+   */
+  regenerarEventos: (curso: any) => Promise<number> = generarEventosCurso,
+): Promise<RegenResult> {
   const cursoRow = await query<any>(
     `SELECT "_id","campaign","tipoCurso","salon","guia","horarioCurso",
             "inicioCurso"::text AS "inicioCurso", "finalCurso"::text AS "finalCurso", "numeroUsuarios",
@@ -235,8 +243,8 @@ export async function regenerarCursoPreservandoEstado(cursoId: string): Promise<
     [cursoId]
   );
 
-  // 2) Regenerar eventos (descuenta festivos + suspensiones)
-  const eventos = await generarEventosCurso(curso);
+  // 2) Regenerar eventos (el motor por defecto descuenta festivos + suspensiones)
+  const eventos = await regenerarEventos(curso);
 
   // 3) Regenerar bookings por alumno
   let bookings = 0;
