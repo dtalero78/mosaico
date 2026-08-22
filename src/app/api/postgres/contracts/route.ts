@@ -82,6 +82,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     tipoPlan,
     createdBy: (session.user as any)?.email || 'unknown',
     clientToday,
+    // Sólo el flujo comercial respeta el corte de matrícula (lunes 09:00 de Chile).
+    // El wizard ya filtra los cursos, pero lo hace al cargar la página.
+    exigirMatriculaAbierta: true,
   });
 
   return successResponse({

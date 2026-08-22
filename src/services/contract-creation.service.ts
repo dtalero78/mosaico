@@ -1,4 +1,5 @@
 import 'server-only';
+import { matriculaAbierta, corteMatricula } from '@/lib/cursos-campaign';
 import { randomUUID } from 'crypto';
 import { query, transaction } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
@@ -134,6 +135,12 @@ export interface BeneficiarioInput {
  *   - `true` (Migrar Contrato, importar PDF, bulk y el alta sobre un contrato que
  *     YA está listo): son ventas ya cerradas, así que ocupan el asiento en el
  *     acto y por eso sí se valida el cupo aquí.
+ *
+ * `exigirMatriculaAbierta` lo pone SÓLO el flujo comercial (Crear Contrato) y sólo
+ * cuando el contrato no es extemporáneo. La pantalla ya filtra los cursos, pero lo
+ * hace al cargar: un comercial con el wizard abierto desde antes de las 09:00 del
+ * lunes podría guardar después del corte. Las vías de back-office no lo piden — ahí
+ * se están registrando ventas ya cerradas, de campañas que suelen estar cerradas.
  */
 export async function insertBeneficiarioTx(
   client: any,
@@ -146,6 +153,7 @@ export async function insertBeneficiarioTx(
     finalContrato: string | null;
     confirmarCupo?: boolean;
     confirmadoPor?: string | null;
+    exigirMatriculaAbierta?: boolean;
   }
 ): Promise<any> {
   const { b, titularId, contrato, plataforma, vigencia, finalContrato } = args;
@@ -157,13 +165,29 @@ export async function insertBeneficiarioTx(
   let inicioCurso: string | null = null;
   if (b.campaign && b.tipoCurso && b.horarioCurso) {
     const cr = await client.query(
-      `SELECT "_id", "salon", "inicioCurso", COALESCE("numeroUsuarios", 0) AS cupos
+      `SELECT "_id", "salon", "inicioCurso", COALESCE("numeroUsuarios", 0) AS cupos,
+              (SELECT MIN(c2."inicioCurso"::text) FROM "CURSOS_CAMPAIGN" c2
+                WHERE c2."campaign" = $1) AS "inicioCampanaCursos"
          FROM "CURSOS_CAMPAIGN"
         WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
       [b.campaign, b.tipoCurso, b.horarioCurso]
     );
     salon = cr.rows[0]?.salon || null;
     inicioCurso = cr.rows[0]?.inicioCurso || null;
+
+    // ── Matrícula ──
+    // El corte (lunes siguiente al de inicio, 09:00 de Chile) se comprueba aquí y
+    // no sólo en el filtro de la pantalla, que se calcula al cargarla.
+    if (args.exigirMatriculaAbierta === true && cr.rows[0]) {
+      const inicioCamp = cr.rows[0].inicioCampanaCursos || inicioCurso;
+      if (!matriculaAbierta(inicioCamp)) {
+        const corte = corteMatricula(inicioCamp).replace('T', ' ');
+        throw new ValidationError(
+          `La matrícula de ${b.campaign} cerró el ${corte} (hora de Chile). ` +
+          `Elige una campaña en matrícula, o marca EXTEMPORÁNEA si la venta corresponde a ésta.`
+        );
+      }
+    }
 
     // ── Cupo ──
     // Sólo se valida cuando el beneficiario va a OCUPAR el asiento en el acto
@@ -389,6 +413,13 @@ export interface CreateContractInput {
   /** YYYY-MM-DD en TZ local del cliente para fechaPago/fechaValidacion (opcional). */
   clientToday?: string | null;
   /**
+   * ¿Se exige que la campaña siga EN MATRÍCULA? Lo pone sólo Crear Contrato (el
+   * flujo comercial). Las vías de back-office —Migrar Contrato, importar PDF,
+   * bulk— registran ventas ya cerradas, casi siempre de campañas cerradas.
+   * Un contrato marcado EXTEMPORÁNEA lo desactiva: para eso existe la casilla.
+   */
+  exigirMatriculaAbierta?: boolean;
+  /**
    * ¿Los beneficiarios OCUPAN el cupo desde ya? Por defecto **no**: en el flujo
    * comercial el curso es provisional hasta que se marque "listo".
    * Las herramientas de back-office (Migrar Contrato, importar PDF, bulk) lo
@@ -481,6 +512,7 @@ export async function createFullContract(input: CreateContractInput) {
         finalContrato,
         confirmarCupo: input.confirmarCupo === true,
         confirmadoPor: input.createdBy,
+        exigirMatriculaAbierta: input.exigirMatriculaAbierta === true && titular?.extemporanea !== true,
       });
       created.beneficiarios.push(row);
     }
