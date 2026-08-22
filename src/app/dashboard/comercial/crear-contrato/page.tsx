@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react'
+import ContratoIdentidadBar from '@/components/contract/ContratoIdentidadBar';
 import { useSearchParams } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
@@ -728,6 +729,18 @@ function CrearContratoContent() {
             </div>
           </div>
         )}
+
+        {/* Identidad del contrato en curso — acompaña los 7 pasos */}
+        <ContratoIdentidadBar
+          contrato={contrato}
+          primerNombre={titular.primerNombre}
+          segundoNombre={titular.segundoNombre}
+          primerApellido={titular.primerApellido}
+          segundoApellido={titular.segundoApellido}
+          numeroId={titular.numeroId}
+          esPrueba={esContratoPrueba}
+          esExtemporanea={esExtemporanea}
+        />
 
         {/* Progress bar */}
         <div className="mb-8">

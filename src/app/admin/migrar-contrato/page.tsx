@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import ContratoIdentidadBar from '@/components/contract/ContratoIdentidadBar'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, TrashIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
@@ -372,6 +373,16 @@ export default function MigrarContratoPage() {
           <h1 className="text-2xl font-bold text-gray-900">Migrar Contrato</h1>
           <p className="text-sm text-gray-500 mt-1">Crea el titular y beneficiarios con número de contrato manual</p>
         </div>
+
+        {/* Identidad del contrato en curso — acompaña los 8 pasos */}
+        <ContratoIdentidadBar
+          contrato={contrato}
+          primerNombre={titular.primerNombre}
+          segundoNombre={titular.segundoNombre}
+          primerApellido={titular.primerApellido}
+          segundoApellido={titular.segundoApellido}
+          numeroId={titular.numeroId}
+        />
 
         {/* Progress */}
         <div className="mb-8 overflow-x-auto">
