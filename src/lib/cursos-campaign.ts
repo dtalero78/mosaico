@@ -174,46 +174,51 @@ export function campaignNameToDate(name: string): string | null {
 
 /**
  * Cursos visibles en Crear Contrato según la casilla EXTEMPORÁNEA.
- * - NO extemporánea → solo cursos de campañas "En matrícula" (`matriculaAbierta`,
- *   que incluye los 7 días de gracia tras el cierre — ver `corteMatricula`).
- * - Extemporánea → cursos "Activo" de la campaña inmediatamente ANTERIOR a la "En matrícula"
- *   (doble comparación: nombre-fecha de campaña + fechas reales; finalCampaign < inicio de la
- *   "En matrícula"), excluyendo cursos cuyo inicio fue hace MÁS de 2 semanas. Vacío si no aplica.
+ * - NO extemporánea → sólo cursos con la matrícula abierta: la semana que sigue
+ *   a que el curso empiece (ver `corteMatricula`).
+ * - Extemporánea → cursos "Activo" de la campaña inmediatamente ANTERIOR a la "En
+ *   matrícula" (doble comparación: nombre-fecha de campaña + fecha real de inicio),
+ *   excluyendo cursos cuyo inicio fue hace MÁS de 2 semanas. Vacío si no aplica.
  */
-export function cursosVisiblesContrato<T extends { campaign?: string; inicioCurso?: any; finalCurso?: any; finalCampaign?: any }>(
+export function cursosVisiblesContrato<T extends { campaign?: string; inicioCampanaCursos?: any; inicioCurso?: any; finalCurso?: any }>(
   rows: T[], extemporanea: boolean, now: Date = new Date()
 ): T[] {
   const hoy = hoyEnChile(now);
   const sl = soloFecha;
-  const fcamp = (r: T) => sl(r.finalCampaign);
   const fcurso = (r: T) => sl(r.finalCurso);
   const ini = (r: T) => sl(r.inicioCurso);
 
-  if (!extemporanea) {
-    return rows.filter(r => matriculaAbierta(r.finalCampaign, now));
-  }
-
-  // Agregado por campaña
-  const byCamp = new Map<string, { finalCampaign: string; nameDate: string | null; inicioMin: string }>();
+  // El corte es de la campaña, no del curso: se calcula aquí a partir de todas
+  // las filas, así no depende de que el endpoint traiga `inicioCampanaCursos`.
+  const inicioCamp = new Map<string, string>();
   for (const r of rows) {
     const c = r.campaign; if (!c) continue;
-    const i = ini(r);
-    const cur = byCamp.get(c);
-    if (!cur) byCamp.set(c, { finalCampaign: fcamp(r), nameDate: campaignNameToDate(c), inicioMin: i });
-    else if (i && (!cur.inicioMin || i < cur.inicioMin)) cur.inicioMin = i;
+    const i = ini(r); if (!i) continue;
+    const cur = inicioCamp.get(c);
+    if (!cur || i < cur) inicioCamp.set(c, i);
+  }
+  const abierta = (r: T) => matriculaAbierta(inicioCamp.get(r.campaign || '') || ini(r), now);
+
+  if (!extemporanea) return rows.filter(abierta);
+
+  // Agregado por campaña
+  const byCamp = new Map<string, { nameDate: string | null; inicioMin: string }>();
+  for (const r of rows) {
+    const c = r.campaign; if (!c) continue;
+    if (!byCamp.has(c)) byCamp.set(c, { nameDate: campaignNameToDate(c), inicioMin: inicioCamp.get(c) || ini(r) });
   }
 
   // E = campaña "En matrícula". Si varias, la próxima (menor nameDate).
-  const enMat = Array.from(byCamp.entries()).filter(([, v]) => matriculaAbierta(v.finalCampaign, now));
+  const enMat = Array.from(byCamp.entries()).filter(([, v]) => matriculaAbierta(v.inicioMin, now));
   if (enMat.length === 0) return [];
   enMat.sort((a, b) => ((a[1].nameDate || '9999') < (b[1].nameDate || '9999') ? -1 : 1));
   const [, ev] = enMat[0];
   const eInicio = ev.nameDate || ev.inicioMin; // "inicio de cursos de la campaña en matrícula"
 
-  // Candidatas: nameDate < E.nameDate, finalCampaign < E.inicio, y con cursos Activos
+  // Candidatas: nameDate < E.nameDate, empezó antes que E, y con cursos Activos
   const candidatas = Array.from(byCamp.entries()).filter(([c, v]) => {
     if (ev.nameDate && v.nameDate && !(v.nameDate < ev.nameDate)) return false;
-    if (eInicio && v.finalCampaign && !(v.finalCampaign < eInicio)) return false;
+    if (eInicio && v.inicioMin && !(v.inicioMin < eInicio)) return false;
     return rows.some(r => r.campaign === c && estadoCurso(r, now) === 'activo');
   });
   if (candidatas.length === 0) return [];
@@ -259,9 +264,18 @@ export function addMonths(isoDate: string, meses: number): string {
 export const TZ_OPERACION = 'America/Santiago';
 
 /**
- * La matrícula sigue abierta 7 días DESPUÉS del cierre (`finalCampaign`), y se
- * cierra a las 09:00 del séptimo día. Es una ventana de gracia para seguir
- * matriculando cuando el curso ya arrancó.
+ * La matrícula va **del lunes en que empieza el curso al lunes siguiente a las
+ * 09:00**. Es la semana para seguir matriculando a quien llega con el curso recién
+ * arrancado.
+ *
+ * Se cuenta desde `inicioCurso` y no desde `finalCampaign` porque el inicio del
+ * curso es el hecho real: la fecha a partir de la cual el alumno nuevo tiene que
+ * ponerse al día. `finalCampaign` es un dato que alguien teclea, y mantenerlo
+ * alineado a mano obligaba a corregirlo campaña por campaña.
+ *
+ * El corte se ancla al LUNES de esa semana, no a "inicio + 7 días", para que
+ * siempre caiga en lunes: una campaña que arranca un sábado —ENERO262026M
+ * empieza el sábado 17— cerraría en sábado si se contaran días corridos.
  */
 export const GRACIA_MATRICULA_DIAS = 7;
 export const HORA_CIERRE_MATRICULA = 9;
@@ -297,40 +311,57 @@ export function hoyEnChile(now: Date = new Date()): string {
 }
 
 /**
- * Instante en que la matrícula deja de estar abierta:
- * `finalCampaign + GRACIA_MATRICULA_DIAS` a las 09:00 de Chile.
- * Devuelve `'YYYY-MM-DDTHH:mm'` (comparable con `ahoraEnChile`) o '' si no hay
- * cierre definido.
+ * Instante en que la matrícula deja de estar abierta: el LUNES SIGUIENTE al lunes
+ * de la semana en que empieza el curso, a las 09:00 de Chile.
+ * Devuelve `'YYYY-MM-DDTHH:mm'` (comparable con `ahoraEnChile`) o '' si el curso
+ * no tiene fecha de inicio.
  *
  * Los días se suman en UTC a propósito: sólo se está corriendo un número de
  * calendario, así que el cambio de horario de Chile no debe alterarlo.
  */
-export function corteMatricula(finalCampaign: any): string {
-  const f = soloFecha(finalCampaign);
+export function corteMatricula(inicioCurso: any): string {
+  const f = soloFecha(inicioCurso);
   if (!f) return '';
   const [y, m, d] = f.split('-').map(Number);
   if (!y || !m || !d) return '';
-  const dt = new Date(Date.UTC(y, m - 1, d + GRACIA_MATRICULA_DIAS));
+  // Retrocede al lunes de esa semana (0 si ya es lunes) y avanza una semana.
+  const alLunes = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+  const dt = new Date(Date.UTC(y, m - 1, d - alLunes + GRACIA_MATRICULA_DIAS));
   return `${dt.toISOString().slice(0, 10)}T${String(HORA_CIERRE_MATRICULA).padStart(2, '0')}:00`;
 }
 
-/** ¿La matrícula de esa campaña sigue abierta AHORA? */
-export function matriculaAbierta(finalCampaign: any, now: Date = new Date()): boolean {
-  const corte = corteMatricula(finalCampaign);
+/** ¿La matrícula de ese curso sigue abierta AHORA? */
+export function matriculaAbierta(inicioCurso: any, now: Date = new Date()): boolean {
+  const corte = corteMatricula(inicioCurso);
   return !!corte && ahoraEnChile(now) < corte;
 }
 
 /**
+ * Cuándo empieza la CAMPAÑA a la que pertenece este curso.
+ *
+ * Dentro de una campaña los cursos tienen fechas de inicio distintas, pero no
+ * porque empiecen en momentos distintos: es el día en que cada horario se reúne
+ * por primera vez (LUN-MIÉ el lunes, MAR-JUE el martes, SÁB el sábado). Son la
+ * misma promoción, así que la semana de matrícula se cuenta desde el PRIMERO.
+ *
+ * `inicioCampanaCursos` lo calcula el servidor por campaña; si no viene, se cae al
+ * inicio del propio curso, que para los de entre semana es el mismo día.
+ */
+function inicioDeLaCampana(row: { inicioCampanaCursos?: any; inicioCurso?: any }): any {
+  return row.inicioCampanaCursos || row.inicioCurso;
+}
+
+/**
  * Estado derivado de un curso. El orden importa: un curso que ya TERMINÓ está
- * cerrado aunque su cierre de matrícula fuera ayer.
+ * cerrado aunque su semana de matrícula siguiera corriendo.
  */
 export function estadoCurso(
-  row: { finalCampaign?: any; finalCurso?: any },
+  row: { inicioCampanaCursos?: any; inicioCurso?: any; finalCurso?: any },
   now: Date = new Date()
 ): EstadoCurso {
   const fc = soloFecha(row.finalCurso);
   if (fc && fc < hoyEnChile(now)) return 'cerrado';
-  if (matriculaAbierta(row.finalCampaign, now)) return 'matricula';
+  if (matriculaAbierta(inicioDeLaCampana(row), now)) return 'matricula';
   return 'activo';
 }
 

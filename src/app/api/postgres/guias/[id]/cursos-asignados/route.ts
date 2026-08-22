@@ -15,6 +15,10 @@ export const GET = handlerWithAuth(async (_req, { params }) => {
   const result = await query(
     `SELECT "campaign", "tipoCurso", "horarioCurso", "salon",
             "inicioCurso"::text  AS "inicioCurso",
+            -- Inicio de la CAMPAÑA = su primer curso. Los demás sólo se reúnen
+            -- otro día de la semana (LUN-MIÉ, MAR-JUE, SÁB); la semana de
+            -- matrícula se cuenta desde el primero.
+            MIN("inicioCurso"::text) OVER (PARTITION BY "campaign") AS "inicioCampanaCursos",
             "finalCurso"::text   AS "finalCurso",
             "finalCampaign"::text AS "finalCampaign",
             COALESCE("numeroUsuarios", 0) AS "numeroUsuarios",

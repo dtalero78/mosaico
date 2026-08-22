@@ -158,14 +158,15 @@ export async function getMonthlyAggregates(_tz: string = 'America/Bogota'): Prom
 // Resumen de campañas + usuarios activos/inactivos + cursos activos por tipo.
 // Alimenta el bloque "Campañas y cursos" del dashboard admin.
 
-import { ordenTipoCurso, estadoCurso, hoyEnChile, TZ_OPERACION } from '@/lib/cursos-campaign';
+import { ordenTipoCurso, estadoCurso, hoyEnChile, TZ_OPERACION, corteMatricula } from '@/lib/cursos-campaign';
 
 export interface CampaniaResumen {
   campaign: string;
   cursos: number;
   inscritos: number;
   cupos: number;
-  cierreMatricula: string | null; // finalCampaign (YYYY-MM-DD)
+  /** Cuándo deja de estar en matrícula: último `inicioCurso` + 7 días (YYYY-MM-DD). */
+  cierreMatricula: string | null;
   finalCursoMax: string | null;
 }
 export interface CursoTipoActivo { tipo: string; cursos: number; inscritos: number }
@@ -183,7 +184,7 @@ let campaniasCache: { value: CampaniasResumen; expires: number } | null = null;
 
 /**
  * El estado de la campaña usa la MISMA regla que el resto de la plataforma
- * (`lib/cursos-campaign`): 7 días de gracia tras el cierre y corte a las 09:00
+ * (`lib/cursos-campaign`): una semana desde que el curso empieza, con corte a las 09:00
  * de Chile. Antes esta copia calculaba "hoy" en la zona que le pasara el
  * cliente (`tz`), así que el dashboard podía discrepar de Consulta de Cursos.
  *
@@ -201,7 +202,9 @@ export async function getCampaniasResumen(_tz: string = TZ_OPERACION): Promise<C
     // Campañas agregadas (una fila por campaña).
     queryMany<any>(
       `SELECT "campaign",
-              MAX("finalCampaign"::text)          AS "cierreMatricula",
+              -- La campaña empieza cuando arranca su PRIMER curso: los demás sólo
+              -- se reúnen otro día de la semana (LUN-MIÉ, MAR-JUE, SÁB).
+              MIN("inicioCurso"::text)            AS "inicioCampanaCursos",
               MAX("finalCurso"::text)             AS "finalCursoMax",
               COUNT(*)::int                        AS "cursos",
               -- inscritos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
@@ -241,7 +244,9 @@ export async function getCampaniasResumen(_tz: string = TZ_OPERACION): Promise<C
     cursos: r.cursos,
     inscritos: r.inscritos,
     cupos: r.cupos,
-    cierreMatricula: r.cierreMatricula ? r.cierreMatricula.slice(0, 10) : null,
+    // Se muestra el corte DERIVADO, no una fecha guardada: es lo que de verdad
+    // decide si la campaña sigue abierta.
+    cierreMatricula: corteMatricula(r.inicioCampanaCursos).slice(0, 10) || null,
     finalCursoMax: r.finalCursoMax ? r.finalCursoMax.slice(0, 10) : null,
   });
 
@@ -250,7 +255,7 @@ export async function getCampaniasResumen(_tz: string = TZ_OPERACION): Promise<C
   const cerradas: CampaniaResumen[] = [];
   for (const r of campRows) {
     const c = mapCamp(r);
-    const est = estadoCurso({ finalCampaign: c.cierreMatricula, finalCurso: c.finalCursoMax });
+    const est = estadoCurso({ inicioCampanaCursos: r.inicioCampanaCursos, finalCurso: c.finalCursoMax });
     if (est === 'matricula') enMatricula.push(c);
     else if (est === 'activo') activas.push(c);
     else cerradas.push(c);

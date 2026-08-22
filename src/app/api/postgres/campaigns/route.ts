@@ -25,6 +25,10 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
   // → salón ascendente.
   const result = await query(
     `SELECT "_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","guia","horarioCurso","inicioCurso",
+            -- Inicio de la CAMPAÑA = su primer curso. Los demás sólo se reúnen
+            -- otro día de la semana (LUN-MIÉ, MAR-JUE, SÁB); la semana de
+            -- matrícula se cuenta desde el primero.
+            MIN("inicioCurso"::text) OVER (PARTITION BY "campaign") AS "inicioCampanaCursos",
             "duracionCurso","finalCurso","numeroUsuarios","paraMenores","activa",
             -- cupos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
             (SELECT COUNT(*)::int FROM "PEOPLE" pe

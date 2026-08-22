@@ -17,29 +17,43 @@ function enChile(iso: string, hhmm: string): Date {
   throw new Error(`no se pudo construir ${iso} ${hhmm} de Chile`);
 }
 
-test.describe('Cierre de matrícula — 7 días después del cierre, a las 09:00 de Chile', () => {
+test.describe('Cierre de matrícula — del lunes que empieza el curso al lunes siguiente, 09:00 de Chile', () => {
   test('las constantes son las acordadas', () => {
     expect(GRACIA_MATRICULA_DIAS).toBe(7);
     expect(HORA_CIERRE_MATRICULA).toBe(9);
   });
 
-  test('el corte es finalCampaign + 7 días a las 09:00', () => {
-    expect(corteMatricula('2026-08-10')).toBe('2026-08-17T09:00');
+  test('el curso empieza un lunes → cierra el lunes siguiente', () => {
+    expect(corteMatricula('2026-08-10')).toBe('2026-08-17T09:00'); // lun → lun
+    expect(corteMatricula('2026-08-17')).toBe('2026-08-24T09:00'); // AGOSTO172026M
+    expect(corteMatricula('2026-10-19')).toBe('2026-10-26T09:00'); // 0CTUBRE192026M
+  });
+
+  test('el corte SIEMPRE cae en lunes, empiece el curso el día que empiece', () => {
+    // Dentro de una campaña cada horario se reúne por primera vez otro día
+    // (LUN-MIÉ el lunes, MAR-JUE el martes, SÁB el sábado): todos cierran el
+    // mismo lunes, el siguiente al de su semana.
+    for (const dia of ['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20',
+                       '2026-08-21', '2026-08-22', '2026-08-23']) {
+      expect(corteMatricula(dia)).toBe('2026-08-24T09:00');
+    }
+    // El lunes siguiente ya pertenece a la semana siguiente.
+    expect(corteMatricula('2026-08-24')).toBe('2026-08-31T09:00');
   });
 
   test('el corte cruza fin de mes y fin de año', () => {
-    expect(corteMatricula('2026-08-30')).toBe('2026-09-06T09:00');
-    expect(corteMatricula('2026-12-28')).toBe('2027-01-04T09:00');
+    expect(corteMatricula('2026-08-30')).toBe('2026-08-31T09:00'); // domingo 30 → su lunes es el 24
+    expect(corteMatricula('2026-12-28')).toBe('2027-01-04T09:00'); // lunes 28 → lunes 4
   });
 
-  test('los 7 días se cuentan en calendario, no en horas: el cambio de horario de Chile no los mueve', () => {
+  test('la semana se cuenta en calendario, no en horas: el cambio de horario de Chile no la mueve', () => {
     // En agosto Chile va en -4 y en enero en -3. La fecha del corte es la misma
     // cuenta de días en ambos casos; lo que cambia es a qué hora UTC ocurre.
-    expect(corteMatricula('2026-01-10')).toBe('2026-01-17T09:00');
-    expect(corteMatricula('2026-08-10')).toBe('2026-08-17T09:00');
+    expect(corteMatricula('2026-01-12')).toBe('2026-01-19T09:00'); // lun ene
+    expect(corteMatricula('2026-08-10')).toBe('2026-08-17T09:00'); // lun ago
   });
 
-  test('el día del cierre y los 6 siguientes siguen en matrícula', () => {
+  test('el día que empieza el curso y los 6 siguientes siguen en matrícula', () => {
     for (let d = 0; d <= 6; d++) {
       const fecha = new Date(Date.UTC(2026, 7, 10 + d));
       const iso = fecha.toISOString().slice(0, 10);
@@ -60,7 +74,7 @@ test.describe('Cierre de matrícula — 7 días después del cierre, a las 09:00
     expect(matriculaAbierta('2026-08-10', new Date(instante.getTime() + 60_000))).toBe(false);
   });
 
-  test('sin fecha de cierre la matrícula no está abierta', () => {
+  test('sin fecha de inicio la matrícula no está abierta', () => {
     expect(matriculaAbierta(null)).toBe(false);
     expect(matriculaAbierta('')).toBe(false);
   });
@@ -70,15 +84,28 @@ test.describe('Estado del curso — cerrado gana a matrícula', () => {
   const ahora = enChile('2026-08-12', '12:00');
 
   test('un curso terminado está cerrado aunque su matrícula siga en gracia', () => {
-    expect(estadoCurso({ finalCurso: '2026-08-01', finalCampaign: '2026-08-10' }, ahora)).toBe('cerrado');
+    expect(estadoCurso({ finalCurso: '2026-08-01', inicioCurso: '2026-08-10' }, ahora)).toBe('cerrado');
   });
 
-  test('dentro de la gracia y con el curso vivo: en matrícula', () => {
-    expect(estadoCurso({ finalCurso: '2027-06-01', finalCampaign: '2026-08-10' }, ahora)).toBe('matricula');
+  test('dentro de la semana y con el curso vivo: en matrícula', () => {
+    // Empezó el lunes 10 y hoy es miércoles 12: cierra el lunes 17.
+    expect(estadoCurso({ finalCurso: '2027-06-01', inicioCurso: '2026-08-10' }, ahora)).toBe('matricula');
   });
 
-  test('pasada la gracia y con el curso vivo: activo', () => {
-    expect(estadoCurso({ finalCurso: '2027-06-01', finalCampaign: '2026-07-01' }, ahora)).toBe('activo');
+  test('el inicio de la CAMPAÑA manda sobre el del curso', () => {
+    // Un curso de sábado de la campaña que arrancó el lunes 10 cierra con ella,
+    // no una semana más tarde por reunirse por primera vez el sábado.
+    expect(estadoCurso({ finalCurso: '2027-06-01', inicioCurso: '2026-08-15', inicioCampanaCursos: '2026-08-10' }, ahora)).toBe('matricula');
+  });
+
+  test('pasada la semana y con el curso vivo: activo', () => {
+    expect(estadoCurso({ finalCurso: '2027-06-01', inicioCurso: '2026-07-01' }, ahora)).toBe('activo');
+  });
+
+  test('un curso que todavía NO empieza también está en matrícula', () => {
+    // La ventana va desde antes del inicio hasta una semana después: hasta que
+    // arranca no hay nada que cierre la matrícula.
+    expect(estadoCurso({ finalCurso: '2027-06-01', inicioCurso: '2026-10-19' }, ahora)).toBe('matricula');
   });
 
   test('el día de hoy en Chile se calcula sobre el instante, no sobre el reloj local', () => {

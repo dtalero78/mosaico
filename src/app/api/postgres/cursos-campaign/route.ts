@@ -16,6 +16,10 @@ export const GET = handler(async () => {
   const result = await query(
     `SELECT "campaign", "tipoCurso", "horarioCurso", "paraMenores", "salon", "guia",
             "inicioCurso", "finalCurso", "finalCampaign",
+            -- Inicio de la CAMPAÑA = su primer curso. Los demás sólo se reúnen
+            -- otro día de la semana (LUN-MIÉ, MAR-JUE, SÁB); la semana de
+            -- matrícula se cuenta desde el primero.
+            MIN("inicioCurso"::text) OVER (PARTITION BY "campaign") AS "inicioCampanaCursos",
             COALESCE("numeroUsuarios", 0) AS "numeroUsuarios",
             -- cupos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
             (SELECT COUNT(*)::int FROM "PEOPLE" pe

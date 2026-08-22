@@ -439,7 +439,7 @@ function CrearCampanaContent() {
     for (const r of existing) {
       const k = r.campaign
       if (!k) continue
-      if (!map.has(k)) map.set(k, { campaign: k, rows: [], inscritos: 0, cupos: 0, finalCampaign: r.finalCampaign || null, porTipo: {} as Record<string, number>, maxFinalCurso: '' })
+      if (!map.has(k)) map.set(k, { campaign: k, rows: [], inscritos: 0, cupos: 0, finalCampaign: r.finalCampaign || null, porTipo: {} as Record<string, number>, maxFinalCurso: '', minInicioCurso: '' })
       const g = map.get(k)
       g.rows.push(r)
       g.inscritos += (r.usuInscritos ?? 0)
@@ -448,6 +448,10 @@ function CrearCampanaContent() {
       if (!g.finalCampaign && r.finalCampaign) g.finalCampaign = r.finalCampaign
       const fc = r.finalCurso ? String(r.finalCurso).slice(0, 10) : ''
       if (fc > g.maxFinalCurso) g.maxFinalCurso = fc
+      // La campaña empieza con su PRIMER curso; los demás sólo se reúnen otro día
+      // de la semana. La semana de matrícula se cuenta desde ése.
+      const ic = r.inicioCurso ? String(r.inicioCurso).slice(0, 10) : ''
+      if (ic && (!g.minInicioCurso || ic < g.minInicioCurso)) g.minInicioCurso = ic
     }
     return [...map.values()].sort((a, b) => {
       const da = campaignNameToDate(a.campaign), db = campaignNameToDate(b.campaign)
@@ -456,10 +460,9 @@ function CrearCampanaContent() {
     })
   }, [existing])
 
-  // Estado agregado de una campaña: la MISMA regla, aplicada al cierre de la
-  // campaña y a la fecha del curso que termina más tarde.
-  // (Antes evaluaba las condiciones en orden invertido y divergía en el borde.)
-  const campEstado = (g: any) => estadoCurso({ finalCampaign: g.finalCampaign, finalCurso: g.maxFinalCurso })
+  // Estado agregado de una campaña: la MISMA regla, aplicada al curso que empieza
+  // PRIMERO (cuando arranca la campaña) y al que termina más tarde.
+  const campEstado = (g: any) => estadoCurso({ inicioCampanaCursos: g.minInicioCurso, finalCurso: g.maxFinalCurso })
   const cursosDeCampania = (nombre: string) => existing.filter((r: any) => r.campaign === nombre)
   // Tipos de curso presentes en la campaña (para el dropdown del detalle del reporte)
   const tiposDeCampania = (nombre: string) =>
