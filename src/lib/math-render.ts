@@ -3,6 +3,7 @@ import katex from 'katex';
 /**
  * Renderiza un texto que mezcla texto plano con:
  *   - ecuaciones LaTeX  `$$...$$` (bloque) o `$...$` (en línea) → KaTeX
+ *   - `\$` → un signo `$` literal, para escribir precios
  *   - imágenes markdown  `![alt](url)` → <img>
  *   - links markdown     `[texto](url)` → <a target="_blank">
  * El resto del texto se escapa. Fuente única usada por el renderizador (quiz,
@@ -62,14 +63,24 @@ function safeUrl(url: string): string | null {
 export function renderMathText(input: string): string {
   if (!input) return '';
   const parts: string[] = [];
-  // $$display$$ | $inline$ | ![alt](url) imagen | [texto](url) link
-  const regex = /\$\$([^$]+)\$\$|\$([^$]+)\$|!\[([^\]]*)\]\(([^)\s]+)\)|\[([^\]]+)\]\(([^)\s]+)\)/g;
+  // \$ escapado | $$display$$ | $inline$ | ![alt](url) imagen | [texto](url) link
+  //
+  // La ecuación EN LÍNEA no puede cruzar un salto de línea (`[^$\n]+`). Sin eso,
+  // dos precios en renglones distintos —"se vende a $25.000." y "se vende a
+  // $20.000."— se emparejaban entre sí y todo lo que va en medio se renderizaba
+  // como fórmula: el caso más común al escribir un enunciado con precios. Una
+  // ecuación en línea de verdad no ocupa dos renglones; el bloque `$$...$$` sí
+  // puede, y ahí se conserva. Para dos precios en el MISMO renglón está `\$`.
+  const regex = /\\\$|\$\$([^$]+)\$\$|\$([^$\n]+)\$|!\[([^\]]*)\]\(([^)\s]+)\)|\[([^\]]+)\]\(([^)\s]+)\)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = regex.exec(input)) !== null) {
     if (m.index > last) parts.push(escapeHtml(decodeHtmlEntities(input.slice(last, m.index))));
 
-    if (m[1] != null || m[2] != null) {
+    if (m[0] === '\\$') {
+      // Signo de moneda escrito a propósito: sale tal cual y no abre ecuación.
+      parts.push('$');
+    } else if (m[1] != null || m[2] != null) {
       // Ecuación LaTeX
       const display = m[1] != null;
       const latex = (m[1] ?? m[2] ?? '').trim();
@@ -103,7 +114,13 @@ export function renderMathText(input: string): string {
   return parts.join('');
 }
 
-/** ¿El texto contiene al menos una ecuación LaTeX? */
+/**
+ * ¿El texto contiene al menos una ecuación LaTeX?
+ *
+ * Misma regla que el render: en línea no cruza renglón, y un `\$` es un signo de
+ * moneda, no el comienzo de una fórmula.
+ */
 export function hasMath(input: string): boolean {
-  return /\$[^$]+\$/.test(input || '');
+  const sinEscapados = (input || '').replace(/\\\$/g, '');
+  return /\$\$[^$]+\$\$/.test(sinEscapados) || /\$[^$\n]+\$/.test(sinEscapados);
 }

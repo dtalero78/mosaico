@@ -203,6 +203,13 @@ export default function ManualQuestionsEditor({
         Cada pregunta tiene sus propios botones <span className="text-gray-700 font-medium">∑ 🖼 🔗</span>: insertan en la
         opción/campo enfocado de esa pregunta, o al final de su enunciado.
       </p>
+      <p className="text-xs text-gray-500">
+        <span className="text-gray-700 font-medium">Precios:</span> el <code className="px-1 bg-gray-100 rounded">$</code> abre
+        y cierra una ecuación, así que dos en el mismo renglón se emparejan y lo de en medio sale como fórmula. Un precio
+        por renglón funciona tal cual; si necesitas dos juntos, escribe{' '}
+        <code className="px-1 bg-gray-100 rounded">\$</code> — ej.{' '}
+        <code className="px-1 bg-gray-100 rounded">Cuesta \$10.000 o \$20.000</code>.
+      </p>
 
       {/* Punto de inserción antes de la primera pregunta */}
       {value.length > 0 && <InsertarAqui onClick={() => insertQuestionAt(0)} />}

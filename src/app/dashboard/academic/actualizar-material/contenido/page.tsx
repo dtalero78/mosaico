@@ -259,6 +259,12 @@ function LeccionEditor({
       <textarea ref={taRef} value={contenido} onChange={(e) => setContenido(e.target.value)} rows={5}
         placeholder="Objetivos, vocabulario, puntos gramaticales, criterios de evaluación… Usa $...$ para ecuaciones."
         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono resize-y" />
+      <p className="mt-1 text-[11px] text-gray-500">
+        <span className="text-gray-700 font-medium">Precios:</span> el <code className="px-1 bg-gray-100 rounded">$</code> abre
+        y cierra una ecuación, así que dos en el mismo renglón se emparejan y lo de en medio sale como fórmula. Un precio por
+        renglón funciona tal cual; si van dos juntos, escribe <code className="px-1 bg-gray-100 rounded">\$</code> — ej.{' '}
+        <code className="px-1 bg-gray-100 rounded">Cuesta \$10.000 o \$20.000</code>.
+      </p>
       {showPreview && (
         <div className="mt-2 p-3 rounded-lg bg-gray-50 border border-gray-200">
           <div className="text-[11px] font-medium text-gray-400 mb-1">Vista previa</div>
