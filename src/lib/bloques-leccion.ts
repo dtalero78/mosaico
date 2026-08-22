@@ -35,6 +35,29 @@ export function esSesionDoble(horarioCurso?: string | null): boolean {
 }
 
 /**
+ * Desde qué campaña se aplica: las que empiezan en AGOSTO 2026 o después.
+ *
+ * Las campañas anteriores (DICIEMBRE012025M, ENERO262026M, ABRIL132026M,
+ * JUNIO082026M) llevan meses en marcha con alumnos en distintos puntos del
+ * currículo: repartirles dos lecciones por sábado les correría la posición de
+ * todas las clases futuras, y eso hay que revisarlo alumno por alumno. Quedan
+ * para ajuste manual.
+ *
+ * Se compara contra `inicioCurso` y no contra el nombre de la campaña porque el
+ * nombre no siempre es legible — `0CTUBRE192026M` va con un cero, y ningún
+ * parser de nombres lo reconoce como octubre. La fecha de inicio sí es un dato.
+ */
+export const INICIO_CAMPANAS_DOS_BLOQUES = '2026-08-01';
+
+/** ¿A este curso se le aplica la regla, por la campaña a la que pertenece? */
+export function campanaAplicaDosBloques(inicioCurso: string | Date | null | undefined): boolean {
+  const iso = inicioCurso instanceof Date
+    ? inicioCurso.toISOString().slice(0, 10)
+    : String(inicioCurso || '').slice(0, 10);
+  return !!iso && iso >= INICIO_CAMPANAS_DOS_BLOQUES;
+}
+
+/**
  * Desde cuándo una sesión de dos horas cubre dos lecciones.
  *
  * Es una FECHA FIJA, no "hoy": el mapeo se recalcula cada vez que se regenera un
@@ -44,13 +67,24 @@ export function esSesionDoble(horarioCurso?: string | null): boolean {
  * uno fijo, el resultado es el mismo hoy que dentro de seis meses.
  *
  * Las sesiones ANTERIORES a esta fecha cubren una lección: es lo que realmente se
- * dictó (el último sábado dictado fue el 08-ago; el primero bajo la regla nueva es
- * el 22-ago, así que el corte cae en medio y no parte ninguna semana).
+ * dictó. Hoy ninguna campaña alcanzada por la regla tiene sábados ya dictados
+ * (AGOSTO172026M empieza el 17-ago y su primer sábado es el 22), así que el corte
+ * es una red de seguridad para las regeneraciones de aquí en adelante.
  */
 export const INICIO_DOS_BLOQUES = '2026-08-21';
 
-/** Lecciones que cubre esa sesión, contando la fecha: antes del corte, siempre 1. */
-export function leccionesDeSesion(fecha: string | Date | null | undefined, horarioCurso?: string | null): 1 | 2 {
+/**
+ * Lecciones que cubre esa sesión. Es 1 salvo que se cumplan las tres: la campaña
+ * está dentro del alcance, la clase dura dos horas y la fecha es posterior al corte.
+ */
+export function leccionesDeSesion(
+  fecha: string | Date | null | undefined,
+  horarioCurso?: string | null,
+  inicioCurso?: string | Date | null,
+): 1 | 2 {
+  // Sin `inicioCurso` no se puede saber la campaña: se asume dentro del alcance
+  // para que quien ya pasa fecha + horario (y los tests de la regla) no cambie.
+  if (inicioCurso !== undefined && !campanaAplicaDosBloques(inicioCurso)) return 1;
   const iso = fecha instanceof Date ? fecha.toISOString().slice(0, 10) : String(fecha || '').slice(0, 10);
   if (!iso || iso < INICIO_DOS_BLOQUES) return 1;
   return leccionesPorSesion(horarioCurso);

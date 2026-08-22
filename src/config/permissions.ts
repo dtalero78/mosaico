@@ -721,6 +721,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Permite suspender las sesiones seleccionadas (y revertir una suspensión). La sesión suspendida se corre al final del curso, extendiéndolo para TODOS los alumnos de ese salón. Acción masiva — pensado para SUPER_ADMIN / ADMIN / COORDINADOR_ACADEMICO.',
   },
   {
+    code: AcademicoPermission.FESTIVOS_GESTION,
+    module: Module.ACADEMICO,
+    section: 'Festivos',
+    name: 'Gestionar festivos personalizados',
+    description: 'Acceso a /dashboard/academic/festivos. Declara días sin clase que se SUMAN al calendario de Chile (la semana de Fiestas Patrias, un puente, un cierre) y regenera los cursos afectados. Un día que ya es feriado del calendario no se puede declarar ni quitar.',
+  },
+  {
     code: AcademicoPermission.ADMIN_EVENTS_GESTIONAR,
     module: Module.ACADEMICO,
     section: 'Eventos Administrativos',

@@ -3,6 +3,7 @@ import { query, transaction } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
 import { esFestivoChile } from '@/lib/festivos-chile';
+import { fechasFestivasPersonalizadas } from './festivos-personalizados.service';
 import { eventoCompartidoIdDeGrupo } from '@/lib/grupo-horario-server';
 import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { mapearLeccionesSalon } from './repetir-clase.service';
@@ -85,8 +86,14 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
   ).catch(() => ({ rows: [] as { fecha: string }[] })); // tabla aún no creada → sin suspensiones
   const suspendidas = new Set(susp.rows.map((r) => String(r.fecha).slice(0, 10)));
 
-  /** No se dicta clase: festivo de Chile o suspensión manual. */
-  const noHayClase = (d: string) => esFestivoChile(d) || suspendidas.has(d);
+  // Festivos declarados por Académico (Académico › Sesiones › Festivos), que se
+  // SUMAN a los del calendario de Chile: la semana de Fiestas Patrias, un puente,
+  // un cierre. Son globales, a diferencia de las suspensiones, que son de un curso.
+  const personalizados = await fechasFestivasPersonalizadas();
+
+  /** No se dicta clase: festivo de Chile, festivo declarado o suspensión del curso. */
+  const noHayClase = (d: string) =>
+    esFestivoChile(d) || personalizados.has(d) || suspendidas.has(d);
 
   // Feriados de Chile y suspensiones: NO se agenda clase ese día; esa sesión se
   // corre al FINAL del curso (se mantiene el nº total de sesiones = nº de clases

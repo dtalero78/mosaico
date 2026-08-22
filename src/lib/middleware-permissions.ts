@@ -178,6 +178,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/suspender-sesiones': [
     'ACADEMICO.SUSPENDER_SESIONES.VER' as Permission,
   ],
+  '/dashboard/academic/festivos': [
+    'ACADEMICO.FESTIVOS.GESTION' as Permission,
+  ],
   // /admin/feature-flags/performance-eval queda gateado solo por SUPER_ADMIN
   // (no aparece en sidebar para otros roles; el endpoint valida la sesión).
 

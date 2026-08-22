@@ -77,17 +77,19 @@ export async function leccionesBaseCurso(tipoCurso: string, sinteticas = false):
 /**
  * Recalcula el mapeo sesión→lección de un salón (por cursoCampaignId). Recorre las
  * sesiones por fecha repartiendo la secuencia expandida: una lección cada una, y
- * DOS si la clase dura dos horas (los sábados). Idempotente.
+ * DOS si la clase dura dos horas (los sábados, en las campañas desde AGOSTO 2026).
+ * Idempotente.
  * NO crea sesiones nuevas ni extiende — eso lo hace la autorización.
  */
 export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<number> {
-  type CursoMapeo = { tipoCurso: string; horarioCurso: string | null; historicRepet: any; sinteticas: boolean | null };
+  type CursoMapeo = { tipoCurso: string; horarioCurso: string | null; inicioCurso: string | null; historicRepet: any; sinteticas: boolean | null };
   const cc = await queryOne<CursoMapeo>(
     `SELECT "tipoCurso","historicRepet",
-            "horarioCurso", COALESCE("evalSinteticaPorModulo", false) AS "sinteticas"
+            "horarioCurso", "inicioCurso"::text AS "inicioCurso",
+            COALESCE("evalSinteticaPorModulo", false) AS "sinteticas"
        FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
   ).catch(() => queryOne<CursoMapeo>(
-    `SELECT "tipoCurso","horarioCurso","historicRepet", false AS "sinteticas" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
+    `SELECT "tipoCurso","horarioCurso","inicioCurso"::text AS "inicioCurso","historicRepet", false AS "sinteticas" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
   ));
   if (!cc) return 0;
 
@@ -126,7 +128,7 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
   const lec2Arr: Array<string | null> = [];
   let k = 0;
   for (const s of sesiones) {
-    const cuantas = leccionesDeSesion(s.fecha, cc.horarioCurso);
+    const cuantas = leccionesDeSesion(s.fecha, cc.horarioCurso, cc.inicioCurso);
     const l1 = seq[k];
     // La segunda, sólo si la sesión es de dos bloques Y queda lección por dictar:
     // la última clase de un curso puede cerrar con una sola.

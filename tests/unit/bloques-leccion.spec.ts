@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
   leccionesPorSesion, esSesionDoble, leccionesDeSesion, INICIO_DOS_BLOQUES,
+  campanaAplicaDosBloques, INICIO_CAMPANAS_DOS_BLOQUES,
 } from '../../src/lib/bloques-leccion';
 
 test.describe('Cuántas lecciones cubre una sesión', () => {
@@ -68,5 +69,38 @@ test.describe('El corte: las clases ya dictadas conservan su lección', () => {
 
   test('sin fecha no duplica', () => {
     expect(leccionesDeSesion(null, 'SÁB 09:00-11:00')).toBe(1);
+  });
+});
+
+test.describe('Alcance: sólo campañas desde AGOSTO 2026', () => {
+  test('una campaña anterior no reparte dos lecciones aunque sea sábado', () => {
+    // JUNIO082026M, ABRIL132026M… llevan meses en marcha: se ajustan a mano.
+    expect(leccionesDeSesion('2026-09-05', 'SÁB 09:00-11:00', '2026-06-08')).toBe(1);
+    expect(leccionesDeSesion('2026-09-05', 'SÁB 09:00-11:00', '2026-04-13')).toBe(1);
+    expect(leccionesDeSesion('2026-09-05', 'SÁB 09:00-11:00', '2025-12-01')).toBe(1);
+  });
+
+  test('AGOSTO 2026 y las siguientes sí', () => {
+    expect(leccionesDeSesion('2026-09-05', 'SÁB 09:00-11:00', '2026-08-17')).toBe(2);
+    expect(leccionesDeSesion('2026-08-22', 'SÁB 09:00-11:00', '2026-08-10')).toBe(2);
+    // 0CTUBRE192026M: el nombre lleva un cero y ningún parser lo lee como octubre,
+    // por eso el alcance se decide con la fecha de inicio.
+    expect(leccionesDeSesion('2026-11-07', 'SÁB 11:00-13:00', '2026-10-19')).toBe(2);
+  });
+
+  test('el límite es el 1 de agosto', () => {
+    expect(campanaAplicaDosBloques('2026-07-31')).toBe(false);
+    expect(campanaAplicaDosBloques(INICIO_CAMPANAS_DOS_BLOQUES)).toBe(true);
+  });
+
+  test('sin inicio de curso no se puede decidir la campaña — no se descarta', () => {
+    // Quien llama con sólo fecha + horario (o un curso sin fecha) mantiene la regla.
+    expect(leccionesDeSesion('2026-09-05', 'SÁB 09:00-11:00')).toBe(2);
+    expect(campanaAplicaDosBloques(null)).toBe(false);
+  });
+
+  test('dentro del alcance sigue mandando la duración y el corte de fecha', () => {
+    expect(leccionesDeSesion('2026-09-07', 'LUN-MIÉ 17:00-18:00', '2026-08-17')).toBe(1);
+    expect(leccionesDeSesion('2026-08-08', 'SÁB 09:00-11:00', '2026-08-17')).toBe(1);
   });
 });

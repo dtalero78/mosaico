@@ -233,6 +233,7 @@ export enum AcademicoPermission {
   // La sesión suspendida se corre al final del curso para TODO el salón.
   SUSPENDER_SESIONES_VER     = 'ACADEMICO.SUSPENDER_SESIONES.VER',
   SUSPENDER_SESIONES_GESTION = 'ACADEMICO.SUSPENDER_SESIONES.GESTION',
+  FESTIVOS_GESTION           = 'ACADEMICO.FESTIVOS.GESTION',
 }
 
 /**

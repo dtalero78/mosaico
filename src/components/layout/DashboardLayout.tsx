@@ -66,6 +66,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       {
         name: 'Sesiones', isSubmenu: true, children: [
           { name: 'Suspende Sesión', href: '/dashboard/academic/suspender-sesiones', newTab: true },
+          { name: 'Festivos', href: '/dashboard/academic/festivos', newTab: true },
           { name: 'Eventos Administrativos', href: '/dashboard/academic/eventos-administrativos', newTab: true },
           { name: 'Refuerzo Sesiones', href: '/dashboard/academic/solicitud-sesiones', newTab: true },
         ],
@@ -311,6 +312,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/dashboard/academic/suspender-sesiones': [
       AcademicoPermission.SUSPENDER_SESIONES_VER,
+    ],
+    '/dashboard/academic/festivos': [
+      AcademicoPermission.FESTIVOS_GESTION,
     ],
     '/dashboard/academic/jump-evaluaciones': [
       AcademicoPermission.JUMP_EVAL_REVISAR,
