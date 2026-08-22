@@ -3,6 +3,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import {
   listarFestivos, previsualizar, crearFestivo, festivosConSesionesPendientes,
+  eventosSueltosEnFestivos,
 } from '@/services/festivos-personalizados.service';
 
 /**
@@ -16,11 +17,12 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.FESTIVOS_GESTION);
   const fecha = new URL(request.url).searchParams.get('fecha');
   if (fecha) return successResponse({ preview: await previsualizar(fecha) });
-  const [festivos, pendientes] = await Promise.all([
+  const [festivos, pendientes, sueltos] = await Promise.all([
     listarFestivos(),
     festivosConSesionesPendientes(),
+    eventosSueltosEnFestivos(),
   ]);
-  return successResponse({ festivos, pendientes });
+  return successResponse({ festivos, pendientes, sueltos });
 });
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {

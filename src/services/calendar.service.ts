@@ -5,6 +5,7 @@
  */
 
 import 'server-only';
+import { assertNoEsFestivo } from '@/lib/festivo-guard';
 import { randomUUID } from 'crypto';
 import { CalendarioRepository, EventFilters } from '@/repositories/calendar.repository';
 import { BookingRepository } from '@/repositories/booking.repository';
@@ -105,6 +106,12 @@ export async function createEvent(data: {
   if (!data.dia) throw new ValidationError('dia is required');
   if (!data.hora) throw new ValidationError('hora is required');
   if (!data.tipo) throw new ValidationError('tipo is required');
+
+  // En un día festivo no se dicta clase. Los cursos de campaña ya lo respetan al
+  // generarse; los eventos sueltos (Welcome, nivelaciones, talleres) se crean a
+  // mano y nada los detenía — por eso llegó a haber un Welcome el 18 de septiembre,
+  // que es feriado legal.
+  await assertNoEsFestivo(data.fecha || String(data.dia).slice(0, 10));
 
   const tipo = data.tipo;
 
@@ -237,6 +244,11 @@ export async function updateEvent(
 ) {
   const event = await CalendarioRepository.findById(eventId);
   if (!event) throw new NotFoundError('Event', eventId);
+
+  // Mover un evento a un día sin clase es lo mismo que crearlo ahí.
+  if (data.fecha || data.dia) {
+    await assertNoEsFestivo(data.fecha || String(data.dia).slice(0, 10));
+  }
 
   // tipo y evento son la MISMA cosa en CALENDARIO (legacy: el campo se llamaba
   // "evento" en Wix, ahora la fuente de verdad es "tipo"). Si el frontend manda

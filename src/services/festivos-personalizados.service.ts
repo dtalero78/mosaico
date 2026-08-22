@@ -166,6 +166,38 @@ export async function cursosDeFechas(fechas: string[]) {
   }));
 }
 
+/**
+ * Eventos SUELTOS que caen en un día sin clase — no pertenecen a ningún curso de
+ * campaña (Welcome, nivelaciones, talleres creados a mano), así que no hay "final
+ * de curso" al que correrlos: se mueven o se eliminan desde el calendario.
+ *
+ * Se listan tanto los que caen en un festivo declarado como en un feriado legal:
+ * hasta ahora nada impedía crearlos ahí, y llegó a haber un Welcome el 18 de
+ * septiembre. Los nuevos ya quedan bloqueados al crearse.
+ */
+export async function eventosSueltosEnFestivos() {
+  const declarados = await listarFestivos();
+  const rows = await queryMany<{
+    _id: string; fecha: string; hora: string | null; tipo: string;
+    titulo: string | null; guia: string | null; inscritos: number;
+  }>(
+    `SELECT c."_id", c."fecha"::text AS "fecha", c."hora", c."tipo",
+            COALESCE(c."tituloONivel", c."titulo") AS "titulo",
+            g."nombreCompleto" AS "guia",
+            (SELECT COUNT(*)::int FROM "ACADEMICA_BOOKINGS" b
+              WHERE b."eventoId" = c."_id" OR b."idEvento" = c."_id") AS "inscritos"
+       FROM "CALENDARIO" c
+       LEFT JOIN "GUIAS" g ON g."_id" = c."advisor"
+      WHERE c."cursoCampaignId" IS NULL AND c."dia" >= NOW() - INTERVAL '1 day'
+      ORDER BY c."dia"`
+  );
+  const dec = new Set(declarados.map((f) => f.fecha));
+  return rows
+    .map((r) => ({ ...r, fecha: String(r.fecha).slice(0, 10) }))
+    .filter((r) => dec.has(r.fecha) || esFestivoChile(r.fecha))
+    .map((r) => ({ ...r, motivo: dec.has(r.fecha) ? 'declarado' : 'feriado legal' }));
+}
+
 /** Clases de IMPULSA que caen en esas fechas — hay que resolverlas en su asistente. */
 export async function impulsaEnFechas(fechas: string[]) {
   const norm = fechas.map(normalizarFecha);

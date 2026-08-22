@@ -29,6 +29,10 @@ interface Preview {
   cursos: CursoImpacto[]; sesiones: number; alumnos: number; yaDictadas: number
 }
 interface Pendiente { fecha: string; motivo: string; sesiones: number }
+interface Suelto {
+  _id: string; fecha: string; hora: string | null; tipo: string
+  titulo: string | null; guia: string | null; inscritos: number; motivo: string
+}
 interface CursoRegen { _id: string; nombre: string }
 interface ClaseImpulsa { fecha: string; hora: string | null; tipo: string; curso: string }
 interface ResRegen { curso: string; eventos?: number; bookings?: number; error?: string }
@@ -48,6 +52,7 @@ function fmtLargo(iso: string): string {
 export default function FestivosPage() {
   const [festivos, setFestivos] = useState<Festivo[]>([])
   const [pendientes, setPendientes] = useState<Pendiente[]>([])
+  const [sueltos, setSueltos] = useState<Suelto[]>([])
   const [cargando, setCargando] = useState(true)
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'error' | 'aviso'; texto: string } | null>(null)
 
@@ -74,6 +79,7 @@ export default function FestivosPage() {
       if (!r.ok) throw new Error(j?.error || 'No se pudo cargar')
       setFestivos(j.festivos || [])
       setPendientes(j.pendientes || [])
+      setSueltos(j.sueltos || [])
     } catch (e: any) {
       setMsg({ tipo: 'error', texto: e?.message || 'Error al cargar' })
     } finally { setCargando(false) }
@@ -313,6 +319,28 @@ export default function FestivosPage() {
                 <div className="bg-amber-500 h-2.5 rounded-full transition-all"
                   style={{ width: `${avance.total ? Math.round((avance.hechos / avance.total) * 100) : 0}%` }} />
               </div>
+            </div>
+          )}
+
+          {sueltos.length > 0 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-6">
+              <h2 className="text-lg font-semibold text-rose-900">Eventos sueltos en día sin clase</h2>
+              <p className="text-rose-800 mt-1">
+                Estos {sueltos.length} evento(s) no pertenecen a ningún curso de campaña —
+                se crearon a mano desde el calendario— así que no hay final de curso al que
+                correrlos: hay que <strong>moverlos o eliminarlos</strong> desde Académico ›
+                Calendario Sesiones. Los que se creen de ahora en adelante ya quedan
+                bloqueados en un día festivo.
+              </p>
+              <ul className="mt-3 text-sm text-rose-900">
+                {sueltos.map((s) => (
+                  <li key={s._id}>
+                    · {fmtLargo(s.fecha)} {s.hora || ''} — {s.tipo} · {s.titulo || 'sin título'}
+                    {' '}({s.guia || 'sin guía'}, {s.inscritos} inscrito/s)
+                    <span className="text-rose-600"> [{s.motivo}]</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

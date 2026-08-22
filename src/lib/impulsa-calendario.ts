@@ -3,8 +3,11 @@
  *
  * IMPULSA no usa el motor dinámico de los cursos MOSAICO. Su calendario se
  * materializa UNA vez al crear el curso:
- *  - SESIONES: recurrencia L/M/V en [inicio, fin], 20:00–21:00 (60 min). Se OMITEN
- *    (no se corren) las fechas que caen en un festivo ingresado manualmente.
+ *  - SESIONES: recurrencia L/M/V en [inicio, fin], 20:00–21:00 (60 min). En un día
+ *    festivo NO hay clase, y esa sesión se CORRE al final del curso — igual que en
+ *    los cursos MOSAICO, para que el curso conserve su número de clases. Cuenta
+ *    como festivo tanto el calendario legal de Chile como los días declarados
+ *    (los propios del curso y los globales de Académico › Sesiones › Festivos).
  *  - ENTRENAMIENTOS: fechas fijas individuales, 2h30, default 09:30–12:00 (sáb),
  *    con override de fecha y hora por ocurrencia.
  *  - EVALUACIONES: fechas fijas individuales, 2h30, 18:30–21:00. Después de las sesiones.
@@ -16,6 +19,7 @@
  * materialización — aquí sólo se computan fechas/horas locales y el resumen.
  */
 import { TZ_OPERACION } from './cursos-campaign';
+import { esFestivoChile } from './festivos-chile';
 
 export const IMPULSA_AUTHOR_TZ = TZ_OPERACION;
 export const SESION_HORA_INICIO = '20:00';   // 20:00–21:00 (60 min)
@@ -81,7 +85,9 @@ const normFijos = (arr: FechaFija[], defHora: (fecha: string) => string, tipo: I
  * sin BD ni zona horaria (eso se resuelve al materializar).
  */
 export function computeImpulsaCalendario(cfg: ImpulsaConfig) {
-  const festivos = new Set((cfg.festivos || []).map(f => String(f).trim()).filter(Boolean));
+  const declarados = new Set((cfg.festivos || []).map(f => String(f).trim()).filter(Boolean));
+  /** Día sin clase: feriado legal de Chile o día declarado (propio o global). */
+  const esFestivo = (fecha: string) => declarados.has(fecha) || esFestivoChile(fecha);
   const entrenamientos = normFijos(cfg.entrenamientos, defaultEntrenHora, 'ENTRENAMIENTO');
   const evaluaciones = normFijos(cfg.evaluaciones, () => EVAL_HORA_DEFAULT, 'EVALUACION');
   const fijos = [...entrenamientos, ...evaluaciones];
@@ -92,18 +98,47 @@ export function computeImpulsaCalendario(cfg: ImpulsaConfig) {
   const sI = SESION_HORA_INICIO, sF = addMinHHMM(SESION_HORA_INICIO, SESION_DUR_MIN);
 
   const start = asUTC(cfg.inicioSesiones), end = asUTC(cfg.finSesiones);
+  const esDiaClase = (t: Date) => { const wd = t.getUTCDay(); return wd === 1 || wd === 3 || wd === 5; };
+
+  /**
+   * Cuántas sesiones debe tener el curso: todos los L-M-V de la ventana MENOS los
+   * que ocupa un entrenamiento o una evaluación (ahí el evento fijo reemplaza a la
+   * clase). Los festivos NO se descuentan: esa clase se corre al final, igual que
+   * en los cursos de MOSAICO — el curso conserva su número de clases.
+   */
+  let objetivo = 0;
   for (let t = new Date(start); t <= end; t.setUTCDate(t.getUTCDate() + 1)) {
-    const wd = t.getUTCDay();
-    if (wd !== 1 && wd !== 3 && wd !== 5) continue; // L(1) M(3) V(5)
+    if (!esDiaClase(t)) continue;
     const fecha = t.toISOString().slice(0, 10);
-    if (festivos.has(fecha)) { festivosOmitidos.push(fecha); continue; }
+    if (fijos.some(f => f.fecha === fecha && overlap(sI, sF, f.horaInicio, f.horaFin))) continue;
+    objetivo++;
+  }
+
+  /** Agenda la sesión de ese día, o explica por qué no. */
+  const intentar = (fecha: string): boolean => {
+    if (esFestivo(fecha)) { festivosOmitidos.push(fecha); return false; }
     const choque = fijos.find(f => f.fecha === fecha && overlap(sI, sF, f.horaInicio, f.horaFin));
     if (choque) {
       colisiones.push({ fecha, sesion: `${sI}–${sF}`, evento: `${choque.tipo} ${choque.horaInicio}–${choque.horaFin}` });
-      continue;
+      return false;
     }
     sesiones.push({ fecha, horaInicio: sI, horaFin: sF, tipo: 'SESSION' });
+    return true;
+  };
+
+  for (let t = new Date(start); t <= end; t.setUTCDate(t.getUTCDate() + 1)) {
+    if (esDiaClase(t)) intentar(t.toISOString().slice(0, 10));
   }
+
+  // Las clases que cayeron en festivo se corren DESPUÉS del fin de la ventana,
+  // hasta completar el número de sesiones. El tope evita que un curso mal
+  // configurado (todo festivo) se extienda sin fin.
+  const t = new Date(end);
+  for (let guard = 0; sesiones.length < objetivo && guard < 400; guard++) {
+    t.setUTCDate(t.getUTCDate() + 1);
+    if (esDiaClase(t)) intentar(t.toISOString().slice(0, 10));
+  }
+  sesiones.sort((a, b) => a.fecha.localeCompare(b.fecha));
 
   const horas = sesiones.length * (SESION_DUR_MIN / 60)
     + (entrenamientos.length + evaluaciones.length) * (LARGO_DUR_MIN / 60);

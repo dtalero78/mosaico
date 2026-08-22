@@ -99,7 +99,15 @@ export async function asignarLeccionesImpulsa(cursoCampaignId: string): Promise<
 export async function materializarCalendarioImpulsa(
   curso: CursoImpulsa, cfg: ImpulsaConfig, actor?: string | null,
 ): Promise<{ count: number; resumen: ReturnType<typeof computeImpulsaCalendario>['resumen'] }> {
-  const calc = computeImpulsaCalendario(cfg);
+  // Los días sin clase declarados por Académico son GLOBALES: aplican también a
+  // IMPULSA. Se suman a los que el curso tenga cargados en su propio asistente.
+  const { fechasFestivasPersonalizadas } = await import('./festivos-personalizados.service');
+  const globales = await fechasFestivasPersonalizadas().catch(() => new Set<string>());
+  const cfgConFestivos: ImpulsaConfig = {
+    ...cfg,
+    festivos: Array.from(new Set([...(cfg.festivos || []), ...Array.from(globales)])),
+  };
+  const calc = computeImpulsaCalendario(cfgConFestivos);
   const tz = calc.authorTz;
   const eventos: EventoImpulsa[] = [...calc.sesiones, ...calc.entrenamientos, ...calc.evaluaciones];
 
