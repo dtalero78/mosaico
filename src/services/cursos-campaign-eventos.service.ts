@@ -248,19 +248,24 @@ export async function regenerarCursoPreservandoEstado(cursoId: string): Promise<
     });
   }
 
-  // 4) Re-aplicar el estado preservado (por estudiante + fecha)
+  // 4) Re-aplicar el estado preservado (por estudiante + fecha), en un solo UPDATE
+  //    con arrays paralelos: antes era una consulta por registro guardado.
   let estadoReaplicado = 0, estadoSinMatch = 0;
-  for (const sp of snap) {
-    const set = STATE_COLS.map((c, i) => `"${c}" = $${i + 3}`).join(', ');
-    const vals = STATE_COLS.map((c) => (sp as any)[c]);
+  if (snap.length) {
+    const set = STATE_COLS.map((c, i) => `"${c}" = v.c${i}`).join(', ');
+    const cols = STATE_COLS.map((c, i) =>
+      `unnest($${i + 4}::${c === 'calificacion' ? 'int' : c === 'comentarios' ? 'text' : 'boolean'}[]) AS c${i}`);
     const r = await query(
       `UPDATE "ACADEMICA_BOOKINGS" b SET ${set}, "_updatedDate" = NOW()
-       FROM "CALENDARIO" c
+       FROM "CALENDARIO" c,
+            (SELECT unnest($2::text[]) AS acaid, unnest($3::date[]) AS fecha, ${cols.join(', ')}) v
        WHERE (c."_id" = b."eventoId" OR c."_id" = b."idEvento") AND c."cursoCampaignId" = $1
-         AND b."idEstudiante" = $2 AND (b."fechaEvento")::date = $${STATE_COLS.length + 3}`,
-      [cursoId, sp.acaid, ...vals, sp.fecha]
+         AND b."idEstudiante" = v.acaid AND (b."fechaEvento")::date = v.fecha`,
+      [cursoId, snap.map((s: any) => s.acaid), snap.map((s: any) => s.fecha),
+       ...STATE_COLS.map((c) => snap.map((s: any) => s[c]))]
     );
-    if ((r.rowCount ?? 0) > 0) estadoReaplicado++; else estadoSinMatch++;
+    estadoReaplicado = r.rowCount ?? 0;
+    estadoSinMatch = Math.max(0, snap.length - estadoReaplicado);
   }
 
   return { eventos, bookings, alumnos: est.length, estadoReaplicado, estadoSinMatch };
@@ -337,10 +342,18 @@ export async function generarBookingsBeneficiario(
     if (r.idEvento) yaTiene.add(r.idEvento);
   }
 
+  // Un INSERT multi-fila para TODAS las clases que le faltan, y un solo UPDATE
+  // para sus contadores. Antes iba de a una: dos viajes a la BD por clase y por
+  // alumno — un curso de 88 clases con 10 alumnos hacía 1.760 idas y vueltas, y
+  // regenerarlo tardaba más de un minuto. Con esto son dos.
+  const pendientes = ev.rows.filter((e: any) => !yaTiene.has(e._id));
+  if (pendientes.length === 0) return 0;
+
   let creados = 0;
   await transaction(async (client) => {
-    for (const e of ev.rows) {
-      if (yaTiene.has(e._id)) continue;
+    const filas: any[][] = [];
+    let columnas: string[] = [];
+    for (const e of pendientes) {
       const bookingData: Record<string, any> = {
         _id: ids.booking(),
         eventoId: e._id,
@@ -372,21 +385,29 @@ export async function generarBookingsBeneficiario(
         fechaAgendamiento: new Date().toISOString(),
         origen: 'POSTGRES',
       };
-      const columns = Object.keys(bookingData);
-      const values = Object.values(bookingData);
-      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-      const columnList = columns.map((c) => `"${c}"`).join(', ');
-      await client.query(
-        `INSERT INTO "ACADEMICA_BOOKINGS" (${columnList}, "_createdDate", "_updatedDate")
-         VALUES (${placeholders}, NOW(), NOW())`,
-        values
-      );
-      await client.query(
-        `UPDATE "CALENDARIO" SET "inscritos" = COALESCE("inscritos",0) + 1, "_updatedDate" = NOW() WHERE "_id" = $1`,
-        [e._id]
-      );
-      creados++;
+      if (!columnas.length) columnas = Object.keys(bookingData);
+      filas.push(columnas.map((c) => bookingData[c]));
     }
+
+    const params: any[] = [];
+    const values = filas.map((f) => {
+      const base = params.length;
+      params.push(...f);
+      return `(${f.map((_, i) => `$${base + i + 1}`).join(', ')}, NOW(), NOW())`;
+    });
+    await client.query(
+      `INSERT INTO "ACADEMICA_BOOKINGS" (${columnas.map((c) => `"${c}"`).join(', ')}, "_createdDate", "_updatedDate")
+       VALUES ${values.join(', ')}`,
+      params
+    );
+    // +1 por clase: el alumno entra una sola vez en cada una, así que basta un
+    // UPDATE sobre el conjunto.
+    await client.query(
+      `UPDATE "CALENDARIO" SET "inscritos" = COALESCE("inscritos",0) + 1, "_updatedDate" = NOW()
+        WHERE "_id" = ANY($1::text[])`,
+      [pendientes.map((e: any) => e._id)]
+    );
+    creados = filas.length;
   });
   return creados;
 }

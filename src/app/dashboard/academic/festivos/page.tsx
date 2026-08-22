@@ -29,6 +29,7 @@ interface Preview {
   cursos: CursoImpacto[]; sesiones: number; alumnos: number; yaDictadas: number
 }
 interface Pendiente { fecha: string; motivo: string; sesiones: number }
+interface CursoRegen { _id: string; nombre: string }
 interface ResRegen { curso: string; eventos?: number; bookings?: number; error?: string }
 
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
@@ -55,10 +56,13 @@ export default function FestivosPage() {
   const [preview, setPreview] = useState<Preview | null>(null)
   const [guardando, setGuardando] = useState(false)
 
-  // Recolocación
+  // Recolocación — va curso por curso: regenerar uno solo ya reescribe sus eventos
+  // y todos los agendamientos de sus alumnos, y en una sola petición para ochenta
+  // cursos el navegador se rinde antes de terminar.
   const [regenerando, setRegenerando] = useState(false)
   const [resultados, setResultados] = useState<ResRegen[] | null>(null)
   const [confirmarRegen, setConfirmarRegen] = useState(false)
+  const [avance, setAvance] = useState<{ hechos: number; total: number; actual: string } | null>(null)
 
   const cargar = async () => {
     setCargando(true)
@@ -123,22 +127,40 @@ export default function FestivosPage() {
 
   const recolocar = async () => {
     setRegenerando(true); setMsg(null); setResultados(null); setConfirmarRegen(false)
+    const acumulado: ResRegen[] = []
     try {
-      const r = await fetch('/api/postgres/academic/festivos/regenerar', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fechas: pendientes.map((p) => p.fecha) }),
-      })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j?.error || 'No se pudo regenerar')
-      setResultados(j.resultados || [])
+      const fechas = pendientes.map((p) => p.fecha).join(',')
+      const rl = await fetch(`/api/postgres/academic/festivos/regenerar?fechas=${fechas}`, { cache: 'no-store' })
+      const jl = await rl.json()
+      if (!rl.ok) throw new Error(jl?.error || 'No se pudo listar los cursos')
+      const cursos: CursoRegen[] = jl.cursos || []
+      setAvance({ hechos: 0, total: cursos.length, actual: '' })
+
+      for (let i = 0; i < cursos.length; i++) {
+        const c = cursos[i]
+        setAvance({ hechos: i, total: cursos.length, actual: c.nombre })
+        try {
+          const r = await fetch('/api/postgres/academic/festivos/regenerar', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cursoId: c._id }),
+          })
+          const j = await r.json()
+          if (!r.ok) throw new Error(j?.error || 'error')
+          acumulado.push({ curso: c.nombre, eventos: j.eventos, bookings: j.bookings })
+        } catch (e: any) {
+          acumulado.push({ curso: c.nombre, error: e?.message || String(e) })
+        }
+        setResultados([...acumulado])
+      }
+      const fallidos = acumulado.filter((r) => r.error).length
       setMsg({
-        tipo: j.fallidos ? 'aviso' : 'ok',
-        texto: `${j.cursos} curso(s) recolocados${j.fallidos ? ` · ${j.fallidos} con error` : ''}.`,
+        tipo: fallidos ? 'aviso' : 'ok',
+        texto: `${acumulado.length} curso(s) recolocados${fallidos ? ` · ${fallidos} con error` : ''}.`,
       })
       await cargar()
     } catch (e: any) {
       setMsg({ tipo: 'error', texto: e?.message || 'Error al regenerar' })
-    } finally { setRegenerando(false) }
+    } finally { setRegenerando(false); setAvance(null) }
   }
 
   const totalPendientes = useMemo(
@@ -253,8 +275,10 @@ export default function FestivosPage() {
                 {confirmarRegen ? (
                   <div className="bg-white border border-amber-300 rounded-lg p-4">
                     <p className="text-gray-900">
-                      Se regenerarán todos los cursos con clase en esos días. Es una operación
-                      pesada y mueve las fechas de las clases futuras. ¿Continuar?
+                      Se regenerarán todos los cursos con clase en esos días, uno por uno.
+                      Cada curso tarda unos segundos y mueve las fechas de sus clases futuras;
+                      con muchos cursos esto puede tomar varios minutos. No cierres la pestaña.
+                      ¿Continuar?
                     </p>
                     <div className="mt-3 flex gap-2 justify-end">
                       <button type="button" onClick={() => setConfirmarRegen(false)}
@@ -263,16 +287,28 @@ export default function FestivosPage() {
                       </button>
                       <button type="button" onClick={recolocar} disabled={regenerando}
                         className="px-4 py-2 rounded-lg text-white bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300">
-                        {regenerando ? 'Recolocando…' : 'Sí, recolocar'}
+                        Sí, recolocar
                       </button>
                     </div>
                   </div>
                 ) : (
                   <button type="button" onClick={() => setConfirmarRegen(true)} disabled={regenerando}
                     className="px-4 py-2 rounded-lg text-white bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300">
-                    Recolocar clases
+                    {regenerando ? 'Recolocando…' : 'Recolocar clases'}
                   </button>
                 )}
+              </div>
+            </div>
+          )}
+
+          {avance && (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <p className="text-gray-900 mb-2">
+                Recolocando <strong>{avance.hechos + 1}</strong> de {avance.total} — {avance.actual}
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-amber-500 h-2.5 rounded-full transition-all"
+                  style={{ width: `${avance.total ? Math.round((avance.hechos / avance.total) * 100) : 0}%` }} />
               </div>
             </div>
           )}

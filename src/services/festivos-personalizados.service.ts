@@ -140,35 +140,33 @@ export async function eliminarFestivo(id: string): Promise<{ fecha: string }> {
   return row;
 }
 
-/**
- * Regenera los cursos que tenían clase en esas fechas, para que el calendario
- * refleje el festivo: los eventos ya creados no se mueven solos.
- *
- * Usa `regenerarCursoPreservandoEstado` —no `generarEventosCurso`— porque el
- * segundo deja huérfanos los agendamientos de los alumnos.
- * Best-effort: un curso que falle no aborta el resto.
- */
-export async function regenerarCursosDeFechas(fechas: string[]) {
-  const { regenerarCursoPreservandoEstado } = await import('./cursos-campaign-eventos.service');
+/** Cursos activos con clase en alguna de esas fechas — los que hay que recolocar. */
+export async function cursosDeFechas(fechas: string[]) {
   const norm = fechas.map(normalizarFecha);
-  const cursos = await queryMany<{ _id: string; campaign: string; tipoCurso: string; salon: string | null }>(
+  const rows = await queryMany<{ _id: string; campaign: string; tipoCurso: string; salon: string | null }>(
     `SELECT DISTINCT cc."_id", cc."campaign", cc."tipoCurso", cc."salon"
        FROM "CALENDARIO" c
        JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
       WHERE c."fecha" = ANY($1::date[]) AND cc."activa" IS NOT FALSE
       ORDER BY cc."campaign", cc."tipoCurso", cc."salon"`, [norm]
   );
-  const resultados: Array<{ curso: string; eventos?: number; bookings?: number; error?: string }> = [];
-  for (const cc of cursos) {
-    const nombre = `${cc.campaign} ${cc.tipoCurso}/${cc.salon || '—'}`;
-    try {
-      const r = await regenerarCursoPreservandoEstado(cc._id);
-      resultados.push({ curso: nombre, eventos: r.eventos, bookings: r.bookings });
-    } catch (e: any) {
-      resultados.push({ curso: nombre, error: e?.message || String(e) });
-    }
-  }
-  return resultados;
+  return rows.map((cc) => ({
+    _id: cc._id,
+    nombre: `${cc.campaign} ${cc.tipoCurso}/${cc.salon || '—'}`,
+  }));
+}
+
+/**
+ * Regenera UN curso para que su calendario refleje los festivos: los eventos ya
+ * creados no se mueven solos.
+ *
+ * Usa `regenerarCursoPreservandoEstado` —no `generarEventosCurso`— porque el
+ * segundo deja huérfanos los agendamientos de los alumnos.
+ */
+export async function regenerarUnCurso(cursoId: string) {
+  const { regenerarCursoPreservandoEstado } = await import('./cursos-campaign-eventos.service');
+  const r = await regenerarCursoPreservandoEstado(cursoId);
+  return { eventos: r.eventos, bookings: r.bookings, alumnos: r.alumnos };
 }
 
 /** Festivos declarados que todavía tienen clases agendadas — falta regenerar. */
