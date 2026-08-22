@@ -18,6 +18,9 @@ interface Props {
   nivel: string
   /** Curso, e.g. "YOJI" — el code (módulo) se repite entre cursos en MOSAICO */
   curso?: string
+  /** 2.ª lección: las clases de dos horas cubren dos, una por bloque. */
+  step2?: string | null
+  nivel2?: string | null
 }
 
 /** Returns true for Office files that can be previewed via MS Office Online */
@@ -25,7 +28,30 @@ function isOfficeFile(name: string) {
   return /\.(pptx?|docx?|xlsx?)$/i.test(name)
 }
 
-export default function SessionAdvisorMaterialTab({ step, nivel, curso }: Props) {
+/**
+ * Material del guía para la sesión.
+ *
+ * Una clase de dos horas cubre DOS lecciones (los sábados), y el guía necesita el
+ * material de las dos: con una sola no puede dictar el segundo bloque. Cada lección
+ * se pide por separado —el endpoint resuelve UNA— y se muestran una bajo la otra.
+ */
+export default function SessionAdvisorMaterialTab({ step, nivel, curso, step2, nivel2 }: Props) {
+  if (!step2) return <MaterialDeLeccion step={step} nivel={nivel} curso={curso} />
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold text-amber-800 mb-2">1.º bloque · {step}</h3>
+        <MaterialDeLeccion step={step} nivel={nivel} curso={curso} />
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-amber-800 mb-2">2.º bloque · {step2}</h3>
+        <MaterialDeLeccion step={step2} nivel={nivel2 || nivel} curso={curso} />
+      </div>
+    </div>
+  )
+}
+
+function MaterialDeLeccion({ step, nivel, curso }: { step: string; nivel: string; curso?: string }) {
   const [materials, setMaterials]     = useState<Material[]>([])
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState<string | null>(null)

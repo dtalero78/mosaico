@@ -99,9 +99,11 @@ export async function generateReport(studentId: string) {
   }
 
   // 2. Bookings del alumno con la lección de su sesión (post-backfill mapearLeccionesSalon).
+  //    Una clase de dos horas trae DOS lecciones (`sesionLeccion2`, ver `lib/bloques-leccion`).
   const bookings = academicaId
     ? await queryMany<any>(
         `SELECT c."sesionModulo" AS "sm", c."sesionLeccion" AS "sl", c."leccionOrden" AS "lo",
+                c."sesionModulo2" AS "sm2", c."sesionLeccion2" AS "sl2",
                 c."dia" AS "dia", c."tipo" AS "tipo",
                 b."asistio", b."asistencia", b."noAprobo", b."cancelo", b."movimientoAcademico"
          FROM "ACADEMICA_BOOKINGS" b
@@ -110,12 +112,20 @@ export async function generateReport(studentId: string) {
     : [];
 
   // Índice de bookings por lección (módulo||lección normalizados). Puede haber >1 = refuerzo.
+  //
+  // Una sesión de dos bloques se indexa bajo SUS DOS lecciones: quien asiste aprueba
+  // las dos. Se indexa el mismo booking, no una copia, porque es UNA sola clase — las
+  // estadísticas de asistencia siguen contándola una vez.
   const byLesson = new Map<string, any[]>();
-  for (const bk of bookings) {
-    if (!bk.sl) continue;
-    const key = `${norm(bk.sm)}||${norm(bk.sl)}`;
+  const indexar = (bk: any, mod: any, lec: any) => {
+    if (!lec) return;
+    const key = `${norm(mod)}||${norm(lec)}`;
     if (!byLesson.has(key)) byLesson.set(key, []);
     byLesson.get(key)!.push(bk);
+  };
+  for (const bk of bookings) {
+    indexar(bk, bk.sm, bk.sl);
+    indexar(bk, bk.sm2, bk.sl2);
   }
 
   const now = Date.now();

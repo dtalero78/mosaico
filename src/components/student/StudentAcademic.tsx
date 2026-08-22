@@ -899,6 +899,10 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                   <td className="table-cell">
                     <div className="text-sm text-gray-900">
                       {(classItem as any).sesionLeccion || <span className="text-gray-400">—</span>}
+                      {/* Las clases de dos horas cubren dos lecciones, una por bloque. */}
+                      {(classItem as any).sesionLeccion2 && (
+                        <div>{(classItem as any).sesionLeccion2}</div>
+                      )}
                     </div>
                   </td>
                   <td className="table-cell">

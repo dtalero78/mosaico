@@ -163,6 +163,7 @@ class BookingRepositoryClass extends BaseRepository {
                    ELSE COALESCE(c."step", b."step")
               END AS "step",
               c."sesionModulo", c."sesionLeccion",
+              c."sesionModulo2", c."sesionLeccion2",
               b."asistencia", b."asistio", b."participacion", b."noAprobo",
               b."cancelo", b."calificacion", b."anotaciones", b."comentarios", b."advisorAnotaciones",
               b."actividadPropuesta",

@@ -2,6 +2,7 @@ import 'server-only';
 import { query, queryMany, queryOne } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
+import { leccionesDeSesion } from '@/lib/bloques-leccion';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { EVALUACION_STEP } from '@/lib/evaluacion';
 import { asignarLeccionesImpulsa } from './impulsa-calendario.service';
@@ -74,17 +75,19 @@ export async function leccionesBaseCurso(tipoCurso: string, sinteticas = false):
 }
 
 /**
- * Recalcula el mapeo sesión→lección de un salón (por cursoCampaignId). Asigna a cada
- * sesión (por fecha) la i-ésima lección de la secuencia expandida. Idempotente.
+ * Recalcula el mapeo sesión→lección de un salón (por cursoCampaignId). Recorre las
+ * sesiones por fecha repartiendo la secuencia expandida: una lección cada una, y
+ * DOS si la clase dura dos horas (los sábados). Idempotente.
  * NO crea sesiones nuevas ni extiende — eso lo hace la autorización.
  */
 export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<number> {
-  const cc = await queryOne<{ tipoCurso: string; historicRepet: any; sinteticas: boolean | null }>(
+  type CursoMapeo = { tipoCurso: string; horarioCurso: string | null; historicRepet: any; sinteticas: boolean | null };
+  const cc = await queryOne<CursoMapeo>(
     `SELECT "tipoCurso","historicRepet",
-            COALESCE("evalSinteticaPorModulo", false) AS "sinteticas"
+            "horarioCurso", COALESCE("evalSinteticaPorModulo", false) AS "sinteticas"
        FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
-  ).catch(() => queryOne<{ tipoCurso: string; historicRepet: any; sinteticas: boolean | null }>(
-    `SELECT "tipoCurso","historicRepet", false AS "sinteticas" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
+  ).catch(() => queryOne<CursoMapeo>(
+    `SELECT "tipoCurso","horarioCurso","historicRepet", false AS "sinteticas" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
   ));
   if (!cc) return 0;
 
@@ -104,30 +107,47 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
   const reps = hist.filter((h: any) => h?.modulo && h?.leccion).map((h: any) => ({ modulo: h.modulo, leccion: h.leccion }));
   const seq = expandirSecuencia(base, reps);
 
-  const sesiones = await queryMany<{ _id: string }>(
-    `SELECT "_id" FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 ORDER BY "dia" ASC`, [cursoCampaignId]
+  const sesiones = await queryMany<{ _id: string; fecha: string }>(
+    `SELECT "_id", "fecha"::text AS "fecha" FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 ORDER BY "dia" ASC`, [cursoCampaignId]
   );
   if (sesiones.length === 0) return 0;
 
   // Batch: un solo UPDATE con arrays paralelos (antes: 1 query por sesión).
+  //
+  // El cursor `k` avanza por la SECUENCIA, no por las sesiones: una clase de dos
+  // horas consume DOS entradas. Por eso `leccionOrden` —que Movimiento Académico
+  // usa para saber si un cambio va adelante o atrás— es la posición de la PRIMERA
+  // lección de la sesión, y la segunda ocupa la siguiente.
   const idsArr: string[] = [];
   const ordArr: Array<number | null> = [];
   const modArr: Array<string | null> = [];
   const lecArr: Array<string | null> = [];
-  for (let i = 0; i < sesiones.length; i++) {
-    const l = seq[i];
-    idsArr.push(sesiones[i]._id);
-    ordArr.push(l ? i + 1 : null);
-    modArr.push(l?.code || null);
-    lecArr.push(l?.step || null);
+  const mod2Arr: Array<string | null> = [];
+  const lec2Arr: Array<string | null> = [];
+  let k = 0;
+  for (const s of sesiones) {
+    const cuantas = leccionesDeSesion(s.fecha, cc.horarioCurso);
+    const l1 = seq[k];
+    // La segunda, sólo si la sesión es de dos bloques Y queda lección por dictar:
+    // la última clase de un curso puede cerrar con una sola.
+    const l2 = cuantas === 2 ? seq[k + 1] : undefined;
+    idsArr.push(s._id);
+    ordArr.push(l1 ? k + 1 : null);
+    modArr.push(l1?.code || null);
+    lecArr.push(l1?.step || null);
+    mod2Arr.push(l2?.code || null);
+    lec2Arr.push(l2?.step || null);
+    k += cuantas;
   }
   await query(
     `UPDATE "CALENDARIO" c
-       SET "leccionOrden" = v.ord, "sesionModulo" = v."mod", "sesionLeccion" = v.lec, "_updatedDate" = NOW()
+       SET "leccionOrden" = v.ord, "sesionModulo" = v."mod", "sesionLeccion" = v.lec,
+           "sesionModulo2" = v.mod2, "sesionLeccion2" = v.lec2, "_updatedDate" = NOW()
      FROM (SELECT unnest($1::text[]) AS id, unnest($2::int[]) AS ord,
-                  unnest($3::text[]) AS "mod", unnest($4::text[]) AS lec) v
+                  unnest($3::text[]) AS "mod", unnest($4::text[]) AS lec,
+                  unnest($5::text[]) AS mod2, unnest($6::text[]) AS lec2) v
      WHERE c."_id" = v.id`,
-    [idsArr, ordArr, modArr, lecArr]
+    [idsArr, ordArr, modArr, lecArr, mod2Arr, lec2Arr]
   );
   return sesiones.length;
 }

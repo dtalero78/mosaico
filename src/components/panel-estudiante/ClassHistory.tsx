@@ -195,6 +195,10 @@ export default function ClassHistory({ data, isLoading }: ClassHistoryProps) {
                     <div className="text-sm text-gray-900">
                       {item.sesionLeccion || <span className="text-gray-400">—</span>}
                     </div>
+                    {/* Las clases de dos horas cubren dos lecciones, una por bloque. */}
+                    {(item as any).sesionLeccion2 && (
+                      <div className="text-sm text-gray-900">{(item as any).sesionLeccion2}</div>
+                    )}
                   </td>
                   <td className="table-cell">
                     <span className={`badge ${item.asistencia ? 'badge-success' : 'badge-danger'}`}>

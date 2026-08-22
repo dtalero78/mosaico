@@ -38,6 +38,8 @@ interface CalendarioEvent {
   step?: string
   sesionModulo?: string | null
   sesionLeccion?: string | null
+  sesionModulo2?: string | null
+  sesionLeccion2?: string | null
   // Ctrl Horas
   timeout?: string | null
   notasadvisor?: string | null
@@ -479,6 +481,8 @@ export default function SesionPage() {
                   step={evento.sesionLeccion || evento.step || ''}
                   nivel={evento.sesionModulo || evento.nivel || ''}
                   curso={evento.sesionModulo ? (evento.nivel || undefined) : undefined}
+                  step2={evento.sesionLeccion2}
+                  nivel2={evento.sesionModulo2}
                 />
               )
             }}

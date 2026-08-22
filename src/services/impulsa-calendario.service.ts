@@ -25,6 +25,15 @@ const nombreEventoDe = (ev: EventoImpulsa, curso: CursoImpulsa): string =>
  * mapeando por TIPO en secuencia contra las lecciones de NIVELES (por orden):
  *   SESSION → "Modulo NN" · ENTRENAMIENTO → "Entrenamiento" · EVALUACION → "Evaluación".
  * Así la pestaña Material y el display resuelven la lección de cada sesión.
+ *
+ * Los ENTRENAMIENTOS se reparten por MÓDULO, no lección a lección: son las clases
+ * largas del fin de semana (2h30) y cubren el módulo COMPLETO — "Entrenamiento 01"
+ * son las lecciones 06 y 07, y las dos avanzan con la misma asistencia. Repartirlos
+ * lección a lección corría la numeración: el 2.º entrenamiento del curso salía como
+ * "Entrenamiento 01 · Lección 07" en vez de Entrenamiento 02.
+ *
+ * Sesiones y evaluaciones siguen 1:1 — duran una hora (o son una prueba) y cubren
+ * una sola lección.
  */
 export async function asignarLeccionesImpulsa(cursoCampaignId: string): Promise<void> {
   const catLec = (code: string) => /entren/i.test(code) ? 'ENTREN' : /evaluac/i.test(code) ? 'EVALUAC' : 'MODULO';
@@ -40,11 +49,40 @@ export async function asignarLeccionesImpulsa(cursoCampaignId: string): Promise<
   const ev = (await query<{ _id: string; tipo: string }>(
     `SELECT "_id","tipo" FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 ORDER BY "dia" ASC, "_id" ASC`, [cursoCampaignId]
   )).rows;
+  // Entrenamientos agrupados por módulo, en el orden del currículo.
+  const modulosEntren: { code: string; steps: string[] }[] = [];
+  for (const l of lecciones.ENTREN) {
+    const ult = modulosEntren[modulosEntren.length - 1];
+    if (ult && ult.code === l.code) ult.steps.push(l.step);
+    else modulosEntren.push({ code: l.code, steps: [l.step] });
+  }
+
+  const limpiar = (id: string) => query(
+    `UPDATE "CALENDARIO" SET "sesionModulo"=NULL,"sesionLeccion"=NULL,"sesionModulo2"=NULL,"sesionLeccion2"=NULL WHERE "_id"=$1`, [id]
+  );
+
   const cursor: Record<string, number> = { MODULO: 0, ENTREN: 0, EVALUAC: 0 };
   for (const e of ev) {
     const cat = catEv(e.tipo); if (!cat) continue;
-    const lec = lecciones[cat][cursor[cat]++]; if (!lec) continue;
-    await query(`UPDATE "CALENDARIO" SET "sesionModulo"=$2,"sesionLeccion"=$3 WHERE "_id"=$1`, [e._id, lec.code, lec.step]);
+    if (cat === 'ENTREN') {
+      const mod = modulosEntren[cursor.ENTREN++];
+      // Sin módulo que asignar (hay más entrenamientos programados que módulos en
+      // NIVELES) se deja SIN lección: repetir el último haría creer que se dicta dos
+      // veces, y arrastrar la etiqueta vieja sobreviviría a la corrección del dato.
+      if (!mod) { await limpiar(e._id); continue; }
+      // Sólo caben dos lecciones por evento; hoy ningún entrenamiento tiene más.
+      await query(
+        `UPDATE "CALENDARIO" SET "sesionModulo"=$2,"sesionLeccion"=$3,"sesionModulo2"=$4,"sesionLeccion2"=$5 WHERE "_id"=$1`,
+        [e._id, mod.code, mod.steps[0], mod.steps[1] ? mod.code : null, mod.steps[1] || null]
+      );
+      continue;
+    }
+    const lec = lecciones[cat][cursor[cat]++];
+    if (!lec) { await limpiar(e._id); continue; }
+    await query(
+      `UPDATE "CALENDARIO" SET "sesionModulo"=$2,"sesionLeccion"=$3,"sesionModulo2"=NULL,"sesionLeccion2"=NULL WHERE "_id"=$1`,
+      [e._id, lec.code, lec.step]
+    );
   }
 }
 

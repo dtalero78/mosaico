@@ -22,6 +22,8 @@ interface CalendarioEvent {
   step?: string
   sesionModulo?: string | null
   sesionLeccion?: string | null
+  sesionModulo2?: string | null
+  sesionLeccion2?: string | null
 }
 
 interface SessionGeneralTabProps {
@@ -105,23 +107,40 @@ export default function SessionGeneralTab({ evento, studentCount }: SessionGener
         </div>
       </div>
 
-      {/* Módulo / Lección a la que corresponde el evento (amarra material y actividades) */}
+      {/* Módulo / Lección a la que corresponde el evento (amarra material y actividades).
+          Las clases de dos horas cubren DOS lecciones, una por bloque. */}
       {(() => {
         const modulo = evento.sesionModulo || evento.nivel || ''
         const leccion = evento.sesionLeccion || evento.step || ''
+        const leccion2 = evento.sesionLeccion2 || ''
+        const modulo2 = evento.sesionModulo2 || ''
         if (!modulo && !leccion) return null
+        const otroModulo = !!modulo2 && modulo2 !== modulo
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Módulo</label>
               <div className="p-3 bg-gray-50 rounded-lg">
                 <p className="text-gray-900">{modulo || '—'}</p>
+                {otroModulo && <p className="text-gray-900 mt-1">{modulo2}</p>}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Lección</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {leccion2 ? 'Lecciones' : 'Lección'}
+              </label>
               <div className="p-3 bg-gray-50 rounded-lg">
-                <p className="text-gray-900">{leccion || '—'}</p>
+                <p className="text-gray-900">
+                  {leccion || '—'}
+                  {leccion2 && <span className="text-gray-500 text-sm ml-2">(1.º bloque)</span>}
+                </p>
+                {leccion2 && (
+                  <p className="text-gray-900 mt-1">
+                    {otroModulo && <span className="text-gray-500">{modulo2} · </span>}
+                    {leccion2}
+                    <span className="text-gray-500 text-sm ml-2">(2.º bloque)</span>
+                  </p>
+                )}
               </div>
             </div>
           </div>

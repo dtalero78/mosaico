@@ -30,6 +30,7 @@ const EVAL_NORM = norm(EVALUACION_STEP);
 interface Aca { _id: string; numeroId: string | null; curso: string | null; nivel: string | null; step: string | null; }
 interface Bk {
   bid: string; sm: string | null; sl: string | null; lo: number | null;
+  sm2: string | null; sl2: string | null;
   asistio: boolean | null; asistencia: boolean | null; noAprobo: boolean | null; cancelo: boolean | null;
   movimientoAcademico: boolean | null;
 }
@@ -41,6 +42,7 @@ async function cargar(academicaId: string): Promise<{ aca: Aca; bookings: Bk[] }
   if (!aca) throw new NotFoundError('Student', academicaId);
   const bookings = await queryMany<Bk>(
     `SELECT b."_id" AS "bid", c."sesionModulo" AS "sm", c."sesionLeccion" AS "sl", c."leccionOrden" AS "lo",
+            c."sesionModulo2" AS "sm2", c."sesionLeccion2" AS "sl2",
             b."asistio", b."asistencia", b."noAprobo", b."cancelo", b."movimientoAcademico"
      FROM "ACADEMICA_BOOKINGS" b
      JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
@@ -55,17 +57,26 @@ function planificar(aca: Aca, bookings: Bk[], targetModulo: string, targetLeccio
   const bloqueadoWelcome = !aca.curso || aca.curso === 'WELCOME';
 
   const conOrden = bookings.filter(b => b.lo != null);
+
+  // Una clase de dos horas cubre DOS lecciones y no se puede partir por la mitad:
+  // hasta dónde llegó el alumno con ella es la posición de la SEGUNDA. Por eso todo
+  // se compara contra `ultimo` y no contra `lo` — si no, mover al alumno a la 2.ª
+  // lección de una clase la daría por vista sin haberse dictado.
+  const ultimo = (b: Bk) => (b.lo as number) + (b.sl2 ? 1 : 0);
   const ordenDe = (mod: string | null, lec: string | null): number | null => {
-    const hits = conOrden.filter(b => norm(b.sm) === norm(mod) && norm(b.sl) === norm(lec));
-    if (!hits.length) return null;
-    return Math.min(...hits.map(b => b.lo as number));
+    const pos: number[] = [];
+    for (const b of conOrden) {
+      if (norm(b.sm) === norm(mod) && norm(b.sl) === norm(lec)) pos.push(b.lo as number);
+      if (b.sl2 && norm(b.sm2) === norm(mod) && norm(b.sl2) === norm(lec)) pos.push((b.lo as number) + 1);
+    }
+    return pos.length ? Math.min(...pos) : null;
   };
 
   const targetOrder = ordenDe(targetModulo, targetLeccion);
   let currentOrder = ordenDe(aca.nivel, aca.step);
   if (currentOrder == null) {
     // Fallback: la posición actual = 1 + el mayor orden aprobado (o 1 si no hay).
-    const aprobadosOrd = conOrden.filter(isAprobada).map(b => b.lo as number);
+    const aprobadosOrd = conOrden.filter(isAprobada).map(ultimo);
     currentOrder = aprobadosOrd.length ? Math.max(...aprobadosOrd) + 1 : 1;
   }
 
@@ -77,13 +88,15 @@ function planificar(aca: Aca, bookings: Bk[], targetModulo: string, targetLeccio
   let aAprobar: Bk[] = [], aDesaprobar: Bk[] = [];
   if (targetOrder != null) {
     if (direction === 'adelante') {
-      aAprobar = conOrden.filter(b => (b.lo as number) < targetOrder && !isAprobada(b));
+      aAprobar = conOrden.filter(b => ultimo(b) < targetOrder && !isAprobada(b));
     } else if (direction === 'atras') {
-      aDesaprobar = conOrden.filter(b => (b.lo as number) >= targetOrder && isAprobada(b));
+      aDesaprobar = conOrden.filter(b => ultimo(b) >= targetOrder && isAprobada(b));
     }
   }
   // Evaluación = la declarada en NIVELES (su módulo lo es) o la sintética legacy.
-  const esEval = (b: Bk) => esModuloEvaluacion(b.sm) || norm(b.sl) === EVAL_NORM;
+  const esEval = (b: Bk) =>
+    esModuloEvaluacion(b.sm) || norm(b.sl) === EVAL_NORM ||
+    (!!b.sl2 && (esModuloEvaluacion(b.sm2) || norm(b.sl2) === EVAL_NORM));
 
   return {
     bloqueadoWelcome, targetOrder, currentOrder, direction,
