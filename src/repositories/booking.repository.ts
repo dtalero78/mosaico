@@ -77,7 +77,15 @@ class BookingRepositoryClass extends BaseRepository {
    */
   async findByEventIdWithStudentDetails(eventId: string) {
     return queryMany(
-      `SELECT DISTINCT ON (b."_id") b.*,
+      // El orden alfabético va en una consulta EXTERIOR a propósito: `DISTINCT ON
+      // (b."_id")` obliga a que `b."_id"` sea la PRIMERA clave del ORDER BY, y como
+      // el id es único agota la comparación — el apellido y el nombre que venían
+      // detrás nunca llegaban a aplicarse y la lista salía en el orden en que se
+      // crearon los agendamientos, que tras regenerar un curso es arbitrario.
+      // `UPPER` porque los nombres están cargados con mayúsculas y minúsculas
+      // mezcladas ("Angelina Castillo" junto a "BENJAMIN GULDMAN").
+      `SELECT * FROM (
+       SELECT DISTINCT ON (b."_id") b.*,
               COALESCE(a."email", p."email") as "studentEmail",
               COALESCE(p."plataforma", a."plataforma") as "studentPlataforma",
               p."estadoInactivo" as "studentInactivo", p."vigencia" as "studentVigencia",
@@ -123,7 +131,9 @@ class BookingRepositoryClass extends BaseRepository {
               AND pb."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
               AND NOT (${cupoOcupadoSql('pb')})
          )
-       ORDER BY b."_id", b."primerApellido", b."primerNombre"`,
+       ORDER BY b."_id"
+       ) t
+       ORDER BY UPPER(t."primerApellido") NULLS LAST, UPPER(t."primerNombre") NULLS LAST`,
       [eventId]
     );
   }
