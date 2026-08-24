@@ -8,6 +8,21 @@ import { ComercialPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import SinCupoModal, { type SinCupoDetalle } from '@/components/comercial/SinCupoModal'
 
+/** Un contrato aprobado ya salió de la gestión comercial. */
+const esAprobadoRow = (r: any) => ['aprobado', 'aprobada'].includes(String(r?.aprobacion || '').trim().toLowerCase())
+
+/** Color del badge por estado — el mismo lenguaje que el resto del panel. */
+function colorEstado(v: any): string {
+  const e = String(v || '').trim().toLowerCase()
+  if (e === 'aprobado' || e === 'aprobada') return 'bg-green-100 text-green-700'
+  if (e === 'finalizada') return 'bg-red-100 text-red-700'
+  if (e === 'devuelto') return 'bg-blue-100 text-blue-700'
+  if (e === 'retractado') return 'bg-gray-200 text-gray-700'
+  if (e === 'rechazado' || e === 'contrato nulo') return 'bg-red-100 text-red-700'
+  if (e === 'pendiente') return 'bg-amber-100 text-amber-700'
+  return 'bg-gray-100 text-gray-600'
+}
+
 const fmtFecha = (v: any) => { if (!v) return '—'; try { return new Date(v).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return String(v).slice(0, 10) } }
 
 export default function GestionContratoPage() {
@@ -18,6 +33,8 @@ export default function GestionContratoPage() {
   const [asesores, setAsesores] = useState<string[]>([])
   const [lideres, setLideres] = useState<string[]>([])
   const [estados, setEstados] = useState<string[]>([])
+  const [pendientes, setPendientes] = useState(0)
+  const [esBandeja, setEsBandeja] = useState(true)
   const [loading, setLoading] = useState(false)
   const [confirmar, setConfirmar] = useState<any>(null)
   const [saving, setSaving] = useState(false)
@@ -41,6 +58,7 @@ export default function GestionContratoPage() {
       const res = await fetch(`/api/postgres/comercial/gestion-contrato?${qs}`, { cache: 'no-store' }).then(r => r.json())
       if (res.error) throw new Error(res.error)
       setRows(res.rows || []); setAsesores(res.asesores || []); setEstados(res.estados || []); setLideres(res.lideres || [])
+      setPendientes(res.pendientes ?? 0); setEsBandeja(res.esBandeja !== false)
     } catch (e: any) { toast.error(e?.message || 'Error al cargar') } finally { setLoading(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -134,8 +152,11 @@ export default function GestionContratoPage() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Estado</label>
-              <select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[120px]">
-                <option value="">Todos</option>
+              {/* El estado decide el UNIVERSO: vacío = la bandeja de trabajo;
+                  cualquier otro valor deja ver el resto de los contratos. */}
+              <select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px]">
+                <option value="">Pendientes de gestión</option>
+                <option value="__TODOS__">Todos los contratos</option>
                 {estados.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -153,7 +174,11 @@ export default function GestionContratoPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-            <span className="text-sm text-gray-500">{loading ? 'Cargando…' : `${rows.length} contrato(s) firmados sin aprobar`}</span>
+            <span className="text-sm text-gray-500">
+              {loading ? 'Cargando…' : esBandeja
+                ? `${rows.length} contrato(s) firmados sin aprobar, pendientes de gestión`
+                : `${rows.length} contrato(s) · ${pendientes} pendiente(s) de gestión`}
+            </span>
             {puedeDarBaja && marcados.size > 0 && (
               <button onClick={() => setBajaOpen(true)}
                 className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700">
@@ -186,7 +211,9 @@ export default function GestionContratoPage() {
                   {loading ? (
                     <tr><td colSpan={puedeDarBaja ? 6 : 5} className="text-center text-sm text-gray-400 py-10">Cargando…</td></tr>
                   ) : rows.length === 0 ? (
-                    <tr><td colSpan={puedeDarBaja ? 6 : 5} className="text-center text-sm text-gray-400 py-10">No hay contratos firmados sin aprobar pendientes de gestión.</td></tr>
+                    <tr><td colSpan={puedeDarBaja ? 6 : 5} className="text-center text-sm text-gray-400 py-10">
+                      {esBandeja ? 'No hay contratos firmados sin aprobar pendientes de gestión.' : 'Ningún contrato coincide con los filtros.'}
+                    </td></tr>
                   ) : rows.map((r) => (
                     <tr key={r._id} className={`hover:bg-purple-50/40 ${marcados.has(r._id) ? 'bg-red-50/60' : ''}`}>
                       {puedeDarBaja && (
@@ -210,7 +237,19 @@ export default function GestionContratoPage() {
                       <td className="px-3 py-3 border-b border-gray-100 text-sm font-medium text-gray-700">{r.contrato || '—'}</td>
                       <td className="px-3 py-3 border-b border-gray-100 text-sm text-gray-600">{fmtFecha(r.fecha)}</td>
                       <td className="px-3 py-3 border-b border-gray-100">
-                        <span className="inline-flex text-xs font-semibold rounded-full px-2.5 py-0.5 bg-amber-100 text-amber-700">{r.aprobacion || r.estado || 'Pendiente'}</span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`inline-flex text-xs font-semibold rounded-full px-2.5 py-0.5 ${colorEstado(r.aprobacion)}`}>
+                            {r.aprobacion?.trim() || 'Sin estado'}
+                          </span>
+                          {/* Fuera de la bandeja las filas se ven iguales: estas
+                              marcas dicen por qué una ya no está pendiente. */}
+                          {!esBandeja && r.gestionListo && (
+                            <span className="text-[10.5px] text-emerald-700 whitespace-nowrap">✓ Gestionado</span>
+                          )}
+                          {!esBandeja && !r.firmado && (
+                            <span className="text-[10.5px] text-gray-500 whitespace-nowrap">Sin firmar</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-3 border-b border-gray-100">
                         <div className="flex items-center justify-end gap-2">
@@ -219,8 +258,12 @@ export default function GestionContratoPage() {
                           <a href={`/person/${r._id}?soloGeneral=1`} target="_blank" rel="noopener noreferrer"
                             title="Adicionar documentos"
                             className="px-2.5 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-xs font-medium hover:bg-purple-50 whitespace-nowrap">📎 Documentos</a>
-                          <button onClick={() => setConfirmar(r)}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700">✓ Dejar listo</button>
+                          {/* Sólo donde falta gestión: sobre uno ya gestionado o
+                              ya aprobado, "Dejar listo" no hace nada útil. */}
+                          {!r.gestionListo && !esAprobadoRow(r) && (
+                            <button onClick={() => setConfirmar(r)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700">✓ Dejar listo</button>
+                          )}
                         </div>
                       </td>
                     </tr>
