@@ -122,7 +122,7 @@ export default function GestionContratoPage() {
       <PermissionGuard permission={ComercialPermission.GESTION_CONTRATO} showDefaultMessage>
         <div className="p-6 max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Gestión Contrato</h1>
-          <p className="text-gray-500 mb-4 text-sm">Contratos <strong>firmados sin aprobar</strong>. Adjunta la documentación y marca <strong>Dejar listo</strong> cuando el contrato esté completo para aprobación.</p>
+          <p className="text-gray-500 mb-4 text-sm">Contratos <strong>firmados sin aprobar</strong>. Adjunta la documentación y marca <strong>Dejar listo</strong> cuando el contrato esté completo para aprobación. Los ya gestionados siguen aquí, marcados <strong>✓ Gestionado</strong>, hasta que Aprobación los apruebe.</p>
 
           <div className="flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
             <div className="flex flex-col gap-1">
@@ -155,7 +155,7 @@ export default function GestionContratoPage() {
               {/* El estado decide el UNIVERSO: vacío = la bandeja de trabajo;
                   cualquier otro valor deja ver el resto de los contratos. */}
               <select value={f.estado} onChange={e => setF({ ...f, estado: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px]">
-                <option value="">Pendientes de gestión</option>
+                <option value="">Firmados sin aprobar</option>
                 <option value="__TODOS__">Todos los contratos</option>
                 {estados.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -175,9 +175,8 @@ export default function GestionContratoPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
             <span className="text-sm text-gray-500">
-              {loading ? 'Cargando…' : esBandeja
-                ? `${rows.length} contrato(s) firmados sin aprobar, pendientes de gestión`
-                : `${rows.length} contrato(s) · ${pendientes} pendiente(s) de gestión`}
+              {loading ? 'Cargando…'
+                : `${rows.length} contrato(s)${esBandeja ? ' firmados sin aprobar' : ''} · ${pendientes} sin gestionar`}
             </span>
             {puedeDarBaja && marcados.size > 0 && (
               <button onClick={() => setBajaOpen(true)}
@@ -212,7 +211,7 @@ export default function GestionContratoPage() {
                     <tr><td colSpan={puedeDarBaja ? 6 : 5} className="text-center text-sm text-gray-400 py-10">Cargando…</td></tr>
                   ) : rows.length === 0 ? (
                     <tr><td colSpan={puedeDarBaja ? 6 : 5} className="text-center text-sm text-gray-400 py-10">
-                      {esBandeja ? 'No hay contratos firmados sin aprobar pendientes de gestión.' : 'Ningún contrato coincide con los filtros.'}
+                      {esBandeja ? 'No hay contratos firmados sin aprobar.' : 'Ningún contrato coincide con los filtros.'}
                     </td></tr>
                   ) : rows.map((r) => (
                     <tr key={r._id} className={`hover:bg-purple-50/40 ${marcados.has(r._id) ? 'bg-red-50/60' : ''}`}>
@@ -243,7 +242,7 @@ export default function GestionContratoPage() {
                           </span>
                           {/* Fuera de la bandeja las filas se ven iguales: estas
                               marcas dicen por qué una ya no está pendiente. */}
-                          {!esBandeja && r.gestionListo && (
+                          {r.gestionListo && (
                             <span className="text-[10.5px] text-emerald-700 whitespace-nowrap">✓ Gestionado</span>
                           )}
                           {!esBandeja && !r.firmado && (

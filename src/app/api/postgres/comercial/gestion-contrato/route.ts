@@ -24,14 +24,22 @@ const TODOS = `p."tipoUsuario"='TITULAR'
   AND COALESCE(p."contrato", '') NOT LIKE 'PRB-%'`;
 
 /**
- * La bandeja de trabajo — lo que se ve por defecto: titulares FIRMADOS, SIN
- * APROBAR y que nadie marcó "listo" todavía. Es un subconjunto de `TODOS`.
+ * La bandeja de trabajo — lo que se ve por defecto: titulares FIRMADOS y SIN
+ * APROBAR. Es un subconjunto de `TODOS`.
+ *
+ * **Incluye los ya marcados "listo"**: siguen sin aprobarse, así que Comercial
+ * tiene que poder verlos y darles seguimiento. Se distinguen en la fila con
+ * "✓ Gestionado" y no ofrecen el botón de dejar listo. Sólo salen de aquí cuando
+ * Aprobación los aprueba.
  */
-const PENDIENTES = `${TODOS}
+const SIN_APROBAR = `${TODOS}
   AND p."hashConsentimiento" IS NOT NULL AND p."hashConsentimiento" <> ''
   AND (p."aprobacion" IS NULL OR NOT ${esAprobadoSql('p."aprobacion"')})
-  AND COALESCE(p."gestionContratoListo", false) = false
   AND (p."estado" IS NULL OR p."estado" <> 'FINALIZADA')`;
+
+/** De los anteriores, los que aún nadie gestionó — el trabajo que falta. */
+const POR_GESTIONAR = `${SIN_APROBAR}
+  AND COALESCE(p."gestionContratoListo", false) = false`;
 
 /** Valor del filtro Estado que levanta el corte de la bandeja. */
 const ESTADO_TODOS = '__TODOS__';
@@ -64,24 +72,37 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   // bandeja de trabajo (lo pendiente); cualquier otro valor levanta el corte de
   // "sin aprobar / sin gestionar" y deja ver el resto de los contratos del
   // alcance. Un líder necesita poder mirar todo su equipo, no sólo su pendiente.
-  const universo = estado ? TODOS : PENDIENTES;
+  const universo = estado ? TODOS : SIN_APROBAR;
 
-  const where: string[] = [universo];
-  const params: any[] = [];
-  if (!scope.seeAll) { params.push(scope.liderCorreo); where.push(`LOWER(p."liderComercialCorreo") = LOWER($${params.length})`); }
-  if (asesor) { params.push(asesor); where.push(`p."asesor" = $${params.length}`); }
-  if (contrato) { params.push(`%${contrato}%`); where.push(`p."contrato" ILIKE $${params.length}`); }
-  if (numeroId) { params.push(`%${numeroId}%`); where.push(`p."numeroId" ILIKE $${params.length}`); }
-  if (estado && estado !== ESTADO_TODOS) {
-    if (estado === ESTADO_SIN) { where.push(`(p."aprobacion" IS NULL OR TRIM(p."aprobacion") = '')`); }
-    else { params.push(estado); where.push(`TRIM(p."aprobacion") = $${params.length}`); }
-  }
-  if (lider) {
-    if (lider === '(Sin líder)') { where.push(`p."liderComercial" IS NULL`); }
-    else { params.push(lider); where.push(`p."liderComercial" = $${params.length}`); }
-  }
-  if (startDate) { params.push(startDate); where.push(`COALESCE(p."fechaContrato", p."inicioContrato")::date >= $${params.length}::date`); }
-  if (endDate) { params.push(endDate); where.push(`COALESCE(p."fechaContrato", p."inicioContrato")::date <= $${params.length}::date`); }
+  /**
+   * Arma el WHERE sobre el universo que se le pase. Se usa dos veces —para las
+   * filas y para el contador de "sin gestionar"— así que el contador respeta los
+   * mismos filtros que la lista: si se acota a un líder, cuenta los de ese líder.
+   * `conEstado` queda fuera del contador porque el estado define el universo.
+   */
+  const construir = (base: string, conEstado: boolean) => {
+    const where: string[] = [base];
+    const params: any[] = [];
+    const add = (sql: (n: number) => string, value: any) => { params.push(value); where.push(sql(params.length)); };
+
+    if (!scope.seeAll) add((n) => `LOWER(p."liderComercialCorreo") = LOWER($${n})`, scope.liderCorreo);
+    if (asesor) add((n) => `p."asesor" = $${n}`, asesor);
+    if (contrato) add((n) => `p."contrato" ILIKE $${n}`, `%${contrato}%`);
+    if (numeroId) add((n) => `p."numeroId" ILIKE $${n}`, `%${numeroId}%`);
+    if (conEstado && estado && estado !== ESTADO_TODOS) {
+      if (estado === ESTADO_SIN) where.push(`(p."aprobacion" IS NULL OR TRIM(p."aprobacion") = '')`);
+      else add((n) => `TRIM(p."aprobacion") = $${n}`, estado);
+    }
+    if (lider) {
+      if (lider === '(Sin líder)') where.push(`p."liderComercial" IS NULL`);
+      else add((n) => `p."liderComercial" = $${n}`, lider);
+    }
+    if (startDate) add((n) => `COALESCE(p."fechaContrato", p."inicioContrato")::date >= $${n}::date`, startDate);
+    if (endDate) add((n) => `COALESCE(p."fechaContrato", p."inicioContrato")::date <= $${n}::date`, endDate);
+    return { sql: where.join(' AND '), params };
+  };
+
+  const { sql: whereSql, params } = construir(universo, true);
 
   const rows = (await query<any>(
     `SELECT p."_id", p."numeroId", p."contrato", p."plataforma", p."asesor",
@@ -94,7 +115,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             COALESCE(p."gestionContratoListo", false) AS "gestionListo",
             p."gestionContratoListoDate" AS "gestionListoDate"
        FROM "PEOPLE" p
-      WHERE ${where.join(' AND ')}
+      WHERE ${whereSql}
       ORDER BY COALESCE(p."fechaContrato", p."inicioContrato") DESC NULLS LAST
       LIMIT 1000`,
     params
@@ -119,9 +140,12 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     scopeArgs
   )).rows.map(r => r.lider);
 
-  // Cuántos hay en la bandeja, para mostrarlo aunque se esté mirando otro estado.
+  // Cuánto falta por gestionar, con los MISMOS filtros que la lista (menos el de
+  // estado, que es el que define el universo): así el número acompaña a lo que se
+  // está viendo en vez de dar siempre el total del alcance.
+  const cuenta = construir(POR_GESTIONAR, false);
   const pend = (await query<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM "PEOPLE" p WHERE ${PENDIENTES}${scopeFrag}`, scopeArgs
+    `SELECT COUNT(*)::int AS n FROM "PEOPLE" p WHERE ${cuenta.sql}`, cuenta.params
   )).rows[0]?.n || 0;
 
   return successResponse({
