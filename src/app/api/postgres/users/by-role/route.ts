@@ -58,10 +58,12 @@ export const GET = handlerWithAuth(async (request: NextRequest, _ctx, session) =
   }
 
   const users = await queryMany<{ _id: string; email: string; nombre: string; rol: string; activo: boolean }>(
-    `SELECT "_id", "email", "nombre", "rol", "activo"
+    // El nombre va COMPLETO: los desplegables mostraban sólo el nombre de pila
+    // y con tres "María" no se distinguía a quién se estaba eligiendo.
+    `SELECT "_id", "email", TRIM(CONCAT_WS(' ', "nombre", "apellido")) AS "nombre", "rol", "activo"
      FROM "USUARIOS_ROLES"
      WHERE ${conditions.join(' AND ')}
-     ORDER BY "nombre" ASC NULLS LAST, "email" ASC`,
+     ORDER BY "nombre" ASC NULLS LAST, "apellido" ASC NULLS LAST, "email" ASC`,
     params
   );
 
