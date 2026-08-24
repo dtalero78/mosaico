@@ -149,7 +149,7 @@ export default function ActualizarMaterialPage() {
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold text-gray-900 group-hover:text-green-600 transition-colors">Guía</div>
-            <div className="text-sm text-gray-500 mt-1">Material para advisors</div>
+            <div className="text-sm text-gray-500 mt-1">Presentaciones para los Guías</div>
           </div>
         </button>
 
