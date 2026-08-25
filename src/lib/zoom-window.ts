@@ -4,7 +4,7 @@
  *
  * Son DOS tiempos distintos:
  *
- *  1. **Ventana de ingreso** — `[inicio − 5 min, inicio + 15 min]`. Es el plazo
+ *  1. **Ventana de ingreso** — `[inicio − 5 min, inicio + 10 min]`. Es el plazo
  *     para *generar el acceso*: el alumno pulsa el ícono y queda registrado.
  *
  *  2. **Reconexión** — si generó el acceso dentro de esa ventana, su ícono le
@@ -27,7 +27,7 @@ import { eventDurationMin } from './event-duration';
 export const ZOOM_ABRE_MIN_ANTES = 5;
 
 /** Minutos DESPUÉS del inicio en que se cierra el plazo para generar el acceso. */
-export const ZOOM_CIERRA_MIN_DESPUES = 15;
+export const ZOOM_CIERRA_MIN_DESPUES = 10;
 
 /** Minutos antes del FIN de la clase en que se corta la reconexión. */
 export const ZOOM_RECONEXION_MARGEN_FINAL_MIN = 10;
