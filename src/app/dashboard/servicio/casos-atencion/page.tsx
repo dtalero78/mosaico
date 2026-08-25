@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import toast from 'react-hot-toast'
-import { CheckCircleIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
+import { CheckCircleIcon, ChatBubbleLeftRightIcon, PlusCircleIcon } from '@heroicons/react/24/outline'
 import DashboardLayout from '@/components/layout/DashboardLayout'
+import ReportarCasoModal from '@/components/session/ReportarCasoModal'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
@@ -83,6 +84,10 @@ function CasosAtencionContent() {
   const [tab, setTab] = useState<Tab>('casos')
   const cfg = TABS.find(t => t.id === tab)!
 
+  // "Adicionar caso": el mismo modal del panel del guía. Aquí no hay sesión de la
+  // que sacar el guía ni el alumno, así que el modal los pide en cascada.
+  const [adicionar, setAdicionar] = useState(false)
+
   const [curso, setCurso] = useState('')
   const [salon, setSalon] = useState('')
   const [leccion, setLeccion] = useState('')
@@ -133,6 +138,7 @@ function CasosAtencionContent() {
 
   const filtros = { curso, salon, leccion, guia, startDate, endDate }
   const aplicar = () => fetchData(tab, filtros)
+
   const borrar = () => {
     setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
     fetchData(tab)
@@ -256,10 +262,23 @@ function CasosAtencionContent() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Casos de Atención</h1>
-      <p className="text-gray-500 mb-4">
-        {cfg.descripcion} Total: <span className="font-semibold text-gray-700">{total}</span>
-      </p>
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Casos de Atención</h1>
+          <p className="text-gray-500">
+            {cfg.descripcion} Total: <span className="font-semibold text-gray-700">{total}</span>
+          </p>
+        </div>
+        {/* Sólo en la pestaña de casos: en Asistencia y Sesiones vacías no hay
+            un caso que adicionar, son otra cosa. */}
+        {tab === 'casos' && canGestion && (
+          <button type="button" onClick={() => setAdicionar(true)}
+            className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700">
+            <PlusCircleIcon className="h-5 w-5" />
+            Adicionar caso
+          </button>
+        )}
+      </div>
 
       {/* Pestañas */}
       <div className="flex flex-wrap gap-1 border-b border-gray-200 mb-5">
@@ -583,6 +602,19 @@ function CasosAtencionContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Mismo modal que usa el guía en su sesión, con la cascada Guía → Curso →
+          Salón → Usuario: aquí no hay sesión de la que tomarlos. */}
+      {adicionar && (
+        <ReportarCasoModal
+          conCascada
+          onClose={() => setAdicionar(false)}
+          onEnviado={(r) => {
+            toast.success(r.abrioCaso ? `Se abrió el caso ${r.codigo}` : `Reporte agregado al caso ${r.codigo}`)
+            fetchData(tab, filtros)   // el caso nuevo debe aparecer en la lista
+          }}
+        />
       )}
     </div>
   )

@@ -160,8 +160,19 @@ export interface CrearReporteInput {
   tema: TemaCaso;
   eventoId?: string | null;
   bookingId?: string | null;
+  /** De quién es la observación (GUIAS._id). */
   guiaId?: string | null;
   guiaNombre?: string | null;
+  /**
+   * Quién lo TECLEÓ, cuando no es el propio guía.
+   *
+   * Servicio puede adicionar un caso desde su informe y atribuírselo al guía que
+   * se lo reportó por teléfono o WhatsApp. Ahí el autor de la observación y quien
+   * la captura son personas distintas, y hay que poder saber quién firmó a nombre
+   * de quién. Va null cuando reporta el propio guía: no hay nada que distinguir.
+   */
+  registradoPor?: string | null;
+  registradoPorEmail?: string | null;
   /**
    * A dónde va el reporte cuando el alumno YA tiene casos abiertos:
    * el `_id` de un caso abierto, o `'nuevo'` para abrir otro.
@@ -264,10 +275,12 @@ export async function crearReporte(input: CrearReporteInput): Promise<CrearRepor
     // R7: nace sin leer — también el que abre el caso, porque nadie lo ha visto.
     await client.query(
       `INSERT INTO "CASOS_REPORTES"
-         ("_id","casoId","academicaId","texto","tema","eventoId","bookingId","guiaId","guiaNombre","abrioCaso","leido")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,false)`,
+         ("_id","casoId","academicaId","texto","tema","eventoId","bookingId","guiaId","guiaNombre",
+          "registradoPor","registradoPorEmail","abrioCaso","leido")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,false)`,
       [reporteId, casoId, academicaId, texto, tema, input.eventoId || null,
-        input.bookingId || null, input.guiaId || null, input.guiaNombre || null, abrioCaso]
+        input.bookingId || null, input.guiaId || null, input.guiaNombre || null,
+        input.registradoPor || null, input.registradoPorEmail || null, abrioCaso]
     );
 
     // Origen ÚNICO: reportar aquí alimenta también el informe Servicio › Casos
