@@ -127,22 +127,22 @@ test.describe('Acceso a Zoom del alumno', () => {
     // Fijadas a propósito: el resto de tests usa las constantes y pasarían con
     // cualquier valor. Cambiar la ventana debe ser una decisión, no un descuido.
     expect(ZOOM_ABRE_MIN_ANTES).toBe(5);
-    expect(ZOOM_CIERRA_MIN_DESPUES).toBe(15);
+    expect(ZOOM_CIERRA_MIN_DESPUES).toBe(10);
     expect(ZOOM_RECONEXION_MARGEN_FINAL_MIN).toBe(10);
   });
 
   test(`abre ${ZOOM_ABRE_MIN_ANTES} minutos antes, ni uno más`, () => {
-    expect(sinAcceso(-6)).toBe('espera');
-    expect(sinAcceso(-5)).toBe('disponible');
+    expect(sinAcceso(-(ZOOM_ABRE_MIN_ANTES + 1))).toBe('espera');
+    expect(sinAcceso(-ZOOM_ABRE_MIN_ANTES)).toBe('disponible');
   });
 
   test('sigue abierto a la hora y hasta el cierre del plazo', () => {
     expect(sinAcceso(0)).toBe('disponible');
-    expect(sinAcceso(15)).toBe('disponible');
+    expect(sinAcceso(ZOOM_CIERRA_MIN_DESPUES)).toBe('disponible');
   });
 
   test('quien NO entró a tiempo pierde el acceso: el plazo venció', () => {
-    expect(sinAcceso(16)).toBe('vencido');
+    expect(sinAcceso(ZOOM_CIERRA_MIN_DESPUES + 1)).toBe('vencido');
     expect(sinAcceso(45)).toBe('vencido');
   });
 
@@ -178,16 +178,16 @@ test.describe('Acceso a Zoom del alumno', () => {
   });
 
   test('el servidor sólo admite generar el acceso dentro del plazo', () => {
-    expect(dentroVentanaIngreso(T, en(-6).getTime())).toBe(false);
-    expect(dentroVentanaIngreso(T, en(-5).getTime())).toBe(true);
-    expect(dentroVentanaIngreso(T, en(15).getTime())).toBe(true);
-    expect(dentroVentanaIngreso(T, en(16).getTime())).toBe(false);
+    expect(dentroVentanaIngreso(T, en(-(ZOOM_ABRE_MIN_ANTES + 1)).getTime())).toBe(false);
+    expect(dentroVentanaIngreso(T, en(-ZOOM_ABRE_MIN_ANTES).getTime())).toBe(true);
+    expect(dentroVentanaIngreso(T, en(ZOOM_CIERRA_MIN_DESPUES).getTime())).toBe(true);
+    expect(dentroVentanaIngreso(T, en(ZOOM_CIERRA_MIN_DESPUES + 1).getTime())).toBe(false);
   });
 
   test('el temporizador apunta al instante correcto y termina', () => {
     // Sin acceso: abre → cierra el plazo → nada más.
-    expect(proximoCambioZoom(T, null, null, null, en(-30).getTime())).toBe(en(-5).getTime());
-    expect(proximoCambioZoom(T, null, null, null, en(0).getTime())).toBe(en(15).getTime());
+    expect(proximoCambioZoom(T, null, null, null, en(-30).getTime())).toBe(en(-ZOOM_ABRE_MIN_ANTES).getTime());
+    expect(proximoCambioZoom(T, null, null, null, en(0).getTime())).toBe(en(ZOOM_CIERRA_MIN_DESPUES).getTime());
     expect(proximoCambioZoom(T, null, null, null, en(20).getTime())).toBeNull();
     // Con acceso: el siguiente corte es el fin de la reconexión, no el del plazo.
     expect(proximoCambioZoom(T, null, null, en(-2).getTime(), en(0).getTime())).toBe(en(50).getTime());
