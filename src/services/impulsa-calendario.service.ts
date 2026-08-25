@@ -21,67 +21,58 @@ const nombreEventoDe = (ev: EventoImpulsa, curso: CursoImpulsa): string =>
   : 'Evaluación';
 
 /**
- * Asigna `sesionModulo`/`sesionLeccion` a los eventos IMPULSA de un curso,
- * mapeando por TIPO en secuencia contra las lecciones de NIVELES (por orden):
- *   SESSION → "Modulo NN" · ENTRENAMIENTO → "Entrenamiento" · EVALUACION → "Evaluación".
- * Así la pestaña Material y el display resuelven la lección de cada sesión.
+ * Asigna `sesionModulo`/`sesionLeccion` a los eventos IMPULSA de un curso.
  *
- * Los ENTRENAMIENTOS se reparten por MÓDULO, no lección a lección: son las clases
- * largas del fin de semana (2h30) y cubren el módulo COMPLETO — "Entrenamiento 01"
- * son las lecciones 06 y 07, y las dos avanzan con la misma asistencia. Repartirlos
- * lección a lección corría la numeración: el 2.º entrenamiento del curso salía como
- * "Entrenamiento 01 · Lección 07" en vez de Entrenamiento 02.
+ * El curso avanza por el currículo de NIVELES **en una sola secuencia**, en orden
+ * de fecha, y cada clase consume las lecciones que dura:
+ *   - **SESSION** (1 h) → 1 lección.
+ *   - **ENTRENAMIENTO** y **EVALUACION** (bloque de 2 h) → **2 lecciones**, que se
+ *     guardan en `sesionLeccion` y `sesionLeccion2`.
  *
- * Sesiones y evaluaciones siguen 1:1 — duran una hora (o son una prueba) y cubren
- * una sola lección.
+ * Antes se llevaba un contador POR TIPO —las sesiones sólo tomaban lecciones de
+ * "Modulo NN"— y eso saltaba las de entrenamiento: en el curso vivo la sesión del
+ * viernes 21-ago se llevó la lección 08 y todo lo posterior quedó una lección
+ * adelantado (el lunes 24 mostraba la 09 en vez de la 08). La posición REAL de los
+ * alumnos en ACADEMICA, que avanza con la asistencia, seguía la secuencia única.
+ *
+ * Si el currículo se agota antes que el calendario, las clases sobrantes quedan
+ * **sin lección** en vez de repetir la última: una etiqueta inventada haría creer
+ * que hay contenido donde no lo hay, y al cargar lo que falta se completa sola.
  */
 export async function asignarLeccionesImpulsa(cursoCampaignId: string): Promise<void> {
-  const catLec = (code: string) => /entren/i.test(code) ? 'ENTREN' : /evaluac/i.test(code) ? 'EVALUAC' : 'MODULO';
+  /** Lecciones que consume una clase según su tipo. */
+  const leccionesDe = (tipo: string) => {
+    const t = String(tipo || '').toUpperCase();
+    return t === 'ENTRENAMIENTO' || t === 'EVALUACION' ? 2 : 1;
+  };
   const catEv = (tipo: string) => {
     const t = String(tipo || '').toUpperCase();
     return t === 'ENTRENAMIENTO' ? 'ENTREN' : t === 'EVALUACION' ? 'EVALUAC' : (t === 'SESSION' || t === 'SESION') ? 'MODULO' : null;
   };
   const nv = (await query<{ code: string; step: string }>(
-    `SELECT "code","step" FROM "NIVELES" WHERE UPPER("curso")='IMPULSA' ORDER BY "orden" ASC`
+    // NULLS LAST + "step" de desempate: una lección sin orden no debe encabezar la
+    // secuencia ni quedar a merced del orden físico de la tabla.
+    `SELECT "code","step" FROM "NIVELES" WHERE UPPER("curso")='IMPULSA'
+      ORDER BY "orden" ASC NULLS LAST, "step" ASC`
   )).rows;
-  const lecciones: Record<string, { code: string; step: string }[]> = { MODULO: [], ENTREN: [], EVALUAC: [] };
-  for (const l of nv) lecciones[catLec(l.code)].push(l);
   const ev = (await query<{ _id: string; tipo: string }>(
     `SELECT "_id","tipo" FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 ORDER BY "dia" ASC, "_id" ASC`, [cursoCampaignId]
   )).rows;
-  // Entrenamientos agrupados por módulo, en el orden del currículo.
-  const modulosEntren: { code: string; steps: string[] }[] = [];
-  for (const l of lecciones.ENTREN) {
-    const ult = modulosEntren[modulosEntren.length - 1];
-    if (ult && ult.code === l.code) ult.steps.push(l.step);
-    else modulosEntren.push({ code: l.code, steps: [l.step] });
-  }
 
   const limpiar = (id: string) => query(
     `UPDATE "CALENDARIO" SET "sesionModulo"=NULL,"sesionLeccion"=NULL,"sesionModulo2"=NULL,"sesionLeccion2"=NULL WHERE "_id"=$1`, [id]
   );
 
-  const cursor: Record<string, number> = { MODULO: 0, ENTREN: 0, EVALUAC: 0 };
+  let cursor = 0;
   for (const e of ev) {
-    const cat = catEv(e.tipo); if (!cat) continue;
-    if (cat === 'ENTREN') {
-      const mod = modulosEntren[cursor.ENTREN++];
-      // Sin módulo que asignar (hay más entrenamientos programados que módulos en
-      // NIVELES) se deja SIN lección: repetir el último haría creer que se dicta dos
-      // veces, y arrastrar la etiqueta vieja sobreviviría a la corrección del dato.
-      if (!mod) { await limpiar(e._id); continue; }
-      // Sólo caben dos lecciones por evento; hoy ningún entrenamiento tiene más.
-      await query(
-        `UPDATE "CALENDARIO" SET "sesionModulo"=$2,"sesionLeccion"=$3,"sesionModulo2"=$4,"sesionLeccion2"=$5 WHERE "_id"=$1`,
-        [e._id, mod.code, mod.steps[0], mod.steps[1] ? mod.code : null, mod.steps[1] || null]
-      );
-      continue;
-    }
-    const lec = lecciones[cat][cursor[cat]++];
-    if (!lec) { await limpiar(e._id); continue; }
+    if (!catEv(e.tipo)) continue;             // tipo desconocido: no consume currículo
+    const n = leccionesDe(e.tipo);
+    const l1 = nv[cursor], l2 = n === 2 ? nv[cursor + 1] : undefined;
+    cursor += n;                              // el cursor avanza aunque falte currículo
+    if (!l1) { await limpiar(e._id); continue; }
     await query(
-      `UPDATE "CALENDARIO" SET "sesionModulo"=$2,"sesionLeccion"=$3,"sesionModulo2"=NULL,"sesionLeccion2"=NULL WHERE "_id"=$1`,
-      [e._id, lec.code, lec.step]
+      `UPDATE "CALENDARIO" SET "sesionModulo"=$2,"sesionLeccion"=$3,"sesionModulo2"=$4,"sesionLeccion2"=$5 WHERE "_id"=$1`,
+      [e._id, l1.code, l1.step, l2 ? l2.code : null, l2 ? l2.step : null]
     );
   }
 }
