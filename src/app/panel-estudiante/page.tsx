@@ -44,7 +44,11 @@ import ClassHistory from '@/components/panel-estudiante/ClassHistory'
 import JumpExamBanner from '@/components/panel-estudiante/JumpExamBanner'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission } from '@/types/permissions'
-import { ZOOM_ABRE_MIN_ANTES, ZOOM_CIERRA_MIN_DESPUES, MENSAJE_ZOOM_LISTO, MENSAJE_ZOOM_ESPERA } from '@/lib/zoom-window'
+import {
+  estadoZoom, proximoCambioZoom,
+  MENSAJE_ZOOM_LISTO, MENSAJE_ZOOM_ESPERA, MENSAJE_ZOOM_RECONEXION,
+  MENSAJE_ZOOM_VENCIDO, MENSAJE_ZOOM_CERRADO,
+} from '@/lib/zoom-window'
 
 // La ventana de conexión a Zoom vive en `lib/zoom-window` (cliente+servidor),
 // para que el número no quede escrito por separado en la lógica y en el texto.
@@ -202,38 +206,67 @@ function PanelEstudianteContent() {
   }
 
   const nextEventDate = nextClass ? new Date(nextClass.fechaEvento) : null
-  // `zoomTick` sólo existe para volver a evaluar la ventana cuando llega la hora
-  // (ver el efecto de abajo): sin él, `now` queda congelado en el instante en que
-  // cargó la página y el ícono no cambiaría hasta recargar.
-  const now = new Date()
-  // Ventana de conexión: se abre 5 min ANTES del inicio y se cierra 15 min DESPUÉS.
-  // Fuera de ella el ícono queda bloqueado y avisa que no es la hora.
-  const minutosAlInicio = nextEventDate ? (nextEventDate.getTime() - now.getTime()) / (1000 * 60) : Infinity
-  const showZoom = !!nextClass && !!nextEventDate
-    && minutosAlInicio <= ZOOM_ABRE_MIN_ANTES
-    && -minutosAlInicio <= ZOOM_CIERRA_MIN_DESPUES
   const zoomLink = nextClass?.eventLinkZoom || nextClass?.linkZoom
 
-  // El ícono de Zoom se activa/desactiva SOLO, sin recargar: se programa un aviso
-  // para el instante exacto del próximo cambio (apertura y luego cierre) en vez de
-  // despertar cada pocos segundos sin necesidad. Al dispararse, el efecto vuelve a
-  // correr y programa el siguiente. La hora es la del dispositivo del alumno, igual
-  // que el resto del cálculo.
+  // Acceso a Zoom. El plazo para ENTRAR va de 5 min antes a 15 después; quien
+  // entra dentro de ese plazo conserva el ícono hasta 10 min antes del final, para
+  // volver a conectarse si se le cae la señal. Ese derecho es personal y queda
+  // guardado en ZOOM_ACCESOS: por eso `accesoLocal` empieza con lo que trae el
+  // servidor —así un F5 no se lo quita— y se actualiza al pulsar el ícono.
+  const [accesoLocal, setAccesoLocal] = useState<string | null>(null)
+  const zoomAccesoEn = accesoLocal || nextClass?.zoomAccesoEn || null
+  // `zoomTick` sólo existe para volver a evaluar el estado cuando llega la hora
+  // (ver el efecto de abajo): sin él quedaría congelado en el instante en que
+  // cargó la página y el ícono no cambiaría hasta recargar.
   const inicioMs = nextEventDate ? nextEventDate.getTime() : null
+  const accesoMs = zoomAccesoEn ? new Date(zoomAccesoEn).getTime() : null
+  // La duración sale del horario del curso (`nombreEvento`); el tipo es el respaldo.
+  const zoomEstado = inicioMs != null
+    ? estadoZoom(inicioMs, nextClass?.eventoTipo, nextClass?.nombreEvento, accesoMs)
+    : 'espera'
+  const showZoom = !!zoomLink && zoomEstado === 'disponible'
+
+  // Al cambiar de clase se suelta el acceso recordado en memoria: es de la clase
+  // anterior, y dejarlo activaría el ícono de la siguiente antes de tiempo.
+  const nextClassId = nextClass?.eventoId || nextClass?.idEvento || null
+  useEffect(() => { setAccesoLocal(null) }, [nextClassId])
+
+  // El ícono se activa/desactiva SOLO, sin recargar: se programa un aviso para el
+  // instante exacto del próximo cambio en vez de despertar cada pocos segundos.
+  // Al dispararse, el efecto vuelve a correr y programa el siguiente. La hora es la
+  // del dispositivo del alumno, igual que el resto del cálculo.
   useEffect(() => {
     if (inicioMs == null) return
-    const abre = inicioMs - ZOOM_ABRE_MIN_ANTES * 60_000
-    const cierra = inicioMs + ZOOM_CIERRA_MIN_DESPUES * 60_000
-    const ahora = Date.now()
-    const proximoCambio = ahora < abre ? abre : ahora < cierra ? cierra : null
-    if (proximoCambio == null) return // la ventana ya se cerró: nada que programar
+    const proximoCambio = proximoCambioZoom(
+      inicioMs, nextClass?.eventoTipo, nextClass?.nombreEvento, accesoMs,
+    )
+    if (proximoCambio == null) return // ya no cambia más: nada que programar
 
     // Se acota la espera: setTimeout desborda pasados ~24 días y dispararía al
     // instante. Si falta más, se despierta antes y se reprograma el resto.
-    const espera = Math.min(proximoCambio - ahora + 1_000, ZOOM_MAX_ESPERA_MS)
+    const espera = Math.min(proximoCambio - Date.now() + 1_000, ZOOM_MAX_ESPERA_MS)
     const id = setTimeout(() => setZoomTick(t => t + 1), espera)
     return () => clearTimeout(id)
-  }, [inicioMs, zoomTick])
+  }, [inicioMs, accesoMs, nextClass?.eventoTipo, nextClass?.nombreEvento, zoomTick])
+
+  /**
+   * Deja constancia del acceso antes de abrir Zoom. Si el registro falla NO se le
+   * cierra la puerta al alumno —entrar a clase pesa más que la bitácora—; sólo se
+   * pierde su ventana de reconexión, que puede recuperar volviendo a pulsar.
+   */
+  const registrarAccesoZoom = async () => {
+    const eventoId = nextClass?.eventoId || nextClass?.idEvento
+    if (!eventoId) return
+    try {
+      const r = await fetch('/api/postgres/panel-estudiante/zoom-acceso', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventoId }),
+      })
+      const j = await r.json().catch(() => null)
+      if (r.ok && j?.accesoEn) setAccesoLocal(j.accesoEn)
+    } catch { /* la bitácora no debe estorbar el ingreso a clase */ }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -469,13 +502,24 @@ function PanelEstudianteContent() {
                   <span className="text-xs text-gray-400 uppercase tracking-wide">Link de Ingreso</span>
                   {zoomLink ? (
                     <div className="mt-1 flex items-center gap-3">
-                      <ZoomAccessButton zoomLink={zoomLink} disponible={showZoom} />
-                      {/* El aviso se mantiene visible en los dos estados, pero
-                          dice cosas distintas: esperando vs listo para entrar.
-                          En verde cuando ya se puede, a juego con el visto del
-                          ícono. Los minutos salen de las constantes. */}
-                      <p className={`text-sm font-semibold leading-snug ${showZoom ? 'text-emerald-700' : 'text-primary-800'}`}>
-                        {showZoom ? MENSAJE_ZOOM_LISTO : MENSAJE_ZOOM_ESPERA}
+                      <ZoomAccessButton
+                        zoomLink={zoomLink}
+                        disponible={showZoom}
+                        onAcceso={registrarAccesoZoom}
+                        mensajeBloqueado={zoomEstado === 'vencido' ? MENSAJE_ZOOM_VENCIDO
+                          : zoomEstado === 'cerrado' ? MENSAJE_ZOOM_CERRADO : undefined}
+                      />
+                      {/* El aviso acompaña siempre al ícono, pero dice cosas
+                          distintas según dónde esté el alumno: esperando, listo
+                          para entrar, ya dentro (puede reconectarse), o se le
+                          pasó el plazo. Los minutos salen de las constantes. */}
+                      <p className={`text-sm font-semibold leading-snug ${
+                        zoomEstado === 'disponible' ? 'text-emerald-700'
+                        : zoomEstado === 'vencido' ? 'text-red-700' : 'text-primary-800'}`}>
+                        {zoomEstado === 'espera' ? MENSAJE_ZOOM_ESPERA
+                          : zoomEstado === 'vencido' ? MENSAJE_ZOOM_VENCIDO
+                          : zoomEstado === 'cerrado' ? MENSAJE_ZOOM_CERRADO
+                          : zoomAccesoEn ? MENSAJE_ZOOM_RECONEXION : MENSAJE_ZOOM_LISTO}
                       </p>
                     </div>
                   ) : (

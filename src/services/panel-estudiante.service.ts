@@ -415,7 +415,10 @@ export async function getStudentProfile(student: any) {
  * Uses academicaId because bookings reference ACADEMICA._id via "idEstudiante".
  */
 export async function getStudentUpcomingEvents(academicaId: string) {
-  return BookingRepository.findUpcomingByStudentId(academicaId, 10);
+  // 3 h hacia atrás: quien ya generó su acceso a Zoom conserva el ícono hasta 10
+  // min antes del final, y un bloque de IMPULSA dura 2h30. Con la ventana normal
+  // de 15 min la clase se caía de la lista y se llevaba el ícono con ella.
+  return BookingRepository.findUpcomingByStudentId(academicaId, 10, 180);
 }
 
 /**

@@ -6,7 +6,8 @@ import {
   getAdminEventWindow,
 } from '../../src/lib/admin-event-window';
 import {
-  zoomDisponible, ZOOM_ABRE_MIN_ANTES, ZOOM_CIERRA_MIN_DESPUES,
+  zoomDisponible, estadoZoom, proximoCambioZoom, dentroVentanaIngreso,
+  ZOOM_ABRE_MIN_ANTES, ZOOM_CIERRA_MIN_DESPUES, ZOOM_RECONEXION_MARGEN_FINAL_MIN,
 } from '../../src/lib/zoom-window';
 import { bookingConRegistroSql } from '../../src/lib/booking-registro';
 
@@ -114,27 +115,90 @@ test.describe('Ventana del evento administrativo — las mismas reglas que una s
 });
 
 test.describe('Acceso a Zoom del alumno', () => {
+  const T = INICIO.getTime();
+  /** Sin acceso registrado: sólo tiene la ventana de ingreso. */
+  const sinAcceso = (min: number, tipo?: string, horario?: string) =>
+    estadoZoom(T, tipo ?? null, horario ?? null, null, en(min).getTime());
+  /** Entró a los -2 min: le corre además la reconexión. */
+  const conAcceso = (min: number, tipo?: string, horario?: string) =>
+    estadoZoom(T, tipo ?? null, horario ?? null, en(-2).getTime(), en(min).getTime());
+
   test('la ventana es la acordada', () => {
-    expect(ZOOM_ABRE_MIN_ANTES).toBe(10);
+    // Fijadas a propósito: el resto de tests usa las constantes y pasarían con
+    // cualquier valor. Cambiar la ventana debe ser una decisión, no un descuido.
+    expect(ZOOM_ABRE_MIN_ANTES).toBe(5);
     expect(ZOOM_CIERRA_MIN_DESPUES).toBe(15);
+    expect(ZOOM_RECONEXION_MARGEN_FINAL_MIN).toBe(10);
   });
 
   test(`abre ${ZOOM_ABRE_MIN_ANTES} minutos antes, ni uno más`, () => {
-    expect(zoomDisponible(INICIO.getTime(), en(-11).getTime())).toBe(false);
-    expect(zoomDisponible(INICIO.getTime(), en(-10).getTime())).toBe(true);
+    expect(sinAcceso(-6)).toBe('espera');
+    expect(sinAcceso(-5)).toBe('disponible');
   });
 
-  test('sigue abierto a la hora y hasta el cierre', () => {
-    expect(zoomDisponible(INICIO.getTime(), en(0).getTime())).toBe(true);
-    expect(zoomDisponible(INICIO.getTime(), en(15).getTime())).toBe(true);
-    expect(zoomDisponible(INICIO.getTime(), en(16).getTime())).toBe(false);
+  test('sigue abierto a la hora y hasta el cierre del plazo', () => {
+    expect(sinAcceso(0)).toBe('disponible');
+    expect(sinAcceso(15)).toBe('disponible');
+  });
+
+  test('quien NO entró a tiempo pierde el acceso: el plazo venció', () => {
+    expect(sinAcceso(16)).toBe('vencido');
+    expect(sinAcceso(45)).toBe('vencido');
+  });
+
+  test('quien SÍ entró conserva el ícono hasta 10 min antes del final', () => {
+    // Sesión de 1 h: la reconexión llega hasta el minuto 50.
+    expect(conAcceso(16)).toBe('disponible');
+    expect(conAcceso(50)).toBe('disponible');
+    expect(conAcceso(51)).toBe('cerrado');
+  });
+
+  test('el cierre sale de la DURACIÓN, no de un número fijo', () => {
+    // Bloque de IMPULSA (2h30) → hasta el minuto 140.
+    expect(conAcceso(139, 'ENTRENAMIENTO')).toBe('disponible');
+    expect(conAcceso(141, 'ENTRENAMIENTO')).toBe('cerrado');
+    // Nivelación (30 min) → 20 min... pero el plazo de ingreso llega a 15 y la
+    // reconexión nunca puede acortarlo.
+    expect(conAcceso(20, 'NIVELACION')).toBe('disponible');
+    expect(conAcceso(21, 'NIVELACION')).toBe('cerrado');
+    // Manda el horario del curso sobre el tipo: 50 min → hasta el minuto 40.
+    expect(conAcceso(40, 'SESSION', 'MAR-JUE 19:00-19:50')).toBe('disponible');
+    expect(conAcceso(41, 'SESSION', 'MAR-JUE 19:00-19:50')).toBe('cerrado');
+  });
+
+  test('la reconexión nunca acorta el plazo de ingreso', () => {
+    // Una clase tan corta que `duración − 10` caería antes del cierre normal:
+    // el alumno conserva sus 15 minutos igual.
+    expect(conAcceso(15, 'NIVELACION')).toBe('disponible');
+  });
+
+  test('entrar tarde también da reconexión: cuenta haber entrado, no cuándo', () => {
+    // Entró al minuto 14, dentro del plazo. Le corre igual hasta el 50.
+    expect(estadoZoom(T, null, null, en(14).getTime(), en(49).getTime())).toBe('disponible');
+  });
+
+  test('el servidor sólo admite generar el acceso dentro del plazo', () => {
+    expect(dentroVentanaIngreso(T, en(-6).getTime())).toBe(false);
+    expect(dentroVentanaIngreso(T, en(-5).getTime())).toBe(true);
+    expect(dentroVentanaIngreso(T, en(15).getTime())).toBe(true);
+    expect(dentroVentanaIngreso(T, en(16).getTime())).toBe(false);
+  });
+
+  test('el temporizador apunta al instante correcto y termina', () => {
+    // Sin acceso: abre → cierra el plazo → nada más.
+    expect(proximoCambioZoom(T, null, null, null, en(-30).getTime())).toBe(en(-5).getTime());
+    expect(proximoCambioZoom(T, null, null, null, en(0).getTime())).toBe(en(15).getTime());
+    expect(proximoCambioZoom(T, null, null, null, en(20).getTime())).toBeNull();
+    // Con acceso: el siguiente corte es el fin de la reconexión, no el del plazo.
+    expect(proximoCambioZoom(T, null, null, en(-2).getTime(), en(0).getTime())).toBe(en(50).getTime());
+    expect(proximoCambioZoom(T, null, null, en(-2).getTime(), en(60).getTime())).toBeNull();
   });
 
   test('se compara el INSTANTE: dos alumnos en husos distintos lo ven abrirse a la vez', () => {
     // Un mismo instante, mirado como Date, no depende de la zona del cliente.
-    const instante = en(-10).getTime();
-    expect(zoomDisponible(INICIO.getTime(), instante)).toBe(true);
-    expect(zoomDisponible(INICIO.getTime(), instante - 1)).toBe(false);
+    const instante = en(-ZOOM_ABRE_MIN_ANTES).getTime();
+    expect(zoomDisponible(T, null, null, null, instante)).toBe(true);
+    expect(zoomDisponible(T, null, null, null, instante - 1)).toBe(false);
   });
 });
 

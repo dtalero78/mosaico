@@ -481,12 +481,28 @@ class BookingRepositoryClass extends BaseRepository {
 
   // ── Panel Estudiante helpers ──
 
-  async findUpcomingByStudentId(studentId: string, limit: number = 10) {
+  /**
+   * Próximas clases del alumno.
+   *
+   * `desdeMin` es cuánto se mira HACIA ATRÁS. Por defecto 15 min —lo justo para
+   * que la clase en curso no desaparezca del panel apenas empieza—, pero el panel
+   * pide más: quien generó su acceso a Zoom conserva el ícono hasta 10 min antes
+   * del final, y con la ventana de 15 la clase se le caía de la lista y el ícono
+   * desaparecía con ella. Un bloque de IMPULSA dura 2h30, así que el panel pide 3 h.
+   *
+   * Devuelve además `zoomAccesoEn`: el primer acceso del alumno a ESA clase, que
+   * es lo que abre su ventana de reconexión. Se busca por evento o por el INSTANTE
+   * de la clase —un alumno no puede tener dos a la misma hora—, así que el registro
+   * sobrevive a una regeneración del curso, que cambia los ids de los eventos.
+   */
+  async findUpcomingByStudentId(studentId: string, limit: number = 10, desdeMin: number = 15) {
     return queryMany(
       `SELECT ab.*,
               COALESCE(c."step", ab."step") AS "step",
               COALESCE(c."nombreEvento", ab."nombreEvento") AS "nombreEvento",
+              c."tipo" AS "eventoTipo",
               a."nombreCompleto" as "advisorNombre",
+              za."primero" AS "zoomAccesoEn",
               -- El enlace sale de la ficha del guía DEL EVENTO; la copia del
               -- evento y la del agendamiento quedan de respaldo.
               ${enlaceClaseSql('ge', `COALESCE(c."linkZoom", ab."linkZoom")`)} as "eventLinkZoom"
@@ -494,12 +510,18 @@ class BookingRepositoryClass extends BaseRepository {
        LEFT JOIN "GUIAS" a ON ab."advisor" = a."_id"
        LEFT JOIN "CALENDARIO" c ON (ab."eventoId" = c."_id" OR ab."idEvento" = c."_id")
        LEFT JOIN "GUIAS" ge ON ge."_id" = c."advisor"
+       LEFT JOIN LATERAL (
+         SELECT MIN(z."_createdDate") AS primero
+           FROM "ZOOM_ACCESOS" z
+          WHERE z."academicaId" = $1
+            AND (z."eventoId" = c."_id" OR z."fechaEvento" = ab."fechaEvento")
+       ) za ON TRUE
        WHERE (ab."idEstudiante" = $1 OR ab."studentId" = $1)
          AND ab."cancelo" = false
-         AND ab."fechaEvento" >= NOW() - INTERVAL '15 minutes'
+         AND ab."fechaEvento" >= NOW() - ($3 || ' minutes')::interval
        ORDER BY ab."fechaEvento" ASC
        LIMIT $2`,
-      [studentId, limit]
+      [studentId, limit, String(Math.max(0, Math.round(desdeMin)))]
     );
   }
 

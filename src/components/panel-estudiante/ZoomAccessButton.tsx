@@ -5,13 +5,13 @@ import { useState } from 'react'
 /**
  * Acceso a Zoom de la "Sesión próxima" del panel del estudiante.
  *
- * Dos estados, según la ventana de conexión (ver ZOOM_ABRE_MIN / ZOOM_CIERRA_MIN
- * en panel-estudiante/page.tsx):
- *  - disponible → ícono de cámara a color; abre Zoom en una pestaña nueva.
- *  - bloqueado  → ícono de reloj; al pulsarlo avisa que no es la hora.
+ * Dos estados, según la ventana de conexión (la decide `lib/zoom-window`):
+ *  - disponible → ícono de cámara a color; deja constancia del acceso y abre Zoom
+ *    en una pestaña nueva.
+ *  - bloqueado  → ícono de reloj; al pulsarlo explica por qué no puede entrar.
  *
- * El texto "Enlace disponible 5 min antes…" NO vive aquí: lo pinta la tarjeta y
- * se muestra siempre, en los dos estados.
+ * El texto que acompaña al ícono NO vive aquí: lo pinta la tarjeta, que sabe en
+ * cuál de los cuatro estados está el alumno.
  */
 
 /** Ícono a color: la sesión está abierta. */
@@ -76,9 +76,15 @@ interface Props {
   zoomLink: string
   /** true dentro de la ventana de conexión. */
   disponible: boolean
+  /** Deja constancia del acceso antes de abrir Zoom (ver ZOOM_ACCESOS). */
+  onAcceso?: () => void
+  /** Por qué está bloqueado, si no es simplemente que aún no es la hora. */
+  mensajeBloqueado?: string
 }
 
-export default function ZoomAccessButton({ zoomLink, disponible }: Props) {
+export default function ZoomAccessButton({
+  zoomLink, disponible, onAcceso, mensajeBloqueado,
+}: Props) {
   const [aviso, setAviso] = useState(false)
 
   if (disponible) {
@@ -87,6 +93,9 @@ export default function ZoomAccessButton({ zoomLink, disponible }: Props) {
         href={zoomLink}
         target="_blank"
         rel="noopener noreferrer"
+        // Se registra el acceso y se deja seguir al enlace sin esperar la
+        // respuesta: la bitácora no debe retrasar la entrada a clase.
+        onClick={() => onAcceso?.()}
         title="Entrar a la sesión"
         aria-label="Entrar a la sesión de Zoom"
         className="inline-block rounded-2xl transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2"
@@ -96,20 +105,21 @@ export default function ZoomAccessButton({ zoomLink, disponible }: Props) {
     )
   }
 
+  const motivo = mensajeBloqueado || MENSAJE_FUERA_DE_HORA
   return (
     <div>
       <button
         type="button"
         onClick={() => setAviso(true)}
-        title={MENSAJE_FUERA_DE_HORA}
-        aria-label={MENSAJE_FUERA_DE_HORA}
+        title={motivo}
+        aria-label={motivo}
         className="inline-block rounded-2xl cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2"
       >
         <IconoEspera />
       </button>
       {aviso && (
         <p className="mt-1.5 inline-block rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">
-          {MENSAJE_FUERA_DE_HORA}
+          {motivo}
         </p>
       )}
     </div>
