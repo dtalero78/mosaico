@@ -7,6 +7,7 @@ import { PermissionGuard } from '@/components/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import { AcademicoPermission } from '@/types/permissions'
 import { ClockIcon, ChevronLeftIcon, ChevronRightIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import GestionCoordinacionCard from '@/components/dashboard/GestionCoordinacionCard'
 import toast from 'react-hot-toast'
 
 interface VigenteRow {
@@ -476,6 +477,14 @@ export function ControlHorasContent({
           <TotalCard label="Conducted" value={totales.conducted} color="bg-sky-50   border-sky-300   text-sky-700" />
           <TotalCard label="Canceladas"  value={totales.canceled}  color="bg-red-50   border-red-300   text-red-700" />
           <TotalCard label="Suspendidas" value={totales.suspended} color="bg-yellow-50 border-yellow-300 text-yellow-800" />
+        </div>
+      )}
+
+      {/* Cuánto tuvo que rescatar la Coordinación por este guía, y cómo se
+          compara con el resto. Mismo panel que ve el guía en su dashboard. */}
+      {data && !loading && !error && advisorId && (
+        <div className="mb-4 max-w-2xl">
+          <GestionCoordinacionCard advisorId={advisorId} year={year} month={month} />
         </div>
       )}
 

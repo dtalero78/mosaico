@@ -132,7 +132,7 @@ export default function ReporteAcademicoPage() {
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
       setComentIA(prev => ({ ...prev, [r.academicaId]: res.comentarioIA }))
-      if (!silent) toast.success('Comentario IA generado')
+      if (!silent) toast.success('Comentario académico generado')
     } catch (e: any) { if (!silent) toast.error(e?.message || 'Error al generar comentario'); throw e } finally { setGenIA(null) }
   }
 
@@ -393,7 +393,18 @@ export default function ReporteAcademicoPage() {
                     🔒 Cerrado por el Guía — en revisión
                   </span>
                 )}
-                {estadoCierre === 'DEFINITIVO' && (
+                {/* Si nadie lo cerró como Guía, lo cerró la Coordinación en su
+                    lugar — se distingue igual que una sesión registrada por
+                    Coordinación en "Sesiones sin gestión". */}
+                {estadoCierre === 'DEFINITIVO' && !data?.cierre?.cerradoGuiaPor && (
+                  <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-red-100 text-red-700"
+                    title={data?.cierre?.cerradoAdminPor
+                      ? `Cerrado por Coordinación (${data.cierre.cerradoAdminPor}) — el Guía no lo cerró`
+                      : 'Cerrado por Coordinación — el Guía no lo cerró'}>
+                    🛡 Cerrado por Coordinación
+                  </span>
+                )}
+                {estadoCierre === 'DEFINITIVO' && data?.cierre?.cerradoGuiaPor && (
                   <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-gray-200 text-gray-700"
                     title={data?.cierre?.cerradoAdminPor ? `Cierre definitivo por ${data.cierre.cerradoAdminPor}` : ''}>
                     ✅ Cierre definitivo
@@ -541,7 +552,7 @@ export default function ReporteAcademicoPage() {
                       </div>
                     </div>
                     <div className="px-4 py-3 border-r border-gray-100">
-                      <div className="flex items-center gap-2 mb-1"><span className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold">Comentario</span><span className="text-[9.5px] bg-fuchsia-50 text-fuchsia-600 rounded-full px-2 py-0.5 font-bold">✦ IA</span></div>
+                      <div className="flex items-center gap-2 mb-1"><span className="text-[10.5px] uppercase tracking-wide text-gray-500 font-semibold">Comentario Académico</span><span className="text-[9.5px] bg-fuchsia-50 text-fuchsia-600 rounded-full px-2 py-0.5 font-bold">✦ IA</span></div>
                       {/* Editable: se genera con IA y el Guía puede ajustarlo o completarlo. */}
                       <textarea
                         value={comentIA[r.academicaId] ?? ''}
@@ -633,7 +644,7 @@ export default function ReporteAcademicoPage() {
                   {/* Base del informe: SIEMPRE se muestran ambos comentarios (IA + Docente),
                       con placeholder si aún no hay contenido. */}
                   <div className="mb-3">
-                    <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario IA</div>
+                    <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario Académico</div>
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.comentarioIA || <span className="text-gray-400">— sin generar —</span>}</p>
                   </div>
                   <div className="mb-3">

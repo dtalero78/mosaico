@@ -111,9 +111,11 @@ const SQL_PENDIENTES = `
     await client.query('BEGIN');
     for (const r of rows) {
       await client.query(
+        // `cerradoMasivo` marca que fue una decisión administrativa en bloque: así
+        // el contador de Gestión Coordinación no se lo carga al Guía.
         `INSERT INTO "REPORTE_ACADEMICO_CIERRE"
-           ("_id","curso","salon","campaign","semanaInicio","estado","cerradoAdminPor","cerradoAdminEn")
-         VALUES ($1,$2,$3,$4,$5,'DEFINITIVO',$6,NOW())
+           ("_id","curso","salon","campaign","semanaInicio","estado","cerradoAdminPor","cerradoAdminEn","cerradoMasivo")
+         VALUES ($1,$2,$3,$4,$5,'DEFINITIVO',$6,NOW(),true)
          ON CONFLICT ("curso","salon","campaign","semanaInicio") DO NOTHING`,
         [`rac_${crypto.randomUUID()}`, r.curso, r.salon, r.campaign, r.semanaInicio, POR]);
       escritos++;

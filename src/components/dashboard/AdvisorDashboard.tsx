@@ -21,6 +21,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { ClockIcon } from '@heroicons/react/24/outline'
+import GestionCoordinacionCard from './GestionCoordinacionCard'
 
 interface VigenteRow {
   source: 'CALENDARIO'
@@ -228,7 +229,6 @@ export default function AdvisorDashboard() {
 
   const matrixMax = (m: number[][]) => m.flat().reduce((a, b) => Math.max(a, b), 0)
   const monthlyConductedMax = useMemo(() => matrixMax(monthly.conducted), [monthly])
-  const monthlyCanceledMax  = useMemo(() => matrixMax(monthly.canceled),  [monthly])
 
   // ── Render ──────────────────────────────────────────────────────────────
   if (loading && !data) {
@@ -310,15 +310,16 @@ export default function AdvisorDashboard() {
           darkColor="#1d4ed8"
           lightColor="#dbeafe"
         />
-        <DayHourHeatmap
-          title="Canceladas — Día vs Hora"
-          subtitle={mesLabel}
-          matrix={monthly.canceled}
-          max={monthlyCanceledMax}
-          darkColor="#b91c1c"
-          lightColor="#fee2e2"
-          emptyMessage="¡Excelente! No has cancelado ninguna sesión este mes."
-        />
+        {/* En el sitio del mapa de canceladas va algo que se lee mejor: cuánto
+            tuvo que rescatar la Coordinación, y cómo se compara con el resto. */}
+        {advisor?._id && (
+          <GestionCoordinacionCard
+            advisorId={advisor._id}
+            year={year}
+            month={month}
+            mesLabel={mesLabel}
+          />
+        )}
       </div>
 
       {/* Donuts */}
