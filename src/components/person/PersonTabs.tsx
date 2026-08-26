@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Person, FinancialData, Beneficiary } from '@/types'
 import { cn } from '@/lib/utils'
+import { usePermissions } from '@/hooks/usePermissions'
+import { PersonPermission } from '@/types/permissions'
 import PersonGeneral from './PersonGeneral'
 import PersonContact from './PersonContact'
 import PersonFinancial from './PersonFinancial'
@@ -33,6 +35,34 @@ const tabs = [
   { id: 'docs', name: 'Documentación', icon: '📎' },
 ]
 
+/**
+ * Qué permiso hace falta para VER cada pestaña: basta con tener UNO de los de su
+ * sección. Sin ninguno, la pestaña no se muestra — antes se veía siempre y sólo
+ * se ocultaban los botones de adentro, así que un rol sin permisos de gestión
+ * seguía entrando a "Administración" y viendo el contrato y sus beneficiarios.
+ *
+ * `general` y `comments` no llevan candado: la primera es la ficha en sí (sin
+ * ella la página quedaría en blanco) y la segunda no tiene permisos definidos en
+ * el catálogo, así que no hay nada que desmarcar.
+ */
+const TAB_PERMISOS: Record<string, string[]> = {
+  contact: [PersonPermission.CAMBIO_CELULAR, PersonPermission.WHATSAPP],
+  financial: [
+    PersonPermission.RESUMEN_FINANCIERO_VER, PersonPermission.INFO_PAGOS_VER,
+    PersonPermission.PAGOS_VER, PersonPermission.PAGOS_REGISTRAR,
+    PersonPermission.PAGOS_EDITAR, PersonPermission.PAGOS_VALIDAR,
+    PersonPermission.PAGOS_ELIMINAR, PersonPermission.PAGOS_RECIBO,
+    PersonPermission.ASIGNAR_GESTOR_RECAUDO, PersonPermission.CAMBIO_ESTADO_CARTERA,
+    PersonPermission.MARCAR_OPCIONAL,
+  ],
+  admin: [
+    PersonPermission.ACTIVAR_DESACTIVAR, PersonPermission.CAMBIAR_ESTADO,
+    PersonPermission.APROBAR, PersonPermission.ELIMINAR,
+    PersonPermission.AGREGAR_BENEFICIARIO,
+  ],
+  docs: [PersonPermission.VER_DOCUMENTACION, PersonPermission.ADICION_DOCUMENTACION],
+}
+
 // Alias para deep-links desde URL (?tab=financiera, ?tab=admin, etc.)
 const TAB_ALIASES: Record<string, string> = {
   financiera: 'financial',
@@ -59,7 +89,28 @@ function resolveInitialTab(initial?: string): string {
 export default function PersonTabs({ person, financialData, beneficiaries, initialTab, isSuspendida, soloGeneral }: PersonTabsProps) {
   const [activeTab, setActiveTab] = useState(() => (soloGeneral ? 'general' : resolveInitialTab(initialTab)))
 
+  // Mientras los permisos cargan se muestran sólo las pestañas sin candado: es
+  // preferible que las demás aparezcan un instante después a que parpadee una
+  // que el usuario no puede abrir.
+  const { hasAnyPermission, isLoading: permisosCargando } = usePermissions()
+  const visibles = useMemo(
+    () => tabs.filter(t => {
+      const req = TAB_PERMISOS[t.id]
+      if (!req) return true
+      return permisosCargando ? false : hasAnyPermission(req as any)
+    }),
+    [permisosCargando, hasAnyPermission])
+
+  // Si la pestaña activa no está permitida (deep link con ?tab=admin, o el admin
+  // acaba de quitar el permiso), se cae a la primera visible en vez de dejar el
+  // contenido colgado.
+  const permitida = visibles.some(t => t.id === activeTab)
+  useEffect(() => {
+    if (!permisosCargando && !permitida) setActiveTab(visibles[0]?.id || 'general')
+  }, [permisosCargando, permitida, visibles])
+
   const renderTabContent = () => {
+    if (!permitida) return <PersonGeneral person={person} isSuspendida={isSuspendida} />
     switch (activeTab) {
       case 'general':
         return <PersonGeneral person={person} isSuspendida={isSuspendida} />
@@ -83,7 +134,7 @@ export default function PersonTabs({ person, financialData, beneficiaries, initi
       {/* Tab Navigation */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
-          {tabs.map((tab) => {
+          {visibles.map((tab) => {
             const bloqueada = soloGeneral && tab.id !== 'general'
             return (
             <button
