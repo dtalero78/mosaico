@@ -31,8 +31,24 @@ const TITULO_ESTADO: Record<string, string> = {
 
 const fmtFecha = (iso: string) => { try { return new Date(iso + 'T12:00:00Z').toLocaleDateString('es', { day: '2-digit', month: 'short' }) } catch { return iso } }
 
+/**
+ * Filtros iniciales tomados de la URL, para poder enlazar a UN salón y semana
+ * concretos — lo usa "RptAcademico sin gestión" en su columna Ir. Se lee una
+ * sola vez al montar: después manda lo que el usuario elija en pantalla.
+ */
+function filtrosDeUrl() {
+  const vacio = { guia: '', curso: '', salon: '', campaign: '', startDate: '', endDate: '' }
+  if (typeof window === 'undefined') return vacio
+  const sp = new URLSearchParams(window.location.search)
+  return {
+    guia: sp.get('guia') || '', curso: sp.get('curso') || '', salon: sp.get('salon') || '',
+    campaign: sp.get('campaign') || '',
+    startDate: sp.get('startDate') || '', endDate: sp.get('endDate') || '',
+  }
+}
+
 export default function ReporteAcademicoPage() {
-  const [f, setF] = useState({ guia: '', curso: '', salon: '', campaign: '', startDate: '', endDate: '' })
+  const [f, setF] = useState(filtrosDeUrl)
   const [applied, setApplied] = useState(f)
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)

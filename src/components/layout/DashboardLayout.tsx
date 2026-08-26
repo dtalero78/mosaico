@@ -52,6 +52,8 @@ const getNavigation = (userEmail: string, userRole: string) => [
             : '/panel-advisor' },
           // "Control Horas" se movió a una pestaña dentro del Panel Guía.
           // La página standalone /dashboard/academic/control-horas sigue accesible por URL.
+          // "Sesiones sin gestión" lleva dentro la pestaña del Reporte Académico
+          // sin gestión: es el mismo seguimiento del coordinador.
           { name: 'Sesiones sin gestión', href: '/dashboard/academic/sesiones-sin-gestion', newTab: true },
           { name: 'Performance Evaluation', href: '/dashboard/academic/performance-evaluation', newTab: true },
           { name: 'Lista de Usuarios', href: '/dashboard/academic/lista-usuarios', newTab: true },
@@ -301,8 +303,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/academic/crear-impulsa': [
       AcademicoPermission.CAMPANA_CREAR,
     ],
+    // Cualquiera de los dos permisos abre la pantalla: dentro, cada pestaña se
+    // muestra según el suyo.
     '/dashboard/academic/sesiones-sin-gestion': [
       AcademicoPermission.SESIONES_SIN_GESTION_VER,
+      AcademicoPermission.RPT_ACADEMICO_SIN_GESTION_VER,
     ],
     '/dashboard/academic/solicitud-sesiones': [
       AcademicoPermission.SOLICITUD_SESIONES_VER,

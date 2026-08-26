@@ -166,8 +166,11 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/performance-evaluation': [
     'ACADEMICO.PERFORMANCE_EVAL.VER' as Permission,
   ],
+  // La pantalla lleva dentro la pestaña del Reporte Académico sin gestión, así
+  // que cualquiera de los dos permisos abre la ruta.
   '/dashboard/academic/sesiones-sin-gestion': [
     'ACADEMICO.SESIONES_SIN_GESTION.VER' as Permission,
+    'ACADEMICO.RPT_ACADEMICO_SIN_GESTION.VER' as Permission,
   ],
   '/dashboard/academic/solicitud-sesiones': [
     'ACADEMICO.SOLICITUD_SESIONES.VER' as Permission,

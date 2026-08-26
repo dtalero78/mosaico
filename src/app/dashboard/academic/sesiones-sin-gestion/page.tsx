@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
+import { usePermissions } from '@/hooks/usePermissions'
 import { AcademicoPermission } from '@/types/permissions'
+import RptAcademicoSinGestionTab from '@/components/academic/RptAcademicoSinGestionTab'
 import {
   ExclamationTriangleIcon,
   ArrowPathIcon,
@@ -54,7 +56,7 @@ interface AdminItem {
   advisorEmail: string | null
 }
 
-type Tab = 'academicas' | 'admin'
+type Tab = 'academicas' | 'admin' | 'reporte'
 
 const PAD = (n: number) => String(n).padStart(2, '0')
 
@@ -113,6 +115,14 @@ export default function SesionesSinGestionPage() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('academicas')
 
+  // La pestaña del Reporte Académico se gobierna sola (rango semanal propio);
+  // aquí sólo se recibe su total para poder mostrarlo en la solapa.
+  const { hasPermission, isLoading: permisosCargando } = usePermissions()
+  const verSesiones = hasPermission(AcademicoPermission.SESIONES_SIN_GESTION_VER)
+  const verReporte = hasPermission(AcademicoPermission.RPT_ACADEMICO_SIN_GESTION_VER)
+  const [rptCount, setRptCount] = useState<number | null>(null)
+  const arranco = useRef(false)
+
   // Cargar advisors activos para el dropdown
   useEffect(() => {
     fetch('/api/postgres/guias')
@@ -162,8 +172,15 @@ export default function SesionesSinGestionPage() {
     }
   }
 
-  // Carga inicial con defaults (ayer)
-  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Carga inicial con defaults (ayer). Espera a que los permisos resuelvan: si
+  // el usuario sólo tiene el del Reporte Académico, no se consulta lo que no
+  // puede ver y se abre directo en esa pestaña.
+  useEffect(() => {
+    if (permisosCargando || arranco.current) return
+    arranco.current = true
+    if (verSesiones) load()
+    else if (verReporte) setTab('reporte')
+  }, [permisosCargando, verSesiones, verReporte]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Campañas presentes en lo cargado. Se arma con TODAS las filas del rango (no
   // con las ya filtradas), así el desplegable no se vacía al elegir una.
@@ -197,7 +214,10 @@ export default function SesionesSinGestionPage() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard permission={AcademicoPermission.SESIONES_SIN_GESTION_VER}>
+      <PermissionGuard anyPermissions={[
+        AcademicoPermission.SESIONES_SIN_GESTION_VER,
+        AcademicoPermission.RPT_ACADEMICO_SIN_GESTION_VER,
+      ]}>
         <div className="space-y-5 pb-10">
           {/* Header */}
           <div className="flex items-start justify-between flex-wrap gap-3">
@@ -208,13 +228,39 @@ export default function SesionesSinGestionPage() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Sesiones sin gestión</h1>
                 <p className="text-sm text-gray-500 mt-0.5">
-                  Eventos pasados sin registrar — el coordinador puede entrar a cada uno y gestionar el cierre.
-                  Default: ayer · todos los advisors. Hoy se excluye (aún en ventana operativa).
+                  {tab === 'reporte'
+                    ? 'Salones que tuvieron clase y NO cerraron su informe semanal — el coordinador puede entrar a cada uno y gestionarlo. Default: semana pasada · todos los guías. IMPULSA no aplica.'
+                    : 'Eventos pasados sin registrar — el coordinador puede entrar a cada uno y gestionar el cierre. Default: ayer · todos los advisors. Hoy se excluye (aún en ventana operativa).'}
                 </p>
               </div>
             </div>
           </div>
 
+          {/* Tabs — arriba de los filtros porque cada pestaña trae los suyos:
+              las sesiones se miran por día y el informe por semana. */}
+          <div className="border-b border-gray-200 flex gap-1">
+            {verSesiones && (
+              <button type="button" onClick={() => setTab('academicas')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'academicas' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                Sesiones académicas ({itemsFiltrados.length})
+              </button>
+            )}
+            {verSesiones && (
+              <button type="button" onClick={() => setTab('admin')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'admin' ? 'border-violet-600 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                Eventos administrativos ({adminItems.length})
+              </button>
+            )}
+            {verReporte && (
+              <button type="button" onClick={() => setTab('reporte')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'reporte' ? 'border-amber-600 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                Reporte Académico{rptCount === null ? '' : ` (${rptCount})`}
+              </button>
+            )}
+          </div>
+
+          {tab !== 'reporte' && (
+          <>
           {/* Filtros */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
@@ -304,21 +350,19 @@ export default function SesionesSinGestionPage() {
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800">{error}</div>
           )}
+          </>
+          )}
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200 flex gap-1">
-            <button type="button" onClick={() => setTab('academicas')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'academicas' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              Sesiones académicas ({itemsFiltrados.length})
-            </button>
-            <button type="button" onClick={() => setTab('admin')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'admin' ? 'border-violet-600 text-violet-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              Eventos administrativos ({adminItems.length})
-            </button>
-          </div>
+          {/* Reporte Académico — se monta siempre (si hay permiso) para que su
+              total aparezca en la solapa sin tener que entrar a la pestaña. */}
+          {verReporte && (
+            <div className={tab === 'reporte' ? '' : 'hidden'}>
+              <RptAcademicoSinGestionTab onCount={setRptCount} />
+            </div>
+          )}
 
           {/* Tabla — render condicional según tab */}
-          {tab === 'admin' && (
+          {verSesiones && tab === 'admin' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               {loading ? (
                 <p className="p-8 text-center text-sm text-gray-400">Cargando…</p>
@@ -384,7 +428,7 @@ export default function SesionesSinGestionPage() {
           )}
 
           {/* Tabla — sesiones académicas (tab por defecto) */}
-          {tab === 'academicas' && (
+          {verSesiones && tab === 'academicas' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             {loading ? (
               <p className="p-8 text-center text-sm text-gray-400">Cargando…</p>

@@ -616,6 +616,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/sesiones-sin-gestion. Lista de eventos pasados sin registrar (sesionCerrada=false) con filtros por fecha y advisor. Muestra inscritos/asistencia marcada para detectar si el advisor empezó pero no cerró, y un acceso directo al panel del evento para que el coordinador gestione el cierre.',
   },
   {
+    code: AcademicoPermission.RPT_ACADEMICO_SIN_GESTION_VER,
+    module: Module.ACADEMICO,
+    section: 'Reporte Académico sin gestión',
+    name: 'Pestaña "Reporte Académico" en Sesiones sin gestión',
+    description: 'Muestra la pestaña "Reporte Académico" dentro de /dashboard/academic/sesiones-sin-gestion: salones que tuvieron clase pero NO cerraron su Reporte Académico de esa semana, con filtros propios por fecha, guía, campaña y curso. Distingue "sin empezar" (el guía no entró) de "borrador" (guardó valoraciones pero no cerró), y enlaza al informe del salón para gestionarlo. Por defecto muestra la semana pasada.',
+  },
+  {
     code: AcademicoPermission.CASOS_USUARIOS_VER,
     module: Module.ACADEMICO,
     section: 'Casos Usuarios',
