@@ -10,6 +10,9 @@ import {
   ZOOM_ABRE_MIN_ANTES, ZOOM_CIERRA_MIN_DESPUES, ZOOM_RECONEXION_MARGEN_FINAL_MIN,
 } from '../../src/lib/zoom-window';
 import { bookingConRegistroSql } from '../../src/lib/booking-registro';
+import {
+  guiaEnVentana, diaSemanaChile, DIAS_GESTION_GUIA,
+} from '../../src/lib/reporte-academico-ventana';
 
 const INICIO = new Date('2026-08-17T20:00:00.000Z');
 /** Instante desplazado `min` minutos respecto del inicio del evento. */
@@ -226,5 +229,41 @@ test.describe('Qué agendamiento guarda historia (y por tanto no se puede borrar
   test('viene envuelto en paréntesis para poder concatenarlo con AND', () => {
     expect(sql.trim().startsWith('(')).toBe(true);
     expect(sql.trim().endsWith(')')).toBe(true);
+  });
+});
+
+test.describe('Ventana del Guía en el Reporte Académico', () => {
+  // Miércoles 26-ago-2026 a las 12:00 de Chile = 16:00 UTC.
+  const aLasChile = (isoUtc: string) => new Date(isoUtc);
+
+  test('el Guía gestiona de miércoles a domingo, no lunes ni martes', () => {
+    // Semana del 24-ago-2026: lunes 24 … domingo 30.
+    const dia = (d: number) => aLasChile(`2026-08-${d}T16:00:00.000Z`); // mediodía en Chile
+    expect(guiaEnVentana(dia(24))).toBe(false); // lunes
+    expect(guiaEnVentana(dia(25))).toBe(false); // martes
+    expect(guiaEnVentana(dia(26))).toBe(true);  // miércoles
+    expect(guiaEnVentana(dia(27))).toBe(true);  // jueves
+    expect(guiaEnVentana(dia(28))).toBe(true);  // viernes
+    expect(guiaEnVentana(dia(29))).toBe(true);  // sábado
+    expect(guiaEnVentana(dia(30))).toBe(true);  // domingo
+  });
+
+  test('el día se mide en CHILE, no en UTC', () => {
+    // Domingo 30-ago 21:00 de Chile = lunes 31 a las 01:00 UTC. En UTC ya sería
+    // lunes y el guía perdería su última tarde; en Chile sigue siendo domingo.
+    const domingoTardeChile = new Date('2026-08-31T01:00:00.000Z');
+    expect(diaSemanaChile(domingoTardeChile)).toBe(0);   // domingo
+    expect(guiaEnVentana(domingoTardeChile)).toBe(true);
+
+    // Y al revés: martes 25 a las 23:00 de Chile es miércoles 26 en UTC — todavía
+    // NO puede gestionar, aunque el servidor ya haya cambiado de día.
+    const martesNocheChile = new Date('2026-08-26T03:00:00.000Z');
+    expect(diaSemanaChile(martesNocheChile)).toBe(2);    // martes
+    expect(guiaEnVentana(martesNocheChile)).toBe(false);
+  });
+
+  test('la ventana es la acordada', () => {
+    // Fijada a propósito: cambiar los días debe ser una decisión, no un descuido.
+    expect(DIAS_GESTION_GUIA.slice().sort((a, b) => a - b)).toEqual([0, 3, 4, 5, 6]);
   });
 });

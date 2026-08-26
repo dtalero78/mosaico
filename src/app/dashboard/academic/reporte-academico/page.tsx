@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission, Role } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
+import { MENSAJE_FUERA_DE_VENTANA } from '@/lib/reporte-academico-ventana'
 
 // `manual: false` = "Asistió", que se calcula solo con la asistencia marcada en
 // cada sesión de la semana. Los otros 8 los marca el Guía aquí mismo.
@@ -195,11 +196,17 @@ export default function ReporteAcademicoPage() {
   //   CERRADO_GUIA → sólo quien tenga el permiso de revisar.
   //   DEFINITIVO   → sólo SUPER_ADMIN.
   const estadoCierre: 'BORRADOR' | 'CERRADO_GUIA' | 'DEFINITIVO' = data?.cierre?.estado || 'BORRADOR'
+  // El Guía sólo gestiona de miércoles a domingo (hora de CHILE, que la manda el
+  // servidor: el reloj del navegador puede estar en otro huso). Fuera de esos
+  // días ve el informe, pero en solo lectura. A Coordinación no le aplica.
+  const fueraDeVentana = esGuia && data?.enVentanaGuia === false
+
   const puedeEditar =
-    estadoCierre === 'BORRADOR' ? true
-      : estadoCierre === 'CERRADO_GUIA' ? puedeRevisar
-        : esSuperAdmin
-  const puedeCerrarGuia = estadoCierre === 'BORRADOR' && rows.length > 0
+    fueraDeVentana ? false
+      : estadoCierre === 'BORRADOR' ? true
+        : estadoCierre === 'CERRADO_GUIA' ? puedeRevisar
+          : esSuperAdmin
+  const puedeCerrarGuia = !fueraDeVentana && estadoCierre === 'BORRADOR' && rows.length > 0
   const puedeCerrarDefinitivo = estadoCierre === 'CERRADO_GUIA' && puedeRevisar && rows.length > 0
 
   const cerrarInforme = async (accion: 'GUIA' | 'DEFINITIVO') => {
@@ -321,18 +328,34 @@ export default function ReporteAcademicoPage() {
                 {(data?.campaigns || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase">Semana desde</label>
-              <input type="date" value={f.startDate} onChange={e => setF({ ...f, startDate: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase">Hasta</label>
-              <input type="date" value={f.endDate} onChange={e => setF({ ...f, endDate: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-            </div>
+            {/* El Guía no elige semana: siempre trabaja la actual. Los controles
+                se ocultan, y el servidor además ignora las fechas si llegaran. */}
+            {!esGuia && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-500 uppercase">Semana desde</label>
+                  <input type="date" value={f.startDate} onChange={e => setF({ ...f, startDate: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-gray-500 uppercase">Hasta</label>
+                  <input type="date" value={f.endDate} onChange={e => setF({ ...f, endDate: e.target.value })} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </>
+            )}
             <div className="flex-1" />
             <button onClick={aplicar} className="px-4 py-2 rounded-lg bg-purple-700 text-white text-sm font-medium hover:bg-purple-800">Aplicar</button>
-            <button onClick={semanaActual} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 text-sm hover:bg-gray-50">Semana actual</button>
+            {!esGuia && (
+              <button onClick={semanaActual} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-600 text-sm hover:bg-gray-50">Semana actual</button>
+            )}
           </div>
+
+          {/* Lunes y martes: el informe se ve pero no se toca. */}
+          {fueraDeVentana && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-800">Informe en solo lectura</p>
+              <p className="text-sm text-amber-700 mt-0.5">{MENSAJE_FUERA_DE_VENTANA}</p>
+            </div>
+          )}
 
           {/* Resumen */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -474,9 +497,9 @@ export default function ReporteAcademicoPage() {
                     Seleccionar todos
                   </label>
                   <span className="text-xs text-gray-500">{seleccion.size} seleccionado(s)</span>
-                  <button type="button" onClick={() => correrMasivo('Generar IA', generarIA)} disabled={!!bulk || seleccion.size === 0}
+                  <button type="button" onClick={() => correrMasivo('Generar IA', generarIA)} disabled={!puedeEditar || !!bulk || seleccion.size === 0}
                     className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-fuchsia-600 text-white hover:bg-fuchsia-700 disabled:opacity-40">✦ Generar IA</button>
-                  <button type="button" onClick={() => correrMasivo('Guardar', guardarNota)} disabled={!!bulk || seleccion.size === 0}
+                  <button type="button" onClick={() => correrMasivo('Guardar', guardarNota)} disabled={!puedeEditar || !!bulk || seleccion.size === 0}
                     className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-40">Guardar valoración</button>
                   {puedeEnviar && (
                     <button type="button" onClick={() => correrMasivo('Enviar', enviarWhatsapp)} disabled={!!bulk || seleccion.size === 0}
@@ -513,7 +536,7 @@ export default function ReporteAcademicoPage() {
                       />
                       {/* En impresión el textarea no se ve bien: se imprime el texto. */}
                       <p className="only-print text-[13px] text-gray-800 whitespace-pre-wrap">{comentIA[r.academicaId]}</p>
-                      <button onClick={() => generarIA(r)} disabled={genIA === r.academicaId} className="no-print mt-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-50">
+                      <button onClick={() => generarIA(r)} disabled={!puedeEditar || genIA === r.academicaId} className="no-print mt-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-50">
                         {genIA === r.academicaId ? 'Generando…' : (comentIA[r.academicaId] ? '✦ Regenerar' : '✦ Generar con IA')}
                       </button>
                     </div>
@@ -523,7 +546,7 @@ export default function ReporteAcademicoPage() {
                         readOnly={!puedeEditar}
                         placeholder="Escribe las actividades de práctica individual de la semana…" className="w-full min-h-[76px] resize-y border border-gray-300 rounded-lg px-3 py-2 text-[13px]" />
                       <p className="only-print text-[13px] text-gray-800 whitespace-pre-wrap">{notas[r.academicaId]}</p>
-                      <button onClick={() => guardarNota(r)} disabled={savingNota === r.academicaId} className="no-print mt-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-50">
+                      <button onClick={() => guardarNota(r)} disabled={!puedeEditar || savingNota === r.academicaId} className="no-print mt-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 disabled:opacity-50">
                         {savingNota === r.academicaId ? 'Guardando…' : 'Guardar'}
                       </button>
                     </div>

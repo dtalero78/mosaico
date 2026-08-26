@@ -3,7 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, ForbiddenError } from '@/lib/errors';
-import { getReporteAcademico, sanitizeCriterios, getCierre } from '@/services/reporte-academico.service';
+import { getReporteAcademico, sanitizeCriterios, getCierre, assertVentanaGuia } from '@/services/reporte-academico.service';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 
@@ -73,6 +73,11 @@ async function guardarFila(item: any, salon: string, semanaInicio: string, email
  *   DEFINITIVO   → sólo SUPER_ADMIN.
  */
 async function assertPuedeEscribir(session: any, curso: string, salon: string, campaign: string, semanaInicio: string) {
+  // El Guía sólo gestiona de miércoles a domingo (hora de Chile). Va ANTES del
+  // estado del informe: aunque siga en BORRADOR, un lunes no se toca. No aplica a
+  // quien revisa —Coordinación corrige cuando haga falta—, sólo al rol GUIA.
+  assertVentanaGuia(session);
+
   if (!curso || !campaign) return; // sin curso/campaña no hay cierre que consultar
   const { estado } = await getCierre(curso, salon, campaign, semanaInicio);
   const rol = String((session as any)?.user?.role || '');

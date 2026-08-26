@@ -5,7 +5,7 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, ForbiddenError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
-import { getCierre } from '@/services/reporte-academico.service';
+import { getCierre, assertVentanaGuia } from '@/services/reporte-academico.service';
 
 /**
  * POST /api/postgres/reports/academico/reporte-academico/cerrar
@@ -36,6 +36,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   if (accion !== 'GUIA' && accion !== 'DEFINITIVO') {
     throw new ValidationError('Acción no válida.');
   }
+
+  // Cerrar es gestionar: al Guía le aplica la misma ventana de miércoles a
+  // domingo que al guardado. Sin esto podría cerrar un lunes lo que no puede editar.
+  assertVentanaGuia(session);
 
   const email = (session as any)?.user?.email || 'desconocido';
   const rol = String((session as any)?.user?.role || '');
