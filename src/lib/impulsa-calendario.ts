@@ -4,10 +4,15 @@
  * IMPULSA no usa el motor dinámico de los cursos MOSAICO. Su calendario se
  * materializa UNA vez al crear el curso:
  *  - SESIONES: recurrencia L/M/V en [inicio, fin], 20:00–21:00 (60 min). En un día
- *    festivo NO hay clase, y esa sesión se CORRE al final del curso — igual que en
- *    los cursos MOSAICO, para que el curso conserve su número de clases. Cuenta
- *    como festivo tanto el calendario legal de Chile como los días declarados
- *    (los propios del curso y los globales de Académico › Sesiones › Festivos).
+ *    sin clase NO hay sesión, y esa clase se CORRE al final del curso para que el
+ *    curso conserve su número de clases.
+ *
+ *    ⚠ Los días sin clase de IMPULSA son SÓLO los que el curso tiene cargados en
+ *    su propio asistente. **No se aplica el calendario de festivos** —ni el legal
+ *    de Chile ni los que Académico declara en Sesiones › Festivos, que rigen para
+ *    los cursos MOSAICO—: IMPULSA dicta normal esos días salvo que su propia
+ *    configuración diga lo contrario. Es una decisión operativa, no un descuido:
+ *    IMPULSA es un curso intensivo con calendario cerrado desde que se crea.
  *  - ENTRENAMIENTOS: fechas fijas individuales, 2h30, default 09:30–12:00 (sáb),
  *    con override de fecha y hora por ocurrencia.
  *  - EVALUACIONES: fechas fijas individuales, 2h30, 18:30–21:00. Después de las sesiones.
@@ -19,7 +24,6 @@
  * materialización — aquí sólo se computan fechas/horas locales y el resumen.
  */
 import { TZ_OPERACION } from './cursos-campaign';
-import { esFestivoChile } from './festivos-chile';
 
 export const IMPULSA_AUTHOR_TZ = TZ_OPERACION;
 export const SESION_HORA_INICIO = '20:00';   // 20:00–21:00 (60 min)
@@ -86,8 +90,12 @@ const normFijos = (arr: FechaFija[], defHora: (fecha: string) => string, tipo: I
  */
 export function computeImpulsaCalendario(cfg: ImpulsaConfig) {
   const declarados = new Set((cfg.festivos || []).map(f => String(f).trim()).filter(Boolean));
-  /** Día sin clase: feriado legal de Chile o día declarado (propio o global). */
-  const esFestivo = (fecha: string) => declarados.has(fecha) || esFestivoChile(fecha);
+  /**
+   * Día sin clase: SÓLO los declarados en el asistente del propio curso. El
+   * calendario de festivos (legal + declarados por Académico) no se consulta a
+   * propósito — ver la nota de la cabecera.
+   */
+  const esFestivo = (fecha: string) => declarados.has(fecha);
   const entrenamientos = normFijos(cfg.entrenamientos, defaultEntrenHora, 'ENTRENAMIENTO');
   const evaluaciones = normFijos(cfg.evaluaciones, () => EVAL_HORA_DEFAULT, 'EVALUACION');
   const fijos = [...entrenamientos, ...evaluaciones];

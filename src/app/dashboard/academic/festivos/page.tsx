@@ -346,12 +346,13 @@ export default function FestivosPage() {
 
           {impulsa.length > 0 && (
             <div className="bg-sky-50 border border-sky-200 rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-sky-900">IMPULSA se resuelve aparte</h2>
+              <h2 className="text-lg font-semibold text-sky-900">IMPULSA dicta normal estos días</h2>
               <p className="text-sky-800 mt-1">
-                IMPULSA no arma su calendario con el horario semanal sino con su propia
-                configuración (sesiones L-M-V más entrenamientos y evaluaciones en fechas fijas),
-                así que no se puede recolocar desde aquí — se le borrarían los entrenamientos.
-                Estas {impulsa.length} clase(s) siguen en pie; hay que cargar el día sin clase en
+                A IMPULSA <strong>no se le aplica el calendario de festivos</strong>: sus días sin
+                clase son sólo los que se cargan en su propio asistente, porque arma el calendario
+                con su configuración (sesiones L-M-V más entrenamientos y evaluaciones en fechas
+                fijas) y no con el horario semanal. Estas {impulsa.length} clase(s) siguen en pie a
+                propósito; si alguna no se va a dictar, se carga el día en
                 <strong> Académico › Crear IMPULSA</strong>.
               </p>
               <ul className="mt-3 text-sm text-sky-900">
