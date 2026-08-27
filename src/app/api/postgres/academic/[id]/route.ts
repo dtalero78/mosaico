@@ -9,6 +9,8 @@ const ALLOWED_BOOKING_FIELDS = [
   'asistio', 'asistencia', 'participacion', 'evaluacion',
   'comentarios', 'noAprobo', 'cancelo', 'comentarioAdvisor', 'comentarioEstudiante',
   'calificacion', 'advisorAnotaciones',
+  // Ausencia justificada: la marca y su motivo. Justificar NO descuenta la falta.
+  'escusa', 'justificaescusa',
 ];
 
 /**

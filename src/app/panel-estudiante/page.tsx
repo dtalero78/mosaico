@@ -545,10 +545,10 @@ function PanelEstudianteContent() {
 
           {/* Derecha: Sesiones + Eventos Programados + Comentarios (apilados) */}
           <div className="space-y-4">
-            {/* Sesiones — 4 subtarjetas en línea */}
+            {/* Sesiones — 5 subtarjetas en línea */}
             <div className="bg-white border border-gray-200 rounded-xl p-5">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Sesiones</h2>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 <div className="rounded-lg bg-green-50 border border-green-100 p-3 text-center">
                   <div className="text-xl font-bold text-green-700">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.asistencias ?? 0)}</div>
                   <div className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide leading-tight">Asistidas</div>
@@ -556,6 +556,12 @@ function PanelEstudianteContent() {
                 <div className="rounded-lg bg-red-50 border border-red-100 p-3 text-center">
                   <div className="text-xl font-bold text-red-600">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.ausencias ?? 0)}</div>
                   <div className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide leading-tight">Ausente</div>
+                </div>
+                {/* Faltas con excusa aceptada. Va aparte y NO descuenta de
+                    "Ausente": la falta sigue siendo falta. */}
+                <div className="rounded-lg bg-sky-50 border border-sky-100 p-3 text-center">
+                  <div className="text-xl font-bold text-sky-700">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.justificadas ?? 0)}</div>
+                  <div className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide leading-tight">Justificadas</div>
                 </div>
                 <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 text-center">
                   <div className="text-xl font-bold text-amber-600">{statsQuery.isLoading ? '—' : (statsQuery.data?.stats?.canceladas ?? 0)}</div>

@@ -644,6 +644,11 @@ export default function StudentAcademic({ student, classes: initialClasses, view
           asistio: selectedClass.asistencia,
           participacion: selectedClass.participacion,
           calificacion: selectedClass.calificacion,
+          // La excusa sólo viaja si de verdad hubo falta: así una marca vieja no
+          // sobrevive a que después se registre la asistencia.
+          escusa: !selectedClass.asistencia && !!(selectedClass as any).escusa,
+          justificaescusa: (!selectedClass.asistencia && (selectedClass as any).escusa)
+            ? ((selectedClass as any).justificaescusa || '') : '',
           advisorAnotaciones: (selectedClass as any).advisorAnotaciones || '',
           comentarios: (selectedClass as any).comentarios || ''
         })
@@ -1013,7 +1018,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
             {steps.map((step) => (
               <div
                 key={step._id}
-                className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 shadow-sm"
+                className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 shadow-sm"
               >
                 <div className="flex items-center space-x-3">
                   <div>
@@ -1174,19 +1179,19 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                 </div>
 
                 {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
                   {/* Left Column - Attendance & Participation */}
                   {canEvaluate && (
-                    <div className="space-y-6">
-                      <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                        <h4 className="text-base font-semibold text-gray-900 mb-3 flex items-center space-x-2">
                           <span>📊</span>
                           <span>Evaluación</span>
                         </h4>
 
                       <div className="space-y-4">
                         {/* Attendance Toggle */}
-                        <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
                           <div className="flex items-center space-x-3">
                             <div className={`w-3 h-3 rounded-full ${selectedClass.asistencia ? 'bg-green-500' : 'bg-red-500'}`}></div>
                             <div>
@@ -1202,8 +1207,10 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                                 if (selectedClass) {
                                   setSelectedClass({
                                     ...selectedClass,
-                                    asistencia: e.target.checked
-                                  })
+                                    asistencia: e.target.checked,
+                                    // Si asistió no hay falta que justificar.
+                                    ...(e.target.checked ? { escusa: false, justificaescusa: '' } : {}),
+                                  } as any)
                                 }
                               }}
                               className="sr-only peer"
@@ -1213,7 +1220,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                         </div>
 
                         {/* Participation Toggle */}
-                        <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
                           <div className="flex items-center space-x-3">
                             <div className={`w-3 h-3 rounded-full ${selectedClass.participacion ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
                             <div>
@@ -1239,43 +1246,88 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                           </label>
                         </div>
 
-                        {/* Grade Input */}
-                        <div className="p-4 bg-white rounded-lg border border-gray-200">
-                          <label className="block text-sm font-medium text-gray-900 mb-2">
-                            Calificación (0-10)
-                          </label>
-                          <div className="relative">
+                        {/* Ausencia justificada — sólo tiene sentido si NO asistió:
+                            justificar una falta de alguien que vino sería un dato
+                            contradictorio, así que con asistencia marcada el toggle
+                            queda deshabilitado. */}
+                        <div className={`flex items-center justify-between p-3 rounded-lg border ${
+                          selectedClass.asistencia ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-200'
+                        }`}>
+                          <div className="flex items-center space-x-3">
+                            <div className={`w-3 h-3 rounded-full ${(selectedClass as any).escusa ? 'bg-sky-500' : 'bg-gray-300'}`}></div>
+                            <div>
+                              <p className={`text-sm font-medium ${selectedClass.asistencia ? 'text-gray-400' : 'text-gray-900'}`}>
+                                Ausencia justificada
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {selectedClass.asistencia
+                                  ? 'No aplica: el usuario asistió'
+                                  : 'La falta sigue contando como ausencia'}
+                              </p>
+                            </div>
+                          </div>
+                          <label className={`relative inline-flex items-center ${selectedClass.asistencia ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                             <input
-                              type="number"
-                              min="0"
-                              max="10"
-                              value={selectedClass.calificacion || 0}
+                              type="checkbox"
+                              disabled={!!selectedClass.asistencia}
+                              checked={!!(selectedClass as any).escusa && !selectedClass.asistencia}
                               onChange={(e) => {
                                 if (selectedClass) {
                                   setSelectedClass({
                                     ...selectedClass,
-                                    calificacion: parseInt(e.target.value) || 0
-                                  })
+                                    escusa: e.target.checked,
+                                    // Al desmarcar se limpia el motivo: dejarlo guardado
+                                    // haría creer que la falta sigue justificada.
+                                    justificaescusa: e.target.checked ? (selectedClass as any).justificaescusa || '' : '',
+                                  } as any)
                                 }
                               }}
-                              className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-lg font-semibold text-center"
+                              className="sr-only peer"
                             />
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                              <span className="text-gray-500 text-sm">/10</span>
-                            </div>
-                          </div>
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600 peer-disabled:opacity-40"></div>
+                          </label>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Motivo — cuarta caja, al lado de las otras tres */}
+                    <div className="bg-sky-50 rounded-xl p-4 border border-sky-200">
+                      <h4 className="text-base font-semibold text-sky-900 mb-3 flex items-center space-x-2">
+                        <span>🗒️</span>
+                        <span>Motivo de la ausencia</span>
+                      </h4>
+                      <div className="relative">
+                        <textarea
+                          rows={3}
+                          value={(selectedClass as any).justificaescusa || ''}
+                          disabled={!(selectedClass as any).escusa || !!selectedClass.asistencia}
+                          onChange={(e) => {
+                            if (selectedClass) {
+                              setSelectedClass({ ...selectedClass, justificaescusa: e.target.value } as any)
+                            }
+                          }}
+                          className={`block w-full rounded-lg border-sky-300 shadow-sm text-sm resize-none ${
+                            (selectedClass as any).escusa && !selectedClass.asistencia
+                              ? 'bg-white focus:border-sky-500 focus:ring-sky-500'
+                              : 'bg-sky-50 cursor-not-allowed'
+                          }`}
+                          placeholder={
+                            (selectedClass as any).escusa && !selectedClass.asistencia
+                              ? 'Por qué se justifica la ausencia…'
+                              : 'Marca "Ausencia justificada" para escribir el motivo'
+                          }
+                        />
                       </div>
                     </div>
                   </div>
                   )}
 
                   {/* Right Column - Comments */}
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {/* Advisor Notes */}
                     {canAddAdvisorNotes && (
-                      <div className="bg-amber-50 rounded-xl p-6 border border-amber-200">
-                      <h4 className="text-lg font-semibold text-amber-900 mb-4 flex items-center space-x-2">
+                      <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                      <h4 className="text-base font-semibold text-amber-900 mb-3 flex items-center space-x-2">
                         <span>📝</span>
                         <span>Anotaciones Académicas</span>
                         {!canEditAdvisorNotes && (
@@ -1286,7 +1338,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                       </h4>
                       <div className="relative">
                         <textarea
-                          rows={4}
+                          rows={3}
                           value={(selectedClass as any).advisorAnotaciones || ''}
                           onChange={(e) => {
                             if (selectedClass && canEditAdvisorNotes) {
@@ -1313,8 +1365,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
 
                     {/* Student Comments */}
                     {canAddStudentComments && (
-                      <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
-                      <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center space-x-2">
+                      <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                      <h4 className="text-base font-semibold text-blue-900 mb-3 flex items-center space-x-2">
                         <span>💬</span>
                         <span>Comentarios para el Usuario</span>
                         {!canEditStudentComments && (
@@ -1325,7 +1377,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                       </h4>
                       <div className="relative">
                         <textarea
-                          rows={4}
+                          rows={3}
                           value={selectedClass.comentarios || ''}
                           onChange={(e) => {
                             if (selectedClass && canEditStudentComments) {
@@ -1462,7 +1514,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                     </div>
                   </div>
                 )}
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {/* Step 1: Event Type Selection */}
                   <div>
                     <h4 className="text-lg font-medium text-gray-900 mb-4">1. Selecciona el tipo de evento</h4>

@@ -176,7 +176,7 @@ class BookingRepositoryClass extends BaseRepository {
               c."sesionModulo2", c."sesionLeccion2",
               b."asistencia", b."asistio", b."participacion", b."noAprobo",
               b."cancelo", b."calificacion", b."anotaciones", b."comentarios", b."advisorAnotaciones",
-              b."actividadPropuesta",
+              b."actividadPropuesta", b."escusa", b."justificaescusa",
               ${enlaceClaseSql('ge', `COALESCE(c."linkZoom", b."linkZoom")`)} AS "linkZoom",
               b."asignadoPor", b."origen",
               b."agendadoPor", b."agendadoPorEmail", b."agendadoPorRol",
@@ -546,7 +546,10 @@ class BookingRepositoryClass extends BaseRepository {
           AND ("cancelo" IS NULL OR "cancelo" = false)
           AND "fechaEvento" < NOW()
         THEN 1 END)::int as ausencias,
-        COUNT(CASE WHEN "cancelo" = true THEN 1 END)::int as canceladas
+        COUNT(CASE WHEN "cancelo" = true THEN 1 END)::int as canceladas,
+        -- Faltas con excusa aceptada. NO se descuentan de "ausencias": la falta
+        -- sigue siendo falta y este número es información aparte.
+        COUNT(CASE WHEN "escusa" = true AND "fechaEvento" < NOW() THEN 1 END)::int as justificadas
        FROM "ACADEMICA_BOOKINGS"
        WHERE ("idEstudiante" = $1 OR "studentId" = $1)`,
       [studentId]
