@@ -172,7 +172,15 @@ class BookingRepositoryClass extends BaseRepository {
               CASE WHEN b."step" ~ '^[A-Z]+ - Step' THEN b."step"
                    ELSE COALESCE(c."step", b."step")
               END AS "step",
-              c."sesionModulo", c."sesionLeccion",
+              -- En una NIVELACIÓN el módulo/lección vive en el AGENDAMIENTO, no en
+              -- el evento: el evento comparte horario pero cada alumno refuerza su
+              -- propio punto del curso, y el mapeo del calendario (sesionModulo)
+              -- sólo lo llena el generador de cursos. Sin este respaldo la tabla
+              -- de asistencia mostraba "—" en toda nivelación.
+              CASE WHEN UPPER(COALESCE(c."tipo",'')) = 'NIVELACION'
+                   THEN COALESCE(c."sesionModulo", b."nivel") ELSE c."sesionModulo" END AS "sesionModulo",
+              CASE WHEN UPPER(COALESCE(c."tipo",'')) = 'NIVELACION'
+                   THEN COALESCE(c."sesionLeccion", b."step") ELSE c."sesionLeccion" END AS "sesionLeccion",
               c."sesionModulo2", c."sesionLeccion2",
               b."asistencia", b."asistio", b."participacion", b."noAprobo",
               b."cancelo", b."calificacion", b."anotaciones", b."comentarios", b."advisorAnotaciones",

@@ -4,6 +4,7 @@ import { CalendarioRepository } from '@/repositories/calendar.repository';
 import { autoAdvanceStep } from '@/services/student.service';
 import { cerrarNivelacionSiRealizada } from '@/services/nivelacion.service';
 import { NotFoundError } from '@/lib/errors';
+import { queryOne } from '@/lib/postgres';
 
 const ALLOWED_BOOKING_FIELDS = [
   'asistio', 'asistencia', 'participacion', 'evaluacion',
@@ -11,6 +12,10 @@ const ALLOWED_BOOKING_FIELDS = [
   'calificacion', 'advisorAnotaciones',
   // Ausencia justificada: la marca y su motivo. Justificar NO descuenta la falta.
   'escusa', 'justificaescusa',
+  // Módulo/lección del refuerzo. SÓLO se aceptan si el evento es una NIVELACIÓN
+  // (ver la guarda del PUT): en una sesión de curso la lección la fija el
+  // calendario del salón, y dejarla editable aquí la desalinearía del resto.
+  'nivel', 'step',
 ];
 
 /**
@@ -30,6 +35,32 @@ export const GET = handlerWithAuth(async (request, { params }) => {
  */
 export const PUT = handlerWithAuth(async (request, { params }, session) => {
   const body = await request.json();
+
+  // El módulo/lección sólo se puede reasignar en una NIVELACIÓN, y se escribe
+  // en el agendamiento de ESE alumno: una nivelación en grupo comparte horario,
+  // pero cada uno refuerza su propio punto del curso.
+  if (body.nivel !== undefined || body.step !== undefined) {
+    const ev = await queryOne<{ tipo: string | null }>(
+      `SELECT c."tipo" FROM "ACADEMICA_BOOKINGS" b
+         LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
+        WHERE b."_id" = $1`,
+      [params.id]
+    );
+    if (String(ev?.tipo || '').toUpperCase() !== 'NIVELACION') {
+      delete body.nivel;
+      delete body.step;
+      // Si no queda nada por actualizar, devolver el registro tal cual: seguir
+      // habría hecho un UPDATE vacío y el 404 de "no encontrado" mentiría sobre
+      // un agendamiento que sí existe.
+      const quedan = ALLOWED_BOOKING_FIELDS.some((f) => body[f] !== undefined);
+      if (!quedan) {
+        const actual = await BookingRepository.findById(params.id);
+        if (!actual) throw new NotFoundError('Class record', params.id);
+        return successResponse({ booking: actual, advancement: null, message: 'Sin cambios aplicables' });
+      }
+    }
+  }
+
   const booking = await BookingRepository.updateFields(params.id, body, ALLOWED_BOOKING_FIELDS);
   if (!booking) throw new NotFoundError('Class record', params.id);
 
