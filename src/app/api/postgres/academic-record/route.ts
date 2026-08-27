@@ -18,6 +18,9 @@ const UPDATABLE_FIELDS = [
   'asistio', 'asistencia', 'participacion', 'noAprobo',
   'calificacion', 'comentarios', 'advisorAnotaciones', 'actividadPropuesta',
   'casoAtencion',
+  // Ausencia justificada: la falta se explica, pero SIGUE contando como ausencia
+  // (no toca 'asistio'/'asistencia'). Sólo es un dato aparte.
+  'escusa', 'justificaescusa',
   ...CRITERIOS_EVAL,
 ];
 
@@ -36,7 +39,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
   const sessionRole = (session?.user as any)?.role;
 
-  const { idEstudiante, idEvento, asistencia, participacion, noAprobo, calificacion, comentarios, advisorAnotaciones, actividadPropuesta } = body;
+  const { idEstudiante, idEvento, asistencia, participacion, noAprobo, calificacion, comentarios, advisorAnotaciones, actividadPropuesta, escusa, justificaescusa } = body;
 
   if (!idEstudiante || !idEvento) {
     throw new ValidationError('idEstudiante and idEvento are required');
@@ -103,6 +106,17 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     updateData.casoAtencion = !!(advisorAnotaciones && String(advisorAnotaciones).trim());
   }
   if (actividadPropuesta !== undefined) updateData.actividadPropuesta = actividadPropuesta;
+
+  // Ausencia justificada. La coherencia se resuelve AQUÍ y no sólo en el front
+  // porque ya son dos las pantallas que escriben estos campos (el panel del Guía
+  // y el modal "Detalles de la Clase" del panel admin): si el alumno asistió, no
+  // hay ausencia que justificar, así que la marca y el motivo se limpian.
+  if (escusa !== undefined) updateData.escusa = !!escusa;
+  if (justificaescusa !== undefined) updateData.justificaescusa = justificaescusa;
+  if (asistencia === true) {
+    updateData.escusa = false;
+    updateData.justificaescusa = '';
+  }
 
   // ── Cierre de NIVELACION: validaciones previas ──
   // La asistencia de una nivelación requiere marcar AMBAS (Asistió y Participó),

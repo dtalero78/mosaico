@@ -85,6 +85,9 @@ interface ClassRecord {
   acDisposicion?: boolean
   nivel?: string
   step?: string
+  /** Ausencia justificada + su motivo. La falta sigue contando como ausencia. */
+  escusa?: boolean
+  justificaescusa?: string
   /** Cómo le fue en su clase ANTERIOR de este curso (aviso de inasistencia al Guía). */
   prevFecha?: string | null
   prevAsistio?: boolean | null
@@ -216,6 +219,8 @@ export default function SesionPage() {
               acDisposicion: booking.acDisposicion ?? false,
               nivel: booking.nivel,
               step: booking.step,
+              escusa: booking.escusa ?? false,
+              justificaescusa: booking.justificaescusa || '',
               // Cómo le fue en su clase anterior de este curso (aviso al Guía).
               prevFecha: booking.prevFecha ?? null,
               prevAsistio: booking.prevAsistio ?? null,

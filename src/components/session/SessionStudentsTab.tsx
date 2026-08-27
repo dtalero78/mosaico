@@ -49,6 +49,9 @@ interface ClassRecord {
   nivel?: string
   step?: string
   noAprobo?: boolean
+  /** Ausencia justificada + su motivo. La falta sigue contando como ausencia. */
+  escusa?: boolean
+  justificaescusa?: string
   /** Cómo le fue en su clase ANTERIOR de este curso (para el aviso de inasistencia). */
   prevFecha?: string | null
   prevAsistio?: boolean | null
@@ -152,6 +155,12 @@ export default function SessionStudentsTab({
   const [asistencia, setAsistencia] = useState(false)
   const [participacion, setParticipacion] = useState(false)
   const [noAprobo, setNoAprobo] = useState(false)
+  // Ausencia justificada: la falta se explica (motivo obligatorio) pero SIGUE
+  // contando como ausencia — no toca la asistencia.
+  const [escusa, setEscusa] = useState(false)
+  const [justificaescusa, setJustificaescusa] = useState('')
+  /** Borrador del motivo mientras el modal está abierto (no pisa lo guardado si se cancela). */
+  const [escusaModal, setEscusaModal] = useState<string | null>(null)
   // Criterios de evaluación de la sesión (Hábitos / Desempeño / Actitudes).
   // asistencia = HE_ASISTENCIA, participacion = DA_PARTICIPACION (reusados).
   const [hePuntualidad, setHePuntualidad] = useState(false)
@@ -261,6 +270,8 @@ export default function SessionStudentsTab({
       setAsistencia(selectedStudent.classRecord.asistencia || false)
       setParticipacion(selectedStudent.classRecord.participacion || false)
       setNoAprobo((selectedStudent.classRecord as any).noAprobo || false)
+      setEscusa((selectedStudent.classRecord as any).escusa || false)
+      setJustificaescusa((selectedStudent.classRecord as any).justificaescusa || '')
       setComentarios(selectedStudent.classRecord.comentarios || '')
       setActividadPropuesta(selectedStudent.classRecord.actividadPropuesta || '')
       const cr = selectedStudent.classRecord as any
@@ -280,6 +291,9 @@ export default function SessionStudentsTab({
     setAsistencia(false)
     setParticipacion(false)
     setNoAprobo(false)
+    setEscusa(false)
+    setJustificaescusa('')
+    setEscusaModal(null)
     setComentarios('')
     setActividadPropuesta('')
     setHePuntualidad(false)
@@ -314,6 +328,10 @@ export default function SessionStudentsTab({
           asistencia,
           participacion,
           noAprobo,
+          // Si asistió no hay ausencia que justificar: el endpoint lo vuelve a
+          // forzar, pero se manda coherente para no depender de eso.
+          escusa: !asistencia && escusa,
+          justificaescusa: (!asistencia && escusa) ? justificaescusa : '',
           hePuntualidad,
           heAsignacion,
           daDominio,
@@ -375,7 +393,10 @@ export default function SessionStudentsTab({
       return
     }
     // Evento normal: si no se marcó NADA, avisar antes de guardar.
-    const vacio = !asistencia && !participacion && !noAprobo
+    // Marcar la falta como justificada TAMBIÉN es haber registrado algo: sin
+    // contarlo aquí, el guía que sólo justifica una ausencia recibiría el aviso
+    // de "no marcaste nada".
+    const vacio = !asistencia && !participacion && !noAprobo && !escusa
       && !hePuntualidad && !heAsignacion && !daDominio && !daDesafio
       && !acPermanencia && !acRespeto && !acDisposicion
       && !comentarios.trim()
@@ -507,11 +528,59 @@ export default function SessionStudentsTab({
                 <h3 className="font-semibold text-gray-900 mb-4">Asistencia</h3>
                 <div className="space-y-5">
                   <div className="space-y-3">
-                    <CritRow Icon={CheckCircleIcon} checked={asistencia} onChange={setAsistencia} disabled={isLocked} label="Asistió a la sesión" />
+                    <CritRow
+                      Icon={CheckCircleIcon}
+                      checked={asistencia}
+                      onChange={(v) => {
+                        setAsistencia(v)
+                        // Si asistió no hay ausencia que justificar: se limpia la marca
+                        // y su motivo para no dejar un dato que se contradice.
+                        if (v) { setEscusa(false); setJustificaescusa(''); setEscusaModal(null) }
+                      }}
+                      disabled={isLocked}
+                      label="Asistió a la sesión"
+                    />
                     {mostrarParticipacion && (
                       <CritRow Icon={HandRaisedIcon} checked={participacion} onChange={setParticipacion} disabled={isLocked} label="Participó en la Sesión" />
                     )}
                   </div>
+                  {/* Falta justificada — la ausencia se explica, pero SIGUE
+                      contando como ausencia (no toca la asistencia). El motivo
+                      se pide en un modal: sin justificación la marca no dice
+                      nada, así que no se puede dejar vacía. */}
+                  <div className="space-y-2">
+                    <CritRow
+                      Icon={DocumentTextIcon}
+                      checked={escusa}
+                      onChange={(v) => {
+                        if (v) {
+                          // Se abre el modal; la marca se pone al confirmar el motivo.
+                          setEscusaModal(justificaescusa || '')
+                        } else {
+                          setEscusa(false); setJustificaescusa('')
+                        }
+                      }}
+                      disabled={isLocked || asistencia}
+                      label="Falta justificada"
+                    />
+                    {escusa && (
+                      <div className="ml-8 flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+                        <p className="flex-1 text-sm text-sky-900 whitespace-pre-wrap break-words">{justificaescusa}</p>
+                        <button
+                          type="button"
+                          onClick={() => setEscusaModal(justificaescusa)}
+                          disabled={isLocked}
+                          className="shrink-0 text-xs font-medium text-sky-700 hover:text-sky-900 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Editar motivo
+                        </button>
+                      </div>
+                    )}
+                    {asistencia && !escusa && (
+                      <p className="ml-8 text-xs text-gray-400">Sólo aplica si el usuario no asistió.</p>
+                    )}
+                  </div>
+
                   {/* Nivelación — casilla + dropdown de lecciones del curso.
                       Se OCULTA cuando el evento es tipo NIVELACION (el evento ya
                       es la nivelación; marcar asistencia la cierra) o cuando el
@@ -654,6 +723,42 @@ export default function SessionStudentsTab({
           </>
         )}
       </div>
+
+      {/* Modal: motivo de la falta justificada. El motivo es OBLIGATORIO —
+          una falta marcada como justificada sin decir por qué no informa nada
+          a quien después revise la asistencia. */}
+      {escusaModal !== null && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Motivo de la ausencia</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              La falta queda justificada, pero <strong>sigue contando como ausencia</strong>.
+              Escribe el motivo. <span className="text-red-600 font-medium">Obligatorio.</span>
+            </p>
+            <textarea
+              value={escusaModal}
+              onChange={(e) => setEscusaModal(e.target.value)}
+              rows={4}
+              autoFocus
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Ej: cita médica; el apoderado avisó por WhatsApp…"
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button type="button" onClick={() => setEscusaModal(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => { setJustificaescusa(escusaModal.trim()); setEscusa(true); setEscusaModal(null) }}
+                disabled={!escusaModal.trim()}
+                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                Guardar motivo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: comentario OBLIGATORIO al cerrar una nivelación (asistió + participó) */}
       {showNivelComentario && (
