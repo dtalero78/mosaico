@@ -641,15 +641,16 @@ export default function ReporteAcademicoPage() {
                       </div>
                     ))}
                   </div>
-                  {/* Base del informe: SIEMPRE se muestran ambos comentarios (IA + Docente),
-                      con placeholder si aún no hay contenido. */}
+                  {/* Base del informe: SIEMPRE se muestran los dos bloques (Comentario Académico
+                      y Actividades de Práctica Individual), con placeholder si aún no hay
+                      contenido. Mismos rótulos que la fila del alumno y que el PDF. */}
                   <div className="mb-3">
                     <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario Académico</div>
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.comentarioIA || <span className="text-gray-400">— sin generar —</span>}</p>
                   </div>
                   <div className="mb-3">
-                    <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Comentario del Docente</div>
-                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.notaGuia || <span className="text-gray-400">— sin valoración —</span>}</p>
+                    <div className="text-[10.5px] uppercase text-gray-500 font-semibold mb-1">Actividades de Práctica Individual</div>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{ov.notaGuia || <span className="text-gray-400">— sin actividades —</span>}</p>
                   </div>
                   {puedeEnviar && (
                     <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
