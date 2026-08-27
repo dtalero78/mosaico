@@ -6,9 +6,7 @@ import { ValidationError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { getReporteAcademico } from '@/services/reporte-academico.service';
 import { buildReporteIndividualHtml } from '@/lib/reporte-academico-pdf';
 import { htmlToPdfBuffer } from '@/lib/pdf';
-import { putBuffer, getPresignedGetUrl, deleteObject } from '@/lib/spaces';
 import { formatPhoneNumber } from '@/lib/whatsapp';
-import { generateId } from '@/lib/id-generator';
 
 const WHAPI_TOKEN = process.env.WHAPI_TOKEN || 'h2vjBWeG8csEl45GIuKgOr5pvGwCVTbu';
 
@@ -48,17 +46,29 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     margin: { top: '8mm', bottom: '8mm', left: '8mm', right: '8mm' },
   });
 
-  const key = `reportes/temp/${generateId('rep')}.pdf`;
-  const nombreArch = `Reporte_${String(row.nombre || 'estudiante').replace(/[^a-zA-Z0-9]+/g, '_')}_${data.semanaInicio}.pdf`;
+  // El nombre viaja como nombre de archivo, así que los acentos se transliteran
+  // (NFD + quitar diacríticos) en vez de reemplazarse por "_": antes "León"
+  // llegaba como "Le_n".
+  const nombreLimpio = String(row.nombre || 'estudiante')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const nombreArch = `Reporte_${nombreLimpio || 'estudiante'}_${data.semanaInicio}.pdf`;
+
+  // El PDF viaja EN EL MENSAJE como data URI, no como enlace a un temporal.
+  // Con una URL firmada de Spaces (que lleva query string) Whapi no resolvía el
+  // tipo y el apoderado recibía el archivo como "BIN" en vez de PDF, aunque el
+  // objeto y su cabecera fueran application/pdf. En el prefijo del data URI el
+  // tipo va declarado y no hay nada que inferir. De paso desaparece el temporal
+  // en Spaces y con él el riesgo de borrarlo antes de que Whapi lo descargue.
+  const media = `data:application/pdf;base64,${pdf.toString('base64')}`;
   let sent: any;
   try {
-    await putBuffer(key, pdf, 'application/pdf');
-    const url = await getPresignedGetUrl(key, 900);
     const res = await fetch('https://gate.whapi.cloud/messages/document', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'authorization': `Bearer ${WHAPI_TOKEN}` },
       body: JSON.stringify({
-        to: phone, media: url, filename: nombreArch,
+        to: phone, media, filename: nombreArch,
         caption: `Hola, adjunto el reporte académico de la semana de ${row.nombre} en MOSAICO. 📊`,
       }),
     });
@@ -66,9 +76,6 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     sent = await res.json().catch(() => ({}));
   } catch (e: any) {
     throw new ValidationError('No se pudo enviar por WhatsApp: ' + (e?.message || 'error'));
-  } finally {
-    // Whapi descarga el media al enviar; el temporal ya no se necesita.
-    deleteObject(key).catch(() => {});
   }
 
   const masked = phone.length > 4 ? `••••${phone.slice(-4)}` : phone;
