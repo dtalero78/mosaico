@@ -8,6 +8,8 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
+import NivelacionesAgrupacionesTab from '@/components/servicio/NivelacionesAgrupacionesTab'
+import NivelacionesHistorialTab from '@/components/servicio/NivelacionesHistorialTab'
 
 interface Row {
   academicaId: string
@@ -22,7 +24,15 @@ interface Row {
 }
 interface Guia { id: string; nombre: string }
 
-function NivelacionesContent() {
+type Tab = 'solicitudes' | 'agrupaciones' | 'historial'
+
+/**
+ * Solicitudes: lo que el Guía pidió y aún nadie resolvió (ACADEMICA.nivelacion).
+ * Aprobar aquí NO agenda: marca la solicitud como aprobada y la manda a
+ * Agrupaciones, donde se juntan por curso y lección para dictar UNA nivelación
+ * a varios alumnos en vez de una por cabeza.
+ */
+function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
   const { hasPermission } = usePermissions()
   const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION as any)
 
@@ -50,12 +60,13 @@ function NivelacionesContent() {
       if (r.error) throw new Error(r.error)
       setRows(r.rows || [])
       setCursos(r.cursos || []); setSalones(r.salones || []); setLecciones(r.lecciones || []); setGuias(r.guias || [])
+      onCount?.(r.rows?.length || 0)
     } catch (e: any) {
       toast.error(e?.message || 'Error al cargar')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [onCount])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -86,9 +97,13 @@ function NivelacionesContent() {
         body: JSON.stringify({ [tipo]: true }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
-      toast.success(tipo === 'aprobar' ? 'Nivelación aprobada' : 'Nivelación cancelada')
+      toast.success(tipo === 'aprobar' ? 'Aprobada — pasa a Agrupaciones' : 'Nivelación cancelada')
       // quitar la fila de la lista (ya resuelta)
-      setRows(prev => prev.filter(x => x.academicaId !== r.academicaId))
+      setRows(prev => {
+        const next = prev.filter(x => x.academicaId !== r.academicaId)
+        onCount?.(next.length)
+        return next
+      })
     } catch (e: any) {
       toast.error(e?.message || 'Error')
     } finally {
@@ -97,44 +112,41 @@ function NivelacionesContent() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Nivelaciones</h1>
-      <p className="text-gray-500 mb-5">Estudiantes marcados para nivelación (pendientes). Total: <span className="font-semibold text-gray-700">{rows.length}</span></p>
-
+    <div>
       {/* Filtros */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
-            <select value={curso} onChange={e => setCurso(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <label htmlFor="so-curso" className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
+            <select id="so-curso" value={curso} onChange={e => setCurso(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todos</option>{cursos.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Salón</label>
-            <select value={salon} onChange={e => setSalon(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <label htmlFor="so-salon" className="block text-xs font-medium text-gray-500 mb-1">Salón</label>
+            <select id="so-salon" value={salon} onChange={e => setSalon(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todos</option>{salones.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Lección</label>
-            <select value={leccion} onChange={e => setLeccion(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <label htmlFor="so-leccion" className="block text-xs font-medium text-gray-500 mb-1">Lección</label>
+            <select id="so-leccion" value={leccion} onChange={e => setLeccion(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todas</option>{lecciones.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
-            <select value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <label htmlFor="so-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
+            <select id="so-guia" value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todos</option>{guias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Fecha inicial</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <label htmlFor="so-desde" className="block text-xs font-medium text-gray-500 mb-1">Fecha inicial</label>
+            <input id="so-desde" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Fecha final</label>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <label htmlFor="so-hasta" className="block text-xs font-medium text-gray-500 mb-1">Fecha final</label>
+            <input id="so-hasta" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-4">
@@ -146,6 +158,9 @@ function NivelacionesContent() {
             <button type="button" onClick={exportar} disabled={!rows.length}
               className="px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-50 font-medium">Exportar CSV</button>
           </PermissionGuard>
+          <span className="ml-auto text-sm text-gray-500">
+            Pendientes: <span className="font-semibold text-gray-700">{rows.length}</span>
+          </span>
         </div>
       </div>
 
@@ -190,9 +205,9 @@ function NivelacionesContent() {
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
                   </td>
                   <td className="px-3 py-2">
-                    <button type="button" title="Aprobar y agendar nivelación"
-                      onClick={() => window.open(`/student/${r.academicaId}?agendar=NIVELACION`, '_blank', 'noopener,noreferrer')}
-                      disabled={!canGestion}
+                    <button type="button" title="Aprobar — pasa a Agrupaciones para agendarla en grupo"
+                      onClick={() => accion(r, 'aprobar')}
+                      disabled={!canGestion || acting === r.academicaId + 'aprobar'}
                       className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed">
                       <CheckCircleIcon className="h-6 w-6" />
                     </button>
@@ -210,6 +225,59 @@ function NivelacionesContent() {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function NivelacionesContent() {
+  const [tab, setTab] = useState<Tab>('solicitudes')
+  const [solCount, setSolCount] = useState<number | null>(null)
+  const [agrCount, setAgrCount] = useState<number | null>(null)
+
+  const tabs: Array<{ id: Tab; label: string; count: number | null }> = [
+    { id: 'solicitudes', label: 'Solicitudes', count: solCount },
+    { id: 'agrupaciones', label: 'Agrupaciones', count: agrCount },
+    { id: 'historial', label: 'Historial', count: null },
+  ]
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Nivelaciones</h1>
+      <p className="text-gray-500 mb-4">Solicitudes del Guía, agrupación para dictarlas y su historial.</p>
+
+      <nav className="flex gap-1 border-b border-gray-200 mb-5 -mb-px">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.id
+                ? 'border-primary-600 text-primary-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            {t.label}
+            {t.count !== null && (
+              <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+                tab === t.id ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-600'
+              }`}>{t.count}</span>
+            )}
+          </button>
+        ))}
+      </nav>
+
+      {/* Las pestañas se mantienen montadas (ocultas con `hidden`) para no perder
+          filtros ni selección al conmutar entre ellas. */}
+      <div className={tab === 'solicitudes' ? '' : 'hidden'}>
+        <SolicitudesTab onCount={setSolCount} />
+      </div>
+      <div className={tab === 'agrupaciones' ? '' : 'hidden'}>
+        <NivelacionesAgrupacionesTab onCount={setAgrCount} />
+      </div>
+      <div className={tab === 'historial' ? '' : 'hidden'}>
+        <NivelacionesHistorialTab />
       </div>
     </div>
   )

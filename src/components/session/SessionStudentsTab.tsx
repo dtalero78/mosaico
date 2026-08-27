@@ -175,6 +175,9 @@ export default function SessionStudentsTab({
   // Nivelación (ACADEMICA.nivelacion / detalleNivelacion) — casilla + dropdown de lecciones
   const [nivelacion, setNivelacion] = useState(false)
   const [nivelacionLeccion, setNivelacionLeccion] = useState('')
+  /** Módulo elegido para la nivelación. Arranca en el del alumno, pero se puede
+   *  cambiar: la nivelación puede ser sobre cualquier punto del curso. */
+  const [nivelacionModulo, setNivelacionModulo] = useState('')
   const [lecciones, setLecciones] = useState<Array<{ value: string; label: string; modulo: string }>>([])
   const [moduloActual, setModuloActual] = useState<string | null>(null)
   const [savingNivel, setSavingNivel] = useState(false)
@@ -216,23 +219,33 @@ export default function SessionStudentsTab({
 
   // Cargar estado de nivelación del estudiante seleccionado
   useEffect(() => {
-    if (!selectedStudent?._id) { setNivelacion(false); setNivelacionLeccion(''); setModuloActual(null); return }
+    if (!selectedStudent?._id) { setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo(''); setModuloActual(null); return }
     fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, { cache: 'no-store' })
       .then(r => r.json())
-      .then(d => { setNivelacion(d.nivelacion === true); setNivelacionLeccion(d.detalleNivelacion?.leccion || ''); setModuloActual(d.moduloActual || null) })
-      .catch(() => { setNivelacion(false); setNivelacionLeccion(''); setModuloActual(null) })
+      .then(d => {
+        setNivelacion(d.nivelacion === true)
+        setNivelacionLeccion(d.detalleNivelacion?.leccion || '')
+        setModuloActual(d.moduloActual || null)
+        // Si ya había una nivelación marcada se respeta SU módulo; si no, se
+        // propone el del alumno, que es el caso habitual.
+        setNivelacionModulo(d.detalleNivelacion?.modulo || d.moduloActual || '')
+      })
+      .catch(() => { setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo(''); setModuloActual(null) })
   }, [selectedStudent?._id])
 
   // Guarda nivelación inmediatamente (al marcar la casilla o elegir lección)
-  const saveNivelacion = async (checked: boolean, leccion: string) => {
+  const saveNivelacion = async (checked: boolean, modulo: string, leccion: string) => {
     if (!selectedStudent?._id) return
     setSavingNivel(true)
     try {
-      const modulo = lecciones.find(l => l.value === leccion)?.modulo || null
       const r = await fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nivelacion: checked, leccion: checked ? leccion : null, modulo: checked ? modulo : null }),
+        body: JSON.stringify({
+          nivelacion: checked,
+          leccion: checked && leccion ? leccion : null,
+          modulo: checked && modulo ? modulo : null,
+        }),
       }).then(x => x.json())
       if (r.error) throw new Error(r.error)
       toast.success('Nivelación actualizada')
@@ -513,7 +526,7 @@ export default function SessionStudentsTab({
                           const c = e.target.checked
                           setNivelacion(c)
                           if (!c) setNivelacionLeccion('')
-                          saveNivelacion(c, c ? nivelacionLeccion : '')
+                          saveNivelacion(c, c ? nivelacionModulo : '', c ? nivelacionLeccion : '')
                         }}
                         className="w-5 h-5 text-amber-600 rounded focus:ring-amber-500"
                       />
@@ -521,18 +534,47 @@ export default function SessionStudentsTab({
                       {savingNivel && <span className="text-xs text-gray-400">guardando…</span>}
                     </label>
                     {(() => {
-                      // Solo las lecciones del módulo ACTUAL del estudiante
-                      const leccionesModulo = moduloActual ? lecciones.filter(l => l.modulo === moduloActual) : lecciones
+                      // Módulo y lección se eligen APARTE: la nivelación puede ser
+                      // sobre cualquier punto del curso, no sólo sobre el módulo en
+                      // que va el alumno (arrastra algo de un módulo anterior). El
+                      // módulo llega preseleccionado en el suyo, que es el caso
+                      // habitual, y las lecciones se acotan al módulo elegido.
+                      const modulos: string[] = []
+                      for (const l of lecciones) if (!modulos.includes(l.modulo)) modulos.push(l.modulo)
+                      const leccionesModulo = nivelacionModulo
+                        ? lecciones.filter(l => l.modulo === nivelacionModulo)
+                        : []
                       return (
-                        <select
-                          value={nivelacionLeccion}
-                          onChange={(e) => { const v = e.target.value; setNivelacionLeccion(v); saveNivelacion(true, v) }}
-                          disabled={!nivelacion || !leccionesModulo.length}
-                          className="mt-2 ml-8 w-[calc(100%-2rem)] px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        >
-                          <option value="">{moduloActual ? `— Lección de ${moduloActual} —` : '— Selecciona lección —'}</option>
-                          {leccionesModulo.map(l => <option key={l.value} value={l.value}>{l.value}</option>)}
-                        </select>
+                        <div className="mt-2 ml-8 w-[calc(100%-2rem)] grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <select
+                            value={nivelacionModulo}
+                            onChange={(e) => {
+                              const m = e.target.value
+                              setNivelacionModulo(m)
+                              // Al cambiar de módulo la lección deja de pertenecerle:
+                              // se limpia y se guarda así, para que lo registrado no
+                              // contradiga al módulo elegido.
+                              setNivelacionLeccion('')
+                              if (nivelacion) saveNivelacion(true, m, '')
+                            }}
+                            disabled={!nivelacion || !modulos.length}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          >
+                            <option value="">— Módulo —</option>
+                            {modulos.map(m => (
+                              <option key={m} value={m}>{m}{m === moduloActual ? ' (actual)' : ''}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={nivelacionLeccion}
+                            onChange={(e) => { const v = e.target.value; setNivelacionLeccion(v); saveNivelacion(true, nivelacionModulo, v) }}
+                            disabled={!nivelacion || !leccionesModulo.length}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          >
+                            <option value="">{nivelacionModulo ? '— Lección —' : '— Elige módulo primero —'}</option>
+                            {leccionesModulo.map(l => <option key={l.value} value={l.value}>{l.value}</option>)}
+                          </select>
+                        </div>
                       )
                     })()}
                   </div>
