@@ -78,6 +78,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
   }
   const exportar = () => {
     exportToExcel(rows, [
+      { header: 'Fecha', accessor: r => (r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '') },
       { header: 'Curso', accessor: r => r.curso || '' },
       { header: 'Nombre', accessor: r => r.nombre || '' },
       { header: 'Salón', accessor: r => r.salon || '' },
@@ -85,7 +86,6 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
       { header: 'Tema', accessor: r => r.tema || '' },
       { header: 'Guía', accessor: r => r.guia || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
-      { header: 'Fecha', accessor: r => (r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '') },
     ], 'nivelaciones')
   }
 
@@ -171,18 +171,21 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Conteo', 'Aprobar', 'Cancelar'].map(h => (
+                {['Fecha', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Conteo', 'Aprobar', 'Cancelar'].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
+                <tr><td colSpan={9} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones pendientes</td></tr>
+                <tr><td colSpan={9} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones pendientes</td></tr>
               ) : rows.map((r) => (
                 <tr key={r.academicaId} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                    {r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '—'}
+                  </td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
                   <td className="px-3 py-2 font-medium whitespace-nowrap">
                     {r.nombre ? (

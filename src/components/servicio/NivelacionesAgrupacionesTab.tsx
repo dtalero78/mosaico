@@ -195,7 +195,7 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                   <table className="w-full text-sm">
                     <thead className="bg-white border-b border-gray-100">
                       <tr>
-                        {['', 'Nombre', 'ID', 'Salón', 'Guía', 'Conteo', 'Aprobada'].map((h, idx) => (
+                        {['', 'Solicitada', 'Nombre', 'ID', 'Salón', 'Guía', 'Conteo'].map((h, idx) => (
                           <th key={idx} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -212,6 +212,9 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                               className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
                             />
                           </td>
+                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                            {r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '—'}
+                          </td>
                           <td className="px-3 py-2 font-medium whitespace-nowrap">
                             <button type="button"
                               onClick={() => window.open(`/student/${r.academicaId}`, '_blank', 'noopener,noreferrer')}
@@ -225,9 +228,6 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                           <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                           <td className="px-3 py-2">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
-                          </td>
-                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
-                            {r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '—'}
                           </td>
                         </tr>
                       ))}
