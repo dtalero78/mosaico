@@ -168,7 +168,7 @@ export const AdminEventsRepository = {
        LEFT JOIN "GUIAS" adv ON adv."_id" = c."advisor"
        WHERE c."advisor" = ANY($1::text[])
          AND c."dia" <  ($2::timestamptz + ($3 || ' hours')::interval)
-         AND c."dia" + (INTERVAL '1 minute' * CASE WHEN UPPER(c."tipo") = 'NIVELACION' THEN 30 ELSE 60 END) > $2::timestamptz
+         AND c."dia" + (INTERVAL '1 minute' * COALESCE(c."duracionMin", CASE WHEN UPPER(c."tipo") = 'NIVELACION' THEN 30 ELSE 60 END)) > $2::timestamptz
        ORDER BY c."dia" ASC`,
       [advisorIds, fechaInicioISO, String(horas)],
     );

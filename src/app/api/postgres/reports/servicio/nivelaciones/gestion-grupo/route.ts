@@ -51,6 +51,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const salon = String(body?.salon || '').trim() || null
   const linkZoom = String(body?.linkZoom || '').trim() || undefined
   const limiteUsuarios = Number(body?.limiteUsuarios) > 0 ? Number(body.limiteUsuarios) : 30
+  // La nivelación dura 30 min salvo que se pida ampliarla a una hora.
+  const duracionMin = body?.unaHora === true ? 60 : 30
 
   // El instante lo arma el NAVEGADOR (`dia`), igual que el modal de eventos del
   // calendario: quien crea la nivelación elige 19:00 y eso es 19:00 en SU reloj.
@@ -80,6 +82,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     tituloONivel: tituloONivel || undefined,
     linkZoom,
     limiteUsuarios,
+    duracionMin,
     campaign: campaign || undefined,
     curso: curso || undefined,
     salon: salon || undefined,

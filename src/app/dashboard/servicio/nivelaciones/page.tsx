@@ -9,6 +9,7 @@ import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
 import NivelacionesAgrupacionesTab from '@/components/servicio/NivelacionesAgrupacionesTab'
+import NivelacionesPendientesTab from '@/components/servicio/NivelacionesPendientesTab'
 import NivelacionesHistorialTab from '@/components/servicio/NivelacionesHistorialTab'
 
 interface Row {
@@ -24,7 +25,7 @@ interface Row {
 }
 interface Guia { id: string; nombre: string }
 
-type Tab = 'solicitudes' | 'agrupaciones' | 'historial'
+type Tab = 'solicitudes' | 'agrupaciones' | 'pendientes' | 'historial'
 
 /**
  * Solicitudes: lo que el Guía pidió y aún nadie resolvió (ACADEMICA.nivelacion).
@@ -234,17 +235,19 @@ function NivelacionesContent() {
   const [tab, setTab] = useState<Tab>('solicitudes')
   const [solCount, setSolCount] = useState<number | null>(null)
   const [agrCount, setAgrCount] = useState<number | null>(null)
+  const [penCount, setPenCount] = useState<number | null>(null)
 
   const tabs: Array<{ id: Tab; label: string; count: number | null }> = [
     { id: 'solicitudes', label: 'Solicitudes', count: solCount },
     { id: 'agrupaciones', label: 'Agrupaciones', count: agrCount },
-    { id: 'historial', label: 'Historial', count: null },
+    { id: 'pendientes', label: 'Pendientes', count: penCount },
+    { id: 'historial', label: 'Histórico', count: null },
   ]
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Nivelaciones</h1>
-      <p className="text-gray-500 mb-4">Solicitudes del Guía, agrupación para dictarlas y su historial.</p>
+      <p className="text-gray-500 mb-4">El recorrido de una nivelación: la pide el Guía, se aprueba, se agrupa para dictarla y, con la asistencia marcada, pasa al histórico.</p>
 
       <nav className="flex gap-1 border-b border-gray-200 mb-5 -mb-px">
         {tabs.map(t => (
@@ -275,6 +278,9 @@ function NivelacionesContent() {
       </div>
       <div className={tab === 'agrupaciones' ? '' : 'hidden'}>
         <NivelacionesAgrupacionesTab onCount={setAgrCount} />
+      </div>
+      <div className={tab === 'pendientes' ? '' : 'hidden'}>
+        <NivelacionesPendientesTab onCount={setPenCount} />
       </div>
       <div className={tab === 'historial' ? '' : 'hidden'}>
         <NivelacionesHistorialTab />

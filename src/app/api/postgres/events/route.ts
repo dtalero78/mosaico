@@ -124,6 +124,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     tituloONivel: tituloONivel || body.tituloONivel,
     linkZoom: body.linkZoom,
     limiteUsuarios: body.limiteUsuarios || 30,
+    // Duración propia (nivelación de 1 h). Sin ella se sigue derivando.
+    duracionMin: body.duracionMin,
     club: body.club,
     observaciones: body.observaciones,
     campaign: body.campaign || null,

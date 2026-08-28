@@ -559,7 +559,7 @@ function PanelAdvisorContent() {
                             }}
                           >
                             {isShared && <span className="mr-0.5" aria-hidden>🔗</span>}
-                            {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento)} - {event.tituloONivel}
+                            {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento, (event as any).duracionMin)} - {event.tituloONivel}
                           </div>
                           )
                         })}
@@ -633,7 +633,7 @@ function PanelAdvisorContent() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-medium">
-                        {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento)} - {event.tituloONivel}
+                        {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento, (event as any).duracionMin)} - {event.tituloONivel}
                       </div>
                       <div className="text-sm opacity-90">
                         {event.evento || event.tipo} {event.nombreEvento && `- ${event.nombreEvento}`}

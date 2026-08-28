@@ -11,16 +11,46 @@ import { ServicioPermission } from '@/types/permissions'
  * agrupa por (curso, lección) para crear UNA nivelación por grupo.
  *
  * "Ya tiene evento" NO se guarda en una columna: se DERIVA de que el alumno
- * tenga un agendamiento no cancelado en un evento `tipo='NIVELACION'` que aún
- * no ocurrió. Copiarlo a una bandera lo dejaría desfasado en cuanto el evento
- * se borre o el agendamiento se cancele. Si el evento ya pasó y nadie cerró la
- * nivelación, el alumno vuelve a aparecer aquí — que es lo correcto: esa
- * nivelación no se dictó y hay que reagendarla.
+ * tenga un agendamiento no cancelado en un evento `tipo='NIVELACION'`. Copiarlo
+ * a una bandera lo dejaría desfasado en cuanto el evento se borre o el
+ * agendamiento se cancele. Los que YA tienen evento no desaparecen: pasan a la
+ * pestaña **Pendientes**, hasta que se dicte y se marque asistencia.
  *
  * Se devuelven además campaña / horario / salón porque son el alcance con el
  * que se creará el evento del grupo.
  */
 const MAX_ROWS = 5000
+
+/**
+ * Alumnos que YA tienen su nivelación agendada.
+ *
+ * Se resuelve en DOS consultas cortas en vez de en un `NOT EXISTS`
+ * correlacionado: ese recorría los ~165k agendamientos por cada alumno y
+ * tardaba 30 segundos. Los eventos de nivelación son un puñado, así que se
+ * listan primero y se pasan como arreglo: con `= ANY($1)` en cada columna y
+ * un OR explícito, Postgres combina los dos índices (BitmapOr) — el mismo
+ * patrón que usa `booking.repository`. `idEstudiante` y `studentId` se miran
+ * ambos porque el enlace legacy de Wix usa el segundo.
+ */
+async function idsConNivelacionAgendada(): Promise<string[]> {
+  const eventos = (await query<{ _id: string }>(
+    `SELECT "_id" FROM "CALENDARIO" WHERE UPPER(COALESCE("tipo", '')) = 'NIVELACION'`
+  )).rows.map((e) => e._id)
+  if (!eventos.length) return []
+  const filas = (await query<{ idEstudiante: string | null; studentId: string | null }>(
+    `SELECT DISTINCT b."idEstudiante", b."studentId"
+       FROM "ACADEMICA_BOOKINGS" b
+      WHERE (b."eventoId" = ANY($1::text[]) OR b."idEvento" = ANY($1::text[]))
+        AND b."cancelo" IS NOT TRUE`,
+    [eventos]
+  )).rows
+  const ids = new Set<string>()
+  for (const f of filas) {
+    if (f.idEstudiante) ids.add(f.idEstudiante)
+    if (f.studentId) ids.add(f.studentId)
+  }
+  return Array.from(ids)
+}
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.NIVELACIONES_VER)
@@ -30,23 +60,15 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const leccion = (searchParams.get('leccion') || '').trim()
   const guia = (searchParams.get('guia') || '').trim()
 
-  // Ya agendada = agendamiento vivo en un evento NIVELACION que aún no ocurre.
-  const YA_AGENDADA = `EXISTS (
-     SELECT 1 FROM "ACADEMICA_BOOKINGS" b
-       JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
-      WHERE (b."idEstudiante" = a."_id" OR b."studentId" = a."_id")
-        AND UPPER(COALESCE(c."tipo", '')) = 'NIVELACION'
-        AND b."cancelo" IS NOT TRUE
-        AND c."dia" >= NOW()
-   )`
+  const agendadas = await idsConNivelacionAgendada()
 
   const where: string[] = [
     `a."aprobadoNivelacion" = true`,
     `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
-    `NOT ${YA_AGENDADA}`,
+    `a."_id" <> ALL($1::text[])`,
   ]
-  const params: any[] = []
-  let i = 1
+  const params: any[] = [agendadas]
+  let i = 2
   if (curso)   { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (leccion) { where.push(`COALESCE(a."detalleNivelacion"->>'leccion','') = $${i++}`); params.push(leccion) }
   if (guia)    { where.push(`cc."guia" = $${i++}`); params.push(guia) }
@@ -91,11 +113,12 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        LEFT JOIN "GUIAS" g ON g."_id"=cc."guia"
       WHERE a."aprobadoNivelacion" = true
         AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
-        AND NOT ${YA_AGENDADA}`
+        AND a."_id" <> ALL($1::text[])`,
+    [agendadas]
   )).rows
-  const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean)))
-  const cursos = uniq(opts.map((o: any) => o.curso)).sort()
-  const lecciones = uniq(opts.map((o: any) => o.leccion)).sort()
+  const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean))).sort()
+  const cursos = uniq(opts.map((o: any) => o.curso))
+  const lecciones = uniq(opts.map((o: any) => o.leccion))
   const guias = Array.from(
     new Map(opts.filter((o: any) => o.guia_id).map((o: any) => [o.guia_id, { id: o.guia_id, nombre: o.guia_nombre }])).values()
   )

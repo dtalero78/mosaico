@@ -272,7 +272,7 @@ export default function DailyAgenda({
                               {event.tituloONivel}
                             </span>
                             <span className="text-xs text-gray-500 font-medium">
-                              · {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento)}
+                              · {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento, (event as any).duracionMin)}
                             </span>
                           </div>
 

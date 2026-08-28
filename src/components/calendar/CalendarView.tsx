@@ -179,10 +179,10 @@ export default function CalendarView({
                   <div
                     key={event._id}
                     className={`text-xs px-1 py-0.5 rounded ${getEventColor(getEventType(event))}`}
-                    title={`${getEventType(event)} - ${event.tituloONivel} ${event.nombreEvento || ''}\nHorario: ${formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento)}\nGuía: ${event.advisorNombre || 'Sin asignar'}\nInscritos: ${event.inscritos || 0}/${event.limiteUsuarios}\nAsistieron: ${event.asistieron || 0}`}
+                    title={`${getEventType(event)} - ${event.tituloONivel} ${event.nombreEvento || ''}\nHorario: ${formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento, (event as any).duracionMin)}\nGuía: ${event.advisorNombre || 'Sin asignar'}\nInscritos: ${event.inscritos || 0}/${event.limiteUsuarios}\nAsistieron: ${event.asistieron || 0}`}
                   >
                     <div className="truncate">
-                      {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento)} {getEventType(event)}
+                      {formatEventTimeRange(event.dia, event.tipo || event.evento, event.nombreEvento, (event as any).duracionMin)} {getEventType(event)}
                     </div>
                     <div className="truncate text-[10px] opacity-75">
                       {event.advisorNombre || 'Sin advisor'}

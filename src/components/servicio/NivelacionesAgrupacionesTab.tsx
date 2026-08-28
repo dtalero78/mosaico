@@ -273,6 +273,8 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
   const [hora, setHora] = useState('19:00')
   const [linkZoom, setLinkZoom] = useState(primero?.guiaZoom || '')
   const [limite, setLimite] = useState(String(Math.max(grupo.rows.length, 10)))
+  // La nivelación dura 30 min por defecto; la casilla la amplía a una hora.
+  const [unaHora, setUnaHora] = useState(false)
   const [modulo, setModulo] = useState(grupo.modulo || '')
   const [leccion, setLeccion] = useState(grupo.leccion || '')
   const [saving, setSaving] = useState(false)
@@ -292,6 +294,7 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
           academicaIds: grupo.rows.map(x => x.academicaId),
           advisor, dia, fecha, hora, linkZoom,
           limiteUsuarios: Number(limite) || 30,
+          unaHora,
           curso: grupo.curso, modulo, leccion,
           campaign: primero?.campaign || null,
           salon: primero?.salon || null,
@@ -355,6 +358,16 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
               <label htmlFor="gg-leccion" className="block text-xs font-medium text-gray-500 mb-1">Lección</label>
               <input id="gg-leccion" value={leccion} onChange={e => setLeccion(e.target.value)} placeholder="Lección 02"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" checked={unaHora} onChange={e => setUnaHora(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-primary-600 rounded focus:ring-primary-500" />
+                <span className="text-sm text-gray-700">
+                  Ampliar a <b>1 hora</b>
+                  <span className="block text-xs text-gray-500">Sin marcar, la nivelación dura 30 minutos.</span>
+                </span>
+              </label>
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="gg-zoom" className="block text-xs font-medium text-gray-500 mb-1">Link de Zoom</label>

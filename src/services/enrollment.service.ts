@@ -155,7 +155,7 @@ export async function enrollStudents(input: EnrollInput) {
       // eventos que se CRUCEN en el tiempo — también cuando lo agenda un admin.
       // Solape real por duración (NIVELACION=30 min, resto=60).
       const evStart = new Date(event.dia);
-      const evEnd = eventEndDate(evStart, event.tipo || event.evento || '', event.nombreEvento);
+      const evEnd = eventEndDate(evStart, event.tipo || event.evento || '', event.nombreEvento, (event as any).duracionMin);
       const overlap = await client.query(
         `SELECT b."nombreEvento", b."fechaEvento"::text AS ts
          FROM "ACADEMICA_BOOKINGS" b

@@ -72,6 +72,8 @@ export default function EventModal({
     advisor: '',
     observaciones: '',
     limiteUsuarios: 20,
+    // Nivelación: dura 30 min salvo que se marque la casilla de 1 hora.
+    nivelacionUnaHora: false,
     linkZoom: '',
     clubStep: '',
     // MOSAICO — alcance Campaña → Curso → Salón ('Todos' = comodín)
@@ -261,6 +263,7 @@ export default function EventModal({
         advisor: advisorId,
         observaciones: editingEvent.observaciones || '',
         limiteUsuarios: editingEvent.limiteUsuarios,
+        nivelacionUnaHora: Number((editingEvent as any).duracionMin) === 60,
         linkZoom: editingEvent.linkZoom || '',
         clubStep: '',
         campaign: (editingEvent as any).campaign || '',
@@ -303,6 +306,7 @@ export default function EventModal({
         advisor: '',
         observaciones: '',
         limiteUsuarios: 20,
+        nivelacionUnaHora: false,
         linkZoom: '',
         clubStep: '',
         campaign: '',
@@ -717,6 +721,11 @@ export default function EventModal({
         advisor: formData.advisor,
         observaciones: formData.observaciones || undefined,
         limiteUsuarios: Number(formData.limiteUsuarios),
+        // Sólo la nivelación lleva duración propia; el resto la deriva del
+        // horario del curso o de su tipo, como siempre.
+        duracionMin: formData.evento === 'NIVELACION'
+          ? (formData.nivelacionUnaHora ? 60 : 30)
+          : null,
         linkZoom: formData.linkZoom || undefined,
         // MOSAICO — alcance del evento
         campaign: formData.campaign || undefined,
@@ -1046,6 +1055,28 @@ export default function EventModal({
                 </select>
                 )}
               </div>
+              {/* Duración de la nivelación. Son 30 minutos por defecto; la
+                  casilla la amplía a una hora. No aplica a los demás tipos,
+                  que derivan su duración del horario del curso. */}
+              {formData.evento === 'NIVELACION' && (
+                <div className="sm:col-span-2">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.nivelacionUnaHora}
+                      onChange={(e) => handleInputChange('nivelacionUnaHora', e.target.checked)}
+                      className="mt-0.5 w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Ampliar a <b>1 hora</b>
+                      <span className="block text-xs text-gray-500">
+                        Sin marcar, la nivelación dura 30 minutos.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
+
               {/* Límite de Usuarios */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Límite de Usuarios *</label>

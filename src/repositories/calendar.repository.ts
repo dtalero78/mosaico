@@ -331,7 +331,7 @@ class CalendarioRepositoryClass extends BaseRepository {
        FROM "CALENDARIO" c
        WHERE c."advisor" = $1
          AND c."dia" <  ($2::timestamptz + ($3 || ' minutes')::interval)
-         AND c."dia" + (INTERVAL '1 minute' * CASE WHEN UPPER(c."tipo") = 'NIVELACION' THEN 30 ELSE 60 END) > $2::timestamptz
+         AND c."dia" + (INTERVAL '1 minute' * COALESCE(c."duracionMin", CASE WHEN UPPER(c."tipo") = 'NIVELACION' THEN 30 ELSE 60 END)) > $2::timestamptz
          ${extra}
        ORDER BY c."dia" ASC
        LIMIT 5`,

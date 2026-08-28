@@ -87,6 +87,8 @@ export async function createEvent(data: {
   tituloONivel?: string;
   linkZoom?: string;
   limiteUsuarios?: number;
+  /** Duración en minutos cuando NO se deriva del tipo (nivelación de 1 h). */
+  duracionMin?: number | null;
   club?: string;
   observaciones?: string;
   /** MOSAICO — alcance del evento (Campaña → Curso → Salón). 'Todos' = comodín. */
@@ -149,7 +151,7 @@ export async function createEvent(data: {
   // que se crean como un grupo — sus hermanos se insertan en la misma
   // transacción y comparten `eventoCompartidoId` (se excluyen del chequeo).
   // NOTA: en MOSAICO aún no se ha definido el uso de eventos compartidos.
-  const newDurationMin = eventDurationMin(tipo);
+  const newDurationMin = eventDurationMin(tipo, null, data.duracionMin);
   const conflicts = await CalendarioRepository.findAdvisorTimeConflicts(
     data.advisor,
     data.dia,
@@ -185,6 +187,8 @@ export async function createEvent(data: {
     campaign: data.campaign || null,
     curso: data.curso || null,
     salon: data.salon || null,
+    // NULL = la duración se sigue derivando (horario del curso o tipo).
+    duracionMin: Number(data.duracionMin) > 0 ? Number(data.duracionMin) : null,
     eventoCompartidoId,
   };
 
@@ -310,6 +314,10 @@ export async function updateEvent(
   // grupo compartido. La duración se deriva del tipo (NIVELACION=30, resto=60).
   const finalAdvisor = data.advisor ?? event.advisor;
   const finalTipo    = data.tipo ?? event.tipo;
+  // Duración propia: si el modal la manda se usa la nueva; si no, la que ya tenía.
+  const finalDuracionMin = data.duracionMin !== undefined
+    ? (Number(data.duracionMin) > 0 ? Number(data.duracionMin) : null)
+    : (event as any).duracionMin ?? null;
   const finalDiaRaw  = data.dia ?? event.dia;
   const diaChanged     = !!data.dia && new Date(data.dia).getTime() !== new Date(event.dia).getTime();
   const advisorChanged = !!data.advisor && data.advisor !== event.advisor;
@@ -318,7 +326,7 @@ export async function updateEvent(
     const conflicts = await CalendarioRepository.findAdvisorTimeConflicts(
       finalAdvisor,
       finalDiaISO,
-      eventDurationMin(finalTipo),
+      eventDurationMin(finalTipo, null, finalDuracionMin),
       { excludeEventId: eventId, excludeGroupId: event.eventoCompartidoId || undefined },
     );
     if (conflicts.length > 0) {

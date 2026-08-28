@@ -7,14 +7,14 @@ import { ServicioPermission } from '@/types/permissions'
 /**
  * GET /api/postgres/reports/servicio/nivelaciones/historial?guia&curso&startDate&endDate
  *
- * TODAS las nivelaciones solicitadas, de la más reciente a la más antigua,
+ * Las nivelaciones que YA SE DICTARON, de la más reciente a la más antigua,
  * para agruparlas por curso en la pantalla.
  *
- * "Solicitadas" incluye las tres situaciones, porque una nivelación pedida y
- * aún sin dictar es parte de la historia igual que una ya cerrada:
- *   - PENDIENTE  → `nivelacion = true` (esperando aprobación)
- *   - APROBADA   → `aprobadoNivelacion = true` (aprobada, con o sin evento)
- *   - REALIZADA / NO_ASISTIO → cada entrada de `NivelacionHistory`
+ * Sólo entran las CERRADAS: cada entrada de `NivelacionHistory`, que se escribe
+ * cuando el guía marca la asistencia del evento (REALIZADA o NO_ASISTIO). Las
+ * que están esperando aprobación viven en Solicitudes, las aprobadas sin evento
+ * en Agrupaciones, y las que ya tienen evento sin dictar en Pendientes: cada una
+ * se gestiona en su pestaña, y el histórico es lo que ya ocurrió.
  *
  * `NivelacionHistory` es un array JSONB por alumno: se expande con
  * `jsonb_array_elements` para que cada nivelación cerrada sea una fila propia.
@@ -76,35 +76,6 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
          CROSS JOIN LATERAL jsonb_array_elements(a."NivelacionHistory") AS h
         WHERE ${NO_PRB} AND jsonb_typeof(a."NivelacionHistory") = 'array'
 
-       UNION ALL
-
-       -- Aprobada, aún sin cerrar
-       SELECT ${IDENT},
-              (a."detalleNivelacion"->>'fecha')::timestamptz AS fecha,
-              NULL AS "fechaEvento",
-              'APROBADA' AS estado,
-              a."detalleNivelacion"->>'modulo' AS modulo,
-              a."detalleNivelacion"->>'leccion' AS leccion,
-              COALESCE(a."NivelacionCount", 0)::int AS conteo,
-              NULL AS comentario,
-              a."detalleNivelacion"->>'marcadoPor' AS "marcadoPor"
-         ${JOINS}
-        WHERE ${NO_PRB} AND a."aprobadoNivelacion" = true
-
-       UNION ALL
-
-       -- Pendiente de aprobación
-       SELECT ${IDENT},
-              (a."detalleNivelacion"->>'fecha')::timestamptz AS fecha,
-              NULL AS "fechaEvento",
-              'PENDIENTE' AS estado,
-              a."detalleNivelacion"->>'modulo' AS modulo,
-              a."detalleNivelacion"->>'leccion' AS leccion,
-              COALESCE(a."NivelacionCount", 0)::int AS conteo,
-              NULL AS comentario,
-              a."detalleNivelacion"->>'marcadoPor' AS "marcadoPor"
-         ${JOINS}
-        WHERE ${NO_PRB} AND a."nivelacion" = true
      )
      SELECT * FROM todas
      ${filtro}
@@ -119,8 +90,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `SELECT DISTINCT p."tipoCurso" AS curso, cc."guia" AS guia_id, g."nombreCompleto" AS guia_nombre
        ${JOINS}
       WHERE ${NO_PRB}
-        AND (a."nivelacion" = true OR a."aprobadoNivelacion" = true
-             OR jsonb_array_length(COALESCE(a."NivelacionHistory", '[]'::jsonb)) > 0)`
+        AND jsonb_array_length(COALESCE(a."NivelacionHistory", '[]'::jsonb)) > 0`
   )).rows
   const cursos = Array.from(new Set(opts.map((o: any) => o.curso).filter(Boolean))).sort()
   const guias = Array.from(
