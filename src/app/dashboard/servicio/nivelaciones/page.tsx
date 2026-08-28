@@ -78,7 +78,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
   }
   const exportar = () => {
     exportToExcel(rows, [
-      { header: 'Fecha', accessor: r => (r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '') },
+      { header: 'Fecha solicitud', accessor: r => (r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '') },
       { header: 'Curso', accessor: r => r.curso || '' },
       { header: 'Nombre', accessor: r => r.nombre || '' },
       { header: 'Salón', accessor: r => r.salon || '' },
@@ -171,7 +171,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Fecha', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Conteo', 'Aprobar', 'Cancelar'].map(h => (
+                {['Fecha solicitud', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Conteo', 'Aprobar', 'Cancelar'].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -183,7 +183,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
                 <tr><td colSpan={9} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones pendientes</td></tr>
               ) : rows.map((r) => (
                 <tr key={r.academicaId} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                  <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
                     {r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '—'}
                   </td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
@@ -202,7 +202,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
                   <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
                   <td className="px-3 py-2 text-gray-600">
                     <span className="font-medium text-gray-800">{r.leccion || '—'}</span>
-                    {r.tema && <span className="block text-xs text-gray-400">{r.tema}</span>}
+                    {r.tema && <span className="block text-xs text-gray-400 truncate max-w-[220px]" title={r.tema}>{r.tema}</span>}
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                   <td className="px-3 py-2">

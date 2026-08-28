@@ -18,6 +18,8 @@ interface Row {
   guia: string | null
   guiaId: string | null
   conteo: number
+  /** Cuándo la pidió el guía. */
+  fechaSolicitud: string | null
   eventoId: string | null
   eventoDia: string | null
   yaPaso: boolean
@@ -63,6 +65,9 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
   const fmt = (iso: string | null) => iso
     ? new Date(iso).toLocaleString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : '—'
+  // La fecha del evento lleva hora (hace falta para ir a la sesión); la de
+  // solicitud no, así que ocupa lo justo.
+  const fmtDia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es-CL') : '—'
   const exportar = () => {
     exportToExcel(rows, [
       { header: 'Curso', accessor: r => r.curso || '' },
@@ -73,8 +78,9 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
       { header: 'Lección', accessor: r => r.leccion || '' },
       { header: 'Guía', accessor: r => r.guia || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
-      { header: 'Fecha de la nivelación', accessor: r => fmt(r.eventoDia) },
+      { header: 'Fecha asignada', accessor: r => fmt(r.eventoDia) },
       { header: 'Estado', accessor: r => (r.yaPaso ? 'Dictada — falta marcar asistencia' : 'Programada') },
+      { header: 'Fecha solicitud', accessor: r => fmtDia(r.fechaSolicitud) },
     ], 'nivelaciones-pendientes')
   }
 
@@ -132,7 +138,7 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  {['Fecha', 'Curso', 'Nombre', 'Salón', 'Módulo · Lección', 'Guía', 'Conteo', 'Estado'].map(h => (
+                  {['Fecha asignada', 'Curso', 'Nombre', 'Salón', 'Módulo · Lección', 'Guía', 'Conteo', 'Estado', 'Fecha solicitud'].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -140,7 +146,7 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
               <tbody>
                 {rows.map(r => (
                   <tr key={`${r.academicaId}-${r.eventoId}`} className={`border-b border-gray-100 hover:bg-gray-50 ${r.yaPaso ? 'bg-amber-50/40' : ''}`}>
-                    <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmt(r.eventoDia)}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{fmt(r.eventoDia)}</td>
                     <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
                     <td className="px-3 py-2 font-medium whitespace-nowrap">
                       <button type="button"
@@ -154,7 +160,7 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
                     <td className="px-3 py-2 text-gray-600">
                       {r.modulo && <span className="text-gray-400">{r.modulo} · </span>}
                       <span className="font-medium text-gray-800">{r.leccion || '—'}</span>
-                      {r.tema && <span className="block text-xs text-gray-400">{r.tema}</span>}
+                      {r.tema && <span className="block text-xs text-gray-400 truncate max-w-[200px]" title={r.tema}>{r.tema}</span>}
                     </td>
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                     <td className="px-3 py-2">
@@ -172,6 +178,7 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Programada</span>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{fmtDia(r.fechaSolicitud)}</td>
                   </tr>
                 ))}
               </tbody>

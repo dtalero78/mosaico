@@ -175,7 +175,7 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                     <span className="mx-2 text-gray-300">·</span>
                     <span className="font-medium text-gray-700">{g.leccion || 'Sin lección asignada'}</span>
                     {g.modulo && <span className="ml-2 text-xs text-gray-400">{g.modulo}</span>}
-                    {g.tema && <span className="block text-xs text-gray-400">{g.tema}</span>}
+                    {g.tema && <span className="block text-xs text-gray-400 truncate max-w-[420px]" title={g.tema}>{g.tema}</span>}
                   </div>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
                     {g.rows.length} alumno(s)
@@ -195,7 +195,7 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                   <table className="w-full text-sm">
                     <thead className="bg-white border-b border-gray-100">
                       <tr>
-                        {['', 'Solicitada', 'Nombre', 'ID', 'Salón', 'Guía', 'Conteo'].map((h, idx) => (
+                        {['', 'Fecha solicitud', 'Nombre', 'ID', 'Salón', 'Guía', 'Conteo'].map((h, idx) => (
                           <th key={idx} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -212,7 +212,7 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                               className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
                             />
                           </td>
-                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                          <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
                             {r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '—'}
                           </td>
                           <td className="px-3 py-2 font-medium whitespace-nowrap">

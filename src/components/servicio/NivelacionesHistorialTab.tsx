@@ -14,6 +14,9 @@ interface Row {
   guiaId: string | null
   guia: string | null
   fecha: string | null
+  /** Cuándo la pidió el guía (las entradas viejas no la guardaron). */
+  fechaSolicitud: string | null
+  /** Fecha del evento en que se dictó. */
   fechaEvento: string | null
   estado: string | null
   modulo: string | null
@@ -30,6 +33,8 @@ const ESTADO_META: Record<string, { label: string; cls: string }> = {
   REALIZADA:  { label: 'Realizada',  cls: 'bg-green-100 text-green-700' },
   NO_ASISTIO: { label: 'No asistió', cls: 'bg-red-100 text-red-700' },
 }
+
+const fmtDia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es-CL') : '—'
 
 export default function NivelacionesHistorialTab() {
   const [guia, setGuia] = useState('')
@@ -77,6 +82,7 @@ export default function NivelacionesHistorialTab() {
   const borrar = () => { setGuia(''); setCurso(''); setStartDate(''); setEndDate(''); fetchData() }
   const exportar = () => {
     exportToExcel(rows, [
+      { header: 'Fecha solicitud', accessor: r => (r.fechaSolicitud ? new Date(r.fechaSolicitud).toLocaleDateString('es-CL') : '') },
       { header: 'Curso', accessor: r => r.curso || '' },
       { header: 'Nombre', accessor: r => r.nombre || '' },
       { header: 'Salón', accessor: r => r.salon || '' },
@@ -85,7 +91,7 @@ export default function NivelacionesHistorialTab() {
       { header: 'Lección', accessor: r => r.leccion || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
       { header: 'Estado', accessor: r => ESTADO_META[r.estado || '']?.label || r.estado || '' },
-      { header: 'Fecha', accessor: r => (r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '') },
+      { header: 'Fecha asignada', accessor: r => (r.fechaEvento ? new Date(r.fechaEvento).toLocaleDateString('es-CL') : '') },
       { header: 'Comentario', accessor: r => r.comentario || '' },
     ], 'nivelaciones-historial')
   }
@@ -148,7 +154,7 @@ export default function NivelacionesHistorialTab() {
                 <table className="w-full text-sm">
                   <thead className="bg-white border-b border-gray-100">
                     <tr>
-                      {['Fecha', 'Nombre', 'Salón', 'Guía', 'Módulo · Lección', 'Conteo', 'Estado', 'Comentario'].map(h => (
+                      {['Fecha solicitud', 'Nombre', 'Salón', 'Guía', 'Módulo · Lección', 'Conteo', 'Estado', 'Comentario', 'Fecha asignada'].map(h => (
                         <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -158,8 +164,8 @@ export default function NivelacionesHistorialTab() {
                       const meta = ESTADO_META[r.estado || ''] || { label: r.estado || '—', cls: 'bg-gray-100 text-gray-600' }
                       return (
                         <tr key={`${r.academicaId}-${r.fecha}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
-                            {r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '—'}
+                          <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
+                            {fmtDia(r.fechaSolicitud)}
                           </td>
                           <td className="px-3 py-2 font-medium whitespace-nowrap">
                             <button type="button"
@@ -183,6 +189,7 @@ export default function NivelacionesHistorialTab() {
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${meta.cls}`}>{meta.label}</span>
                           </td>
                           <td className="px-3 py-2 text-gray-500 max-w-xs truncate" title={r.comentario || ''}>{r.comentario || '—'}</td>
+                          <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{fmtDia(r.fechaEvento)}</td>
                         </tr>
                       )
                     })}

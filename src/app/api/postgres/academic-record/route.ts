@@ -150,12 +150,19 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     const fechaEvento = evt?.dia ? new Date(evt.dia).toISOString() : null;
     // Conteo de la nivelación (número de esta nivelación: 1ª, 2ª…). Se lee ANTES
     // de modificar y se guarda en el registro del historial.
-    const curNiv = await queryOne<{ NivelacionCount: number | null }>(
-      `SELECT "NivelacionCount" FROM "ACADEMICA" WHERE "_id" = $1`, [idEstudiante]
+    const curNiv = await queryOne<{ NivelacionCount: number | null; detalleNivelacion: any }>(
+      `SELECT "NivelacionCount", "detalleNivelacion" FROM "ACADEMICA" WHERE "_id" = $1`, [idEstudiante]
     );
     const conteo = Number(curNiv?.NivelacionCount) || 0;
+    // Lo que se pidió: cuándo y sobre qué. Se guarda en la entrada del historial
+    // porque `detalleNivelacion` se pisa con la siguiente nivelación del alumno.
+    let det: any = curNiv?.detalleNivelacion;
+    if (typeof det === 'string') { try { det = JSON.parse(det); } catch { det = null; } }
+    const fechaSolicitud = det?.fecha || null;
+    const modulo = det?.modulo || null;
+    const leccion = det?.leccion || null;
     if (asistioNiv && participoNiv) {
-      const entry = { fecha, fechaEvento, conteo, resultado: 'REALIZADA', comentario: (body.nivelacionComentario || '').trim(), marcadoPor: actor };
+      const entry = { fecha, fechaEvento, fechaSolicitud, modulo, leccion, conteo, resultado: 'REALIZADA', comentario: (body.nivelacionComentario || '').trim(), marcadoPor: actor };
       await query(
         `UPDATE "ACADEMICA"
            SET "nivelacion" = false, "aprobadoNivelacion" = false,
@@ -165,7 +172,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         [idEstudiante, JSON.stringify([entry])]
       ).catch(err => console.warn('[academic-record] cierre nivelación REALIZADA:', err.message));
     } else {
-      const entry = { fecha, fechaEvento, conteo, resultado: 'NO_ASISTIO', marcadoPor: actor };
+      const entry = { fecha, fechaEvento, fechaSolicitud, modulo, leccion, conteo, resultado: 'NO_ASISTIO', marcadoPor: actor };
       await query(
         `UPDATE "ACADEMICA"
            SET "nivelacion" = false, "aprobadoNivelacion" = false,
