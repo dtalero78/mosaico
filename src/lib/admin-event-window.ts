@@ -104,7 +104,11 @@ export function getAdminEventWindow(
   // su fin. Registrar una reunión de la semana siguiente queda descartado solo,
   // porque los minutos transcurridos serían negativos.
   const openMin  = REGISTER_OPEN_MIN;
-  const closeMin = REGISTER_CLOSE_MIN;
+  // El cierre se cuenta desde el FIN NOMINAL, no desde el inicio: el plazo es
+  // "24 h después del evento", y un evento administrativo puede durar de 1 a 12
+  // horas — anclarlo al inicio le restaría ese tiempo al guía. En una sesión no
+  // se nota porque todas duran una hora.
+  const closeMin = finNominalMin + REGISTER_CLOSE_MIN;
 
   const inRegisterWindow = minutesElapsed >= openMin && minutesElapsed <= closeMin;
   const expired          = minutesElapsed > closeMin;
@@ -125,6 +129,48 @@ export function getAdminEventWindow(
     minutesUntilExpire,
     finNominalMin,
   };
+}
+
+/**
+ * Zona horaria IANA válida. Acepta las tres formas que reporta un navegador:
+ * `UTC`, `America/Santiago` y `America/Argentina/Buenos_Aires`.
+ * Es una lista blanca de forma, no de contenido: lo que llegue va a `Intl`.
+ */
+export function esTzValida(tz: unknown): tz is string {
+  return typeof tz === 'string' && /^[A-Za-z][A-Za-z_+0-9-]*(\/[A-Za-z_+0-9-]+)*$/.test(tz);
+}
+
+/**
+ * Hora `'HH:MM'` de un instante **en la zona del guía**.
+ *
+ * Hace falta porque `fechaInicio` es un instante (timestamptz) y `getHours()`
+ * lo lee en la zona del PROCESO: en producción el servidor corre en UTC, así que
+ * un evento de las 16:00 de Chile se leía como las 20:00 y la validación del
+ * Time Out rechazaba cualquier hora que tecleara el guía.
+ */
+export function horaLocal(fecha: Date | string, tz?: string | null): string {
+  const d = fecha instanceof Date ? fecha : new Date(fecha);
+  if (Number.isNaN(d.getTime())) return '';
+  const opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
+  // El regex sólo comprueba la FORMA; una zona bien escrita pero inexistente
+  // ('America/Atlantis') hace que `Intl` lance, y eso tumbaría el registro con un
+  // "Database error". Ante una zona que no existe se cae a la del proceso, que es
+  // el comportamiento que había antes de recibirla.
+  if (esTzValida(tz)) {
+    try {
+      new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: tz });
+      opts.timeZone = tz;
+    } catch { /* zona desconocida: se ignora */ }
+  }
+  // `hour12:false` devuelve '24' a medianoche en algunos runtimes.
+  const txt = new Intl.DateTimeFormat('en-GB', opts).format(d);
+  return txt.startsWith('24:') ? `00:${txt.slice(3)}` : txt;
+}
+
+/** Minutos desde medianoche de un `'HH:MM'`. */
+export function minutosDelDia(hhmm: string): number {
+  const [hh, mm] = String(hhmm).split(':').map(Number);
+  return (Number.isFinite(hh) ? hh : 0) * 60 + (Number.isFinite(mm) ? mm : 0);
 }
 
 export const ADMIN_EVENT_EXPIRED_MESSAGE =

@@ -102,7 +102,13 @@ export default function AdminEventRegistrarModal({
       const r = await fetch(`/api/postgres/admin-events/${event._id}/registrar`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timeout, notas: notas || null }),
+        body: JSON.stringify({
+          timeout,
+          notas: notas || null,
+          // El Time Out se teclea en la hora del guía; el servidor la necesita
+          // para compararla con el inicio del evento (que guarda un instante).
+          tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
       })
       const j = await r.json()
       if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)

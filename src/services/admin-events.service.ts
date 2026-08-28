@@ -20,6 +20,8 @@ import {
   ADMIN_EVENT_TIPOS,
   getAdminEventWindow,
   ADMIN_EVENT_EXPIRED_MESSAGE,
+  horaLocal,
+  minutosDelDia,
 } from '@/lib/admin-event-window';
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -159,6 +161,8 @@ export async function registrarAdminEvent(input: {
   sessionRole: string;
   timeout: string;
   notas: string | null;
+  /** Zona horaria IANA del guía; sin ella se compara en la del servidor (UTC en prod). */
+  tz?: string | null;
 }): Promise<AdminEventRow> {
   if (!TIMEOUT_REGEX.test(input.timeout)) {
     throw new ValidationError('timeout debe estar en formato HH:MM militar (ej. 09:30)');
@@ -207,15 +211,16 @@ export async function registrarAdminEvent(input: {
     // Defensa B: el Time Out no puede ser anterior al INICIO del evento — la misma
     // regla que en una sesión, donde el guía cierra cuando termina de dictarla y no
     // se le exige esperar al fin nominal.
-    const inicioDate = new Date(ev.fechaInicio);
-    const [hh, mm] = input.timeout.split(':').map(Number);
-    const timeoutDate = new Date(inicioDate);
-    timeoutDate.setHours(hh, mm, 0, 0);
-    if (timeoutDate < inicioDate) {
-      const iniHH = String(inicioDate.getHours()).padStart(2, '0');
-      const iniMM = String(inicioDate.getMinutes()).padStart(2, '0');
+    //
+    // ⚠ Se compara en la zona del GUÍA, que es en la que él teclea la hora.
+    // `fechaInicio` es un instante y `getHours()` lo lee en la zona del PROCESO:
+    // en producción el servidor corre en UTC, así que una reunión de las 16:00 de
+    // Chile se leía como las 20:00 y NINGÚN Time Out que escribiera el guía era
+    // aceptable — el registro quedaba bloqueado del todo.
+    const inicioLocal = horaLocal(ev.fechaInicio, input.tz);
+    if (minutosDelDia(input.timeout) < minutosDelDia(inicioLocal)) {
       throw new ValidationError(
-        `Time Out (${input.timeout}) no puede ser anterior a la hora de inicio del evento (${iniHH}:${iniMM}).`,
+        `Time Out (${input.timeout}) no puede ser anterior a la hora de inicio del evento (${inicioLocal}).`,
       );
     }
   }

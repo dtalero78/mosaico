@@ -23,10 +23,13 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
   const body = await request.json();
   const timeout = String(body?.timeout || '').trim();
   const notas   = body?.notas ? String(body.notas).trim() : null;
+  // La zona del guía: sin ella el Time Out se compararía contra la hora UTC del
+  // evento y ninguna hora que teclee sería válida (ver admin-events.service).
+  const tz      = body?.tz ? String(body.tz).trim() : null;
   if (!timeout) throw new ValidationError('timeout requerido (HH:MM)');
 
   const updated = await registrarAdminEvent({
-    id: params.id, sessionEmail: email, sessionRole: role, timeout, notas,
+    id: params.id, sessionEmail: email, sessionRole: role, timeout, notas, tz,
   });
   return successResponse({ event: updated });
 });

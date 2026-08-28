@@ -96,8 +96,11 @@ test.describe('Ventana del evento administrativo — las mismas reglas que una s
   test('abre a los 30 min del INICIO — no hay que esperar a que termine', () => {
     expect(getAdminEventWindow(INICIO, 'GUIA', en(29), 3).canRegister).toBe(false);
     expect(getAdminEventWindow(INICIO, 'GUIA', en(30), 3).canRegister).toBe(true);
-    expect(getAdminEventWindow(INICIO, 'GUIA', en(REGISTER_CLOSE_MIN), 3).canRegister).toBe(true);
-    expect(getAdminEventWindow(INICIO, 'GUIA', en(REGISTER_CLOSE_MIN + 1), 3).isExpired).toBe(true);
+    // El cierre se cuenta desde el FIN nominal: un evento de 3 h conserva sus
+    // 24 h completas después de terminar, no 21.
+    const fin3h = 3 * 60;
+    expect(getAdminEventWindow(INICIO, 'GUIA', en(fin3h + REGISTER_CLOSE_MIN), 3).canRegister).toBe(true);
+    expect(getAdminEventWindow(INICIO, 'GUIA', en(fin3h + REGISTER_CLOSE_MIN + 1), 3).isExpired).toBe(true);
   });
 
   test('la ventana es la MISMA que la de las sesiones', () => {
