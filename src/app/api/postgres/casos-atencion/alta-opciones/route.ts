@@ -1,6 +1,6 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { requirePermission } from '@/lib/api-permissions';
+import { requireAnyPermission } from '@/lib/api-permissions';
 import { query } from '@/lib/postgres';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { ServicioPermission } from '@/types/permissions';
@@ -27,7 +27,15 @@ import { ServicioPermission } from '@/types/permissions';
  * con su campaña y horario, y el paso de usuarios los exige.
  */
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
-  await requirePermission(session, ServicioPermission.CASOS_ATENCION_GESTION as any);
+  // La misma cascada la usan Casos de Atención y el alta de Nivelaciones: basta
+  // tener el permiso de gestión de CUALQUIERA de las dos. Se comparte en vez de
+  // duplicarla porque aquí viven reglas finas —el salón se identifica por
+  // (campaña, curso, horario) y sólo salen los alumnos que ocupan cupo— y dos
+  // copias divergirían.
+  await requireAnyPermission(session, [
+    ServicioPermission.CASOS_ATENCION_GESTION as any,
+    ServicioPermission.NIVELACIONES_GESTION as any,
+  ]);
 
   const sp = new URL(request.url).searchParams;
   const guiaId = (sp.get('guiaId') || '').trim();

@@ -11,6 +11,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import NivelacionesAgrupacionesTab from '@/components/servicio/NivelacionesAgrupacionesTab'
 import NivelacionesPendientesTab from '@/components/servicio/NivelacionesPendientesTab'
 import NivelacionesHistorialTab from '@/components/servicio/NivelacionesHistorialTab'
+import AdicionarNivelacionModal from '@/components/servicio/AdicionarNivelacionModal'
 
 interface Row {
   academicaId: string
@@ -50,6 +51,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
   const [lecciones, setLecciones] = useState<string[]>([])
   const [guias, setGuias] = useState<Guia[]>([])
   const [loading, setLoading] = useState(true)
+  const [adicionar, setAdicionar] = useState(false)
   const [acting, setActing] = useState<string | null>(null)
 
   const fetchData = useCallback(async (f?: Record<string, string>) => {
@@ -151,6 +153,11 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-4">
+          <PermissionGuard permission={ServicioPermission.NIVELACIONES_GESTION}>
+            <button type="button" onClick={() => setAdicionar(true)}
+              className="px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium">
+              + Adicionar Nivelación</button>
+          </PermissionGuard>
           <button type="button" onClick={aplicar} disabled={loading}
             className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">Aplicar filtros</button>
           <button type="button" onClick={borrar}
@@ -164,6 +171,13 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
           </span>
         </div>
       </div>
+
+      {adicionar && (
+        <AdicionarNivelacionModal
+          onClose={() => setAdicionar(false)}
+          onCreated={() => fetchData({ curso, salon, leccion, guia, startDate, endDate })}
+        />
+      )}
 
       {/* Tabla */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
