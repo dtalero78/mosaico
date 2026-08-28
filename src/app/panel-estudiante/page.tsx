@@ -624,8 +624,10 @@ function PanelEstudianteContent() {
             {!esImpulsa && (
               <NivelacionProgramadaCard
                 booking={nivelacionBooking}
+                solicitud={profile?.nivelacionSolicitud || null}
                 onCancel={handleCancel}
                 isCancelling={cancelMutation.isLoading}
+                onConfirmed={() => meQuery.refetch()}
               />
             )}
 

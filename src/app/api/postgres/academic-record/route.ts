@@ -159,10 +159,15 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     let det: any = curNiv?.detalleNivelacion;
     if (typeof det === 'string') { try { det = JSON.parse(det); } catch { det = null; } }
     const fechaSolicitud = det?.fecha || null;
+    // La confirmación también se copia: `detalleNivelacion` se borra al cerrar y
+    // con él se perdería si el alumno había confirmado, que es justo lo que hay
+    // que poder contrastar contra si finalmente asistió.
+    const confirmadoEn = det?.confirmadoEn || null;
+    const confirmadoPor = det?.confirmadoPor || null;
     const modulo = det?.modulo || null;
     const leccion = det?.leccion || null;
     if (asistioNiv && participoNiv) {
-      const entry = { fecha, fechaEvento, fechaSolicitud, modulo, leccion, conteo, resultado: 'REALIZADA', comentario: (body.nivelacionComentario || '').trim(), marcadoPor: actor };
+      const entry = { fecha, fechaEvento, fechaSolicitud, modulo, leccion, conteo, confirmadoEn, confirmadoPor, resultado: 'REALIZADA', comentario: (body.nivelacionComentario || '').trim(), marcadoPor: actor };
       await query(
         `UPDATE "ACADEMICA"
            SET "nivelacion" = false, "aprobadoNivelacion" = false,
@@ -172,7 +177,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         [idEstudiante, JSON.stringify([entry])]
       ).catch(err => console.warn('[academic-record] cierre nivelación REALIZADA:', err.message));
     } else {
-      const entry = { fecha, fechaEvento, fechaSolicitud, modulo, leccion, conteo, resultado: 'NO_ASISTIO', marcadoPor: actor };
+      const entry = { fecha, fechaEvento, fechaSolicitud, modulo, leccion, conteo, confirmadoEn, confirmadoPor, resultado: 'NO_ASISTIO', marcadoPor: actor };
       await query(
         `UPDATE "ACADEMICA"
            SET "nivelacion" = false, "aprobadoNivelacion" = false,

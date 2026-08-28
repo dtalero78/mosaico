@@ -151,6 +151,34 @@ async function executeExpireContracts() {
   }
 }
 
+/**
+ * Cancela las nivelaciones que nadie confirmo (jueves 22:00 de Chile)
+ */
+async function executeCancelarNivelaciones() {
+  const timestamp = getLocalTimestamp();
+  console.log(`\n[${timestamp}] Ejecutando cancelar-nivelaciones-sin-confirmar...`);
+
+  try {
+    const response = await fetch(`${NEXTAUTH_URL}/api/cron/cancelar-nivelaciones-sin-confirmar`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${CRON_SECRET}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      console.log(`[${timestamp}] Completado. Canceladas: ${data.successCount || 0}, Fallidas: ${data.failedCount || 0}`);
+    } else {
+      console.error(`[${timestamp}] Error: ${data.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error(`[${timestamp}] Error de conexion:`, error.message);
+  }
+}
+
 // Programar tareas
 // ================
 
@@ -178,11 +206,21 @@ cron.schedule('0 4 * * *', executeExpireContracts, {
   timezone: 'UTC'
 });
 
+// Cancelar nivelaciones sin confirmar: jueves a las 22:00 DE CHILE.
+// Va con timezone y no en UTC como los demas porque el corte es una hora local
+// del negocio: Chile cambia de huso dos veces al ano y con una hora UTC fija el
+// corte se moveria solo entre las 21:00 y las 22:00.
+cron.schedule('0 22 * * 4', executeCancelarNivelaciones, {
+  scheduled: true,
+  timezone: 'America/Santiago'
+});
+
 console.log('Tareas programadas:');
 console.log('   - activate-academica: Diariamente a las 01:30 UTC (8:30 PM Colombia)');
 console.log('   - reconcile-pegados: Diariamente a las 02:00 UTC (9:00 PM Colombia)');
 console.log('   - reactivate-onhold: Diariamente a las 03:00 UTC (10:00 PM Colombia)');
 console.log('   - expire-contracts: Diariamente a las 04:00 UTC (11:00 PM Colombia)');
+console.log('   - cancelar-nivelaciones-sin-confirmar: Jueves a las 22:00 de Chile');
 
 // Ejecutar inmediatamente si se pasa el argumento --run-now
 if (process.argv.includes('--run-now')) {
@@ -215,6 +253,12 @@ if (process.argv.includes('--expire-contracts')) {
 if (process.argv.includes('--reactivate-onhold')) {
   console.log('\nEjecutando reactivate-onhold...');
   executeReactivateOnHold();
+}
+
+// Ejecutar solo cancelar-nivelaciones si se pasa --cancelar-nivelaciones
+if (process.argv.includes('--cancelar-nivelaciones')) {
+  console.log('\nEjecutando cancelar-nivelaciones-sin-confirmar...');
+  executeCancelarNivelaciones();
 }
 
 // Mantener el proceso vivo

@@ -47,6 +47,8 @@ export async function cerrarNivelacionSiRealizada(bookingId: string, actor: stri
     resultado: 'REALIZADA',
     comentario: 'Cerrada al marcar asistencia (módulo Académica)',
     fechaSolicitud: det?.fecha || null,
+    confirmadoEn: det?.confirmadoEn || null,
+    confirmadoPor: det?.confirmadoPor || null,
     modulo: det?.modulo || null,
     leccion: det?.leccion || null,
     marcadoPor: actor,

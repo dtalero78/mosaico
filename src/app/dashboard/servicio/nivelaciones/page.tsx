@@ -12,6 +12,7 @@ import NivelacionesAgrupacionesTab from '@/components/servicio/NivelacionesAgrup
 import NivelacionesPendientesTab from '@/components/servicio/NivelacionesPendientesTab'
 import NivelacionesHistorialTab from '@/components/servicio/NivelacionesHistorialTab'
 import AdicionarNivelacionModal from '@/components/servicio/AdicionarNivelacionModal'
+import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
 
 interface Row {
   academicaId: string
@@ -23,6 +24,8 @@ interface Row {
   guia: string | null
   conteo: number
   fecha: string | null
+  confirmadoEn: string | null
+  confirmadoPor: string | null
 }
 interface Guia { id: string; nombre: string }
 
@@ -88,6 +91,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
       { header: 'Tema', accessor: r => r.tema || '' },
       { header: 'Guía', accessor: r => r.guia || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
+      { header: 'Confirmación', accessor: r => (r.confirmadoEn ? (r.confirmadoPor === 'SERVICIO' ? 'Confirmada (Servicio)' : 'Confirmada') : 'Sin confirmar') },
     ], 'nivelaciones')
   }
 
@@ -185,7 +189,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Fecha solicitud', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Conteo', 'Aprobar', 'Cancelar'].map(h => (
+                {['Fecha solicitud', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Conteo', 'Confirmación', 'Aprobar', 'Cancelar'].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -221,6 +225,16 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                   <td className="px-3 py-2">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <ConfirmacionCell
+                      academicaId={r.academicaId}
+                      fechaSolicitud={r.fecha}
+                      confirmadoEn={r.confirmadoEn ?? null}
+                      confirmadoPor={r.confirmadoPor ?? null}
+                      puedeGestionar={canGestion}
+                      onConfirmed={() => fetchData({ curso, salon, leccion, guia, startDate, endDate })}
+                    />
                   </td>
                   <td className="px-3 py-2">
                     <button type="button" title="Aprobar — pasa a Agrupaciones para agendarla en grupo"

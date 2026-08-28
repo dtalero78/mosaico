@@ -2,7 +2,9 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { query, queryOne } from '@/lib/postgres'
 import { AcademicaRepository } from '@/repositories/academica.repository'
-import { NotFoundError } from '@/lib/errors'
+import { NotFoundError, ValidationError } from '@/lib/errors'
+import { requirePermission } from '@/lib/api-permissions'
+import { ServicioPermission } from '@/types/permissions'
 
 /**
  * GET /api/postgres/students/[id]/nivelacion
@@ -65,6 +67,31 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
     )
     return successResponse({ nivelacion: false, aprobadoNivelacion: true, NivelacionCount: curCount })
   }
+  // Acción CONFIRMAR desde Servicio → marca la confirmación en nombre del alumno.
+  // No mira el plazo a propósito: es justamente la excepción para el alumno que
+  // no alcanzó a confirmar y avisó por otro canal. Queda registrado QUIÉN la
+  // confirmó, para distinguirla de la que confirmó el propio alumno.
+  if (body?.confirmar === true) {
+    await requirePermission(session, ServicioPermission.NIVELACIONES_GESTION as any)
+    const cur2 = await queryOne<{ detalleNivelacion: any; aprobadoNivelacion: boolean | null }>(
+      `SELECT "detalleNivelacion", "aprobadoNivelacion" FROM "ACADEMICA" WHERE "_id" = $1`, [rec._id]
+    )
+    const det = cur2?.detalleNivelacion || null
+    if (!det?.fecha || !(curNivel || cur2?.aprobadoNivelacion === true)) {
+      throw new ValidationError('Ese usuario no tiene una nivelación pendiente de confirmar')
+    }
+    if (det.confirmadoEn) {
+      return successResponse({ confirmadoEn: det.confirmadoEn, confirmadoPor: det.confirmadoPor ?? null, yaEstaba: true })
+    }
+    const confirmadoEn = new Date().toISOString()
+    const nuevo = { ...det, confirmadoEn, confirmadoPor: 'SERVICIO', confirmadoPorNombre: session.user?.name || session.user?.email || null }
+    await query(
+      `UPDATE "ACADEMICA" SET "detalleNivelacion" = $2::jsonb, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      [rec._id, JSON.stringify(nuevo)]
+    )
+    return successResponse({ confirmadoEn, confirmadoPor: 'SERVICIO' })
+  }
+
   // Acción CANCELAR (reporte) → quita la nivelación pendiente (decrementa el conteo)
   if (body?.cancelar === true) {
     const nc = Math.max(0, curCount - (curNivel ? 1 : 0))

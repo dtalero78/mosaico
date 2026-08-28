@@ -66,6 +66,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        SELECT ${IDENT},
               (h->>'fecha')::timestamptz AS fecha,
               COALESCE(h->>'fechaSolicitud', a."detalleNivelacion"->>'fecha') AS "fechaSolicitud",
+              (h->>'confirmadoEn') AS "confirmadoEn",
+              (h->>'confirmadoPor') AS "confirmadoPor",
               (h->>'fechaEvento') AS "fechaEvento",
               h->>'resultado' AS estado,
               h->>'modulo' AS modulo,

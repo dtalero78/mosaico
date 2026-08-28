@@ -48,7 +48,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             n."description" AS tema,
             g."nombreCompleto" AS guia,
             COALESCE(a."NivelacionCount", 0)::int AS conteo,
-            (a."detalleNivelacion"->>'fecha') AS fecha
+            (a."detalleNivelacion"->>'fecha') AS fecha,
+            (a."detalleNivelacion"->>'confirmadoEn') AS "confirmadoEn",
+            (a."detalleNivelacion"->>'confirmadoPor') AS "confirmadoPor"
        FROM "ACADEMICA" a
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
        LEFT JOIN "CURSOS_CAMPAIGN" cc

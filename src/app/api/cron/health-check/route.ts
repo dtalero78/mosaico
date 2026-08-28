@@ -31,6 +31,7 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
 
   const reactivateLast = await getLastRun('reactivate-onhold')
   const expireLast     = await getLastRun('expire-contracts')
+  const nivelLast      = await getLastRun('cancelar-nivelaciones-sin-confirmar')
 
   const reactivatePending = await queryOne<{ n: number }>(
     `SELECT COUNT(*)::int AS n FROM "PEOPLE"
@@ -47,11 +48,14 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
     crons: {
       'reactivate-onhold': summarize(reactivateLast, reactivatePending?.n ?? null),
       'expire-contracts':  summarize(expireLast, null),
+      // Semanal (jueves 22:00 de Chile): con el umbral diario saldría "stale"
+      // seis días de cada siete, así que se le da su propia ventana.
+      'cancelar-nivelaciones-sin-confirmar': summarize(nivelLast, null, 8 * 24 + 2),
     },
   })
 })
 
-function summarize(run: any, pendingNow: number | null) {
+function summarize(run: any, pendingNow: number | null, maxHours?: number) {
   if (!run) {
     return {
       lastRun: null,
@@ -72,7 +76,7 @@ function summarize(run: any, pendingNow: number | null) {
     lastRun: finishedAt?.toISOString() ?? null,
     lastStatus: run.status,
     hoursSinceLastRun: hours,
-    stale: isStale(run),
+    stale: maxHours ? isStale(run, maxHours) : isStale(run),
     lastProcessed: run.processedCount ?? 0,
     lastSuccess: run.successCount ?? 0,
     lastFailed: run.failedCount ?? 0,

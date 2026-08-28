@@ -5,6 +5,8 @@ import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
+import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface Row {
   academicaId: string
@@ -20,6 +22,8 @@ interface Row {
   conteo: number
   /** Cuándo la pidió el guía. */
   fechaSolicitud: string | null
+  confirmadoEn: string | null
+  confirmadoPor: string | null
   eventoId: string | null
   eventoDia: string | null
   yaPaso: boolean
@@ -40,6 +44,8 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
   const [lecciones, setLecciones] = useState<string[]>([])
   const [guias, setGuias] = useState<Guia[]>([])
   const [loading, setLoading] = useState(true)
+  const { hasPermission } = usePermissions()
+  const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION)
 
   const fetchData = useCallback(async (f?: Record<string, string>) => {
     setLoading(true)
@@ -79,6 +85,7 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
       { header: 'Guía', accessor: r => r.guia || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
       { header: 'Fecha asignada', accessor: r => fmt(r.eventoDia) },
+      { header: 'Confirmación', accessor: r => (r.confirmadoEn ? (r.confirmadoPor === 'SERVICIO' ? 'Confirmada (Servicio)' : 'Confirmada') : 'Sin confirmar') },
       { header: 'Estado', accessor: r => (r.yaPaso ? 'Dictada — falta marcar asistencia' : 'Programada') },
       { header: 'Fecha solicitud', accessor: r => fmtDia(r.fechaSolicitud) },
     ], 'nivelaciones-pendientes')
@@ -138,7 +145,7 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  {['Fecha asignada', 'Curso', 'Nombre', 'Salón', 'Módulo · Lección', 'Guía', 'Conteo', 'Estado', 'Fecha solicitud'].map(h => (
+                  {['Fecha asignada', 'Curso', 'Nombre', 'Salón', 'Módulo · Lección', 'Guía', 'Conteo', 'Confirmación', 'Estado', 'Fecha solicitud'].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -165,6 +172,16 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
                     <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                     <td className="px-3 py-2">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <ConfirmacionCell
+                        academicaId={r.academicaId}
+                        fechaSolicitud={r.fechaSolicitud}
+                        confirmadoEn={r.confirmadoEn}
+                        confirmadoPor={r.confirmadoPor}
+                        puedeGestionar={canGestion}
+                        onConfirmed={() => fetchData({ curso, leccion, guia })}
+                      />
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {r.yaPaso ? (

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { UserGroupIcon } from '@heroicons/react/24/outline'
 import { ServicioPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
+import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
 
 interface Row {
   academicaId: string
@@ -19,6 +20,9 @@ interface Row {
   tema: string | null
   guiaId: string | null
   guia: string | null
+  fechaSolicitud: string | null
+  confirmadoEn: string | null
+  confirmadoPor: string | null
   guiaZoom: string | null
   conteo: number
   fecha: string | null
@@ -195,7 +199,7 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                   <table className="w-full text-sm">
                     <thead className="bg-white border-b border-gray-100">
                       <tr>
-                        {['', 'Fecha solicitud', 'Nombre', 'ID', 'Salón', 'Guía', 'Conteo'].map((h, idx) => (
+                        {['', 'Fecha solicitud', 'Nombre', 'ID', 'Salón', 'Guía', 'Conteo', 'Confirmación'].map((h, idx) => (
                           <th key={idx} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -228,6 +232,16 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                           <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                           <td className="px-3 py-2">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <ConfirmacionCell
+                              academicaId={r.academicaId}
+                              fechaSolicitud={r.fechaSolicitud ?? null}
+                              confirmadoEn={r.confirmadoEn ?? null}
+                              confirmadoPor={r.confirmadoPor ?? null}
+                              puedeGestionar={canGestion}
+                              onConfirmed={() => fetchData({ curso, leccion, guia })}
+                            />
                           </td>
                         </tr>
                       ))}

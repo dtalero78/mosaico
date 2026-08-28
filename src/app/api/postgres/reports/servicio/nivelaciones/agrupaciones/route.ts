@@ -82,6 +82,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             p."campaign",
             p."horarioCurso",
             (a."detalleNivelacion"->>'modulo') AS modulo,
+            (a."detalleNivelacion"->>'confirmadoEn') AS "confirmadoEn",
+            (a."detalleNivelacion"->>'confirmadoPor') AS "confirmadoPor",
             (a."detalleNivelacion"->>'leccion') AS leccion,
             n."description" AS tema,
             cc."guia" AS "guiaId",

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
+import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
 
 interface Row {
   academicaId: string
@@ -16,6 +17,8 @@ interface Row {
   fecha: string | null
   /** Cuándo la pidió el guía (las entradas viejas no la guardaron). */
   fechaSolicitud: string | null
+  confirmadoEn: string | null
+  confirmadoPor: string | null
   /** Fecha del evento en que se dictó. */
   fechaEvento: string | null
   estado: string | null
@@ -32,6 +35,9 @@ const ESTADO_META: Record<string, { label: string; cls: string }> = {
   APROBADA:   { label: 'Aprobada',   cls: 'bg-blue-100 text-blue-700' },
   REALIZADA:  { label: 'Realizada',  cls: 'bg-green-100 text-green-700' },
   NO_ASISTIO: { label: 'No asistió', cls: 'bg-red-100 text-red-700' },
+  // La canceló el sistema el jueves 22:00 porque nadie confirmó. Se distingue
+  // de "No asistió": aquí la clase nunca llegó a programarse.
+  CANCELADA_SIN_CONFIRMAR: { label: 'Cancelada (sin confirmar)', cls: 'bg-gray-200 text-gray-700' },
 }
 
 const fmtDia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es-CL') : '—'
@@ -90,6 +96,7 @@ export default function NivelacionesHistorialTab() {
       { header: 'Módulo', accessor: r => r.modulo || '' },
       { header: 'Lección', accessor: r => r.leccion || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
+      { header: 'Confirmación', accessor: r => (r.confirmadoEn ? (r.confirmadoPor === 'SERVICIO' ? 'Confirmada (Servicio)' : 'Confirmada') : 'Sin confirmar') },
       { header: 'Estado', accessor: r => ESTADO_META[r.estado || '']?.label || r.estado || '' },
       { header: 'Fecha asignada', accessor: r => (r.fechaEvento ? new Date(r.fechaEvento).toLocaleDateString('es-CL') : '') },
       { header: 'Comentario', accessor: r => r.comentario || '' },
@@ -154,7 +161,7 @@ export default function NivelacionesHistorialTab() {
                 <table className="w-full text-sm">
                   <thead className="bg-white border-b border-gray-100">
                     <tr>
-                      {['Fecha solicitud', 'Nombre', 'Salón', 'Guía', 'Módulo · Lección', 'Conteo', 'Estado', 'Comentario', 'Fecha asignada'].map(h => (
+                      {['Fecha solicitud', 'Nombre', 'Salón', 'Guía', 'Módulo · Lección', 'Conteo', 'Confirmación', 'Estado', 'Comentario', 'Fecha asignada'].map(h => (
                         <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -184,6 +191,14 @@ export default function NivelacionesHistorialTab() {
                           </td>
                           <td className="px-3 py-2">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <ConfirmacionCell
+                              fechaSolicitud={r.fechaSolicitud ?? null}
+                              confirmadoEn={r.confirmadoEn ?? null}
+                              confirmadoPor={r.confirmadoPor ?? null}
+                              soloLectura
+                            />
                           </td>
                           <td className="px-3 py-2">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${meta.cls}`}>{meta.label}</span>

@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { resolveStudentFromSession } from '@/services/panel-estudiante.service';
 import { queryOne, query } from '@/lib/postgres';
 import { getPresignedVideoUrl } from '@/lib/spaces';
+import { corteConfirmacion, estadoConfirmacion } from '@/lib/nivelacion-confirmacion';
 
 export const GET = handlerWithAuth(async (request, context, session) => {
   const student = await resolveStudentFromSession(session);
@@ -89,6 +90,30 @@ export const GET = handlerWithAuth(async (request, context, session) => {
     }
   }
 
+  // Nivelación PEDIDA (aún sin evento). La tarjeta del panel la necesita para
+  // poder ofrecer el botón de confirmar desde el momento en que el guía la pide,
+  // que es antes de que exista el evento: hasta ahora sólo sabía del agendamiento.
+  let nivelacionSolicitud: any = null;
+  if ((student as any)?.academicaId) {
+    const niv = await queryOne<{ nivelacion: boolean | null; aprobadoNivelacion: boolean | null; detalleNivelacion: any }>(
+      `SELECT "nivelacion", "aprobadoNivelacion", "detalleNivelacion" FROM "ACADEMICA" WHERE "_id" = $1`,
+      [(student as any).academicaId]
+    ).catch(() => null);
+    const det = niv?.detalleNivelacion || null;
+    // Vale mientras la nivelación siga viva: pedida o ya aprobada sin dictarse.
+    if (det?.fecha && (niv?.nivelacion === true || niv?.aprobadoNivelacion === true)) {
+      nivelacionSolicitud = {
+        fecha: det.fecha,
+        modulo: det.modulo ?? null,
+        leccion: det.leccion ?? null,
+        confirmadoEn: det.confirmadoEn ?? null,
+        confirmadoPor: det.confirmadoPor ?? null,
+        corte: corteConfirmacion(det.fecha),
+        estado: estadoConfirmacion(det),
+      };
+    }
+  }
+
   return successResponse({
     profile: {
       ...student,
@@ -97,6 +122,7 @@ export const GET = handlerWithAuth(async (request, context, session) => {
       cursoProgreso,
       cursoGuia,
       cursoModulos,
+      nivelacionSolicitud,
     },
   });
 });
