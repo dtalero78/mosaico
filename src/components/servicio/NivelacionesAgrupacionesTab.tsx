@@ -21,6 +21,8 @@ interface Row {
   guiaId: string | null
   guia: string | null
   fechaSolicitud: string | null
+  hora: string | null
+  motivo: string | null
   confirmadoEn: string | null
   confirmadoPor: string | null
   guiaZoom: string | null
@@ -199,7 +201,7 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                   <table className="w-full text-sm">
                     <thead className="bg-white border-b border-gray-100">
                       <tr>
-                        {['', 'Fecha solicitud', 'Nombre', 'ID', 'Salón', 'Guía', 'Conteo', 'Confirmación'].map((h, idx) => (
+                        {['', 'Fecha solicitud', 'Nombre', 'ID', 'Salón', 'Hora', 'Guía', 'Conteo', 'Confirmación'].map((h, idx) => (
                           <th key={idx} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -229,6 +231,7 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
                           </td>
                           <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.numeroId || '—'}</td>
                           <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap" title={r.motivo || ''}>{r.hora || '—'}</td>
                           <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                           <td className="px-3 py-2">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>

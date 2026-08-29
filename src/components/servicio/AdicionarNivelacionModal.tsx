@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { HORAS_NIVELACION } from '@/lib/nivelacion-confirmacion'
 
 interface Guia { _id: string; nombreCompleto: string }
 interface Salon { salon: string; campaign: string; horarioCurso: string }
@@ -33,6 +34,8 @@ export default function AdicionarNivelacionModal({ onClose, onCreated }: {
   const [academicaId, setAcademicaId] = useState('')
   const [modulo, setModulo] = useState('')
   const [leccion, setLeccion] = useState('')
+  const [hora, setHora] = useState('')
+  const [motivo, setMotivo] = useState('')
 
   const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -93,7 +96,7 @@ export default function AdicionarNivelacionModal({ onClose, onCreated }: {
   for (const l of lecciones) if (!modulos.includes(l.modulo)) modulos.push(l.modulo)
   const leccionesModulo = modulo ? lecciones.filter(l => l.modulo === modulo) : lecciones
 
-  const listo = !!(guiaId && curso && salonKey && academicaId && leccion)
+  const listo = !!(guiaId && curso && salonKey && academicaId && leccion && hora && motivo.trim())
 
   const crear = async () => {
     if (!listo) return
@@ -102,7 +105,7 @@ export default function AdicionarNivelacionModal({ onClose, onCreated }: {
       const r = await fetch('/api/postgres/reports/servicio/nivelaciones/alta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ academicaId, guiaId, modulo, leccion }),
+        body: JSON.stringify({ academicaId, guiaId, modulo, leccion, hora, motivo: motivo.trim() }),
       }).then(x => x.json())
       if (r.error) throw new Error(r.error)
       toast.success(`Nivelación adicionada para ${r.nombre}`)
@@ -189,10 +192,27 @@ export default function AdicionarNivelacionModal({ onClose, onCreated }: {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="an-hora" className="block text-xs font-medium text-gray-500 mb-1">Hora</label>
+              <select id="an-hora" value={hora} onChange={e => setHora(e.target.value)} disabled={!curso}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100">
+                <option value="">Seleccione…</option>
+                {HORAS_NIVELACION.map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="an-motivo" className="block text-xs font-medium text-gray-500 mb-1">Motivo</label>
+              <input id="an-motivo" type="text" value={motivo} onChange={e => setMotivo(e.target.value)}
+                disabled={!curso} maxLength={300} placeholder="Por qué se pide"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100" />
+            </div>
+          </div>
+
           {alumno && leccion && (
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-900">
               Se adicionará una nivelación para <strong>{alumno.nombre}</strong> en{' '}
-              <strong>{modulo ? `${modulo} · ` : ''}{leccion}</strong>, a nombre del guía seleccionado.
+              <strong>{modulo ? `${modulo} · ` : ''}{leccion}</strong>{hora ? ` a las ${hora}` : ''}, a nombre del guía seleccionado.
             </div>
           )}
         </div>

@@ -49,6 +49,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             g."nombreCompleto" AS guia,
             COALESCE(a."NivelacionCount", 0)::int AS conteo,
             (a."detalleNivelacion"->>'fecha') AS fecha,
+            (a."detalleNivelacion"->>'hora') AS hora,
+            (a."detalleNivelacion"->>'motivo') AS motivo,
             (a."detalleNivelacion"->>'confirmadoEn') AS "confirmadoEn",
             (a."detalleNivelacion"->>'confirmadoPor') AS "confirmadoPor"
        FROM "ACADEMICA" a

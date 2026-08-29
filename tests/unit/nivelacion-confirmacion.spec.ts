@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import {
   corteConfirmacion, corteCancelacion, estadoConfirmacion,
   puedeConfirmarAlumno, debeCancelarse,
+  HORAS_NIVELACION, esHoraNivelacionValida,
 } from '../../src/lib/nivelacion-confirmacion'
 
 /**
@@ -94,4 +95,22 @@ test('el corte no depende del huso del proceso', () => {
   const b = corteConfirmacion(new Date('2026-08-27T12:00:00Z'))
   expect(a).toBe(b)
   expect(a).toBe('2026-08-27T09:00')
+})
+
+test('las horas de nivelacion van de 17:00 a 20:30 cada media hora', () => {
+  expect(HORAS_NIVELACION).toEqual([
+    '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30',
+  ])
+})
+
+test('solo se admiten horas del catalogo', () => {
+  expect(esHoraNivelacionValida('17:00')).toBe(true)
+  expect(esHoraNivelacionValida('20:30')).toBe(true)
+  // Fuera de rango o fuera de la media hora: no se admiten.
+  expect(esHoraNivelacionValida('16:30')).toBe(false)
+  expect(esHoraNivelacionValida('21:00')).toBe(false)
+  expect(esHoraNivelacionValida('18:15')).toBe(false)
+  expect(esHoraNivelacionValida('5 pm')).toBe(false)
+  expect(esHoraNivelacionValida('')).toBe(false)
+  expect(esHoraNivelacionValida(null)).toBe(false)
 })

@@ -32,6 +32,26 @@ export const HORA_CIERRE_CONFIRMACION = 9;
 /** Hora (Chile) en que el sistema cancela lo que nadie confirmó. */
 export const HORA_CANCELACION = 22;
 
+/**
+ * Horas en que se puede pedir una nivelación: de 17:00 a 20:30, cada media hora.
+ *
+ * Es un catálogo cerrado y no un campo libre porque la hora la teclearía cada
+ * guía a su manera ('5 pm', '17hrs') y Servicio no podría agrupar por ella. Vive
+ * aquí para que el desplegable del panel del guía, el del alta de Servicio y la
+ * validación del servidor usen la MISMA lista.
+ */
+export const HORAS_NIVELACION: string[] = (() => {
+  const out: string[] = [];
+  for (let m = 17 * 60; m <= 20 * 60 + 30; m += 30) {
+    out.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+  }
+  return out;
+})();
+
+export function esHoraNivelacionValida(h: unknown): h is string {
+  return typeof h === 'string' && HORAS_NIVELACION.includes(h);
+}
+
 export type QuienConfirma = 'ESTUDIANTE' | 'SERVICIO';
 
 /** Lo que guarda `ACADEMICA.detalleNivelacion`. */

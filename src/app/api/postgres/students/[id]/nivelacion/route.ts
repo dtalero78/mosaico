@@ -5,6 +5,7 @@ import { AcademicaRepository } from '@/repositories/academica.repository'
 import { NotFoundError, ValidationError } from '@/lib/errors'
 import { requirePermission } from '@/lib/api-permissions'
 import { ServicioPermission } from '@/types/permissions'
+import { esHoraNivelacionValida } from '@/lib/nivelacion-confirmacion'
 
 /**
  * GET /api/postgres/students/[id]/nivelacion
@@ -106,8 +107,20 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
   const nivelacion = body?.nivelacion === true
   const leccion = (body?.leccion || '').trim() || null
   const modulo = (body?.modulo || '').trim() || null
+  const hora = (body?.hora || '').trim() || null
+  const motivo = (body?.motivo || '').trim() || null
+
+  // Pedir una nivelación exige decir SOBRE QUÉ, A QUÉ HORA y POR QUÉ: sin la hora
+  // Servicio no puede armar los grupos, y sin el motivo la solicitud llega sin
+  // contexto a quien la gestiona. Se valida aquí y no sólo en el panel.
+  if (nivelacion) {
+    if (!leccion) throw new ValidationError('Elige la lección de la nivelación')
+    if (!esHoraNivelacionValida(hora)) throw new ValidationError('Elige una hora válida para la nivelación')
+    if (!motivo) throw new ValidationError('Escribe el motivo de la nivelación')
+  }
+
   const detalle = nivelacion && leccion
-    ? { leccion, modulo, fecha: new Date().toISOString(), marcadoPor: session.user?.email || null }
+    ? { leccion, modulo, hora, motivo, fecha: new Date().toISOString(), marcadoPor: session.user?.email || null }
     : null
 
   // Conteo: +1 al pasar de false→true, -1 al pasar de true→false

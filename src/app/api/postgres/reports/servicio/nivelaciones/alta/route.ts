@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query, queryOne } from '@/lib/postgres'
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
+import { esHoraNivelacionValida } from '@/lib/nivelacion-confirmacion'
 
 /**
  * POST /api/postgres/reports/servicio/nivelaciones/alta
@@ -31,10 +32,14 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const guiaId = String(body?.guiaId || '').trim()
   const modulo = String(body?.modulo || '').trim()
   const leccion = String(body?.leccion || '').trim()
+  const hora = String(body?.hora || '').trim()
+  const motivo = String(body?.motivo || '').trim()
 
   if (!academicaId) throw new ValidationError('Falta el usuario')
   if (!guiaId) throw new ValidationError('Falta el guía')
   if (!leccion) throw new ValidationError('Falta la lección')
+  if (!esHoraNivelacionValida(hora)) throw new ValidationError('Elige una hora válida para la nivelación')
+  if (!motivo) throw new ValidationError('Escribe el motivo de la nivelación')
 
   const alumno = await queryOne<any>(
     `SELECT a."_id", a."nivelacion", a."aprobadoNivelacion",
@@ -70,6 +75,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const detalle = {
     leccion,
     modulo: modulo || null,
+    hora,
+    motivo,
     fecha: new Date().toISOString(),
     marcadoPor: guia.email || null,
     registradoPor: session.user?.name || null,

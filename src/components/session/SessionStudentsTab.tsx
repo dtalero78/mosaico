@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import ReportarCasoModal from './ReportarCasoModal'
 import { isJumpStep as esJumpStep } from '@/lib/motor-academico'
+import { HORAS_NIVELACION } from '@/lib/nivelacion-confirmacion'
 
 interface CalendarioEvent {
   _id: string
@@ -187,6 +188,9 @@ export default function SessionStudentsTab({
   /** Módulo elegido para la nivelación. Arranca en el del alumno, pero se puede
    *  cambiar: la nivelación puede ser sobre cualquier punto del curso. */
   const [nivelacionModulo, setNivelacionModulo] = useState('')
+  /** Hora pedida y motivo. Ambos son obligatorios para dejar la solicitud. */
+  const [nivelacionHora, setNivelacionHora] = useState('')
+  const [nivelacionMotivo, setNivelacionMotivo] = useState('')
   const [lecciones, setLecciones] = useState<Array<{ value: string; label: string; modulo: string }>>([])
   const [moduloActual, setModuloActual] = useState<string | null>(null)
   const [savingNivel, setSavingNivel] = useState(false)
@@ -229,7 +233,10 @@ export default function SessionStudentsTab({
 
   // Cargar estado de nivelación del estudiante seleccionado
   useEffect(() => {
-    if (!selectedStudent?._id) { setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo(''); setModuloActual(null); return }
+    if (!selectedStudent?._id) {
+      setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo('')
+      setNivelacionHora(''); setNivelacionMotivo(''); setModuloActual(null); return
+    }
     fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
@@ -239,13 +246,24 @@ export default function SessionStudentsTab({
         // Si ya había una nivelación marcada se respeta SU módulo; si no, se
         // propone el del alumno, que es el caso habitual.
         setNivelacionModulo(d.detalleNivelacion?.modulo || d.moduloActual || '')
+        setNivelacionHora(d.detalleNivelacion?.hora || '')
+        setNivelacionMotivo(d.detalleNivelacion?.motivo || '')
       })
-      .catch(() => { setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo(''); setModuloActual(null) })
+      .catch(() => {
+        setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo('')
+        setNivelacionHora(''); setNivelacionMotivo(''); setModuloActual(null)
+      })
   }, [selectedStudent?._id])
 
-  // Guarda nivelación inmediatamente (al marcar la casilla o elegir lección)
-  const saveNivelacion = async (checked: boolean, modulo: string, leccion: string) => {
+  /**
+   * Guarda la nivelación. Sólo se manda cuando están los CUATRO datos —lección,
+   * módulo, hora y motivo—: son obligatorios, así que una solicitud a medias no
+   * debe llegar a existir. Mientras falte alguno la casilla queda marcada en
+   * pantalla y se avisa qué falta; desmarcarla borra la solicitud enseguida.
+   */
+  const saveNivelacion = async (checked: boolean, modulo: string, leccion: string, hora: string, motivo: string) => {
     if (!selectedStudent?._id) return
+    if (checked && !(leccion && hora && motivo.trim())) return   // incompleta: aún no se manda
     setSavingNivel(true)
     try {
       const r = await fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, {
@@ -253,12 +271,14 @@ export default function SessionStudentsTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nivelacion: checked,
-          leccion: checked && leccion ? leccion : null,
+          leccion: checked ? leccion : null,
           modulo: checked && modulo ? modulo : null,
+          hora: checked ? hora : null,
+          motivo: checked ? motivo.trim() : null,
         }),
       }).then(x => x.json())
       if (r.error) throw new Error(r.error)
-      toast.success('Nivelación actualizada')
+      toast.success(checked ? 'Nivelación solicitada' : 'Nivelación quitada')
     } catch (e: any) {
       toast.error(e?.message || 'Error al guardar nivelación')
     } finally {
@@ -599,8 +619,9 @@ export default function SessionStudentsTab({
                         onChange={(e) => {
                           const c = e.target.checked
                           setNivelacion(c)
-                          if (!c) setNivelacionLeccion('')
-                          saveNivelacion(c, c ? nivelacionModulo : '', c ? nivelacionLeccion : '')
+                          if (!c) { setNivelacionLeccion(''); setNivelacionHora(''); setNivelacionMotivo('') }
+                          saveNivelacion(c, c ? nivelacionModulo : '', c ? nivelacionLeccion : '',
+                            c ? nivelacionHora : '', c ? nivelacionMotivo : '')
                         }}
                         className="w-5 h-5 text-amber-600 rounded focus:ring-amber-500"
                       />
@@ -629,7 +650,7 @@ export default function SessionStudentsTab({
                               // se limpia y se guarda así, para que lo registrado no
                               // contradiga al módulo elegido.
                               setNivelacionLeccion('')
-                              if (nivelacion) saveNivelacion(true, m, '')
+                              if (nivelacion) saveNivelacion(true, m, '', nivelacionHora, nivelacionMotivo)
                             }}
                             disabled={!nivelacion || !modulos.length}
                             className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -641,13 +662,45 @@ export default function SessionStudentsTab({
                           </select>
                           <select
                             value={nivelacionLeccion}
-                            onChange={(e) => { const v = e.target.value; setNivelacionLeccion(v); saveNivelacion(true, nivelacionModulo, v) }}
+                            onChange={(e) => { const v = e.target.value; setNivelacionLeccion(v); saveNivelacion(true, nivelacionModulo, v, nivelacionHora, nivelacionMotivo) }}
                             disabled={!nivelacion || !leccionesModulo.length}
                             className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                           >
                             <option value="">{nivelacionModulo ? '— Lección —' : '— Elige módulo primero —'}</option>
                             {leccionesModulo.map(l => <option key={l.value} value={l.value}>{l.value}</option>)}
                           </select>
+                          {/* Hora pedida: catálogo cerrado (17:00–20:30 cada media
+                              hora) para que Servicio pueda agrupar por ella; escrita
+                              a mano cada guía la pondría a su manera. */}
+                          <select
+                            value={nivelacionHora}
+                            onChange={(e) => { const v = e.target.value; setNivelacionHora(v); saveNivelacion(true, nivelacionModulo, nivelacionLeccion, v, nivelacionMotivo) }}
+                            disabled={!nivelacion}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          >
+                            <option value="">— Hora —</option>
+                            {HORAS_NIVELACION.map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
+                          {/* El motivo se guarda al salir del campo, no en cada tecla. */}
+                          <input
+                            type="text"
+                            value={nivelacionMotivo}
+                            onChange={(e) => setNivelacionMotivo(e.target.value)}
+                            onBlur={() => { if (nivelacion) saveNivelacion(true, nivelacionModulo, nivelacionLeccion, nivelacionHora, nivelacionMotivo) }}
+                            disabled={!nivelacion}
+                            maxLength={300}
+                            placeholder="Motivo de la nivelación"
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          />
+                          {nivelacion && !(nivelacionLeccion && nivelacionHora && nivelacionMotivo.trim()) && (
+                            <p className="sm:col-span-2 text-xs text-amber-700">
+                              Falta {[
+                                !nivelacionLeccion ? 'la lección' : null,
+                                !nivelacionHora ? 'la hora' : null,
+                                !nivelacionMotivo.trim() ? 'el motivo' : null,
+                              ].filter(Boolean).join(', ')} — la nivelación se guarda cuando estén los tres.
+                            </p>
+                          )}
                         </div>
                       )
                     })()}

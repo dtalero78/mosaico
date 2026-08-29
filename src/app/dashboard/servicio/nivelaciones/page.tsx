@@ -24,6 +24,8 @@ interface Row {
   guia: string | null
   conteo: number
   fecha: string | null
+  hora: string | null
+  motivo: string | null
   confirmadoEn: string | null
   confirmadoPor: string | null
 }
@@ -90,6 +92,8 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
       { header: 'Lección', accessor: r => r.leccion || '' },
       { header: 'Tema', accessor: r => r.tema || '' },
       { header: 'Guía', accessor: r => r.guia || '' },
+      { header: 'Hora', accessor: r => r.hora || '' },
+      { header: 'Motivo', accessor: r => r.motivo || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
       { header: 'Confirmación', accessor: r => (r.confirmadoEn ? (r.confirmadoPor === 'SERVICIO' ? 'Confirmada (Servicio)' : 'Confirmada') : 'Sin confirmar') },
     ], 'nivelaciones')
@@ -189,7 +193,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Fecha solicitud', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Conteo', 'Confirmación', 'Aprobar', 'Cancelar'].map(h => (
+                {['Fecha solicitud', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Hora', 'Guía', 'Conteo', 'Confirmación', 'Aprobar', 'Cancelar'].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -221,7 +225,9 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
                   <td className="px-3 py-2 text-gray-600">
                     <span className="font-medium text-gray-800">{r.leccion || '—'}</span>
                     {r.tema && <span className="block text-xs text-gray-400 truncate max-w-[220px]" title={r.tema}>{r.tema}</span>}
+                    {r.motivo && <span className="block text-xs text-amber-700 truncate max-w-[220px]" title={r.motivo}>{r.motivo}</span>}
                   </td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.hora || '—'}</td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                   <td className="px-3 py-2">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
