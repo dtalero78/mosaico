@@ -208,6 +208,7 @@ export default function SessionStudentsTab({
   const [showNivelComentario, setShowNivelComentario] = useState(false)
   const [nivelComentarioText, setNivelComentarioText] = useState('')
   const [showNivelReminder, setShowNivelReminder] = useState(false)
+  const [showNivelNoAsistio, setShowNivelNoAsistio] = useState(false)
   // Aviso al guardar sin marcar nada (evento normal).
   const [showEmptyWarn, setShowEmptyWarn] = useState(false)
   const [savingNivelClose, setSavingNivelClose] = useState(false)
@@ -385,8 +386,12 @@ export default function SessionStudentsTab({
         setShowNivelComentario(true)
         return
       }
+      // No marcar nada CIERRA la nivelación como NO ASISTIÓ y le baja el conteo
+      // al alumno. En una sesión normal ese mismo camino saca el aviso "No
+      // marcaste nada"; aquí cerraba en silencio, así que un guía que abriera la
+      // ficha y guardara sin querer daba la nivelación por perdida.
       if (!asistencia && !participacion) {
-        await doSaveClassRecord()
+        setShowNivelNoAsistio(true)
         return
       }
       setShowNivelReminder(true)
@@ -786,6 +791,31 @@ export default function SessionStudentsTab({
                 disabled={!nivelComentarioText.trim() || savingNivelClose}
                 className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
                 {savingNivelClose ? 'Guardando…' : 'Guardar nivelación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación: cerrar la nivelación como NO ASISTIÓ */}
+      {showNivelNoAsistio && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">⚠️ No marcaste nada</h3>
+            <p className="text-sm text-gray-700 mb-4">
+              No marcaste <strong>Asistió</strong> ni <strong>Participó</strong>. Si continúas, la
+              nivelación se cerrará como <strong>NO ASISTIÓ</strong>: pasará al histórico y el
+              estudiante tendrá que solicitarla de nuevo.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowNivelNoAsistio(false)}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded hover:bg-gray-200">
+                Cancelar (volver a marcar)
+              </button>
+              <button type="button"
+                onClick={async () => { setShowNivelNoAsistio(false); await doSaveClassRecord() }}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded hover:bg-red-700">
+                Cerrar como NO ASISTIÓ
               </button>
             </div>
           </div>
