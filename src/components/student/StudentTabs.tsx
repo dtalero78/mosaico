@@ -56,6 +56,14 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
       setAcademicView('schedule')
       return
     }
+    // Deep-link ?clase=<eventoId|bookingId> (Servicio › Nivelaciones → nombre del
+    // alumno): la ficha abre en la Tabla de Asistencia, que es donde
+    // StudentAcademic monta el modal "Detalles de la Clase".
+    if (searchParams?.get('clase')) {
+      setActiveTab('academic')
+      setAcademicView('attendance')
+      return
+    }
     // Deep-link ?tab=<id> (ej. Servicio › Casos de Atención → nombre del alumno).
     // Sólo se aceptan ids conocidos para no dejar la ficha en una pestaña vacía.
     const t = searchParams?.get('tab')

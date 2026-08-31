@@ -157,9 +157,14 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
                     <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
                     <td className="px-3 py-2 font-medium whitespace-nowrap">
                       <button type="button"
-                        onClick={() => window.open(`/student/${r.academicaId}`, '_blank', 'noopener,noreferrer')}
+                        // Abre la ficha directamente en el modal "Detalles de la
+                        // Clase" de ESTA nivelación: llegar a la ficha y tener que
+                        // buscar la fila en el historial era el paso que sobraba.
+                        onClick={() => window.open(
+                          `/student/${r.academicaId}${r.eventoId ? `?clase=${encodeURIComponent(r.eventoId)}` : ''}`,
+                          '_blank', 'noopener,noreferrer')}
                         className="text-primary-600 hover:text-primary-800 hover:underline"
-                        title="Ver perfil del beneficiario">
+                        title="Ver la nivelación en la ficha del beneficiario">
                         {r.nombre || '—'}
                       </button>
                     </td>

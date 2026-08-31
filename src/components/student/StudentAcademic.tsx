@@ -38,6 +38,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   // El historial oculta por defecto las clases de semanas futuras. En la ficha
   // admin hace falta poder verlas para auditar que la aprobación sí agendó.
   const [verFuturas, setVerFuturas] = useState(false)
+  /** Clase a abrir al llegar con ?clase= (Servicio › Nivelaciones). */
+  const [claseDeepLink, setClaseDeepLink] = useState<string | null>(null)
   const [ocultasFuturas, setOcultasFuturas] = useState(0)
   const [primeraFutura, setPrimeraFutura] = useState<string | null>(null)
 
@@ -266,6 +268,15 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       setShowScheduleModal(true)
       // Quitar ?agendar de la URL (estado de Next) para que al REFRESCAR o
       // cambiar de pestaña NO se vuelva a abrir el modal automáticamente.
+      router.replace(pathname, { scroll: false })
+      return
+    }
+    // ?clase=<eventoId|bookingId> — abre el modal "Detalles de la Clase" de esa
+    // clase. Se guarda y se resuelve en otro efecto porque las clases llegan
+    // después (y puede hacer falta destapar las futuras).
+    const clase = (searchParams?.get('clase') || '').trim()
+    if (clase) {
+      setClaseDeepLink(clase)
       router.replace(pathname, { scroll: false })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -730,6 +741,30 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       alert('Error al eliminar la clase')
     }
   }
+
+  /**
+   * Deep link ?clase=: abre el modal de esa clase en cuanto llega en el listado.
+   *
+   * Va en su propio efecto y no en el de lectura del parámetro porque las clases
+   * se cargan después. Si no aparece, se destapan las futuras y se reintenta una
+   * sola vez: una nivelación ya agrupada suele estar por dictarse, y la Tabla de
+   * Asistencia oculta por defecto lo que pase de la semana siguiente.
+   */
+  useEffect(() => {
+    if (!claseDeepLink || !classes.length) return
+    const encontrada = classes.find((c: any) =>
+      c._id === claseDeepLink || c.eventoId === claseDeepLink || c.idEvento === claseDeepLink)
+    if (encontrada) {
+      handleClassClick(encontrada as Class)
+      setClaseDeepLink(null)
+      return
+    }
+    // Puede estar en el futuro: se destapan y el efecto vuelve a correr con el
+    // listado ampliado. Si tampoco está, se deja de insistir.
+    if (!verFuturas) setVerFuturas(true)
+    else setClaseDeepLink(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claseDeepLink, classes, verFuturas])
 
   // Filter classes based on filter states
   const filteredClasses = classes.filter(classItem => {
