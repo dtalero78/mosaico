@@ -43,7 +43,13 @@ interface Grupo {
   rows: Row[]
 }
 
-export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n: number) => void }) {
+export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, onMoved }: {
+  onCount?: (n: number) => void
+  /** Cambia cuando otra pestaña mueve una nivelación: hay que recargar. */
+  refreshKey?: number
+  /** Crear el grupo manda a los alumnos a Pendientes. */
+  onMoved?: () => void
+}) {
   const { hasPermission } = usePermissions()
   const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION as any)
 
@@ -78,6 +84,15 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
   }, [onCount])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Las cuatro pestañas viven montadas para no perder filtros, así que una acción
+  // en otra (aprobar, agrupar, cerrar) no la vería nadie hasta recargar la página.
+  // Se recarga CON los filtros vigentes, no en blanco.
+  useEffect(() => {
+    if (!refreshKey) return
+    fetchData({ curso, leccion, guia })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   // Los grupos se arman en el cliente sobre las filas ya filtradas: así el
   // encabezado de cada grupo cuenta exactamente lo que se está viendo.
@@ -262,7 +277,7 @@ export default function NivelacionesAgrupacionesTab({ onCount }: { onCount?: (n:
           grupo={modalGrupo}
           guias={guias}
           onClose={() => setModalGrupo(null)}
-          onDone={() => { setModalGrupo(null); fetchData({ curso, leccion, guia }) }}
+          onDone={() => { setModalGrupo(null); fetchData({ curso, leccion, guia }); onMoved?.() }}
         />
       )}
     </div>

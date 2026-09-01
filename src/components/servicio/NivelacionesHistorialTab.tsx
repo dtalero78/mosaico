@@ -47,7 +47,10 @@ const ESTADO_META: Record<string, { label: string; cls: string }> = {
 
 const fmtDia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es-CL') : '—'
 
-export default function NivelacionesHistorialTab() {
+export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
+  /** Cambia cuando otra pestaña cierra una nivelación: hay que recargar. */
+  refreshKey?: number
+} = {}) {
   const [guia, setGuia] = useState('')
   const [curso, setCurso] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -75,6 +78,12 @@ export default function NivelacionesHistorialTab() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    if (!refreshKey) return
+    fetchData({ guia, curso, startDate, endDate })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   // El servidor ya devuelve todo ordenado de la más reciente a la más antigua;
   // aquí sólo se parte en bloques por curso conservando ese orden, para que el

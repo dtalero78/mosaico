@@ -45,7 +45,13 @@ const CIERRES: Array<{ value: string; label: string; cls: string }> = [
  * Nivelaciones ya agrupadas: tienen evento y esperan que se dicte y que el guía
  * marque la asistencia. Al cerrarse pasan al Histórico.
  */
-export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: number) => void }) {
+export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onMoved }: {
+  onCount?: (n: number) => void
+  /** Cambia cuando otra pestaña mueve una nivelación: hay que recargar. */
+  refreshKey?: number
+  /** Cerrar una nivelación la manda al Histórico. */
+  onMoved?: () => void
+}) {
   const [curso, setCurso] = useState('')
   const [leccion, setLeccion] = useState('')
   const [guia, setGuia] = useState('')
@@ -80,6 +86,12 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
   }, [onCount])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    if (!refreshKey) return
+    fetchData({ curso, leccion, guia })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
 
   const aplicar = () => fetchData({ curso, leccion, guia })
   const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); fetchData() }
@@ -124,6 +136,7 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
       toast.success(`Nivelación de ${r.nombre} cerrada · pasó al Histórico`)
       setCerrando(null); setComentario('')
       fetchData({ curso, leccion, guia })
+      onMoved?.()   // ya está en el Histórico: esa pestaña también debe recargar
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo cerrar la nivelación')
     } finally { setGuardando(false) }

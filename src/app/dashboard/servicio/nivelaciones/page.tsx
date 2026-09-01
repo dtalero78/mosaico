@@ -39,7 +39,11 @@ type Tab = 'solicitudes' | 'agrupaciones' | 'pendientes' | 'historial'
  * Agrupaciones, donde se juntan por curso y lección para dictar UNA nivelación
  * a varios alumnos en vez de una por cabeza.
  */
-function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
+function SolicitudesTab({ onCount, onMoved }: {
+  onCount?: (n: number) => void
+  /** Aprobar o cancelar saca la solicitud de aquí y la mete en otra pestaña. */
+  onMoved?: () => void
+}) {
   const { hasPermission } = usePermissions()
   const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION as any)
 
@@ -115,6 +119,7 @@ function SolicitudesTab({ onCount }: { onCount?: (n: number) => void }) {
         onCount?.(next.length)
         return next
       })
+      onMoved?.()   // la nivelación cambió de pestaña: las demás deben recargar
     } catch (e: any) {
       toast.error(e?.message || 'Error')
     } finally {
@@ -273,6 +278,8 @@ function NivelacionesContent() {
   const [solCount, setSolCount] = useState<number | null>(null)
   const [agrCount, setAgrCount] = useState<number | null>(null)
   const [penCount, setPenCount] = useState<number | null>(null)
+  /** Sube cada vez que una pestaña mueve una nivelación a otra: todas recargan. */
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const tabs: Array<{ id: Tab; label: string; count: number | null }> = [
     { id: 'solicitudes', label: 'Solicitudes', count: solCount },
@@ -311,16 +318,16 @@ function NivelacionesContent() {
       {/* Las pestañas se mantienen montadas (ocultas con `hidden`) para no perder
           filtros ni selección al conmutar entre ellas. */}
       <div className={tab === 'solicitudes' ? '' : 'hidden'}>
-        <SolicitudesTab onCount={setSolCount} />
+        <SolicitudesTab onCount={setSolCount} onMoved={() => setRefreshKey(k => k + 1)} />
       </div>
       <div className={tab === 'agrupaciones' ? '' : 'hidden'}>
-        <NivelacionesAgrupacionesTab onCount={setAgrCount} />
+        <NivelacionesAgrupacionesTab onCount={setAgrCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
       </div>
       <div className={tab === 'pendientes' ? '' : 'hidden'}>
-        <NivelacionesPendientesTab onCount={setPenCount} />
+        <NivelacionesPendientesTab onCount={setPenCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
       </div>
       <div className={tab === 'historial' ? '' : 'hidden'}>
-        <NivelacionesHistorialTab />
+        <NivelacionesHistorialTab refreshKey={refreshKey} />
       </div>
     </div>
   )
