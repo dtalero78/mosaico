@@ -1206,7 +1206,13 @@ export enum NewModulePermission {
 }
 ```
 
-#### Step 3: Map Route (if needed)
+#### Step 3: Map Route (OBLIGATORIO para páginas nuevas)
+
+> **⚠ El middleware DENIEGA por defecto.** Una página bajo `/dashboard` o `/admin` que no esté
+> declarada en `ROUTE_PERMISSIONS` (ni cubierta por un prefijo de `GENERIC_ROUTE_ACCESS`) queda
+> **inaccesible** para todo rol que no sea SUPER_ADMIN/ADMIN. Antes se permitía por defecto, así que
+> una página nueva nacía abierta hasta que alguien la gateara; ahora el olvido quita el acceso en vez
+> de darlo. Exentos: `/`, las rutas públicas y las de `alwaysAllowedRoutes`.
 Update `src/lib/middleware-permissions.ts`:
 ```typescript
 export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
@@ -1721,6 +1727,7 @@ export interface Person {
 
 | Commit | Description |
 |---|---|
+| `local` (rama `soroban`) | fix(mosaico): **lo que no está marcado ya no se ve — el control de acceso DENIEGA por defecto**. Reporte: los permisos de `SERVICIO_NIVELACIONES` no coincidían con lo que veía su usuario. Eran **dos cosas distintas**. (1) **El rol estaba sin configurar**: tenía **un solo permiso y era de otro módulo** (`MANTENIMIENTO.USUARIOS.ENVIO_MENSAJES`), así que sin `SERVICIO.NIVELACIONES.VER` el middleware **ni siquiera lo dejaba abrir su propia pantalla**. Los tres permisos sí existían en el enum y en el catálogo de `/admin/permissions` — nunca se le marcaron. (2) **El agujero de fondo**: [`hasAccessToRoute`](src/lib/middleware-permissions.ts) terminaba en `return true` — **toda ruta sin entrada en `ROUTE_PERMISSIONS` ni prefijo genérico se PERMITÍA**. Eso hacía que cada página nueva **naciera abierta** hasta que alguien se acordara de gatearla: la omisión **daba** acceso en vez de quitarlo. Ahora deniega, y el costo del olvido se invierte — una ruta sin declarar deja de verse, que se nota de inmediato y se corrige agregándola. **⚠ Regla nueva: toda página nueva bajo `/dashboard` o `/admin` DEBE declararse en `ROUTE_PERMISSIONS` o queda inaccesible** para todo rol que no sea SUPER_ADMIN/ADMIN. No se ven afectados `/` (el middleware lo exceptúa antes), las rutas públicas, las de `alwaysAllowedRoutes` (`/person`, `/student`, `/sesion`, `/advisor`, `/panel-estudiante`) ni el bypass de SUPER_ADMIN/ADMIN. **Cierra de paso `/dbmosaico`** (el visor de base de datos), que no estaba declarado y por tanto lo abría **cualquier autenticado**; `/admin/permissions` y el feature flag de performance-eval tampoco lo estaban — **no hubo escalación** porque sus endpoints ya rechazaban con 403, pero la página se abría. (3) Se **declaran las 5 subrutas** que se habían quedado sin entrada y sí tienen dueño: los dos *actualizar-material* (`/usuarios`, `/advisor`), `/admin/actualizar-videos/instructivos`, `/admin/roles/create/consultar` y `/panel-advisor/actualizar-datos`. Las dos de `informes/sesiones` (`advisor`, `programadas`) **se dejan denegadas a propósito**: son páginas legadas que ya se habían quitado del menú en `76cf422`. (4) **Datos** ([scripts/fix-permisos-nivelaciones-y-huerfanos.js](scripts/fix-permisos-nivelaciones-y-huerfanos.js), idempotente, ensayo por defecto, **aplicado**): `SERVICIO_NIVELACIONES` 1 → 4 permisos (se le marcan los tres `SERVICIO.NIVELACIONES.*`; **se le conserva** el de Envío de Mensajes que ya tenía), y se borran los **9 `SERVICIO.EXAM_INTERN.*`** que seguían guardados en SERVICIO, SUPER_ADMIN y TALERO pese a que ese módulo se eliminó del código en `2a746de` — **no daban acceso a nada** (no existe la ruta ni el endpoint) pero **inflaban el conteo** de la matriz, que es justo lo que hace dudar de si un rol está bien armado (SERVICIO figuraba con 26 y opera con 17). (5) **Auditoría del resto**: de los 20 roles, `SERVICIO_NIVELACIONES` era **el único con usuario activo realmente roto**; `FINANCIERO` no tiene ningún `PERSON.FINANCIERA.*` pero tiene **0 usuarios**. Los 19 permisos del enum sin entrada en el catálogo son legado documentado de la reorganización de Informes, no un fallo. **5 pruebas nuevas** ([tests/unit/acceso-rutas.spec.ts](tests/unit/acceso-rutas.spec.ts)) fijan la regla: sin permisos no se entra a ninguna parte, una ruta inventada se deniega, y el rol entra a lo suyo y no a Casos/Welcome/Comercial/Recaudos/Mantenimiento. Verificado **en producción** con el usuario real del rol: `/dashboard/servicio/nivelaciones` → **200**, y Casos, `/dbmosaico`, `/admin/permissions` y Crear Contrato → **307 a `/`**. Verificado también lo inverso —que **nadie perdió acceso**— con ACTUALIZA_MATERIAL, GUIA, COMERCIAL_LIDER y SERVICIO_CASOS, incluidas las rutas recién declaradas. |
 | `local` (rama `soroban`) | fix(mosaico): **las pestañas de Nivelaciones se enteran de lo que hace la otra**. Reporte: se cerró una nivelación desde Pendientes y "no pasó al Histórico". **El cierre había funcionado** (verificado en la base: `aprobadoNivelacion=false` y su entrada en `NivelacionHistory` con el comentario); lo que fallaba era la pantalla. Las cuatro pestañas **viven montadas** (`hidden`) para no perder filtros al conmutar, y cada una carga sus datos **sólo al montar** — así que el Histórico seguía mostrando lo que trajo al abrir la página. El mismo agujero afectaba a los otros dos saltos: **aprobar** en Solicitudes no refrescaba Agrupaciones, y **crear el grupo** no refrescaba Pendientes; sólo se notaba ahora porque el cierre es la primera acción que manda algo a una pestaña que se mira enseguida. **Fix**: una llave `refreshKey` en la página; las tres acciones que mueven una nivelación de pestaña la incrementan (`onMoved`) y las demás recargan. **Se recarga CON los filtros vigentes**, no en blanco — recargar a ciegas habría borrado el filtro que el usuario tenía puesto, que es justo lo que las pestañas montadas buscaban evitar. Verificado E2E (:3001) el salto completo sin recargar la página: Pendientes 5 → 4 y la entrada aparece en el Histórico con su estado pintado. Dato de prueba revertido. |
 | `local` (rama `soroban`) | feat(mosaico): **Servicio cierra la nivelación no asistida desde Pendientes**. La columna **Estado** deja de ser un cartel y pasa a ser un desplegable: **Sin cierre** (defecto) · **No asistió — justificó** (azul) · **No asistió — no contestó** (rojo). Elegir cualquiera de los dos cierres pide confirmación con **comentario obligatorio** y manda la nivelación al Histórico; antes había que esperar a que el guía entrara a la sesión. (1) **"Sin cierre" NO se guarda**: es la ausencia de cierre, que es exactamente lo que significa estar en Pendientes — sin columna nueva ni migración. Se pinta en **dos tonos**: ámbar si el evento ya se dictó (urge) y gris si aún no toca, porque esa distinción es la que alimenta el contador *"N sin marcar asistencia"* y con un desplegable plano se habría perdido. El enlace **↗** a la sesión se conserva. (2) **Endpoint nuevo** [nivelaciones/cerrar](src/app/api/postgres/reports/servicio/nivelaciones/cerrar/route.ts) gateado por `SERVICIO.NIVELACIONES.GESTION`, transaccional. Tres decisiones del usuario: **el conteo NO baja** (a diferencia del cierre "No asistió" del guía — mide cuántas se le programaron, no cuántas aprovechó); **el agendamiento se marca como no asistió** (`asistio=false`) para que la ficha del alumno y los informes digan lo mismo que el histórico, **sin cancelarlo** (el alumno estuvo inscrito y esa historia se conserva); y el **comentario es obligatorio**. (3) **⚠ Se cierra un riesgo que ya existía**: el cierre desde `/sesion/[id]` **no comprobaba si la nivelación ya estaba cerrada**. Daba igual mientras sólo el guía cerrara, una vez; en cuanto Servicio también puede, si el guía entraba después a esa sesión y guardaba se escribía una **SEGUNDA entrada** en el historial y el conteo bajaba dos veces. Ahora `academic-record` mira si sigue viva antes de tocar nada, y el endpoint nuevo rechaza el doble cierre con el nombre del alumno. (4) El Histórico pinta los dos resultados nuevos y las entradas llevan `cerradoPorServicio`. Verificado E2E (:3001): las 3 opciones exactas en 6 filas, elegir un cierre **no manda nada** hasta confirmar (0 POST) y el botón está bloqueado sin comentario; el cierre real deja el agendamiento en no-asistió, el conteo **intacto** y la entrada completa; sin comentario, con resultado inválido y el doble cierre se rechazan. Datos de prueba restaurados. |
 | `local` (rama `soroban`) | feat(mosaico): **el nombre en Nivelaciones › Pendientes abre el modal de la clase, no sólo la ficha**. Antes llevaba a `/student/[id]` y había que buscar a mano la fila de la nivelación en la Tabla de Asistencia; ahora llega con el modal **"Detalles de la Clase"** ya abierto sobre ESA nivelación. (1) **Deep link `?clase=<eventoId>`** — mismo patrón que `?agendar=` y `?tab=`: [StudentTabs](src/components/student/StudentTabs.tsx) abre la pestaña Académica en **Tabla de Asistencia** (que es donde vive el modal) y [StudentAcademic](src/components/student/StudentAcademic.tsx) lo resuelve. Se acepta el **eventoId** además del bookingId porque es lo que la fila de Pendientes ya tiene — no hizo falta tocar el endpoint. El parámetro se **quita de la URL** al usarlo, para que refrescar no lo reabra. (2) **Se resuelve en un efecto aparte**: las clases llegan después del montaje, así que el id se guarda y se busca cuando el listado existe. (3) **Si no está, destapa las futuras y reintenta UNA vez**: una nivelación agrupada suele estar por dictarse y la Tabla de Asistencia oculta por defecto lo que pase de la semana siguiente — sin esto, el enlace no habría abierto nada justo en las que más se consultan. Si tampoco aparece, deja de insistir en vez de quedar en bucle. Verificado E2E (:3001) con una nivelación real: el clic abre la ficha en otra pestaña con el modal cargado (*"Nivelación • Modulo 00 • Leccion 01"*, 28-ago 05:30 p.m.). |
@@ -2957,7 +2964,13 @@ export enum NewModulePermission {
 }
 ```
 
-#### Step 3: Map Route (if needed)
+#### Step 3: Map Route (OBLIGATORIO para páginas nuevas)
+
+> **⚠ El middleware DENIEGA por defecto.** Una página bajo `/dashboard` o `/admin` que no esté
+> declarada en `ROUTE_PERMISSIONS` (ni cubierta por un prefijo de `GENERIC_ROUTE_ACCESS`) queda
+> **inaccesible** para todo rol que no sea SUPER_ADMIN/ADMIN. Antes se permitía por defecto, así que
+> una página nueva nacía abierta hasta que alguien la gateara; ahora el olvido quita el acceso en vez
+> de darlo. Exentos: `/`, las rutas públicas y las de `alwaysAllowedRoutes`.
 Update `src/lib/middleware-permissions.ts`:
 ```typescript
 export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
@@ -4676,7 +4689,13 @@ export enum NewModulePermission {
 }
 ```
 
-#### Step 3: Map Route (if needed)
+#### Step 3: Map Route (OBLIGATORIO para páginas nuevas)
+
+> **⚠ El middleware DENIEGA por defecto.** Una página bajo `/dashboard` o `/admin` que no esté
+> declarada en `ROUTE_PERMISSIONS` (ni cubierta por un prefijo de `GENERIC_ROUTE_ACCESS`) queda
+> **inaccesible** para todo rol que no sea SUPER_ADMIN/ADMIN. Antes se permitía por defecto, así que
+> una página nueva nacía abierta hasta que alguien la gateara; ahora el olvido quita el acceso en vez
+> de darlo. Exentos: `/`, las rutas públicas y las de `alwaysAllowedRoutes`.
 Update `src/lib/middleware-permissions.ts`:
 ```typescript
 export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
@@ -6397,7 +6416,13 @@ export enum NewModulePermission {
 }
 ```
 
-#### Step 3: Map Route (if needed)
+#### Step 3: Map Route (OBLIGATORIO para páginas nuevas)
+
+> **⚠ El middleware DENIEGA por defecto.** Una página bajo `/dashboard` o `/admin` que no esté
+> declarada en `ROUTE_PERMISSIONS` (ni cubierta por un prefijo de `GENERIC_ROUTE_ACCESS`) queda
+> **inaccesible** para todo rol que no sea SUPER_ADMIN/ADMIN. Antes se permitía por defecto, así que
+> una página nueva nacía abierta hasta que alguien la gateara; ahora el olvido quita el acceso en vez
+> de darlo. Exentos: `/`, las rutas públicas y las de `alwaysAllowedRoutes`.
 Update `src/lib/middleware-permissions.ts`:
 ```typescript
 export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
@@ -8116,7 +8141,13 @@ export enum NewModulePermission {
 }
 ```
 
-#### Step 3: Map Route (if needed)
+#### Step 3: Map Route (OBLIGATORIO para páginas nuevas)
+
+> **⚠ El middleware DENIEGA por defecto.** Una página bajo `/dashboard` o `/admin` que no esté
+> declarada en `ROUTE_PERMISSIONS` (ni cubierta por un prefijo de `GENERIC_ROUTE_ACCESS`) queda
+> **inaccesible** para todo rol que no sea SUPER_ADMIN/ADMIN. Antes se permitía por defecto, así que
+> una página nueva nacía abierta hasta que alguien la gateara; ahora el olvido quita el acceso en vez
+> de darlo. Exentos: `/`, las rutas públicas y las de `alwaysAllowedRoutes`.
 Update `src/lib/middleware-permissions.ts`:
 ```typescript
 export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
