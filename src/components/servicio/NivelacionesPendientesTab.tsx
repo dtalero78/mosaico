@@ -31,6 +31,17 @@ interface Row {
 interface Guia { id: string; nombre: string }
 
 /**
+ * Los cierres que Servicio puede aplicar desde aquí. "Sin cierre" NO está en la
+ * lista porque no es un valor guardado: es la ausencia de cierre, que es lo que
+ * significa estar en esta pestaña. Por eso el desplegable arranca siempre ahí y
+ * elegir cualquier otra opción cierra la nivelación y la manda al histórico.
+ */
+const CIERRES: Array<{ value: string; label: string; cls: string }> = [
+  { value: 'NO_ASISTIO_JUSTIFICO',   label: 'No asistió — justificó',   cls: 'bg-blue-100 text-blue-700 border-blue-300' },
+  { value: 'NO_ASISTIO_NO_CONTESTO', label: 'No asistió — no contestó', cls: 'bg-red-100 text-red-700 border-red-300' },
+]
+
+/**
  * Nivelaciones ya agrupadas: tienen evento y esperan que se dicte y que el guía
  * marque la asistencia. Al cerrarse pasan al Histórico.
  */
@@ -44,6 +55,10 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
   const [lecciones, setLecciones] = useState<string[]>([])
   const [guias, setGuias] = useState<Guia[]>([])
   const [loading, setLoading] = useState(true)
+  /** Fila que se está cerrando: dispara el modal de confirmación. */
+  const [cerrando, setCerrando] = useState<{ row: Row; resultado: string } | null>(null)
+  const [comentario, setComentario] = useState('')
+  const [guardando, setGuardando] = useState(false)
   const { hasPermission } = usePermissions()
   const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION)
 
@@ -86,9 +101,32 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
       { header: 'Fecha asignada', accessor: r => fmt(r.eventoDia) },
       { header: 'Confirmación', accessor: r => (r.confirmadoEn ? (r.confirmadoPor === 'SERVICIO' ? 'Confirmada (Servicio)' : 'Confirmada') : 'Sin confirmar') },
-      { header: 'Estado', accessor: r => (r.yaPaso ? 'Dictada — falta marcar asistencia' : 'Programada') },
+      { header: 'Estado', accessor: r => (r.yaPaso ? 'Sin cierre — ya se dictó' : 'Sin cierre — programada') },
       { header: 'Fecha solicitud', accessor: r => fmtDia(r.fechaSolicitud) },
     ], 'nivelaciones-pendientes')
+  }
+
+  const confirmarCierre = async () => {
+    if (!cerrando || !comentario.trim()) return
+    setGuardando(true)
+    try {
+      const r = await fetch('/api/postgres/reports/servicio/nivelaciones/cerrar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          academicaId: cerrando.row.academicaId,
+          eventoId: cerrando.row.eventoId,
+          resultado: cerrando.resultado,
+          comentario: comentario.trim(),
+        }),
+      }).then(x => x.json())
+      if (r.error) throw new Error(r.error)
+      toast.success(`Nivelación de ${r.nombre} cerrada · pasó al Histórico`)
+      setCerrando(null); setComentario('')
+      fetchData({ curso, leccion, guia })
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo cerrar la nivelación')
+    } finally { setGuardando(false) }
   }
 
   // Las que ya pasaron y siguen sin cerrarse son las que necesitan gestión.
@@ -189,22 +227,72 @@ export default function NivelacionesPendientesTab({ onCount }: { onCount?: (n: n
                       />
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {r.yaPaso ? (
-                        <button type="button"
-                          onClick={() => r.eventoId && window.open(`/sesion/${r.eventoId}`, '_blank', 'noopener,noreferrer')}
-                          title="Ir a la sesión para marcar la asistencia"
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200">
-                          Falta marcar asistencia ↗
-                        </button>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Programada</span>
-                      )}
+                      {/* "Sin cierre" se pinta en dos tonos: ámbar si el evento ya
+                          pasó (urge gestionarla) y gris si aún no toca. Sin esa
+                          distinción se perdería la señal que hoy da la columna y
+                          que alimenta el contador "N sin marcar asistencia". */}
+                      <div className="flex items-center gap-1">
+                        <select
+                          value=""
+                          disabled={!canGestion}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            if (!v) return
+                            setComentario('')
+                            setCerrando({ row: r, resultado: v })
+                            e.target.value = ''
+                          }}
+                          title={canGestion ? 'Cerrar la nivelación' : 'Sin permiso para cerrar'}
+                          className={`px-2 py-1 rounded-lg border text-xs font-semibold disabled:opacity-60 disabled:cursor-not-allowed ${
+                            r.yaPaso ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-gray-100 text-gray-600 border-gray-300'
+                          }`}
+                        >
+                          <option value="">Sin cierre</option>
+                          {CIERRES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                        </select>
+                        {r.yaPaso && r.eventoId && (
+                          <button type="button"
+                            onClick={() => window.open(`/sesion/${r.eventoId}`, '_blank', 'noopener,noreferrer')}
+                            title="Ir a la sesión para marcar la asistencia"
+                            className="text-xs text-amber-700 hover:text-amber-900">↗</button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{fmtDia(r.fechaSolicitud)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {cerrando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Cerrar nivelación</h3>
+            <p className="text-sm text-gray-700 mb-4">
+              La nivelación de <strong>{cerrando.row.nombre}</strong> se cerrará como{' '}
+              <strong>{CIERRES.find(c => c.value === cerrando.resultado)?.label}</strong>.
+              Pasará al <strong>Histórico</strong>, su agendamiento quedará como no asistió y el
+              usuario tendrá que solicitarla de nuevo.
+            </p>
+            <label htmlFor="niv-com" className="block text-xs font-medium text-gray-600 mb-1">
+              Comentario (obligatorio)
+            </label>
+            <textarea id="niv-com" value={comentario} onChange={e => setComentario(e.target.value)}
+              rows={3} maxLength={500} placeholder="Qué pasó con esta nivelación"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4" />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => { setCerrando(null); setComentario('') }}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmarCierre} disabled={!comentario.trim() || guardando}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
+                {guardando ? 'Cerrando…' : 'Cerrar y pasar al histórico'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -150,9 +150,14 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     const fechaEvento = evt?.dia ? new Date(evt.dia).toISOString() : null;
     // Conteo de la nivelación (número de esta nivelación: 1ª, 2ª…). Se lee ANTES
     // de modificar y se guarda en el registro del historial.
-    const curNiv = await queryOne<{ NivelacionCount: number | null; detalleNivelacion: any }>(
-      `SELECT "NivelacionCount", "detalleNivelacion" FROM "ACADEMICA" WHERE "_id" = $1`, [idEstudiante]
+    const curNiv = await queryOne<{ NivelacionCount: number | null; detalleNivelacion: any; nivelacion: boolean | null; aprobadoNivelacion: boolean | null }>(
+      `SELECT "NivelacionCount", "detalleNivelacion", "nivelacion", "aprobadoNivelacion" FROM "ACADEMICA" WHERE "_id" = $1`, [idEstudiante]
     );
+    // Si la nivelación YA está cerrada no se vuelve a cerrar: desde que Servicio
+    // también puede cerrarla desde Pendientes, el guía podría entrar después a la
+    // sesión y guardar, y sin esta guarda se escribiría una SEGUNDA entrada en el
+    // historial y el conteo bajaría dos veces.
+    const nivelacionViva = curNiv?.nivelacion === true || curNiv?.aprobadoNivelacion === true;
     const conteo = Number(curNiv?.NivelacionCount) || 0;
     // Lo que se pidió: cuándo y sobre qué. Se guarda en la entrada del historial
     // porque `detalleNivelacion` se pisa con la siguiente nivelación del alumno.
@@ -166,7 +171,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     const confirmadoPor = det?.confirmadoPor || null;
     const modulo = det?.modulo || null;
     const leccion = det?.leccion || null;
-    if (asistioNiv && participoNiv) {
+    if (!nivelacionViva) {
+      // Ya cerrada (por Servicio o por un guardado anterior): no se toca el historial.
+    } else if (asistioNiv && participoNiv) {
       const entry = { fecha, fechaEvento, fechaSolicitud, modulo, leccion, conteo, confirmadoEn, confirmadoPor, resultado: 'REALIZADA', comentario: (body.nivelacionComentario || '').trim(), marcadoPor: actor };
       await query(
         `UPDATE "ACADEMICA"

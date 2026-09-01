@@ -38,6 +38,11 @@ const ESTADO_META: Record<string, { label: string; cls: string }> = {
   // La canceló el sistema el jueves 22:00 porque nadie confirmó. Se distingue
   // de "No asistió": aquí la clase nunca llegó a programarse.
   CANCELADA_SIN_CONFIRMAR: { label: 'Cancelada (sin confirmar)', cls: 'bg-gray-200 text-gray-700' },
+  // Cierres que aplica Servicio desde Pendientes. Se distinguen del "No asistió"
+  // del guía porque no son el mismo caso para quien hace seguimiento: uno avisó
+  // y el otro nunca respondió.
+  NO_ASISTIO_JUSTIFICO:    { label: 'No asistió — justificó',   cls: 'bg-blue-100 text-blue-700' },
+  NO_ASISTIO_NO_CONTESTO:  { label: 'No asistió — no contestó', cls: 'bg-red-100 text-red-700' },
 }
 
 const fmtDia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es-CL') : '—'
