@@ -32,6 +32,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.CASOS_ATENCION_VER)
 
   const { searchParams } = new URL(request.url)
+  const campaign = (searchParams.get('campaign') || '').trim()
   const curso = (searchParams.get('curso') || '').trim()
   const salon = (searchParams.get('salon') || '').trim()
   const leccion = (searchParams.get('leccion') || '').trim()
@@ -63,6 +64,13 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     where.push(`COALESCE(c."dia", b."fechaEvento") < (date_trunc('week', (NOW() AT TIME ZONE 'America/Santiago')) + INTERVAL '7 days') AT TIME ZONE 'America/Santiago'`)
   }
 
+  // Las opciones de los dropdowns salen del universo SIN los filtros elegidos:
+  // si salieran de lo ya filtrado, al elegir una campaña desaparecerían las
+  // demás y no se podría cambiar sin borrar los filtros.
+  const whereBase = [...where]
+  const paramsBase = [...params]
+
+  if (campaign) { where.push(`p."campaign" = $${i++}`); params.push(campaign) }
   if (curso)   { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (salon)   { where.push(`p."salon" = $${i++}`); params.push(salon) }
   if (leccion) { where.push(`${LECCION} = $${i++}`); params.push(leccion) }
@@ -71,6 +79,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const rows = (await query(
     `SELECT b."_id" AS "bookingId",
             a."_id" AS "academicaId",
+            p."campaign" AS campaign,
             p."tipoCurso" AS curso,
             TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido"), '\\s+', ' ', 'g')) AS nombre,
             p."numeroId" AS "numeroId",
@@ -103,14 +112,29 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     params
   )).rows
 
-  // Opciones de los dropdowns, sobre el mismo universo de inasistencias.
+  // Opciones: mismo universo y mismas fechas, pero sin los filtros elegidos.
+  const opts = (await query(
+    `SELECT DISTINCT p."campaign" AS campaign, p."tipoCurso" AS curso, p."salon" AS salon,
+            ${LECCION} AS leccion, g."nombreCompleto" AS guia
+       FROM "ACADEMICA_BOOKINGS" b
+       JOIN "ACADEMICA" a ON a."_id" = COALESCE(b."idEstudiante", b."studentId")
+       JOIN "PEOPLE" p ON p."_id" = a."peopleId"
+       LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+       LEFT JOIN "CURSOS_CAMPAIGN" cc
+         ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
+       LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
+      WHERE ${whereBase.join(' AND ')}`,
+    paramsBase
+  )).rows
+
   const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean)))
-  const cursos = uniq(rows.map((r: any) => r.curso)).sort()
-  const salones = uniq(rows.map((r: any) => r.salon)).sort()
-  const lecciones = uniq(rows.map((r: any) => r.leccion)).sort()
+  const campanias = uniq(opts.map((o: any) => o.campaign)).sort()
+  const cursos = uniq(opts.map((o: any) => o.curso)).sort()
+  const salones = uniq(opts.map((o: any) => o.salon)).sort()
+  const lecciones = uniq(opts.map((o: any) => o.leccion)).sort()
   const guias = Array.from(new Map(
-    rows.filter((r: any) => r.guia).map((r: any) => [r.guia, { id: r.guia, nombre: r.guia }])
+    opts.filter((o: any) => o.guia).map((o: any) => [o.guia, { id: o.guia, nombre: o.guia }])
   ).values())
 
-  return successResponse({ rows, total: rows.length, cursos, salones, lecciones, guias })
+  return successResponse({ rows, total: rows.length, campanias, cursos, salones, lecciones, guias })
 })

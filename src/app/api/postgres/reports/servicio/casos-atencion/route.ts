@@ -21,6 +21,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.CASOS_ATENCION_VER)
 
   const { searchParams } = new URL(request.url)
+  const campaign = (searchParams.get('campaign') || '').trim()
   const curso = (searchParams.get('curso') || '').trim()
   const salon = (searchParams.get('salon') || '').trim()
   const leccion = (searchParams.get('leccion') || '').trim()
@@ -41,6 +42,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   ]
   const params: any[] = []
   let i = 1
+  if (campaign) { where.push(`p."campaign" = $${i++}`); params.push(campaign) }
   if (curso)   { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (salon)   { where.push(`p."salon" = $${i++}`); params.push(salon) }
   if (leccion) { where.push(`COALESCE(c."step", b."step") = $${i++}`); params.push(leccion) }
@@ -97,7 +99,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   // Opciones de dropdowns (sobre los casos abiertos)
   const opts = (await query(
-    `SELECT DISTINCT p."tipoCurso" AS curso, p."salon" AS salon,
+    `SELECT DISTINCT p."campaign" AS campaign, p."tipoCurso" AS curso, p."salon" AS salon,
             COALESCE(c."step", b."step") AS leccion,
             cc."guia" AS guia_id, g."nombreCompleto" AS guia_nombre
        FROM "ACADEMICA_BOOKINGS" b
@@ -110,10 +112,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
         AND ${cupoOcupadoSql('p')}`
   )).rows
   const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean)))
+  const campanias = uniq(opts.map((o: any) => o.campaign)).sort()
   const cursos = uniq(opts.map((o: any) => o.curso)).sort()
   const salones = uniq(opts.map((o: any) => o.salon)).sort()
   const lecciones = uniq(opts.map((o: any) => o.leccion)).sort()
   const guias = Array.from(new Map(opts.filter((o: any) => o.guia_id).map((o: any) => [o.guia_id, { id: o.guia_id, nombre: o.guia_nombre }])).values())
 
-  return successResponse({ rows, total: rows.length, cursos, salones, lecciones, guias })
+  return successResponse({ rows, total: rows.length, campanias, cursos, salones, lecciones, guias })
 })

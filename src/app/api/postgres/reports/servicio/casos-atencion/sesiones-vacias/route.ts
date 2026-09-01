@@ -32,6 +32,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.CASOS_ATENCION_VER)
 
   const { searchParams } = new URL(request.url)
+  const campaign = (searchParams.get('campaign') || '').trim()
   const curso = (searchParams.get('curso') || '').trim()
   const salon = (searchParams.get('salon') || '').trim()
   const leccion = (searchParams.get('leccion') || '').trim()
@@ -55,6 +56,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     where.push(`c."dia" < (date_trunc('week', (NOW() AT TIME ZONE 'America/Santiago')) + INTERVAL '7 days') AT TIME ZONE 'America/Santiago'`)
   }
 
+  // Las opciones salen del universo SIN los filtros elegidos (ver Asistencia).
+  const whereBase = [...where]
+  const paramsBase = [...params]
+
+  if (campaign) { where.push(`COALESCE(cc."campaign", c."campaign") = $${i++}`); params.push(campaign) }
   if (curso)   { where.push(`UPPER(COALESCE(cc."tipoCurso", c."curso")) = UPPER($${i++})`); params.push(curso) }
   if (salon)   { where.push(`COALESCE(cc."salon", c."salon") = $${i++}`); params.push(salon) }
   if (leccion) { where.push(`${LECCION} = $${i++}`); params.push(leccion) }
@@ -62,6 +68,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   const rows = (await query(
     `SELECT c."_id" AS "eventoId",
+            COALESCE(cc."campaign", c."campaign") AS campaign,
             COALESCE(cc."tipoCurso", c."curso") AS curso,
             COALESCE(cc."salon", c."salon") AS salon,
             ${LECCION} AS leccion,
@@ -110,12 +117,25 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     grupos[idx.get(k)!].sesiones.push(r)
   }
 
+  const opts = (await query(
+    `SELECT DISTINCT COALESCE(cc."campaign", c."campaign") AS campaign,
+            COALESCE(cc."tipoCurso", c."curso") AS curso,
+            COALESCE(cc."salon", c."salon") AS salon,
+            ${LECCION} AS leccion, g."nombreCompleto" AS guia
+       FROM "CALENDARIO" c
+       LEFT JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
+       LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
+      WHERE ${whereBase.join(' AND ')}`,
+    paramsBase
+  )).rows
+
   const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean)))
   return successResponse({
     grupos, total: rows.length,
-    cursos: uniq(rows.map((r: any) => r.curso)).sort(),
-    salones: uniq(rows.map((r: any) => r.salon)).sort(),
-    lecciones: uniq(rows.map((r: any) => r.leccion)).sort(),
-    guias: Array.from(new Map(rows.filter((r: any) => r.guia).map((r: any) => [r.guia, { id: r.guia, nombre: r.guia }])).values()),
+    campanias: uniq(opts.map((o: any) => o.campaign)).sort(),
+    cursos: uniq(opts.map((o: any) => o.curso)).sort(),
+    salones: uniq(opts.map((o: any) => o.salon)).sort(),
+    lecciones: uniq(opts.map((o: any) => o.leccion)).sort(),
+    guias: Array.from(new Map(opts.filter((o: any) => o.guia).map((o: any) => [o.guia, { id: o.guia, nombre: o.guia }])).values()),
   })
 })

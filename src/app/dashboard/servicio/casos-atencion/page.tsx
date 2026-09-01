@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import toast from 'react-hot-toast'
 import { CheckCircleIcon, ChatBubbleLeftRightIcon, PlusCircleIcon } from '@heroicons/react/24/outline'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -131,6 +131,7 @@ function CasosAtencionContent() {
   // que sacar el guía ni el alumno, así que el modal los pide en cascada.
   const [adicionar, setAdicionar] = useState(false)
 
+  const [campaign, setCampaign] = useState('')
   const [curso, setCurso] = useState('')
   const [salon, setSalon] = useState('')
   const [leccion, setLeccion] = useState('')
@@ -141,6 +142,7 @@ function CasosAtencionContent() {
   const [rows, setRows] = useState<Row[]>([])
   const [grupos, setGrupos] = useState<Grupo[]>([])
   const [total, setTotal] = useState(0)
+  const [campanias, setCampanias] = useState<string[]>([])
   const [cursos, setCursos] = useState<string[]>([])
   const [salones, setSalones] = useState<string[]>([])
   const [lecciones, setLecciones] = useState<string[]>([])
@@ -161,7 +163,13 @@ function CasosAtencionContent() {
   // gestiones, el total solo no dice cuánto hay de cada una.
   const [porEstado, setPorEstado] = useState<Array<{ estado: string; n: number }>>([])
 
+  // Cada carga lleva número. Al cambiar de pestaña deprisa las respuestas vuelven
+  // desordenadas y la de la pestaña anterior pisaba los datos de la nueva: se veía
+  // "Asistencia" con el total de "Sesiones vacías". Sólo pinta la última pedida.
+  const reqRef = useRef(0)
+
   const fetchData = useCallback(async (t: Tab, f?: Record<string, string>) => {
+    const req = ++reqRef.current
     setLoading(true)
     try {
       const conf = TABS.find(x => x.id === t)!
@@ -169,31 +177,34 @@ function CasosAtencionContent() {
       if (conf.area) qs.set('area', conf.area)
       Object.entries(f || {}).forEach(([k, v]) => { if (v) qs.set(k, v) })
       const r = await fetch(`${conf.endpoint}?${qs}`, { cache: 'no-store' }).then(x => x.json())
+      if (req !== reqRef.current) return   // llegó tarde: ya hay otra pestaña
       if (r.error) throw new Error(r.error)
       setRows(r.rows || [])
       setGrupos(r.grupos || [])
       setTotal(r.total ?? (r.rows?.length || 0))
+      setCampanias(r.campanias || [])
       setCursos(r.cursos || []); setSalones(r.salones || []); setLecciones(r.lecciones || []); setGuias(r.guias || [])
       setPorEstado(r.porEstado || [])
     } catch (e: any) {
+      if (req !== reqRef.current) return
       toast.error(e?.message || 'Error al cargar')
       setRows([]); setGrupos([]); setTotal(0); setPorEstado([])
     } finally {
-      setLoading(false)
+      if (req === reqRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => { fetchData(tab) }, [tab, fetchData])
 
-  const filtros = { curso, salon, leccion, guia, startDate, endDate }
+  const filtros = { campaign, curso, salon, leccion, guia, startDate, endDate }
   const aplicar = () => fetchData(tab, filtros)
 
   const borrar = () => {
-    setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
+    setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
     fetchData(tab)
   }
   const cambiarTab = (t: Tab) => {
-    setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
+    setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
     setTab(t)
   }
 
@@ -379,7 +390,13 @@ function CasosAtencionContent() {
 
       {/* Filtros */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Campaña</label>
+            <select value={campaign} onChange={e => setCampaign(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Todas</option>{campanias.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
             <select value={curso} onChange={e => setCurso(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">

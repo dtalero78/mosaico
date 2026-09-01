@@ -45,6 +45,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const estados = AREAS[area]
   if (!estados) throw new ValidationError('Área no válida')
 
+  const campaign = (searchParams.get('campaign') || '').trim()
   const curso = (searchParams.get('curso') || '').trim()
   const salon = (searchParams.get('salon') || '').trim()
   const leccion = (searchParams.get('leccion') || '').trim()
@@ -68,6 +69,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     where.push(`${FECHA} >= NOW() - INTERVAL '1 month'`)
   }
 
+  if (campaign) { where.push(`p."campaign" = $${i++}`); params.push(campaign) }
   if (curso)   { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (salon)   { where.push(`p."salon" = $${i++}`); params.push(salon) }
   if (leccion) { where.push(`COALESCE(c."sesionLeccion", c."step") = $${i++}`); params.push(leccion) }
@@ -121,7 +123,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   // Opciones de los dropdowns, acotadas al área para no ofrecer un filtro que
   // devolvería vacío.
   const opts = (await query(
-    `SELECT DISTINCT p."tipoCurso" AS curso, p."salon" AS salon,
+    `SELECT DISTINCT p."campaign" AS campaign, p."tipoCurso" AS curso, p."salon" AS salon,
             COALESCE(c."sesionLeccion", c."step") AS leccion,
             cc."guia" AS guia_id, g."nombreCompleto" AS guia_nombre
        FROM "CASOS_ATENCION" ca
@@ -140,6 +142,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     rows,
     total: rows.length,
     porEstado,
+    campanias: uniq(opts.map((o: any) => o.campaign)).sort(),
     cursos: uniq(opts.map((o: any) => o.curso)).sort(),
     salones: uniq(opts.map((o: any) => o.salon)).sort(),
     lecciones: uniq(opts.map((o: any) => o.leccion)).sort(),
