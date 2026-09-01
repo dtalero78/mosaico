@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { TZ_OPERACION } from '@/lib/cursos-campaign'
+import { ESTADO_ABIERTO, ESTADOS_CIERRE, ESTADO_LABEL, estadoLabel } from '@/lib/casos-atencion-estados'
+import type { EstadoCaso } from '@/lib/casos-atencion-estados'
 
 /**
  * Pestaña "Casos Atención" de la ficha del estudiante.
@@ -14,21 +16,6 @@ import { TZ_OPERACION } from '@/lib/cursos-campaign'
  * Lo único editable es la gestión: los reportes vienen del panel del guía y son
  * inmutables, y el contexto administrativo se deriva de sus fuentes.
  */
-
-const ESTADO_ABIERTO = 'EN_GESTION'
-
-const ESTADO_LABEL: Record<string, string> = {
-  EN_GESTION: 'En gestión — mantiene abierto',
-  RESUELTO: 'Resuelto',
-  PROCESO_DE_CIERRE: 'Proceso de cierre',
-  PROPUESTA_DE_CAMBIO: 'Propuesta de cambio',
-  CIERRA_PROGRAMA: 'Cierra programa',
-  REMITIDO_A_ACADEMICA: 'Remitido a Académica',
-  PROGRAMA_CONGELADO: 'Programa congelado',
-  PRE_JURIDICO: 'Pre-jurídico',
-  SIN_CONTACTO: 'Sin contacto',
-}
-const ESTADOS_CIERRE = Object.keys(ESTADO_LABEL).filter(e => e !== ESTADO_ABIERTO)
 
 const TEMA_LABEL: Record<string, string> = {
   ASISTENCIA: 'Asistencia', CONDUCTA: 'Conducta', DESEMPENO: 'Desempeño',
@@ -232,7 +219,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
         </div>
         <div className="min-w-[260px]">
           <label className="block text-xs text-gray-500 mb-1">Estado</label>
-          <select value={nuevoEstado} onChange={e => setNuevoEstado(e.target.value)} disabled={!abierto || busy}
+          <select value={nuevoEstado} onChange={e => setNuevoEstado(e.target.value as EstadoCaso)} disabled={!abierto || busy}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100">
             <option value={ESTADO_ABIERTO}>{ESTADO_LABEL[ESTADO_ABIERTO]}</option>
             <optgroup label="Cierran el caso">
@@ -460,7 +447,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
                   </button>
                   <span className="text-gray-500">{fmt(h.abiertoEn, false)} – {fmt(h.cerradoEn, false)}</span>
                   <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-700">
-                    {ESTADO_LABEL[h.estado] || h.estado}
+                    {estadoLabel(h.estado)}
                   </span>
                   <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
                     {h.reportes} reporte(s) · {(TEMA_LABEL[h.tema] || h.tema).toLowerCase()}

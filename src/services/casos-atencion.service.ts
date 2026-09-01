@@ -21,36 +21,27 @@ import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
  *  R8     los intentos de contacto sólo se agregan, no se editan
  */
 
-export const ESTADO_ABIERTO = 'EN_GESTION' as const;
 
-export type EstadoCaso =
-  | 'EN_GESTION' | 'RESUELTO' | 'PROCESO_DE_CIERRE' | 'PROPUESTA_DE_CAMBIO'
-  | 'CIERRA_PROGRAMA' | 'REMITIDO_A_ACADEMICA' | 'PROGRAMA_CONGELADO'
-  | 'PRE_JURIDICO' | 'SIN_CONTACTO';
+// Los estados, sus etiquetas y sus áreas viven en @/lib/casos-atencion-estados
+// (fuera de 'server-only'), porque los mismos textos los usan el dropdown de la
+// ficha del alumno y los informes. Aquí sólo se re-exportan.
+export type { EstadoCaso } from '@/lib/casos-atencion-estados';
+export {
+  ESTADO_ABIERTO, ESTADOS_CIERRE, ESTADOS, ESTADO_LABEL, estadoLabel,
+  ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS, ESTADO_COLOR, estadoColor,
+} from '@/lib/casos-atencion-estados';
+import {
+  ESTADO_ABIERTO, ESTADOS_CIERRE, ESTADOS, ESTADO_LABEL,
+  ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS,
+} from '@/lib/casos-atencion-estados';
+import type { EstadoCaso } from '@/lib/casos-atencion-estados';
 
 export type TemaCaso = 'ASISTENCIA' | 'CONDUCTA' | 'DESEMPENO' | 'SALUD' | 'PAGO' | 'OTRO';
 export type CanalContacto = 'LLAMADA' | 'WHATSAPP' | 'EMAIL';
 export type ResultadoContacto = 'CONTESTO' | 'NO_CONTESTO' | 'RESPONDIO' | 'SIN_RESPUESTA' | 'PENDIENTE';
-
-export const ESTADOS: EstadoCaso[] = ['EN_GESTION', 'RESUELTO', 'PROCESO_DE_CIERRE',
-  'PROPUESTA_DE_CAMBIO', 'CIERRA_PROGRAMA', 'REMITIDO_A_ACADEMICA', 'PROGRAMA_CONGELADO',
-  'PRE_JURIDICO', 'SIN_CONTACTO'];
 export const TEMAS: TemaCaso[] = ['ASISTENCIA', 'CONDUCTA', 'DESEMPENO', 'SALUD', 'PAGO', 'OTRO'];
 export const CANALES: CanalContacto[] = ['LLAMADA', 'WHATSAPP', 'EMAIL'];
 export const RESULTADOS: ResultadoContacto[] = ['CONTESTO', 'NO_CONTESTO', 'RESPONDIO', 'SIN_RESPUESTA', 'PENDIENTE'];
-
-/** Etiquetas para la UI. Los enums viajan crudos; el texto vive aquí. */
-export const ESTADO_LABEL: Record<EstadoCaso, string> = {
-  EN_GESTION: 'En gestión — mantiene abierto',
-  RESUELTO: 'Resuelto',
-  PROCESO_DE_CIERRE: 'Proceso de cierre',
-  PROPUESTA_DE_CAMBIO: 'Propuesta de cambio',
-  CIERRA_PROGRAMA: 'Cierra programa',
-  REMITIDO_A_ACADEMICA: 'Remitido a Académica',
-  PROGRAMA_CONGELADO: 'Programa congelado',
-  PRE_JURIDICO: 'Pre-jurídico',
-  SIN_CONTACTO: 'Sin contacto',
-};
 
 export const TEMA_LABEL: Record<TemaCaso, string> = {
   ASISTENCIA: 'Asistencia', CONDUCTA: 'Conducta', DESEMPENO: 'Desempeño',

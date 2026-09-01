@@ -9,11 +9,25 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
+import { estadoLabel, estadoColor, ESTADO_ABIERTO } from '@/lib/casos-atencion-estados'
 
-/** Las tres vistas de la pantalla. Los filtros son los mismos para todas. */
-type Tab = 'casos' | 'asistencia' | 'vacias'
+/**
+ * Las seis vistas de la pantalla. Los filtros son los mismos para todas.
+ *
+ * Las tres primeras salen de la marca del agendamiento o del calendario; las tres
+ * últimas salen del ESTADO del caso (endpoint `gestiones`), y por eso llevan
+ * `area`. Se agrupan así porque responden a preguntas distintas: qué hay abierto,
+ * quién faltó, qué clase quedó vacía, y qué quedó pendiente para cada área.
+ */
+type Tab = 'casos' | 'asistencia' | 'vacias' | 'historico' | 'academicos' | 'financieros'
 
-const TABS: Array<{ id: Tab; label: string; endpoint: string; vacio: string; descripcion: string }> = [
+interface TabCfg {
+  id: Tab; label: string; endpoint: string; vacio: string; descripcion: string
+  /** Sólo en las pestañas que leen el estado del caso. */
+  area?: string
+}
+
+const TABS: TabCfg[] = [
   {
     id: 'casos', label: 'Casos de Atención',
     endpoint: '/api/postgres/reports/servicio/casos-atencion',
@@ -32,7 +46,28 @@ const TABS: Array<{ id: Tab; label: string; endpoint: string; vacio: string; des
     vacio: 'No hubo clases vacías',
     descripcion: 'Sesiones de la semana a las que no asistió ningún estudiante, agrupadas por curso y salón.',
   },
+  {
+    id: 'historico', label: 'Histórico',
+    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'historico',
+    vacio: 'Sin casos cerrados en el período',
+    descripcion: 'Casos cerrados del último mes. Usa las fechas para consultar otro período.',
+  },
+  {
+    id: 'academicos', label: 'Académicos',
+    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'academicos',
+    vacio: 'Sin gestiones académicas pendientes',
+    descripcion: 'Casos que quedaron en Cambio Curso, Cambio de Nivel o Solicitud Congelamiento.',
+  },
+  {
+    id: 'financieros', label: 'Financieros',
+    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'financieros',
+    vacio: 'Sin gestiones financieras pendientes',
+    descripcion: 'Casos que quedaron en Cierre financiero o Envío Pre-jurídico.',
+  },
 ]
+
+/** Las tres que leen el estado del caso comparten columnas y comportamiento. */
+const ES_GESTION = (t: Tab) => t === 'historico' || t === 'academicos' || t === 'financieros'
 
 interface Row {
   bookingId: string
@@ -50,6 +85,14 @@ interface Row {
   caso: string | null
   conteo: number
   fecha: string | null
+  // Estado REAL del caso (viene de CASOS_ATENCION, no de la marca del booking)
+  estado?: string | null
+  codigoCaso?: string | null
+  // Sólo en las pestañas de gestión
+  casoId?: string
+  acuerdo?: string | null
+  cerradoPor?: string | null
+  fechaEstado?: string | null
   // Sólo en la pestaña Asistencia
   contactadoApoderado?: boolean
   recordatorioEnviado?: boolean
@@ -114,11 +157,16 @@ function CasosAtencionContent() {
   const [enviando, setEnviando] = useState(false)
   const [marcando, setMarcando] = useState<string | null>(null)
 
+  // Desglose por estado de la pestaña activa: en una lista que junta varias
+  // gestiones, el total solo no dice cuánto hay de cada una.
+  const [porEstado, setPorEstado] = useState<Array<{ estado: string; n: number }>>([])
+
   const fetchData = useCallback(async (t: Tab, f?: Record<string, string>) => {
     setLoading(true)
     try {
       const conf = TABS.find(x => x.id === t)!
       const qs = new URLSearchParams()
+      if (conf.area) qs.set('area', conf.area)
       Object.entries(f || {}).forEach(([k, v]) => { if (v) qs.set(k, v) })
       const r = await fetch(`${conf.endpoint}?${qs}`, { cache: 'no-store' }).then(x => x.json())
       if (r.error) throw new Error(r.error)
@@ -126,9 +174,10 @@ function CasosAtencionContent() {
       setGrupos(r.grupos || [])
       setTotal(r.total ?? (r.rows?.length || 0))
       setCursos(r.cursos || []); setSalones(r.salones || []); setLecciones(r.lecciones || []); setGuias(r.guias || [])
+      setPorEstado(r.porEstado || [])
     } catch (e: any) {
       toast.error(e?.message || 'Error al cargar')
-      setRows([]); setGrupos([]); setTotal(0)
+      setRows([]); setGrupos([]); setTotal(0); setPorEstado([])
     } finally {
       setLoading(false)
     }
@@ -163,6 +212,23 @@ function CasosAtencionContent() {
       return
     }
     // El CSV sigue a la tabla: en Casos van las mismas columnas que se ven.
+    if (ES_GESTION(tab)) {
+      exportToExcel(rows, [
+        { header: 'Curso', accessor: (r: Row) => r.curso || '' },
+        { header: 'Nombre', accessor: (r: Row) => r.nombre || '' },
+        { header: 'Contrato', accessor: (r: Row) => r.contrato || '' },
+        { header: 'ID', accessor: (r: Row) => r.numeroId || '' },
+        { header: 'Salón', accessor: (r: Row) => r.salon || '' },
+        { header: 'Guía', accessor: (r: Row) => r.guia || '' },
+        { header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fechaEstado || null) },
+        { header: 'Estado', accessor: (r: Row) => estadoLabel(r.estado) },
+        { header: 'Caso', accessor: (r: Row) => r.codigoCaso || '' },
+        { header: 'Acuerdo', accessor: (r: Row) => r.acuerdo || '' },
+        { header: 'Cerrado por', accessor: (r: Row) => r.cerradoPor || '' },
+      ], `casos-${tab}`)
+      return
+    }
+
     const cols: any[] = tab === 'casos' ? [
       { header: 'Curso', accessor: (r: Row) => r.curso || '' },
       { header: 'Nombre', accessor: (r: Row) => r.nombre || '' },
@@ -183,7 +249,7 @@ function CasosAtencionContent() {
     // tabla (…Guía · Fecha · Estado).
     cols.push({ header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fecha) })
     if (tab === 'casos') {
-      cols.push({ header: 'Estado', accessor: () => 'Pendiente' })
+      cols.push({ header: 'Estado', accessor: (r: Row) => (r.estado && r.estado !== ESTADO_ABIERTO ? estadoLabel(r.estado) : 'Pendiente') })
     } else {
       cols.push(
         { header: 'Contactado apoderado', accessor: (r: Row) => (r.contactadoApoderado ? 'Sí' : 'No') },
@@ -254,7 +320,9 @@ function CasosAtencionContent() {
   }
 
   const hayDatos = tab === 'vacias' ? grupos.length > 0 : rows.length > 0
-  const columnas = tab === 'casos'
+  const columnas = ES_GESTION(tab)
+    ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
+    : tab === 'casos'
     ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
     : tab === 'asistencia'
       ? ['Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Fecha', 'Contactado apoderado', 'Envío recordatorio']
@@ -268,6 +336,19 @@ function CasosAtencionContent() {
           <p className="text-gray-500">
             {cfg.descripcion} Total: <span className="font-semibold text-gray-700">{total}</span>
           </p>
+          {/* Desglose por estado: en una pestaña que junta varias gestiones, el
+              total solo no dice cuánto hay de cada una. */}
+          {ES_GESTION(tab) && porEstado.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {porEstado.map(e => (
+                <span key={e.estado}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${estadoColor(e.estado)}`}>
+                  {estadoLabel(e.estado)}
+                  <span className="font-bold">{e.n}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         {/* Sólo en la pestaña de casos: en Asistencia y Sesiones vacías no hay
             un caso que adicionar, son otra cosa. */}
@@ -332,7 +413,7 @@ function CasosAtencionContent() {
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
         </div>
-        {tab !== 'casos' && !startDate && !endDate && (
+        {(tab === 'asistencia' || tab === 'vacias') && !startDate && !endDate && (
           <p className="text-xs text-gray-400 mt-2">Mostrando la semana en curso (lunes a domingo). Usa las fechas para consultar otro período.</p>
         )}
         <div className="flex flex-wrap items-center gap-2 mt-4">
@@ -416,7 +497,55 @@ function CasosAtencionContent() {
                     ))}
                   </Fragment>
                 ))
-              ) : tab === 'casos' ? rows.map((r) => (
+              ) : ES_GESTION(tab) ? rows.map((r) => (
+                /* Histórico · Académicos · Financieros: mismas columnas que Casos,
+                   sin botón de cerrar — estos ya están cerrados. */
+                <tr key={r.casoId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                    {r.nombre ? (
+                      <button
+                        type="button"
+                        onClick={() => window.open(`/student/${r.academicaId}?tab=casos-atencion`, '_blank', 'noopener,noreferrer')}
+                        className="text-primary-600 hover:text-primary-800 hover:underline"
+                        title="Ver los casos de atención del beneficiario"
+                      >
+                        {r.nombre}
+                      </button>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {r.contrato ? (
+                      r.titularId ? (
+                        <button type="button"
+                          onClick={() => window.open(`/person/${r.titularId}?tab=financiera`, '_blank', 'noopener,noreferrer')}
+                          className="text-primary-600 hover:text-primary-800 hover:underline"
+                          title="Ver la información financiera del titular">
+                          {r.contrato}
+                        </button>
+                      ) : <span className="text-gray-700" title="El contrato no tiene titular registrado">{r.contrato}</span>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.numeroId || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
+                  <td className="px-3 py-2 text-gray-600">
+                    <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
+                  </td>
+                  <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fechaEstado || null)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${estadoColor(r.estado)}`}
+                      title={[r.codigoCaso ? `Caso ${r.codigoCaso}` : '', r.cerradoPor ? `Cerrado por ${r.cerradoPor}` : '']
+                        .filter(Boolean).join(' · ') || undefined}>
+                      {estadoLabel(r.estado)}
+                    </span>
+                    {r.acuerdo && (
+                      <span className="block max-w-[220px] truncate text-xs text-gray-500 mt-1" title={r.acuerdo}>
+                        {r.acuerdo}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              )) : tab === 'casos' ? rows.map((r) => (
                 /* Curso · Nombre · Contrato · ID · Salón · Guía · Fecha · Estado */
                 <tr key={r.bookingId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
@@ -456,10 +585,13 @@ function CasosAtencionContent() {
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {/* El informe sólo lista casos abiertos, así que el estado es
-                        Pendiente y el botón es la vía para cerrarlo. */}
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 mr-2">
-                      Pendiente
+                    {/* Estado REAL del caso. Esta pestaña sólo lista los abiertos
+                        (los cerrados pasan al Histórico), así que en la práctica
+                        dice "Pendiente"; se lee del caso y no se escribe en duro
+                        para que un cambio hecho en la ficha del alumno se vea. */}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold mr-2 ${estadoColor(r.estado || ESTADO_ABIERTO)}`}
+                      title={r.codigoCaso ? `Caso ${r.codigoCaso}` : undefined}>
+                      {r.estado && r.estado !== ESTADO_ABIERTO ? estadoLabel(r.estado) : 'Pendiente'}
                     </span>
                     <button type="button" title="Marcar como resuelto (agrega un comentario al historial)"
                       onClick={() => { setResolver(r); setComentario('') }}
@@ -557,7 +689,7 @@ function CasosAtencionContent() {
                 <p className="whitespace-pre-wrap break-words">{resolver.caso}</p>
               </div>
             )}
-            <label className="block text-sm font-medium text-gray-700 mb-1">Comentario para el usuario <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Comentario de cierre del caso <span className="text-red-500">*</span></label>
             <textarea
               value={comentario}
               onChange={e => setComentario(e.target.value)}

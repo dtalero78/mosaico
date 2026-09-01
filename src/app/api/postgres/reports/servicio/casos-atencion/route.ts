@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { cupoOcupadoSql } from '@/lib/cupo'
 import { ServicioPermission } from '@/types/permissions'
+import { ESTADO_ABIERTO } from '@/lib/casos-atencion-estados'
 
 /**
  * GET /api/postgres/reports/servicio/casos-atencion?curso&salon&leccion&guia&startDate&endDate
@@ -33,6 +34,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     // Sólo los que ocupan cupo (ver lib/cupo): un contrato retractado ya no es
     // alumno del salón, así que su caso no debe seguir en la bandeja.
     cupoOcupadoSql('p'),
+    // El universo sigue siendo el agendamiento marcado por el guía, pero si su
+    // caso ya se cerró desde la ficha del alumno deja de ser bandeja: pasa al
+    // Histórico. Sin caso enlazado (datos viejos) se considera abierto.
+    `(ca."estado" IS NULL OR ca."estado"::text = '${ESTADO_ABIERTO}')`,
   ]
   const params: any[] = []
   let i = 1
@@ -59,6 +64,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             n."description" AS tema,
             g."nombreCompleto" AS guia,
             b."advisorAnotaciones" AS caso,
+            COALESCE(ca."estado"::text, '${ESTADO_ABIERTO}') AS estado,
+            ca."codigo" AS "codigoCaso",
             COALESCE(c."dia", b."fechaEvento") AS fecha,
             COUNT(*) OVER (PARTITION BY a."_id")::int AS conteo
        FROM "ACADEMICA_BOOKINGS" b
@@ -69,12 +76,21 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
          ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
        LEFT JOIN "NIVELES" n ON n."curso" = p."tipoCurso" AND n."step" = COALESCE(c."step", b."step")
+       -- Estado REAL del caso. El informe lee el agendamiento (marca plana del
+       -- guía) y el estado vive en CASOS_ATENCION: sin este JOIN la columna
+       -- decía siempre "Pendiente" aunque el caso ya estuviera cerrado.
+       LEFT JOIN LATERAL (
+         SELECT x."estado", x."codigo" FROM "CASOS_ATENCION" x
+          WHERE x."academicaId" = a."_id"
+            AND x."eventoOrigenId" = COALESCE(b."eventoId", b."idEvento")
+          ORDER BY x."_createdDate" DESC LIMIT 1
+       ) ca ON true
        LEFT JOIN LATERAL (
          SELECT t."_id" FROM "PEOPLE" t
           WHERE t."contrato" = p."contrato" AND t."tipoUsuario" = 'TITULAR' LIMIT 1
        ) tit ON true
       WHERE ${where.join(' AND ')}
-      ORDER BY fecha DESC NULLS LAST, nombre ASC
+      ORDER BY curso ASC NULLS LAST, fecha DESC NULLS LAST, nombre ASC
       LIMIT ${MAX_ROWS}`,
     params
   )).rows

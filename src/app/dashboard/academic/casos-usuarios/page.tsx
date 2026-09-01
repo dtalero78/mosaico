@@ -6,6 +6,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { ESTADO_LABEL, estadoLabel } from '@/lib/casos-atencion-estados'
 
 /**
  * Académico › Casos Usuarios — listado de los Casos de Atención.
@@ -15,12 +16,6 @@ import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
  * servidor, no esta pantalla.
  */
 
-const ESTADO_LABEL: Record<string, string> = {
-  EN_GESTION: 'En gestión', RESUELTO: 'Resuelto', PROCESO_DE_CIERRE: 'Proceso de cierre',
-  PROPUESTA_DE_CAMBIO: 'Propuesta de cambio', CIERRA_PROGRAMA: 'Cierra programa',
-  REMITIDO_A_ACADEMICA: 'Remitido a Académica', PROGRAMA_CONGELADO: 'Programa congelado',
-  PRE_JURIDICO: 'Pre-jurídico', SIN_CONTACTO: 'Sin contacto',
-}
 const TEMA_LABEL: Record<string, string> = {
   ASISTENCIA: 'Asistencia', CONDUCTA: 'Conducta', DESEMPENO: 'Desempeño',
   SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro',
@@ -142,7 +137,7 @@ export default function CasosUsuariosPage() {
                 { header: 'Salón', accessor: (r: any) => r.salon || '' },
                 { header: 'Guía', accessor: (r: any) => r.guia || '' },
                 { header: 'Tema', accessor: (r: any) => TEMA_LABEL[r.tema] || r.tema },
-                { header: 'Estado', accessor: (r: any) => ESTADO_LABEL[r.estado] || r.estado },
+                { header: 'Estado', accessor: (r: any) => estadoLabel(r.estado) },
                 { header: 'Reportes', accessor: (r: any) => r.reportes },
                 { header: 'Reincidencia', accessor: (r: any) => r.reincidenciaNivel || '' },
                 { header: 'Abierto', accessor: (r: any) => fmt(r.abiertoEn) },
@@ -210,7 +205,7 @@ export default function CasosUsuariosPage() {
                       <td className="px-3 py-2">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.estado === 'EN_GESTION'
                           ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                          {ESTADO_LABEL[r.estado] || r.estado}
+                          {estadoLabel(r.estado)}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmt(r.abiertoEn)}</td>
