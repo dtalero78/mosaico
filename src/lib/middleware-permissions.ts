@@ -115,6 +115,12 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/actualizar-material': [
     'ACADEMICO.MATERIAL.ACTUALIZAR' as Permission,
   ],
+  '/dashboard/academic/actualizar-material/usuarios': [
+    'ACADEMICO.MATERIAL.ACTUALIZAR' as Permission,
+  ],
+  '/dashboard/academic/actualizar-material/advisor': [
+    'ACADEMICO.MATERIAL.ACTUALIZAR' as Permission,
+  ],
   '/dashboard/academic/actualizar-material/interactivo': [
     'ACADEMICO.MATERIAL.ACTUALIZAR' as Permission,
   ],
@@ -188,6 +194,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   // (no aparece en sidebar para otros roles; el endpoint valida la sesión).
 
   // Panel Advisor
+  '/panel-advisor/actualizar-datos': [
+    'ACADEMICO.ADVISOR.VER_ENLACE' as Permission,
+  ],
   '/panel-advisor': [
     'ACADEMICO.ADVISOR.VER_ENLACE' as Permission,
   ],
@@ -304,6 +313,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/admin/roles/create': [
     'MANTENIMIENTO.USUARIOS.CREAR_ROL' as Permission,
   ],
+  '/admin/roles/create/consultar': [
+    'MANTENIMIENTO.USUARIOS.CREAR_ROL' as Permission,
+  ],
   '/admin/roles/create/estudiante': [
     'MANTENIMIENTO.USUARIOS.CREAR_ROL' as Permission,
   ],
@@ -321,6 +333,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   '/admin/banner': [
     'MANTENIMIENTO.AVISOS.BANNER' as Permission,
+  ],
+  '/admin/actualizar-videos/instructivos': [
+    'MANTENIMIENTO.MATERIAL.ACTUALIZAR_VIDEOS' as Permission,
   ],
   '/admin/actualizar-videos': [
     'MANTENIMIENTO.MATERIAL.ACTUALIZAR_VIDEOS' as Permission,
@@ -458,9 +473,19 @@ export function hasAccessToRoute(
     }
   }
 
-  // 3. Rutas sin restricciones de permisos específicos
-  console.log(`  ℹ️ Ruta ${pathname} no tiene permisos específicos definidos - PERMITIDO por defecto`);
-  return true;
+  // 3. Lo que no está declarado se DENIEGA.
+  //
+  // Antes se permitía por defecto, y eso convertía cada página nueva en un
+  // acceso abierto hasta que alguien se acordara de declararla: una omisión
+  // silenciosa daba acceso en vez de quitarlo. Denegar por defecto invierte el
+  // costo del olvido — una ruta sin declarar deja de verse, que es visible de
+  // inmediato y se corrige agregándola aquí.
+  //
+  // Nota: '/' nunca llega hasta acá (el middleware lo exceptúa), y las rutas
+  // públicas y las de `alwaysAllowedRoutes` se resuelven antes. SUPER_ADMIN y
+  // ADMIN tampoco pasan por aquí.
+  console.log(`  🚫 Ruta ${pathname} no está declarada - DENEGADO por defecto`);
+  return false;
 }
 
 /**
