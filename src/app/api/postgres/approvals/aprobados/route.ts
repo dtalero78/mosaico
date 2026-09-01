@@ -7,9 +7,16 @@ import { query } from '@/lib/postgres';
 /**
  * GET /api/postgres/approvals/aprobados
  *
- * Titulares con contrato APROBADO, INACTIVO o FINALIZADO (consulta del ítem
- * "Aprobados" del submenú Aprobación). Incluye la campaña (de un beneficiario del
- * contrato). Gateado por APROBACION.APROBADOS.VER.
+ * Titulares con contrato APROBADO o FINALIZADO (consulta del ítem "Aprobados"
+ * del submenú Aprobación). Incluye la campaña (de un beneficiario del contrato).
+ * Gateado por APROBACION.APROBADOS.VER.
+ *
+ * **No se mira `estadoInactivo`**: esa condición metía aquí contratos que NO
+ * están aprobados. Los estados "Contrato nulo", "Devuelto" y "Rechazado"
+ * inactivan automáticamente al titular, así que 6 contratos Devueltos y
+ * Retractados salían en una lista llamada "Aprobados" — y además se duplicaban
+ * con el Centro, que lista todo lo no aprobado. Un aprobado que después se
+ * inactiva no se pierde: sigue entrando por su `aprobacion`.
  */
 export const GET = handlerWithAuth(async (_req, _ctx, session) => {
   await requirePermission(session, AprobacionPermission.APROBADOS_VER);
@@ -32,7 +39,6 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
        AND (
          p."aprobacion" IN ('Aprobado','Aprobada','FINALIZADA')
          OR p."estado" = 'FINALIZADA'
-         OR p."estadoInactivo" = true
        )
      ORDER BY p."_createdDate" DESC`
   );

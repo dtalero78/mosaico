@@ -3,7 +3,12 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
 
 export const GET = handlerWithAuth(async () => {
-  // Traer de PEOPLE todos los titulares cuyo campo aprobacion NO sea 'Aprobado'
+  // Titulares cuyo contrato NO está aprobado.
+  //
+  // La lista de estados es el complemento EXACTO del endpoint `aprobados`: antes
+  // sólo se descartaba 'Aprobado' literal, así que un registro grabado como
+  // 'Aprobada' o marcado 'FINALIZADA' por el cron se habría colado aquí Y en
+  // Aprobados a la vez. Hoy no hay ninguno; la guarda evita que aparezca.
   const result = await query(
     `SELECT p."_id", p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido",
             p."numeroId", p."contrato", p."celular", p."email", p."plataforma", p."tipoUsuario",
@@ -22,7 +27,8 @@ export const GET = handlerWithAuth(async () => {
        LIMIT 1
      ) camp ON true
      WHERE p."tipoUsuario" = 'TITULAR'
-       AND (p."aprobacion" IS NULL OR p."aprobacion" != 'Aprobado')
+       AND (p."aprobacion" IS NULL
+            OR p."aprobacion" NOT IN ('Aprobado','Aprobada','FINALIZADA'))
        AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
      ORDER BY p."_createdDate" DESC`
   );
