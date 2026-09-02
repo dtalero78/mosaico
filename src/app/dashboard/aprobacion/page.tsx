@@ -52,7 +52,7 @@ interface FilterState {
 
 const ESTADOS_APROBACION = [
   { value: '', label: 'Todos los contratos' },
-  { value: 'Listo', label: 'Listo', color: 'bg-yellow-100 text-yellow-800' },
+  { value: 'Listo', label: 'Listo para aprobar', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'Rechazado', label: 'Rechazado', color: 'bg-red-100 text-red-800' },
   { value: 'Pendiente', label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'En revisión', label: 'En revisión', color: 'bg-blue-100 text-blue-800' },
@@ -70,8 +70,9 @@ export default function AprobacionPage() {
   const [allContratos, setAllContratos] = useState<Contrato[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState<FilterState>({
-    // Default = "Listo": contratos que el comercial marcó con el botón amarillo
-    // "Contrato Para Aprobación" (PEOPLE.listoAprobacion) y esperan visto bueno.
+    // Default = "Listo para aprobar": contratos con el cupo ya confirmado en
+    // Gestión Contrato (PEOPLE.gestionContratoListo), que es lo que la aprobación
+    // exige. Son los que se pueden aprobar ahora mismo.
     estado: 'Listo',
     campaign: '',
     fechaInicio: null,
@@ -243,7 +244,17 @@ export default function AprobacionPage() {
     // Filtrar por estado
     if (filters.estado) {
       if (filters.estado === 'Listo') {
-        data = data.filter(c => (c as any).listoAprobacion && !c.aprobacion)
+        // Se mira `gestionContratoListo` (el "Dejar listo" de Gestión Contrato,
+        // donde se reserva el cupo) y NO `listoAprobacion` (un botón del detalle
+        // del contrato, informativo). Aprobar exige la primera: con la segunda el
+        // default mostraba contratos que al aprobarlos daban error, y escondía
+        // otros que sí se podían aprobar.
+        // Se excluyen los que ya tienen una decisión negativa: un contrato
+        // Devuelto o Retractado puede tener el cupo confirmado, pero no es algo
+        // que se vaya a aprobar. Siguen consultables con el filtro de su estado.
+        const ANULAN = ['Devuelto', 'Rechazado', 'Retractado', 'Contrato nulo']
+        data = data.filter(c => (c as any).gestionContratoListo === true
+                             && !ANULAN.includes(String(c.aprobacion || '')))
       } else if (filters.estado === 'Firmado sin aprobar') {
         data = data.filter(c => c.hashConsentimiento && !c.aprobacion)
       } else if (filters.estado === 'Sin firmar') {
