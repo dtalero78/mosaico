@@ -410,7 +410,8 @@ export default function AprobacionPage() {
                 { header: 'Celular', accessor: (c) => c.celular },
                 { header: 'Email', accessor: (c) => c.email },
                 { header: 'Estado', accessor: (c) => getEstadoDisplay(c).text },
-                { header: 'Listo', accessor: (c) => (c.listoAprobacion ? 'Sí' : 'No') },
+                { header: 'Listo para aprobar', accessor: (c) => ((c as any).gestionContratoListo ? 'Sí' : 'No') },
+                { header: 'Avisado por comercial', accessor: (c) => (c.listoAprobacion ? 'Sí' : 'No') },
                 { header: 'Fecha', accessor: (c) => new Date(c._createdDate).toLocaleDateString() },
               ], `aprobaciones-${new Date().toISOString().split('T')[0]}`)}
               disabled={getFilteredData().length === 0}
@@ -619,7 +620,7 @@ export default function AprobacionPage() {
                       Estado
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Listo
+                      Listo para aprobar
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Fecha
@@ -680,22 +681,32 @@ export default function AprobacionPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-col items-start gap-1">
-                            {contrato.listoAprobacion ? (
-                              <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            {/* Esta celda dice UNA cosa: si el contrato se puede
+                                aprobar. Antes mostraba `listoAprobacion` (el botón
+                                del detalle del contrato, informativo) mientras el
+                                filtro miraba `gestionContratoListo` — así que un
+                                contrato salía en "Listo para aprobar" con un "—"
+                                al lado. Ahora ambos leen el mismo dato. */}
+                            {(contrato as any).gestionContratoListo ? (
+                              <span
+                                className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-100 text-emerald-800"
+                                title="Cupo del salón confirmado en Gestión Contrato: se puede aprobar."
+                              >
                                 ✓ Listo
                               </span>
                             ) : (
-                              <span className="text-gray-300 text-xs">—</span>
-                            )}
-                            {/* Sin la gestión comercial el cupo del salón no está
-                                tomado, y la aprobación se rechaza. Se avisa aquí
-                                para no descubrirlo recién al intentar aprobar. */}
-                            {!(contrato as any).gestionContratoListo && (
                               <span
                                 className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-700"
-                                title="Comercial debe marcarlo en Gestión Contrato: ahí se confirma el cupo del salón."
+                                title="Comercial debe marcarlo en Gestión Contrato: ahí se confirma el cupo del salón. Sin eso la aprobación se rechaza."
                               >
                                 Falta gestión
+                              </span>
+                            )}
+                            {/* Aviso del comercial desde el detalle del contrato.
+                                No condiciona la aprobación; es trazabilidad. */}
+                            {contrato.listoAprobacion && (
+                              <span className="text-[10px] text-gray-400" title="Comercial pulsó «Contrato Para Aprobación» en el detalle del contrato">
+                                avisado
                               </span>
                             )}
                           </div>
