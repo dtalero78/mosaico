@@ -3,6 +3,7 @@ import { query, queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { resolverDestinoBienvenida } from '@/lib/destino-bienvenida';
 import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service';
 
 /**
@@ -299,15 +300,20 @@ export async function approveOnePerson(
 
     if (celular) {
       try {
+        // En cursos de menores el contacto es el APODERADO. Antes esto enviaba
+        // siempre al celular de la ficha del beneficiario, que en 141 casos de
+        // YOJI/OKINA/KODOMO/DANSHI no es el suyo — el mismo mensaje llegaba a
+        // destinos distintos según se disparara desde aquí o desde /student.
+        const { numero: destino, usoApoderado } = await resolverDestinoBienvenida(personId, celular);
         const nombre = person.primerNombre || '';
         const message = `Hola ${nombre} 👋:\n\n*¡Eres parte de MOSAICO!* 🎉 \n\nPara terminar tu registro y crear tu usuario sigue este enlace:\n\n${process.env.APP_URL || 'https://mosaicosorobanplataforma.com'}/nuevo-usuario/${academicId}\n\nSi tienes alguna pregunta, no dudes en contactarnos.\n\n¡Bienvenido a la familia MOSAICO! 🚀`;
-        console.log(`📤 [Approve] Enviando WhatsApp a: ${celular}`);
-        const whatsappResult = await sendWhatsAppMessage(celular, message);
+        console.log(`📤 [Approve] Enviando WhatsApp a: ${destino}${usoApoderado ? ' (APODERADO — curso de menores)' : ''}`);
+        const whatsappResult = await sendWhatsAppMessage(destino, message);
         whatsappSent = true;
-        console.log(`✅ [Approve] WhatsApp enviado a ${celular}`, whatsappResult);
+        console.log(`✅ [Approve] WhatsApp enviado a ${destino}`, whatsappResult);
       } catch (err: any) {
         whatsappError = err.message;
-        console.error(`⚠️ [Approve] Error enviando WhatsApp a "${celular}":`, err.message);
+        console.error(`⚠️ [Approve] Error enviando WhatsApp (origen "${celular}"):`, err.message);
       }
     } else {
       whatsappError = 'Sin número de celular registrado';
