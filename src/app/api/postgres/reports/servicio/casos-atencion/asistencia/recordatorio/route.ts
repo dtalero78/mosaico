@@ -6,7 +6,7 @@ import { ValidationError, NotFoundError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
 import { generateId } from '@/lib/id-generator'
 import { formatPhoneNumber, sendWhatsAppMessage } from '@/lib/whatsapp'
-import { cursoUsaApoderadoParaMensajes } from '@/lib/welcome-modulo'
+import { usaApoderadoAsync } from '@/services/tipos-curso.service'
 
 /**
  * POST /api/postgres/reports/servicio/casos-atencion/asistencia/recordatorio
@@ -47,7 +47,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   )
   if (!row) throw new NotFoundError('Inasistencia', bookingId)
 
-  const usaApoderado = cursoUsaApoderadoParaMensajes(row.tipoCurso)
+  const usaApoderado = await usaApoderadoAsync(row.tipoCurso || '')
   const preferido = usaApoderado ? row.apoderadoTelefono : row.celular
   const alterno = usaApoderado ? row.celular : row.apoderadoTelefono
   const telefono = formatPhoneNumber(preferido || '') || formatPhoneNumber(alterno || '')

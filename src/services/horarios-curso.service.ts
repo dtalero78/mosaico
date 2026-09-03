@@ -2,6 +2,7 @@ import 'server-only';
 import { query, queryOne } from '@/lib/postgres';
 import { ValidationError, ConflictError, NotFoundError } from '@/lib/errors';
 import { TIPOS_CURSO, parseHorarioRango, horariosFor } from '@/lib/cursos-campaign';
+import { esTipoCursoValido, nombresTiposCurso } from '@/services/tipos-curso.service';
 import { ids } from '@/lib/id-generator';
 
 /**
@@ -99,8 +100,12 @@ export async function crearHorario(input: {
   // así que "SÁB  09:00-11:00" y "SÁB 09:00-11:00" no pueden convivir.
   const horario = String(input.horario || '').trim().replace(/\s+/g, ' ').toUpperCase();
 
-  if (!TIPOS_CURSO.includes(tipoCurso as any)) {
-    throw new ValidationError(`Tipo de curso no válido: ${input.tipoCurso}. Debe ser uno de ${TIPOS_CURSO.join(', ')}.`);
+  // El catálogo vive en TIPOS_CURSO_CATALOGO. Antes se validaba contra la
+  // constante del código, así que un curso recién cargado en el currículo no
+  // podía recibir horarios aunque ya apareciera en el desplegable.
+  if (!(await esTipoCursoValido(tipoCurso))) {
+    const validos = await nombresTiposCurso();
+    throw new ValidationError(`Tipo de curso no válido: ${input.tipoCurso}. Debe ser uno de ${validos.join(', ')}.`);
   }
   if (!horario) throw new ValidationError('Escribe el horario.');
   if (!parseHorarioRango(horario)) {

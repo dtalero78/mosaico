@@ -8,6 +8,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import { useTiposCurso } from '@/hooks/use-tipos-curso'
 
 /** Opción del desplegable de Salón: el nº solo no identifica nada sin su horario. */
 interface SalonOpt { salon: string; horario: string | null; campaign: string | null; curso: string | null }
@@ -40,6 +41,9 @@ interface Row {
 interface Guia { id: string; nombre: string }
 
 function ListaUsuariosContent() {
+  // Cursos del catálogo (TIPOS_CURSO_CATALOGO), no de la constante: un curso
+  // nuevo aparece sin necesidad de desplegar.
+  const { nombres: nombresCurso } = useTiposCurso()
   const { hasPermission, isRole } = usePermissions()
   const puedeEditar = isRole('SUPER_ADMIN') || isRole('ADMIN') || hasPermission(AcademicoPermission.LISTA_USUARIOS_EDITAR)
 
@@ -178,7 +182,7 @@ function ListaUsuariosContent() {
             <label className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
             <select value={curso} onChange={e => { setCurso(e.target.value); setSalon(''); setHorario('') }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todos</option>
-              {TIPOS_CURSO.map(c => <option key={c} value={c}>{c}</option>)}
+              {nombresCurso.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>

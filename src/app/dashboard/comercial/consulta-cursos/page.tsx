@@ -6,6 +6,7 @@ import { PermissionGuard } from '@/components/permissions'
 import { ComercialPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import { TIPOS_CURSO, estadoCurso, ESTADO_CURSO_META, hoyEnChile, type EstadoCurso } from '@/lib/cursos-campaign'
+import { useTiposCurso } from '@/hooks/use-tipos-curso'
 import { exportToExcel } from '@/lib/export-excel'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 
@@ -23,6 +24,9 @@ export default function ConsultaCursosPage() {
 }
 
 function ConsultaCursosContent() {
+  // Cursos del catálogo (TIPOS_CURSO_CATALOGO), no de la constante: un curso
+  // nuevo aparece sin necesidad de desplegar.
+  const { nombres: nombresCurso } = useTiposCurso()
   const { hasPermission } = usePermissions()
   const canExport = hasPermission(ComercialPermission.CONSULTA_CURSOS_EXPORTAR)
 
@@ -129,7 +133,7 @@ function ConsultaCursosContent() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Curso</label>
             <select value={fCurso} onChange={e => setFCurso(e.target.value)} className={selCls} title="Tipo de curso">
               <option value="">Todos</option>
-              {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}</option>)}
+              {nombresCurso.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>

@@ -163,6 +163,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/horarios': [
     'ACADEMICO.HORARIOS.GESTION' as Permission,
   ],
+  '/dashboard/academic/tipos-curso': [
+    'ACADEMICO.TIPOS_CURSO.GESTION' as Permission,
+  ],
   '/dashboard/academic/crear-impulsa': [
     'ACADEMICO.CAMPANA.CREAR' as Permission,
   ],

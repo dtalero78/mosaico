@@ -5,7 +5,7 @@ import { AcademicoPermission } from '@/types/permissions';
 import { query, queryOne } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 import { ValidationError } from '@/lib/errors';
-import { TIPOS_CURSO } from '@/lib/cursos-campaign';
+import { esTipoCursoValido } from '@/services/tipos-curso.service';
 
 /**
  * PATCH /api/postgres/cursos-imagenes/[tipoCurso]
@@ -18,7 +18,7 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
   await requirePermission(session, AcademicoPermission.ACTUALIZAR_MATERIAL);
 
   const tipoCurso = (params?.tipoCurso as string) || '';
-  if (!(TIPOS_CURSO as readonly string[]).includes(tipoCurso)) {
+  if (!(await esTipoCursoValido(tipoCurso))) {
     throw new ValidationError(`tipoCurso inválido: ${tipoCurso}`);
   }
 

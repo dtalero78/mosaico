@@ -202,6 +202,7 @@ export enum AcademicoPermission {
   // Catálogo de horarios por tipo de curso (Académico › Horarios): agregar y
   // desactivar. El catálogo sólo llena el desplegable de Campañas.
   HORARIOS_GESTION = 'ACADEMICO.HORARIOS.GESTION',
+  TIPOS_CURSO_GESTION = 'ACADEMICO.TIPOS_CURSO.GESTION',
 
   // Lista de Usuarios — reporte de estudiantes (Académico › Guías)
   LISTA_USUARIOS_VER      = 'ACADEMICO.LISTA_USUARIOS.VER',

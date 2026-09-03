@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions'
 import { AcademicoPermission } from '@/types/permissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import { useTiposCurso } from '@/hooks/use-tipos-curso'
 import MathText from '@/components/ecuaciones/MathText'
 import InsertEquationModal from '@/components/ecuaciones/InsertEquationModal'
 import InsertImageModal from '@/components/ecuaciones/InsertImageModal'
@@ -398,6 +399,8 @@ function LeccionEditor({
 }
 
 export default function ContenidoCursoPage() {
+  // Cursos del catálogo (TIPOS_CURSO_CATALOGO), no de la constante.
+  const { nombres: nombresCurso } = useTiposCurso()
   const [curso, setCurso] = useState('')
   const [modulos, setModulos] = useState<{ code: string; steps: string[] }[]>([])
   const [code, setCode] = useState('')
@@ -512,7 +515,7 @@ export default function ContenidoCursoPage() {
             <select value={curso} onChange={(e) => setCurso(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm min-w-[180px]">
               <option value="">— Selecciona —</option>
-              {TIPOS_CURSO.map((c) => <option key={c} value={c}>{c}</option>)}
+              {nombresCurso.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>

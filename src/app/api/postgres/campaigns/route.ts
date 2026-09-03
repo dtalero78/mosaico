@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, ConflictError } from '@/lib/errors';
 import { TIPOS_CURSO, esMenores, addMonths, horariosSeSolapan } from '@/lib/cursos-campaign';
+import { esTipoCursoValido, esMenoresAsync } from '@/services/tipos-curso.service';
 import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso } from '@/services/cursos-campaign-eventos.service';
 import { cupoOcupadoSql } from '@/lib/cupo';
@@ -80,7 +81,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   for (const [indice, c] of (cursos as any[]).entries()) {
     const tipo = String(c?.tipoCurso || '');
-    if (!(TIPOS_CURSO as readonly string[]).includes(tipo)) throw new ValidationError(`Tipo de curso inválido: ${tipo}`);
+    // El catálogo vive en TIPOS_CURSO_CATALOGO: un curso nuevo se habilita desde
+    // Académico › Tipos de Curso, sin tocar código.
+    if (!(await esTipoCursoValido(tipo))) throw new ValidationError(`Tipo de curso inválido: ${tipo}`);
     const horario = String(c?.horarioCurso || '');
     // El catálogo vive en HORARIOS_CURSO (Académico › Horarios), ya no en el código.
     if (!(await horarioEsValido(tipo, horario))) throw new ValidationError(`Horario inválido para ${tipo}: ${horario}`);
@@ -174,7 +177,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
          "numeroUsuarios"=EXCLUDED."numeroUsuarios", "paraMenores"=EXCLUDED."paraMenores",
          "activa"=true, "_updatedDate"=NOW()
        RETURNING *`,
-      [`ccp_${randomUUID()}`, nombre, inicioCamp, finalCamp, tipo, salon, guia, horario, inicioCurso, duracion, finalCurso, numeroUsuarios, esMenores(tipo)]
+      [`ccp_${randomUUID()}`, nombre, inicioCamp, finalCamp, tipo, salon, guia, horario, inicioCurso, duracion, finalCurso, numeroUsuarios, await esMenoresAsync(tipo)]
     );
     creados.push(r.rows[0]);
 

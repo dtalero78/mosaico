@@ -6,7 +6,7 @@ import { spacesClient, SPACES_BUCKET } from '@/lib/spaces';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ValidationError } from '@/lib/errors';
-import { TIPOS_CURSO } from '@/lib/cursos-campaign';
+import { esTipoCursoValido } from '@/services/tipos-curso.service';
 
 /**
  * POST /api/postgres/cursos-imagenes/presign
@@ -19,7 +19,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.ACTUALIZAR_MATERIAL);
 
   const { tipoCurso, contentType } = await request.json();
-  if (!(TIPOS_CURSO as readonly string[]).includes(tipoCurso)) {
+  if (!(await esTipoCursoValido(tipoCurso))) {
     throw new ValidationError(`tipoCurso inválido: ${tipoCurso}`);
   }
   const ct = contentType || 'image/jpeg';

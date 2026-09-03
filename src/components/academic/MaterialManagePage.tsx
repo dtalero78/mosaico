@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import { useTiposCurso } from '@/hooks/use-tipos-curso'
 import { isDriveUrl } from '@/lib/drive-embed'
 
 interface MaterialFile {
@@ -27,6 +28,8 @@ interface Props {
 const FIELD_LABEL: Record<string, string> = { usuario: 'materialUsuario', advisor: 'material' }
 
 export default function MaterialManagePage({ tipo, title, description, accentColor }: Props) {
+  // Cursos del catálogo (TIPOS_CURSO_CATALOGO), no de la constante.
+  const { nombres: nombresCurso } = useTiposCurso()
   const [curso, setCurso] = useState('')
   const [modulos, setModulos] = useState<{ code: string; steps: string[] }[]>([])
   const [selectedNivel, setSelectedNivel] = useState('')   // code del módulo seleccionado
@@ -247,7 +250,7 @@ export default function MaterialManagePage({ tipo, title, description, accentCol
               style={{ '--tw-ring-color': accentColor === 'blue' ? '#3b82f6' : '#22c55e' } as any}
             >
               <option value="">-- Selecciona un curso --</option>
-              {TIPOS_CURSO.map(c => <option key={c} value={c}>{c}</option>)}
+              {nombresCurso.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>

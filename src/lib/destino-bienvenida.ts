@@ -1,6 +1,6 @@
 import 'server-only';
 import { query } from '@/lib/postgres';
-import { cursoUsaApoderadoParaMensajes } from '@/lib/welcome-modulo';
+import { usaApoderadoAsync } from '@/services/tipos-curso.service';
 
 /**
  * A qué número va el mensaje de bienvenida de un beneficiario.
@@ -48,7 +48,9 @@ export async function resolverDestinoBienvenida(
       )).rows[0] as { tipoCurso?: string; apoderadoTelefono?: string } | undefined;
     }
 
-    if (!row || !cursoUsaApoderadoParaMensajes(row.tipoCurso)) return fallback;
+    // La regla vive en el catálogo (TIPOS_CURSO_CATALOGO): un curso nuevo se
+    // marca desde Académico › Tipos de Curso, sin tocar código.
+    if (!row || !(await usaApoderadoAsync(row.tipoCurso || ''))) return fallback;
 
     const apoderadoDigitos = String(row.apoderadoTelefono || '').replace(/\D/g, '');
     // Apoderado sin teléfono utilizable → al alumno, antes que no enviar nada.

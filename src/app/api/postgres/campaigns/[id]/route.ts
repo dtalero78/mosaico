@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { TIPOS_CURSO, esMenores, addMonths } from '@/lib/cursos-campaign';
+import { esTipoCursoValido, esMenoresAsync } from '@/services/tipos-curso.service';
 import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { horarioEsValido } from '@/services/horarios-curso.service';
 import { generarEventosCurso, eliminarEventosCurso, regenerarCursoPreservandoEstado, arrastrarAlumnosDelCurso } from '@/services/cursos-campaign-eventos.service';
@@ -38,7 +39,8 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
 
   // Merge de valores (lo enviado pisa lo actual)
   const tipoCurso = body.tipoCurso !== undefined ? String(body.tipoCurso) : row.tipoCurso;
-  if (!(TIPOS_CURSO as readonly string[]).includes(tipoCurso)) throw new ValidationError(`Tipo de curso inválido: ${tipoCurso}`);
+  // Catálogo administrable (TIPOS_CURSO_CATALOGO).
+  if (!(await esTipoCursoValido(tipoCurso))) throw new ValidationError(`Tipo de curso inválido: ${tipoCurso}`);
   const horarioCurso = body.horarioCurso !== undefined ? String(body.horarioCurso) : row.horarioCurso;
   // Grandfathering: si no cambian tipo ni horario, se acepta el valor guardado
   // aunque ya no esté en el catálogo (cursos creados con horarios antiguos).
@@ -230,7 +232,7 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
        "finalCurso"=$7, "numeroUsuarios"=$8, "inicioCampania"=$9, "finalCampaign"=$10,
        "paraMenores"=$11, "activa"=$12, "_updatedDate"=NOW()
      WHERE "_id"=$13 RETURNING *`,
-    [tipoCurso, horarioCurso, salon, guia, inicioCurso, duracion, finalCurso, numeroUsuarios, inicioCampania, finalCampaign, esMenores(tipoCurso), activa, id]
+    [tipoCurso, horarioCurso, salon, guia, inicioCurso, duracion, finalCurso, numeroUsuarios, inicioCampania, finalCampaign, await esMenoresAsync(tipoCurso), activa, id]
   );
   // ─── Efecto de la decisión sobre el grupo de salón ───
   // Se aplica ANTES de regenerar los eventos de este curso, para que la

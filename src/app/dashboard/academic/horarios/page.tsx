@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { AcademicoPermission } from '@/types/permissions'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import { useTiposCurso } from '@/hooks/use-tipos-curso'
 
 /**
  * Académico › Horarios — catálogo de horarios que se ofrecen al crear un curso
@@ -38,6 +39,9 @@ export default function HorariosPage() {
 }
 
 function HorariosContent() {
+  // Los cursos salen del catálogo (TIPOS_CURSO_CATALOGO), no de la constante:
+  // un curso nuevo debe poder recibir horarios sin pasar por un despliegue.
+  const { nombres: nombresCurso } = useTiposCurso()
   const [rows, setRows] = useState<Horario[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -69,9 +73,14 @@ function HorariosContent() {
   const porCurso = useMemo(() => {
     const m = new Map<string, Horario[]>()
     visibles.forEach(h => { if (!m.has(h.tipoCurso)) m.set(h.tipoCurso, []); m.get(h.tipoCurso)!.push(h) })
-    return Array.from(m.entries()).sort((a, b) =>
-      TIPOS_CURSO.indexOf(a[0] as any) - TIPOS_CURSO.indexOf(b[0] as any))
-  }, [visibles])
+    // Orden del catálogo; los que no estén en él van al final (p. ej. un curso
+    // desactivado que todavía tiene horarios en uso).
+    const pos = (t: string) => {
+      const i = nombresCurso.indexOf(t)
+      return i < 0 ? 999 : i
+    }
+    return Array.from(m.entries()).sort((a, b) => pos(a[0]) - pos(b[0]))
+  }, [visibles, nombresCurso])
 
   const agregar = async () => {
     if (!nuevoCurso || !nuevoHorario.trim()) { toast.error('Elige el curso y escribe el horario'); return }
@@ -126,7 +135,7 @@ function HorariosContent() {
             <label htmlFor="h-curso" className="block text-sm font-medium text-gray-700 mb-1">Curso</label>
             <select id="h-curso" value={nuevoCurso} onChange={e => setNuevoCurso(e.target.value)} className={`${input} bg-white`}>
               <option value="">Seleccionar…</option>
-              {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}</option>)}
+              {nombresCurso.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div>
@@ -155,7 +164,7 @@ function HorariosContent() {
           <select id="f-curso" value={filtroCurso} onChange={e => setFiltroCurso(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
             <option value="">Todos los cursos</option>
-            {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}</option>)}
+            {nombresCurso.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">

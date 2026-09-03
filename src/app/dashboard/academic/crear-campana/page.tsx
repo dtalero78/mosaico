@@ -5,6 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
 import { TIPOS_CURSO, horariosFor, esMenores, addMonths, campaignNameToDate, estadoCurso, ESTADO_CURSO_META, hoyEnChile } from '@/lib/cursos-campaign'
+import { useTiposCurso } from '@/hooks/use-tipos-curso'
 import { exportToExcel } from '@/lib/export-excel'
 import { PlusIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import ColisionesTab from '@/components/academic/ColisionesTab'
@@ -37,6 +38,9 @@ export default function CrearCampanaPage() {
 }
 
 function CrearCampanaContent() {
+  // Cursos y su regla de menores salen del catálogo (TIPOS_CURSO_CATALOGO),
+  // no de la constante: un curso nuevo aparece sin desplegar.
+  const { tipos: tiposCurso } = useTiposCurso()
   const [campaign, setCampaign] = useState('')
   const [inicioCampania, setInicioCampania] = useState('')
   const [finalCampaign, setFinalCampaign] = useState('')
@@ -922,7 +926,7 @@ function CrearCampanaContent() {
                 <label className={lblCls}>Tipo de curso *</label>
                 <select value={form.tipoCurso} onChange={e => setForm({ ...form, tipoCurso: e.target.value, horarioCurso: '' })} className={inputCls} title="Tipo de curso">
                   <option value="">Seleccionar...</option>
-                  {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}{esMenores(t) ? ' (menores)' : ''}</option>)}
+                  {tiposCurso.map(t => <option key={t.tipoCurso} value={t.tipoCurso}>{t.tipoCurso}{t.esMenores ? ' (menores)' : ''}</option>)}
                 </select>
               </div>
               <div>
@@ -1006,7 +1010,7 @@ function CrearCampanaContent() {
               <div>
                 <label className={lblCls}>Tipo de curso *</label>
                 <select value={editRow.tipoCurso} onChange={e => setEditRow({ ...editRow, tipoCurso: e.target.value, horarioCurso: '' })} className={inputCls}>
-                  {TIPOS_CURSO.map(t => <option key={t} value={t}>{t}{esMenores(t) ? ' (menores)' : ''}</option>)}
+                  {tiposCurso.map(t => <option key={t.tipoCurso} value={t.tipoCurso}>{t.tipoCurso}{t.esMenores ? ' (menores)' : ''}</option>)}
                 </select>
               </div>
               <div>

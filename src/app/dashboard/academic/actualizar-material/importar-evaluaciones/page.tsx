@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import { useTiposCurso } from '@/hooks/use-tipos-curso'
 import MathText from '@/components/ecuaciones/MathText'
 import { decodeHtmlEntities } from '@/lib/math-render'
 import { ArrowUpTrayIcon } from '@heroicons/react/24/outline'
@@ -99,6 +100,8 @@ function toPreguntas(rows: string[][]): { meta: Meta | null; preguntas: Preg[] }
 }
 
 export default function ImportarEvaluacionesPage() {
+  // Cursos del catálogo (TIPOS_CURSO_CATALOGO), no de la constante.
+  const { nombres: nombresCurso } = useTiposCurso()
   const [meta, setMeta] = useState<Meta | null>(null)
   const [preguntas, setPreguntas] = useState<Preg[]>([])
   const [fileName, setFileName] = useState('')
@@ -192,7 +195,7 @@ export default function ImportarEvaluacionesPage() {
             <label className="block text-xs font-medium text-gray-600 mb-1">Curso</label>
             <select value={curso} onChange={(e) => setCurso(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
               <option value="">— Curso —</option>
-              {TIPOS_CURSO.map((c) => <option key={c} value={c}>{c}</option>)}
+              {nombresCurso.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
