@@ -306,12 +306,23 @@ export default function PagoTitularWizard({
   const saldoFechaNum   = Math.max(0, Number(saldoActual ?? 0))
 
   // ── Cálculos en vivo de esta captura ──────────────────────────────────
-  // "Valor a Aplicar" = lo que se descuenta del saldo en este pago
-  // "Saldo después de pago" = lo que quedará debiendo tras este pago
-  // El endpoint server-side recomputa `saldo` de forma autoritativa antes
+  // El descuento es una REBAJA SOBRE LA CUOTA: se le perdona parte de lo que
+  // debía pagar, pero la cuota queda saldada igual. Por eso el descuento SUMA
+  // a lo que se aplica contra el saldo — si la cuota es 115.000 y se le
+  // descuentan 25.000, el titular paga 90.000 y el saldo baja los 115.000
+  // completos. Restarlo (como se hacía antes) mostraba 65.000 e inducía a
+  // capturar el pago por el valor entero de la cuota, aplicando de más.
+  // El endpoint server-side recomputa `saldo` con esta misma fórmula antes
   // de insertar (no confía en el cliente).
-  const valorAplicar = Math.max(0, toNum(form.valorPagado) - toNum(form.descuento))
+  const valorAplicar = Math.max(0, toNum(form.valorPagado) + toNum(form.descuento))
   const saldoDespues = Math.max(0, saldoFechaNum - valorAplicar)
+
+  // Aviso preventivo: con la regla de negocio, pagado + descuento debe dar el
+  // valor de la cuota. Si excede, casi siempre es que se capturó el pago por la
+  // cuota entera y ADEMÁS se puso el descuento (se aplicaría de más contra el
+  // saldo). No se bloquea — un abono adelantado legítimo también excede.
+  const cuotaNum = toNum(form.valorCuota)
+  const excedeCuota = cuotaNum > 0 && valorAplicar > cuotaNum
 
   // Upload de documentos (mismo flujo que UploadDocButton)
   const uploadFiles = async (files: File[]) => {
@@ -583,6 +594,19 @@ export default function PagoTitularWizard({
               </div>
             </div>
           </div>
+
+          {excedeCuota && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <strong>Revisa el valor a pagar.</strong> Con el descuento se aplicarían{' '}
+              $ {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(valorAplicar)}{' '}
+              contra el saldo, y la cuota es de $ {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(cuotaNum)}.{' '}
+              El descuento es una rebaja sobre la cuota: si se le descuentan{' '}
+              $ {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(toNum(form.descuento))},{' '}
+              el titular paga{' '}
+              $ {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Math.max(0, cuotaNum - toNum(form.descuento)))}{' '}
+              y la cuota queda saldada igual.
+            </div>
+          )}
 
           {/* Fila 5 — Medio de Pago / Referencia */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

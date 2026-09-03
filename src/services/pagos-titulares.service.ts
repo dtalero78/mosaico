@@ -2,8 +2,10 @@
  * PagosTitulares Service
  *
  * Business rules for PAGOS_TITULARES:
- * - Saldo is computed server-side as `valorCuota - valorPagado - descuento`.
- *   Negative values are clamped to 0.
+ * - Saldo is computed server-side and clamped to 0. El descuento es una
+ *   REBAJA SOBRE LA CUOTA (se le perdona parte de lo que debía pagar, pero la
+ *   cuota queda saldada igual), así que lo que se aplica contra el saldo es
+ *   `valorPagado + descuento` — la misma suma que usa syncFinancieroSaldo.
  * - On create, idPeople MUST exist in PEOPLE; numeroId, plataforma and
  *   gestorRecaudo are auto-inherited from the titular when not provided.
  * - Validation flips `validado` to true and stamps fechaValidacion + validadoPor.
@@ -67,9 +69,17 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#039;');
 }
 
-function computeSaldo(valorCuota: any, valorPagado: any, descuento: any): number {
-  const s = toNum(valorCuota) - toNum(valorPagado) - toNum(descuento);
-  return s < 0 ? 0 : Number(s.toFixed(2));
+/**
+ * Lo que este pago aplica contra el saldo del contrato.
+ *
+ * El descuento SUMA: es una rebaja sobre la cuota, no menos abono. Si la cuota
+ * es 115.000 y se descuentan 25.000, el titular paga 90.000 y el saldo baja los
+ * 115.000 completos. Es la misma fórmula de syncFinancieroSaldo, y por eso el
+ * `saldo` guardado en la fila coincide con el Saldo a la Fecha del contrato.
+ */
+function computeValorAplicar(valorPagado: any, descuento: any): number {
+  const v = toNum(valorPagado) + toNum(descuento);
+  return v < 0 ? 0 : Number(v.toFixed(2));
 }
 
 /**
@@ -314,14 +324,12 @@ export const pagosTitularesService = {
     }
 
     // Saldo del pago = "Saldo después de pago" en el wizard
-    // (= Saldo a la Fecha actual − (Valor a Pagar − Descuento)).
+    // (= Saldo a la Fecha actual − (Valor a Pagar + Descuento)).
     // Saldo a la Fecha lo obtenemos de FINANCIEROS.saldo (mantenido al día
     // por syncFinancieroSaldo). Para cuota#0 no aplica — esa fila se inserta
     // directamente en /api/postgres/contracts y /api/admin/migrar-contrato
     // con su propia lógica; este path es para cuotas posteriores.
-    const valorPagadoNum = toNum(input.valorPagado);
-    const descuentoNum   = toNum(input.descuento);
-    const valorAplicar   = Math.max(0, valorPagadoNum - descuentoNum);
+    const valorAplicar = computeValorAplicar(input.valorPagado, input.descuento);
 
     let saldoAFecha = 0;
     const titularContrato = (titular as any).contrato as string | undefined;
@@ -390,12 +398,28 @@ export const pagosTitularesService = {
       }
     }
 
+    // El `saldo` de la fila es "saldo del CONTRATO después de este pago", la
+    // misma semántica con la que lo escribe create. Antes update lo recalculaba
+    // como "lo que falta de ESTA cuota" (cuota − pagado − desc), así que editar
+    // un pago le cambiaba el significado a la columna.
     const next = { ...existing, ...body };
-    const saldo = computeSaldo(next.valorCuota, next.valorPagado, next.descuento);
+    const valorAplicar = computeValorAplicar(next.valorPagado, next.descuento);
+    const saldoAFechaPrevio = toNum(existing.saldo) + computeValorAplicar(existing.valorPagado, existing.descuento);
+    const saldo = Math.max(0, Number((saldoAFechaPrevio - valorAplicar).toFixed(2)));
     const payload = { ...body, saldo };
 
     const updated = await PagosTitularesRepository.updateFields(id, payload, [...UPDATABLE_FIELDS, 'saldo']);
     if (!updated) throw new ValidationError('No se pudieron aplicar los cambios');
+
+    // Si se editó lo que aplica contra el saldo de un pago YA validado, el Saldo
+    // a la Fecha del contrato queda desfasado hasta el próximo pago. update no
+    // lo recalculaba (sólo lo hacían validar y delete), así que corregir un
+    // valor mal capturado dejaba FINANCIEROS.saldo con el valor viejo.
+    const tocaElSaldo = body.valorPagado !== undefined || body.descuento !== undefined;
+    if (tocaElSaldo && existing.validado) {
+      await syncFinancieroSaldo(existing.idPeople).catch(() => { /* best-effort */ });
+    }
+
     return updated;
   },
 
