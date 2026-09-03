@@ -390,6 +390,7 @@ export default function ContratoDetailPage() {
 
       toast.success('Contrato enviado por WhatsApp')
       setWhatsAppStatus('sent')
+      marcarEnvio('firma')
       // Start polling for consent — customer may sign soon
       if (!consentStatus?.hasConsent) {
         pollingStartRef.current = Date.now()
@@ -420,6 +421,26 @@ export default function ContratoDetailPage() {
   }
 
   // ── Contrato Para Aprobación (marca LISTO) ──
+  // Marcas del checklist de cierre. Combinan lo hecho en ESTA pestaña (feedback
+  // inmediato) con lo que consta en la BASE. Antes sólo miraban el estado local,
+  // que arranca en cero en cada carga: al recargar, volver otro día, o cuando el
+  // titular firmaba solo desde el enlace, el modal decía "Pendiente" sobre cosas
+  // que sí se habían hecho.
+  const firmaSolicitadaEn = (titular as any)?.firmaSolicitadaEn as string | null | undefined
+  const pdfEnviadoEn      = (titular as any)?.pdfEnviadoEn as string | null | undefined
+  const contratoImpresoEn = (titular as any)?.contratoImpresoEn as string | null | undefined
+  const okFirmaSolicitada = whatsAppStatus === 'sent' || !!firmaSolicitadaEn
+  const okPdfEnviado      = pdfStatus === 'sent'      || !!pdfEnviadoEn
+  const okImpreso         = printedContract           || !!contratoImpresoEn
+  const fechaCorta = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null
+
+  // Deja constancia en la base de una acción de cierre. Best-effort: la acción
+  // ya se hizo, así que un fallo al anotarla no debe interrumpir al usuario.
+  const marcarEnvio = (tipo: 'firma' | 'pdf' | 'impreso') => {
+    api.post(`/api/contracts/${titularId}/marcar-envio`, { tipo }).catch(() => {})
+  }
+
   const yaListo = !!(listoLocal || (titular as any)?.listoAprobacion)
   const confirmarListoAprobacion = async () => {
     try {
@@ -1110,6 +1131,7 @@ export default function ContratoDetailPage() {
                               printWindow.document.close()
                               printWindow.print()
                               setPrintedContract(true)
+                              marcarEnvio('impreso')
                             }
                           }
                         }}
@@ -1145,17 +1167,22 @@ export default function ContratoDetailPage() {
                     </p>
                     <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-5 text-sm">
                       {[
-                        { label: 'Firma solicitada por WhatsApp', ok: whatsAppStatus === 'sent' },
-                        { label: 'Contrato firmado por el titular', ok: !!consentStatus?.hasConsent },
-                        { label: 'PDF enviado por WhatsApp', ok: pdfStatus === 'sent' },
-                        { label: 'Contrato impreso', ok: printedContract },
+                        { label: 'Firma solicitada por WhatsApp', ok: okFirmaSolicitada, cuando: fechaCorta(firmaSolicitadaEn) },
+                        { label: 'Contrato firmado por el titular', ok: !!consentStatus?.hasConsent, cuando: fechaCorta(consentStatus?.consent?.timestampAcceptacion) },
+                        { label: 'PDF enviado por WhatsApp', ok: okPdfEnviado, cuando: fechaCorta(pdfEnviadoEn) },
+                        { label: 'Contrato impreso', ok: okImpreso, cuando: fechaCorta(contratoImpresoEn) },
                       ].map(item => (
-                        <div key={item.label} className="flex items-center justify-between px-4 py-2.5">
+                        <div key={item.label} className="flex items-center justify-between gap-3 px-4 py-2.5">
                           <span className="text-gray-700">{item.label}</span>
                           {item.ok ? (
-                            <span className="inline-flex items-center gap-1 text-green-600 font-medium">✓ Hecho</span>
+                            <span className="inline-flex items-center gap-2 shrink-0">
+                              {item.cuando && (
+                                <span className="text-xs text-gray-400 tabular-nums">{item.cuando}</span>
+                              )}
+                              <span className="text-green-600 font-medium">✓ Hecho</span>
+                            </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-amber-600 font-medium">— Pendiente</span>
+                            <span className="text-amber-600 font-medium shrink-0">— Pendiente</span>
                           )}
                         </div>
                       ))}
@@ -1298,8 +1325,8 @@ export default function ContratoDetailPage() {
             <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-5 text-sm">
               {[
                 { label: 'Consentimiento firmado', ok: !!consentStatus?.hasConsent },
-                { label: 'Enviado al titular (firma o PDF)', ok: whatsAppStatus === 'sent' || pdfStatus === 'sent' },
-                { label: 'Contrato impreso', ok: printedContract },
+                { label: 'Enviado al titular (firma o PDF)', ok: okFirmaSolicitada || okPdfEnviado },
+                { label: 'Contrato impreso', ok: okImpreso },
                 { label: `Documentos adjuntos (${docs.length})`, ok: docs.length > 0 },
               ].map(item => (
                 <div key={item.label} className="flex items-center justify-between px-4 py-2.5">

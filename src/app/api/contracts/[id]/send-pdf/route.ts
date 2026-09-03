@@ -1,7 +1,7 @@
 import 'server-only';
 import { handler, successResponse } from '@/lib/api-helpers';
 import { NotFoundError, ValidationError } from '@/lib/errors';
-import { queryOne, queryMany } from '@/lib/postgres';
+import { query, queryOne, queryMany } from '@/lib/postgres';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { getAsesorInfo } from '@/lib/asesor';
@@ -151,6 +151,20 @@ export const POST = handler(async (_request, { params }) => {
   }
 
   const whapiData = await whapiRes.json();
+
+  // Deja constancia del envío. Se registra aquí y no desde el navegador porque
+  // este es el punto donde consta que el PDF salió de verdad: si Whapi falla,
+  // el throw de arriba corta antes y no se marca nada. Best-effort — el PDF ya
+  // le llegó al titular, así que un fallo al anotarlo no debe volverse un error
+  // en pantalla. COALESCE conserva el primer envío.
+  try {
+    await query(
+      `UPDATE "PEOPLE" SET "pdfEnviadoEn" = COALESCE("pdfEnviadoEn", NOW()) WHERE "_id" = $1`,
+      [params.id]
+    );
+  } catch (err: any) {
+    console.warn('[send-pdf] no se pudo registrar pdfEnviadoEn:', err?.message || err);
+  }
 
   return successResponse({
     pdfUrl: tempPdfUrl,
