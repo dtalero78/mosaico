@@ -102,7 +102,7 @@ export default function NivelacionProgramadaCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-bold text-orange-700 uppercase tracking-wide">
-            Nivelación Programada:
+            Nivelaciones
           </h3>
           {activa ? (
             <div className="mt-1">
@@ -163,19 +163,39 @@ export default function NivelacionProgramadaCard({
         </div>
       </div>
 
-      {puedeConfirmar ? (
-        <p className="text-xs text-orange-800/80 mt-3">
-          Confirma tu asistencia antes del <strong>{corteTexto}</strong>. Si no confirmas, la
-          nivelación se cancela.
+      {!activa ? (
+        /* Sin nivelación: se explica para qué sirve la tarjeta. Va un punto más
+           grande que el resto porque es lo único que se lee en este estado. */
+        <p className="text-sm text-orange-800/90 mt-3">
+          Aquí verás la información de tu nivelación. Cuando sea aprobada, aparecerá el horario
+          para que puedas confirmarlo con el botón verde.
         </p>
-      ) : pedida && !confirmada ? (
+      ) : confirmada ? (
+        <p className="text-xs text-orange-800/80 mt-3">
+          Contamos con tu asistencia a la nivelación. Si no puedes asistir, recuerda cancelarla
+          con al menos 24 horas de anticipación.
+        </p>
+      ) : puedeConfirmar ? (
+        <>
+          <p className="text-xs text-orange-800/80 mt-3">
+            Tienes una nivelación programada. Cuando tu horario esté disponible, confírmalo con el
+            botón verde. A partir de ese momento, contaremos con tu asistencia.
+          </p>
+          {/* El plazo se conserva aparte: sin él el alumno no sabe hasta cuándo
+              puede confirmar ni que la nivelación se cancela sola. */}
+          <p className="text-xs text-orange-800/80 mt-1">
+            Confirma antes del <strong>{corteTexto}</strong>. Si no confirmas, la nivelación se cancela.
+          </p>
+        </>
+      ) : pedida ? (
         <p className="text-xs text-red-700/90 mt-3">
           El plazo para confirmar venció. Comunícate con el Área de Servicio.
         </p>
       ) : (
+        /* Ya agendada y sin confirmación pendiente. */
         <p className="text-xs text-orange-800/80 mt-3">
-          Se cuenta con tu asistencia a la nivelación, en caso de no poder asistir puedes cancelarla
-          hasta 24 Hrs antes del Evento.
+          Contamos con tu asistencia a la nivelación. Si no puedes asistir, recuerda cancelarla
+          con al menos 24 horas de anticipación.
         </p>
       )}
     </div>
