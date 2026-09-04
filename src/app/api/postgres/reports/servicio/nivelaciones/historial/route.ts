@@ -3,9 +3,10 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { ServicioPermission } from '@/types/permissions'
+import { condicionUsuarioSql } from '@/lib/filtro-usuario'
 
 /**
- * GET /api/postgres/reports/servicio/nivelaciones/historial?guia&curso&startDate&endDate
+ * GET /api/postgres/reports/servicio/nivelaciones/historial?guia&curso&usuario&startDate&endDate
  *
  * Las nivelaciones que YA SE DICTARON, de la más reciente a la más antigua,
  * para agruparlas por curso en la pantalla.
@@ -29,6 +30,7 @@ const IDENT = `
     a."_id" AS "academicaId",
     p."tipoCurso" AS curso,
     TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido"), '\\s+', ' ', 'g')) AS nombre,
+    p."numeroId",
     p."salon",
     cc."guia" AS "guiaId",
     g."nombreCompleto" AS guia`
@@ -50,6 +52,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const curso = (searchParams.get('curso') || '').trim()
   const startDate = (searchParams.get('startDate') || '').trim()
   const endDate = (searchParams.get('endDate') || '').trim()
+  const usuario = (searchParams.get('usuario') || '').trim()
 
   const params: any[] = []
   let i = 1
@@ -57,7 +60,12 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (guia)  { extra.push(`"guiaId" = $${i++}`); params.push(guia) }
   if (curso) { extra.push(`curso = $${i++}`); params.push(curso) }
   if (startDate) { extra.push(`fecha >= $${i++}::date`); params.push(startDate) }
-  if (endDate)   { extra.push(`fecha < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
+  if (endDate)   { extra.push(`fecha < (${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
+  if (usuario) {
+    // Sobre la CTE, donde el nombre ya es una columna.
+    const c = condicionUsuarioSql('nombre', '"numeroId"', usuario, i)
+    extra.push(c.sql); params.push(...c.params); i += 2
+  }
   const filtro = extra.length ? `WHERE ${extra.join(' AND ')}` : ''
 
   const rows = (await query(

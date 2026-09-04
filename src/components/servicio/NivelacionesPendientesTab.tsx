@@ -55,6 +55,7 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
   const [curso, setCurso] = useState('')
   const [leccion, setLeccion] = useState('')
   const [guia, setGuia] = useState('')
+  const [usuario, setUsuario] = useState('')
 
   const [rows, setRows] = useState<Row[]>([])
   const [cursos, setCursos] = useState<string[]>([])
@@ -93,8 +94,8 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey])
 
-  const aplicar = () => fetchData({ curso, leccion, guia })
-  const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); fetchData() }
+  const aplicar = () => fetchData({ curso, leccion, guia, usuario })
+  const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); setUsuario(''); fetchData() }
   const fmt = (iso: string | null) => iso
     ? new Date(iso).toLocaleString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : '—'
@@ -148,7 +149,14 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
   return (
     <div>
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label htmlFor="pe-usuario" className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
+            <input id="pe-usuario" type="text" value={usuario} onChange={e => setUsuario(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') aplicar() }}
+              placeholder="Nombre o documento"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
           <div>
             <label htmlFor="pe-curso" className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
             <select id="pe-curso" value={curso} onChange={e => setCurso(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">

@@ -51,6 +51,7 @@ function SolicitudesTab({ onCount, onMoved }: {
   const [salon, setSalon] = useState('')
   const [leccion, setLeccion] = useState('')
   const [guia, setGuia] = useState('')
+  const [usuario, setUsuario] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
@@ -82,9 +83,9 @@ function SolicitudesTab({ onCount, onMoved }: {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const aplicar = () => fetchData({ curso, salon, leccion, guia, startDate, endDate })
+  const aplicar = () => fetchData({ curso, salon, leccion, guia, usuario, startDate, endDate })
   const borrar = () => {
-    setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
+    setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setUsuario(''); setStartDate(''); setEndDate('')
     fetchData()
   }
   const exportar = () => {
@@ -131,7 +132,14 @@ function SolicitudesTab({ onCount, onMoved }: {
     <div>
       {/* Filtros */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          <div>
+            <label htmlFor="so-usuario" className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
+            <input id="so-usuario" type="text" value={usuario} onChange={e => setUsuario(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') aplicar() }}
+              placeholder="Nombre o documento"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
           <div>
             <label htmlFor="so-curso" className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
             <select id="so-curso" value={curso} onChange={e => setCurso(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">

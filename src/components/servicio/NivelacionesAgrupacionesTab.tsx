@@ -56,6 +56,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
   const [curso, setCurso] = useState('')
   const [leccion, setLeccion] = useState('')
   const [guia, setGuia] = useState('')
+  const [usuario, setUsuario] = useState('')
 
   const [rows, setRows] = useState<Row[]>([])
   const [cursos, setCursos] = useState<string[]>([])
@@ -132,13 +133,20 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
     setModalGrupo({ ...g, rows: seleccionados })
   }
 
-  const aplicar = () => fetchData({ curso, leccion, guia })
-  const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); fetchData() }
+  const aplicar = () => fetchData({ curso, leccion, guia, usuario })
+  const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); setUsuario(''); fetchData() }
 
   return (
     <div>
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label htmlFor="ag-usuario" className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
+            <input id="ag-usuario" type="text" value={usuario} onChange={e => setUsuario(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') aplicar() }}
+              placeholder="Nombre o documento"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
           <div>
             <label htmlFor="ag-curso" className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
             <select id="ag-curso" value={curso} onChange={e => setCurso(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">

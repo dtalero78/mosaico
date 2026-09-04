@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { ServicioPermission } from '@/types/permissions'
+import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
 
 /**
  * GET /api/postgres/reports/servicio/nivelaciones/pendientes?curso&leccion&guia
@@ -88,6 +89,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const curso = (searchParams.get('curso') || '').trim()
   const leccion = (searchParams.get('leccion') || '').trim()
   const guia = (searchParams.get('guia') || '').trim()
+  const usuario = (searchParams.get('usuario') || '').trim()
 
   const agendadas = await nivelacionesAgendadas()
   const ids = Array.from(agendadas.keys())
@@ -104,6 +106,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   let i = 2
   if (curso) { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (guia)  { where.push(`cc."guia" = $${i++}`); params.push(guia) }
+  if (usuario) {
+    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i)
+    where.push(c.sql); params.push(...c.params); i += 2
+  }
 
   const base = (await query<any>(
     `SELECT a."_id" AS "academicaId",

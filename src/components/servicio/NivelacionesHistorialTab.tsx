@@ -53,6 +53,7 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
 } = {}) {
   const [guia, setGuia] = useState('')
   const [curso, setCurso] = useState('')
+  const [usuario, setUsuario] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
@@ -81,7 +82,7 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
 
   useEffect(() => {
     if (!refreshKey) return
-    fetchData({ guia, curso, startDate, endDate })
+    fetchData({ guia, curso, usuario, startDate, endDate })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey])
 
@@ -98,8 +99,8 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
     return Array.from(map.entries())
   }, [rows])
 
-  const aplicar = () => fetchData({ guia, curso, startDate, endDate })
-  const borrar = () => { setGuia(''); setCurso(''); setStartDate(''); setEndDate(''); fetchData() }
+  const aplicar = () => fetchData({ guia, curso, usuario, startDate, endDate })
+  const borrar = () => { setGuia(''); setCurso(''); setUsuario(''); setStartDate(''); setEndDate(''); fetchData() }
   const exportar = () => {
     exportToExcel(rows, [
       { header: 'Fecha solicitud', accessor: r => (r.fechaSolicitud ? new Date(r.fechaSolicitud).toLocaleDateString('es-CL') : '') },
@@ -120,7 +121,14 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
   return (
     <div>
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div>
+            <label htmlFor="hi-usuario" className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
+            <input id="hi-usuario" type="text" value={usuario} onChange={e => setUsuario(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') aplicar() }}
+              placeholder="Nombre o documento"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
           <div>
             <label htmlFor="hi-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
             <select id="hi-guia" value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
