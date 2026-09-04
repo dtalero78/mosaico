@@ -1377,57 +1377,6 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                       </div>
                     </div>
 
-                    {/* Módulo y lección del refuerzo — SÓLO en una nivelación. En una sesión
-                        de curso la lección la fija el calendario del salón; aquí se puede
-                        asignar o cambiar porque una nivelación en grupo comparte horario pero
-                        cada alumno refuerza su propio punto del curso. Se guarda en SU
-                        agendamiento, no en el evento: no altera a los demás inscritos. */}
-                    {String((selectedClass as any).tipoEvento || '').toUpperCase() === 'NIVELACION' && (
-                      <div className="bg-violet-50 rounded-xl p-4 border border-violet-200">
-                        <h4 className="text-base font-semibold text-violet-900 mb-3 flex items-center space-x-2">
-                          <span>🎯</span>
-                          <span>Módulo y lección del refuerzo</span>
-                        </h4>
-                        {(() => {
-                          const modulos: string[] = []
-                          for (const l of leccionesCurso) if (!modulos.includes(l.modulo)) modulos.push(l.modulo)
-                          const modActual = (selectedClass.nivel || '') as string
-                          const delModulo = modActual ? leccionesCurso.filter(l => l.modulo === modActual) : []
-                          return (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label htmlFor="niv-modulo" className="block text-xs font-medium text-violet-700 mb-1">Módulo</label>
-                                <select
-                                  id="niv-modulo"
-                                  value={modActual}
-                                  onChange={(e) => selectedClass && setSelectedClass({ ...selectedClass, nivel: e.target.value, step: '' } as any)}
-                                  disabled={!modulos.length}
-                                  className="block w-full rounded-lg border-violet-300 shadow-sm text-sm bg-white focus:border-violet-500 focus:ring-violet-500 disabled:bg-violet-50 disabled:cursor-not-allowed"
-                                >
-                                  <option value="">— Módulo —</option>
-                                  {modulos.map(m => <option key={m} value={m}>{m}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <label htmlFor="niv-leccion" className="block text-xs font-medium text-violet-700 mb-1">Lección</label>
-                                <select
-                                  id="niv-leccion"
-                                  value={(selectedClass.step || '') as string}
-                                  onChange={(e) => selectedClass && setSelectedClass({ ...selectedClass, step: e.target.value } as any)}
-                                  disabled={!delModulo.length}
-                                  className="block w-full rounded-lg border-violet-300 shadow-sm text-sm bg-white focus:border-violet-500 focus:ring-violet-500 disabled:bg-violet-50 disabled:cursor-not-allowed"
-                                >
-                                  <option value="">{modActual ? '— Lección —' : '— Elige módulo primero —'}</option>
-                                  {delModulo.map(l => <option key={l.value} value={l.value}>{l.value}</option>)}
-                                </select>
-                              </div>
-                            </div>
-                          )
-                        })()}
-                        <p className="mt-2 text-xs text-violet-600">Aplica sólo a este usuario; no cambia la nivelación de los demás inscritos.</p>
-                      </div>
-                    )}
-
                   </div>
                   )}
 
@@ -1509,6 +1458,59 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                         </div>
                       </div>
                     </div>
+                    )}
+
+                    {/* Módulo y lección del refuerzo — SÓLO en una nivelación. En una sesión
+                        de curso la lección la fija el calendario del salón; aquí se puede
+                        asignar o cambiar porque una nivelación en grupo comparte horario pero
+                        cada alumno refuerza su propio punto del curso. Se guarda en SU
+                        agendamiento, no en el evento: no altera a los demás inscritos. El gate
+                        canEvaluate es explícito: el bloque vivía dentro del de la columna
+                        izquierda, y esta columna no lo tiene. */}
+                    {canEvaluate && String((selectedClass as any).tipoEvento || '').toUpperCase() === 'NIVELACION' && (
+                      <div className="bg-violet-50 rounded-xl p-4 border border-violet-200">
+                        <h4 className="text-base font-semibold text-violet-900 mb-3 flex items-center space-x-2">
+                          <span>🎯</span>
+                          <span>Módulo y lección del refuerzo</span>
+                        </h4>
+                        {(() => {
+                          const modulos: string[] = []
+                          for (const l of leccionesCurso) if (!modulos.includes(l.modulo)) modulos.push(l.modulo)
+                          const modActual = (selectedClass.nivel || '') as string
+                          const delModulo = modActual ? leccionesCurso.filter(l => l.modulo === modActual) : []
+                          return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label htmlFor="niv-modulo" className="block text-xs font-medium text-violet-700 mb-1">Módulo</label>
+                                <select
+                                  id="niv-modulo"
+                                  value={modActual}
+                                  onChange={(e) => selectedClass && setSelectedClass({ ...selectedClass, nivel: e.target.value, step: '' } as any)}
+                                  disabled={!modulos.length}
+                                  className="block w-full rounded-lg border-violet-300 shadow-sm text-sm bg-white focus:border-violet-500 focus:ring-violet-500 disabled:bg-violet-50 disabled:cursor-not-allowed"
+                                >
+                                  <option value="">— Módulo —</option>
+                                  {modulos.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label htmlFor="niv-leccion" className="block text-xs font-medium text-violet-700 mb-1">Lección</label>
+                                <select
+                                  id="niv-leccion"
+                                  value={(selectedClass.step || '') as string}
+                                  onChange={(e) => selectedClass && setSelectedClass({ ...selectedClass, step: e.target.value } as any)}
+                                  disabled={!delModulo.length}
+                                  className="block w-full rounded-lg border-violet-300 shadow-sm text-sm bg-white focus:border-violet-500 focus:ring-violet-500 disabled:bg-violet-50 disabled:cursor-not-allowed"
+                                >
+                                  <option value="">{modActual ? '— Lección —' : '— Elige módulo primero —'}</option>
+                                  {delModulo.map(l => <option key={l.value} value={l.value}>{l.value}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                          )
+                        })()}
+                        <p className="mt-2 text-xs text-violet-600">Aplica sólo a este usuario; no cambia la nivelación de los demás inscritos.</p>
+                      </div>
                     )}
                   </div>
                 </div>
