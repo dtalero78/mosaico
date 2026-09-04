@@ -19,7 +19,7 @@ import { estadoLabel, estadoColor, ESTADO_ABIERTO } from '@/lib/casos-atencion-e
  * `area`. Se agrupan así porque responden a preguntas distintas: qué hay abierto,
  * quién faltó, qué clase quedó vacía, y qué quedó pendiente para cada área.
  */
-type Tab = 'casos' | 'asistencia' | 'vacias' | 'academicos' | 'coordinador' | 'financieros' | 'historico'
+type Tab = 'casos' | 'asistencia' | 'vacias' | 'academicos' | 'nivelaciones' | 'coordinador' | 'financieros' | 'historico'
 
 interface TabCfg {
   id: Tab; label: string; endpoint: string; vacio: string; descripcion: string
@@ -53,6 +53,12 @@ const TABS: TabCfg[] = [
     descripcion: 'Casos que quedaron en Cambio Curso, Cambio de Nivel o Solicitud Congelamiento.',
   },
   {
+    id: 'nivelaciones', label: 'Nivelaciones',
+    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'nivelaciones',
+    vacio: 'Sin casos derivados a Nivelaciones',
+    descripcion: 'Casos que derivaron en reforzarle al alumno un punto del curso.',
+  },
+  {
     id: 'coordinador', label: 'Coordinador',
     endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'coordinacion',
     vacio: 'Sin casos remitidos a Coordinación',
@@ -73,8 +79,35 @@ const TABS: TabCfg[] = [
 ]
 
 /** Las tres que leen el estado del caso comparten columnas y comportamiento. */
+/**
+ * A dónde puede asignarse un caso desde la bandeja. Cada destino guarda un
+ * estado y con eso el caso aparece en su pestaña — el mapeo estado→pestaña vive
+ * en lib/casos-atencion-estados, así que aquí sólo se nombra el estado.
+ *
+ * "Cerrar" no manda a ninguna bandeja: el caso no deja nada pendiente y sólo va
+ * al Histórico. Por eso es el único que exige comentario.
+ */
+const DESTINOS: { estado: string; label: string; detalle: string; clase: string }[] = [
+  { estado: 'REMITIDO_A_SERVICIO_ACADEMICO', label: 'Servicio Académico',
+    detalle: 'Cambio de nivel, congelamiento y demás trámites del área.',
+    clase: 'border-indigo-300 text-indigo-800 hover:bg-indigo-50' },
+  { estado: 'REMITIDO_A_NIVELACION', label: 'Nivelación',
+    detalle: 'Al alumno hay que reforzarle un punto del curso.',
+    clase: 'border-orange-300 text-orange-800 hover:bg-orange-50' },
+  { estado: 'REMITIDO_A_COORDINACION', label: 'Coordinador Académico',
+    detalle: 'La decisión la toma el Coordinador (incluye cambio de curso).',
+    clase: 'border-teal-300 text-teal-800 hover:bg-teal-50' },
+  { estado: 'REMITIDO_A_FINANZAS', label: 'Área Financiera',
+    detalle: 'Cierre financiero o cobranza pre-jurídica.',
+    clase: 'border-rose-300 text-rose-800 hover:bg-rose-50' },
+  { estado: 'RESUELTO', label: 'Cerrar',
+    detalle: 'Se resolvió y no requiere nada más. Pide comentario.',
+    clase: 'border-gray-300 text-gray-700 hover:bg-gray-50' },
+]
+
 const ES_GESTION = (t: Tab) =>
-  t === 'historico' || t === 'academicos' || t === 'financieros' || t === 'coordinador'
+  t === 'historico' || t === 'academicos' || t === 'financieros' ||
+  t === 'coordinador' || t === 'nivelaciones'
 
 interface Row {
   bookingId: string
@@ -159,6 +192,7 @@ function CasosAtencionContent() {
   // Modal de "Resuelto" (pestaña Casos)
   const [resolver, setResolver] = useState<Row | null>(null)
   const [comentario, setComentario] = useState('')
+  const [destino, setDestino] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Confirmación del WhatsApp (pestaña Asistencia)
@@ -278,19 +312,21 @@ function CasosAtencionContent() {
   }
 
   const confirmarResuelto = async () => {
-    if (!resolver) return
-    if (!comentario.trim()) { toast.error('El comentario es obligatorio'); return }
+    if (!resolver || !destino) return
+    const cierra = destino === 'RESUELTO'
+    if (cierra && !comentario.trim()) { toast.error('El comentario es obligatorio al cerrar'); return }
     setSaving(true)
     try {
       const res = await fetch(`/api/postgres/students/${resolver.academicaId}/caso-atencion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: resolver.bookingId, comentario: comentario.trim() }),
+        body: JSON.stringify({ bookingId: resolver.bookingId, comentario: comentario.trim(), estado: destino }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
-      toast.success('Caso marcado como resuelto')
+      toast.success(cierra ? 'Caso cerrado'
+        : `Caso asignado a ${DESTINOS.find(d => d.estado === destino)?.label || destino}`)
       setRows(prev => prev.filter(x => x.bookingId !== resolver.bookingId))
-      setResolver(null); setComentario('')
+      setResolver(null); setComentario(''); setDestino(null)
     } catch (e: any) {
       toast.error(e?.message || 'Error')
     } finally {
@@ -617,11 +653,11 @@ function CasosAtencionContent() {
                       title={r.codigoCaso ? `Caso ${r.codigoCaso}` : undefined}>
                       {r.estado && r.estado !== ESTADO_ABIERTO ? estadoLabel(r.estado) : 'Pendiente'}
                     </span>
-                    <button type="button" title="Marcar como resuelto (agrega un comentario al historial)"
-                      onClick={() => { setResolver(r); setComentario('') }}
+                    <button type="button" title="Asignar el caso a un área o cerrarlo"
+                      onClick={() => { setResolver(r); setComentario(''); setDestino(null) }}
                       disabled={!canGestion}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
-                      <CheckCircleIcon className="h-4 w-4" /> Resolver
+                      <CheckCircleIcon className="h-4 w-4" /> Asignar
                     </button>
                   </td>
                 </tr>
@@ -703,7 +739,7 @@ function CasosAtencionContent() {
       {resolver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !saving && setResolver(null)}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">Marcar caso como resuelto</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Asignar caso</h3>
             <p className="text-sm text-gray-500 mb-4">
               {resolver.nombre} — {resolver.curso || '—'} · Lección {resolver.leccion || '—'}
             </p>
@@ -713,22 +749,39 @@ function CasosAtencionContent() {
                 <p className="whitespace-pre-wrap break-words">{resolver.caso}</p>
               </div>
             )}
-            <label className="block text-sm font-medium text-gray-700 mb-1">Comentario de cierre del caso <span className="text-red-500">*</span></label>
+            <p className="block text-sm font-medium text-gray-700 mb-2">¿A dónde va el caso?</p>
+            <div className="space-y-2 mb-4">
+              {DESTINOS.map(d => (
+                <button key={d.estado} type="button" onClick={() => setDestino(d.estado)} disabled={saving}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg border-2 transition-colors disabled:opacity-50 ${
+                    destino === d.estado ? d.clase + ' ring-2 ring-offset-1 ring-primary-400' : d.clase
+                  }`}>
+                  <span className="block text-sm font-semibold">{d.label}</span>
+                  <span className="block text-xs opacity-80">{d.detalle}</span>
+                </button>
+              ))}
+            </div>
+
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Comentario{destino === 'RESUELTO' && <span className="text-red-500"> *</span>}
+            </label>
             <textarea
               value={comentario}
               onChange={e => setComentario(e.target.value)}
-              rows={4}
-              autoFocus
-              placeholder="Describe cómo se resolvió el caso de atención…"
+              rows={3}
+              placeholder={destino === 'RESUELTO'
+                ? 'Describe cómo se resolvió el caso…'
+                : 'Opcional: qué debe atender el área que lo reciba.'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
             />
-            <p className="text-xs text-gray-400 mt-1">Se agrega al historial del estudiante y cierra el caso.</p>
+            <p className="text-xs text-gray-400 mt-1">Se agrega al historial del estudiante y el caso sale de esta bandeja.</p>
             <div className="flex justify-end gap-2 mt-5">
-              <button type="button" onClick={() => setResolver(null)} disabled={saving}
+              <button type="button" onClick={() => { setResolver(null); setDestino(null) }} disabled={saving}
                 className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-              <button type="button" onClick={confirmarResuelto} disabled={saving || !comentario.trim()}
-                className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 font-medium">
-                {saving ? 'Guardando…' : 'Confirmar Resuelto'}
+              <button type="button" onClick={confirmarResuelto}
+                disabled={saving || !destino || (destino === 'RESUELTO' && !comentario.trim())}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
+                {saving ? 'Guardando…' : destino === 'RESUELTO' ? 'Cerrar caso' : 'Asignar'}
               </button>
             </div>
           </div>

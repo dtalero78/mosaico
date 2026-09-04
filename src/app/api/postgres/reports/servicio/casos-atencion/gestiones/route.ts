@@ -6,10 +6,11 @@ import { ValidationError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
 import {
   ESTADOS_CIERRE, ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS, ESTADOS_COORDINACION,
+  ESTADOS_NIVELACION,
 } from '@/lib/casos-atencion-estados'
 
 /**
- * GET .../casos-atencion/gestiones?area=historico|academicos|financieros|coordinacion
+ * GET .../casos-atencion/gestiones?area=historico|academicos|nivelaciones|coordinacion|financieros
  *     &curso&salon&leccion&guia&startDate&endDate
  *
  * Las pestañas que se alimentan del ESTADO del caso, no de la marca del
@@ -20,7 +21,8 @@ import {
  *  - `historico`   → todos los estados de cierre (el último mes por defecto)
  *  - `academicos`  → Cambio Curso · Cambio de Nivel · Solicitud Congelamiento
  *  - `financieros` → Cierre financiero · Envío Pre-jurídico
- *  - `coordinacion` → Remitido a Coordinación
+ *  - `nivelaciones` → Nivelación
+ *  - `coordinacion` → Remitido a Coordinación · Cambio Curso
  *
  * Académicos, Financieros y Coordinador **no llevan corte de tiempo por defecto**: son bandejas
  * de trabajo pendiente, y esconder lo de hace cinco semanas dejaría gestiones sin
@@ -36,6 +38,7 @@ const AREAS: Record<string, string[]> = {
   historico: ESTADOS_CIERRE,
   academicos: ESTADOS_ACADEMICOS,
   financieros: ESTADOS_FINANCIEROS,
+  nivelaciones: ESTADOS_NIVELACION,
   coordinacion: ESTADOS_COORDINACION,
 }
 

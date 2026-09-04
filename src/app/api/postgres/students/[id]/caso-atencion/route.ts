@@ -5,16 +5,22 @@ import { queryOne, withTransaction } from '@/lib/postgres'
 import { ServicioPermission } from '@/types/permissions'
 import { ValidationError, NotFoundError } from '@/lib/errors'
 import { ids } from '@/lib/id-generator'
+import { ESTADOS_CIERRE, ESTADO_LABEL, type EstadoCaso } from '@/lib/casos-atencion-estados'
 
 /**
  * POST /api/postgres/students/[id]/caso-atencion   (id = ACADEMICA._id)
- * Body: { bookingId, comentario }
+ * Body: { bookingId, comentario, estado? }
  *
- * Marca RESUELTO un Caso de Atención. Cierra las TRES cosas en una transacción:
+ * ASIGNA el caso a un área. `estado` dice a cuál (por defecto RESUELTO =
+ * "Cerrado", que es lo que hacía el botón cuando se llamaba Resolver).
+ * Todos los estados admitidos CIERRAN el caso para Servicio y lo mandan a la
+ * bandeja del área correspondiente; "Cerrar" no lo manda a ninguna.
+ *
+ * Cierra las TRES cosas en una transacción:
  *  - el booking (ACADEMICA_BOOKINGS.casoAtencion=false),
  *  - el comentario en el historial del estudiante (ACADEMICA.historicCasoAtencion),
- *  - y el CASO del módulo (CASOS_ATENCION.estado='RESUELTO' = "Cerrado"), con su
- *    entrada en CASOS_ESTADO_HISTORIAL.
+ *  - y el CASO del módulo (CASOS_ATENCION.estado = el elegido), con su entrada
+ *    en CASOS_ESTADO_HISTORIAL.
  *
  * Lo tercero se agregó porque sin ello el caso quedaba abierto en la ficha del
  * alumno aunque el informe lo diera por resuelto: eran dos verdades distintas
@@ -30,9 +36,17 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
   const body = await req.json().catch(() => ({}))
   const bookingId = String(body?.bookingId || '').trim()
   const comentario = String(body?.comentario || '').trim()
+  const estado = (String(body?.estado || 'RESUELTO').trim() || 'RESUELTO') as EstadoCaso
   if (!academicaId) throw new ValidationError('academicaId requerido')
   if (!bookingId) throw new ValidationError('bookingId requerido')
-  if (!comentario) throw new ValidationError('El comentario es obligatorio')
+  // Sólo estados de cierre: asignar a un área saca el caso de la bandeja.
+  if (!ESTADOS_CIERRE.includes(estado)) throw new ValidationError(`Estado no válido: ${estado}`)
+  // El comentario se exige al CERRAR, que es donde había que justificar por qué
+  // el caso no requiere nada más. Al derivarlo a un área es opcional: la
+  // justificación la dará el área que lo reciba.
+  if (estado === 'RESUELTO' && !comentario) {
+    throw new ValidationError('El comentario es obligatorio al cerrar el caso')
+  }
 
   // Datos del caso para el historial (curso, lección, fecha del evento, texto).
   const info = await queryOne<any>(
@@ -64,6 +78,8 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
     leccion: info.leccion || null,
     caso: info.caso || null,
     fechaEvento: info.fechaEvento ? new Date(info.fechaEvento).toISOString() : null,
+    estado,
+    estadoLabel: ESTADO_LABEL[estado] || estado,
     resueltoPor: session?.user?.email || null,
     resueltoPorNombre: (session?.user as any)?.name || null,
   }
@@ -85,18 +101,19 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
     if (info.casoId) {
       await client.query(
         `UPDATE "CASOS_ATENCION"
-            SET "estado" = 'RESUELTO', "cerradoPor" = $2, "cerradoEn" = NOW(), "_updatedDate" = NOW()
+            SET "estado" = $3::estado_caso, "cerradoPor" = $2, "cerradoEn" = NOW(), "_updatedDate" = NOW()
           WHERE "_id" = $1`,
-        [info.casoId, session?.user?.email || null]
+        [info.casoId, session?.user?.email || null, estado]
       )
       await client.query(
         `INSERT INTO "CASOS_ESTADO_HISTORIAL"("_id","casoId","estadoAnterior","estadoNuevo","autorEmail","autorNombre","motivo")
-         VALUES ($1,$2,$3,'RESUELTO',$4,$5,$6)`,
+         VALUES ($1,$2,$3,$7::estado_caso,$4,$5,$6)`,
         [ids.comment(), info.casoId, info.estadoCaso || 'EN_GESTION',
-         session?.user?.email || null, (session?.user as any)?.name || null, comentario]
+         session?.user?.email || null, (session?.user as any)?.name || null,
+         comentario || `Asignado a ${ESTADO_LABEL[estado] || estado}`, estado]
       )
     }
   })
 
-  return successResponse({ ok: true, casoCerrado: !!info.casoId })
+  return successResponse({ ok: true, casoCerrado: !!info.casoId, estado })
 })

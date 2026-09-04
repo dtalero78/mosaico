@@ -10,7 +10,8 @@
 export type EstadoCaso =
   | 'EN_GESTION' | 'RESUELTO' | 'PROCESO_DE_CIERRE' | 'PROPUESTA_DE_CAMBIO'
   | 'CIERRA_PROGRAMA' | 'REMITIDO_A_ACADEMICA' | 'PROGRAMA_CONGELADO'
-  | 'PRE_JURIDICO' | 'SIN_CONTACTO' | 'REMITIDO_A_COORDINACION';
+  | 'PRE_JURIDICO' | 'SIN_CONTACTO' | 'REMITIDO_A_COORDINACION'
+  | 'REMITIDO_A_SERVICIO_ACADEMICO' | 'REMITIDO_A_NIVELACION' | 'REMITIDO_A_FINANZAS';
 
 /** El único estado que deja el caso ABIERTO. Es el "Pendiente" del informe. */
 export const ESTADO_ABIERTO: EstadoCaso = 'EN_GESTION';
@@ -35,7 +36,10 @@ export const ESTADOS_CIERRE: EstadoCaso[] = [
   'REMITIDO_A_ACADEMICA',
   'PROGRAMA_CONGELADO',
   'PRE_JURIDICO',
+  'REMITIDO_A_SERVICIO_ACADEMICO',
+  'REMITIDO_A_NIVELACION',
   'REMITIDO_A_COORDINACION',
+  'REMITIDO_A_FINANZAS',
   'SIN_CONTACTO',
 ];
 
@@ -48,6 +52,9 @@ export const ESTADO_LABEL: Record<EstadoCaso, string> = {
   PROCESO_DE_CIERRE: 'Cierre financiero',
   CIERRA_PROGRAMA: 'Cierre financiero',   // fusionado; sólo para datos viejos
   PROPUESTA_DE_CAMBIO: 'Cambio Curso',
+  REMITIDO_A_SERVICIO_ACADEMICO: 'Servicio Académico',
+  REMITIDO_A_NIVELACION: 'Nivelación',
+  REMITIDO_A_FINANZAS: 'Área Financiera',
   REMITIDO_A_ACADEMICA: 'Cambio de Nivel',
   PROGRAMA_CONGELADO: 'Solicitud Congelamiento',
   PRE_JURIDICO: 'Envío Pre-jurídico',
@@ -67,7 +74,7 @@ export function estadoLabel(e: string | null | undefined): string {
  * contactar" no están en ninguna: no dejan nada pendiente para nadie.
  */
 export const ESTADOS_ACADEMICOS: EstadoCaso[] = [
-  'PROPUESTA_DE_CAMBIO',      // Cambio Curso
+  'REMITIDO_A_SERVICIO_ACADEMICO', // el genérico del botón Asignar
   'REMITIDO_A_ACADEMICA',     // Cambio de Nivel
   'PROGRAMA_CONGELADO',       // Solicitud Congelamiento
 ];
@@ -80,9 +87,20 @@ export const ESTADOS_ACADEMICOS: EstadoCaso[] = [
  */
 export const ESTADOS_COORDINACION: EstadoCaso[] = [
   'REMITIDO_A_COORDINACION',
+  'PROPUESTA_DE_CAMBIO',      // Cambio Curso: la decisión de mover a un alumno
+                              // de curso la toma el Coordinador, no Académica.
+];
+
+/**
+ * Los que quedan a cargo del área de Nivelaciones: el caso deriva en que al
+ * alumno hay que reforzarle un punto del curso.
+ */
+export const ESTADOS_NIVELACION: EstadoCaso[] = [
+  'REMITIDO_A_NIVELACION',
 ];
 
 export const ESTADOS_FINANCIEROS: EstadoCaso[] = [
+  'REMITIDO_A_FINANZAS',      // el genérico del botón Asignar
   'PROCESO_DE_CIERRE',        // Cierre financiero
   'CIERRA_PROGRAMA',          // idem (legado fusionado)
   'PRE_JURIDICO',             // Envío Pre-jurídico
@@ -100,6 +118,9 @@ export const ESTADO_COLOR: Record<EstadoCaso, string> = {
   PRE_JURIDICO: 'bg-red-100 text-red-800',
   SIN_CONTACTO: 'bg-stone-100 text-stone-700',
   REMITIDO_A_COORDINACION: 'bg-teal-100 text-teal-800',
+  REMITIDO_A_SERVICIO_ACADEMICO: 'bg-indigo-100 text-indigo-800',
+  REMITIDO_A_NIVELACION: 'bg-orange-100 text-orange-800',
+  REMITIDO_A_FINANZAS: 'bg-rose-100 text-rose-800',
 };
 
 export function estadoColor(e: string | null | undefined): string {
