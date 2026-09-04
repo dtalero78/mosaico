@@ -5,23 +5,24 @@ import { query } from '@/lib/postgres'
 import { ValidationError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
 import {
-  ESTADOS_CIERRE, ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS,
+  ESTADOS_CIERRE, ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS, ESTADOS_COORDINACION,
 } from '@/lib/casos-atencion-estados'
 
 /**
- * GET .../casos-atencion/gestiones?area=historico|academicos|financieros
+ * GET .../casos-atencion/gestiones?area=historico|academicos|financieros|coordinacion
  *     &curso&salon&leccion&guia&startDate&endDate
  *
- * Las tres pestañas que se alimentan del ESTADO del caso, no de la marca del
- * agendamiento. Un solo endpoint porque las tres devuelven exactamente las mismas
+ * Las pestañas que se alimentan del ESTADO del caso, no de la marca del
+ * agendamiento. Un solo endpoint porque todas devuelven exactamente las mismas
  * columnas y sólo cambia el conjunto de estados que miran; tres endpoints con la
  * misma consulta habrían divergido al primer ajuste.
  *
  *  - `historico`   → todos los estados de cierre (el último mes por defecto)
  *  - `academicos`  → Cambio Curso · Cambio de Nivel · Solicitud Congelamiento
  *  - `financieros` → Cierre financiero · Envío Pre-jurídico
+ *  - `coordinacion` → Remitido a Coordinación
  *
- * Académicos y Financieros **no llevan corte de tiempo por defecto**: son bandejas
+ * Académicos, Financieros y Coordinador **no llevan corte de tiempo por defecto**: son bandejas
  * de trabajo pendiente, y esconder lo de hace cinco semanas dejaría gestiones sin
  * hacer fuera de la vista. El Histórico sí lo lleva, porque es consulta.
  *
@@ -35,6 +36,7 @@ const AREAS: Record<string, string[]> = {
   historico: ESTADOS_CIERRE,
   academicos: ESTADOS_ACADEMICOS,
   financieros: ESTADOS_FINANCIEROS,
+  coordinacion: ESTADOS_COORDINACION,
 }
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {

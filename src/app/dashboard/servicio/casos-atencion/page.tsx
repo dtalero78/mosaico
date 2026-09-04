@@ -19,7 +19,7 @@ import { estadoLabel, estadoColor, ESTADO_ABIERTO } from '@/lib/casos-atencion-e
  * `area`. Se agrupan así porque responden a preguntas distintas: qué hay abierto,
  * quién faltó, qué clase quedó vacía, y qué quedó pendiente para cada área.
  */
-type Tab = 'casos' | 'asistencia' | 'vacias' | 'historico' | 'academicos' | 'financieros'
+type Tab = 'casos' | 'asistencia' | 'vacias' | 'academicos' | 'financieros' | 'coordinador' | 'historico'
 
 interface TabCfg {
   id: Tab; label: string; endpoint: string; vacio: string; descripcion: string
@@ -47,12 +47,6 @@ const TABS: TabCfg[] = [
     descripcion: 'Sesiones de la semana a las que no asistió ningún estudiante, agrupadas por curso y salón.',
   },
   {
-    id: 'historico', label: 'Histórico',
-    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'historico',
-    vacio: 'Sin casos cerrados en el período',
-    descripcion: 'Casos cerrados del último mes. Usa las fechas para consultar otro período.',
-  },
-  {
     id: 'academicos', label: 'Académicos',
     endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'academicos',
     vacio: 'Sin gestiones académicas pendientes',
@@ -64,10 +58,23 @@ const TABS: TabCfg[] = [
     vacio: 'Sin gestiones financieras pendientes',
     descripcion: 'Casos que quedaron en Cierre financiero o Envío Pre-jurídico.',
   },
+  {
+    id: 'coordinador', label: 'Coordinador',
+    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'coordinacion',
+    vacio: 'Sin casos remitidos a Coordinación',
+    descripcion: 'Casos que Servicio remitió al Coordinador Académico para que decida.',
+  },
+  {
+    id: 'historico', label: 'Histórico',
+    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'historico',
+    vacio: 'Sin casos cerrados en el período',
+    descripcion: 'Casos cerrados del último mes. Usa las fechas para consultar otro período.',
+  },
 ]
 
 /** Las tres que leen el estado del caso comparten columnas y comportamiento. */
-const ES_GESTION = (t: Tab) => t === 'historico' || t === 'academicos' || t === 'financieros'
+const ES_GESTION = (t: Tab) =>
+  t === 'historico' || t === 'academicos' || t === 'financieros' || t === 'coordinador'
 
 interface Row {
   bookingId: string

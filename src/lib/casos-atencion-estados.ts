@@ -10,7 +10,7 @@
 export type EstadoCaso =
   | 'EN_GESTION' | 'RESUELTO' | 'PROCESO_DE_CIERRE' | 'PROPUESTA_DE_CAMBIO'
   | 'CIERRA_PROGRAMA' | 'REMITIDO_A_ACADEMICA' | 'PROGRAMA_CONGELADO'
-  | 'PRE_JURIDICO' | 'SIN_CONTACTO';
+  | 'PRE_JURIDICO' | 'SIN_CONTACTO' | 'REMITIDO_A_COORDINACION';
 
 /** El único estado que deja el caso ABIERTO. Es el "Pendiente" del informe. */
 export const ESTADO_ABIERTO: EstadoCaso = 'EN_GESTION';
@@ -35,6 +35,7 @@ export const ESTADOS_CIERRE: EstadoCaso[] = [
   'REMITIDO_A_ACADEMICA',
   'PROGRAMA_CONGELADO',
   'PRE_JURIDICO',
+  'REMITIDO_A_COORDINACION',
   'SIN_CONTACTO',
 ];
 
@@ -51,6 +52,7 @@ export const ESTADO_LABEL: Record<EstadoCaso, string> = {
   PROGRAMA_CONGELADO: 'Solicitud Congelamiento',
   PRE_JURIDICO: 'Envío Pre-jurídico',
   SIN_CONTACTO: 'Sin poder contactar',
+  REMITIDO_A_COORDINACION: 'Remitido a Coordinación',
 };
 
 /** Etiqueta de un estado, tolerando valores desconocidos o legados. */
@@ -60,7 +62,7 @@ export function estadoLabel(e: string | null | undefined): string {
 }
 
 /**
- * Las dos áreas que gestionan un caso cerrado. Un estado pertenece a un área
+ * Las áreas que gestionan un caso cerrado. Un estado pertenece a un área
  * cuando su resolución la trabaja esa área — por eso "Cerrado" y "Sin poder
  * contactar" no están en ninguna: no dejan nada pendiente para nadie.
  */
@@ -68,6 +70,16 @@ export const ESTADOS_ACADEMICOS: EstadoCaso[] = [
   'PROPUESTA_DE_CAMBIO',      // Cambio Curso
   'REMITIDO_A_ACADEMICA',     // Cambio de Nivel
   'PROGRAMA_CONGELADO',       // Solicitud Congelamiento
+];
+
+/**
+ * Lo que queda a cargo del Coordinador Académico. Está aparte de
+ * ESTADOS_ACADEMICOS porque no es lo mismo: aquéllos piden un trámite
+ * concreto sobre el alumno (moverlo de curso, de nivel, congelarlo),
+ * mientras que éste es la decisión que el Coordinador todavía debe tomar.
+ */
+export const ESTADOS_COORDINACION: EstadoCaso[] = [
+  'REMITIDO_A_COORDINACION',
 ];
 
 export const ESTADOS_FINANCIEROS: EstadoCaso[] = [
@@ -87,6 +99,7 @@ export const ESTADO_COLOR: Record<EstadoCaso, string> = {
   PROGRAMA_CONGELADO: 'bg-violet-100 text-violet-800',
   PRE_JURIDICO: 'bg-red-100 text-red-800',
   SIN_CONTACTO: 'bg-stone-100 text-stone-700',
+  REMITIDO_A_COORDINACION: 'bg-teal-100 text-teal-800',
 };
 
 export function estadoColor(e: string | null | undefined): string {
