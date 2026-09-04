@@ -19,7 +19,7 @@ import { estadoLabel, estadoColor, ESTADO_ABIERTO } from '@/lib/casos-atencion-e
  * `area`. Se agrupan así porque responden a preguntas distintas: qué hay abierto,
  * quién faltó, qué clase quedó vacía, y qué quedó pendiente para cada área.
  */
-type Tab = 'casos' | 'asistencia' | 'vacias' | 'academicos' | 'financieros' | 'coordinador' | 'historico'
+type Tab = 'casos' | 'asistencia' | 'vacias' | 'academicos' | 'coordinador' | 'financieros' | 'historico'
 
 interface TabCfg {
   id: Tab; label: string; endpoint: string; vacio: string; descripcion: string
@@ -53,16 +53,16 @@ const TABS: TabCfg[] = [
     descripcion: 'Casos que quedaron en Cambio Curso, Cambio de Nivel o Solicitud Congelamiento.',
   },
   {
-    id: 'financieros', label: 'Financieros',
-    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'financieros',
-    vacio: 'Sin gestiones financieras pendientes',
-    descripcion: 'Casos que quedaron en Cierre financiero o Envío Pre-jurídico.',
-  },
-  {
     id: 'coordinador', label: 'Coordinador',
     endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'coordinacion',
     vacio: 'Sin casos remitidos a Coordinación',
     descripcion: 'Casos que Servicio remitió al Coordinador Académico para que decida.',
+  },
+  {
+    id: 'financieros', label: 'Financieros',
+    endpoint: '/api/postgres/reports/servicio/casos-atencion/gestiones', area: 'financieros',
+    vacio: 'Sin gestiones financieras pendientes',
+    descripcion: 'Casos que quedaron en Cierre financiero o Envío Pre-jurídico.',
   },
   {
     id: 'historico', label: 'Histórico',
