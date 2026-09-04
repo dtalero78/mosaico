@@ -233,6 +233,7 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
                       <ConfirmacionCell
                         academicaId={r.academicaId}
                         fechaSolicitud={r.fechaSolicitud}
+                        fechaEvento={r.eventoDia}
                         confirmadoEn={r.confirmadoEn}
                         confirmadoPor={r.confirmadoPor}
                         puedeGestionar={canGestion}

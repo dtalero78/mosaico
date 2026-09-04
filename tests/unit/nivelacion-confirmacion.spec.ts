@@ -51,14 +51,28 @@ test('la cancelacion es el MISMO jueves a las 22:00', () => {
   expect(corteCancelacion('2026-08-28T19:00:00.000Z')).toBe('2026-09-03T22:00')
 })
 
-test('el alumno puede confirmar hasta las 09:00 del jueves, no despues', () => {
+test('el plazo se cuenta desde el evento: 3 horas antes', () => {
   const det = { fecha: '2026-08-25T18:00:00.000Z' }
-  // Miércoles: abierta
-  expect(puedeConfirmarAlumno(det, new Date('2026-08-26T18:00:00.000Z'))).toBe(true)
-  // Jueves 08:59 Chile (12:59Z): abierta
-  expect(puedeConfirmarAlumno(det, new Date('2026-08-27T12:59:00.000Z'))).toBe(true)
-  // Jueves 09:00 exactas: cerrada
-  expect(puedeConfirmarAlumno(det, new Date('2026-08-27T13:00:00.000Z'))).toBe(false)
+  const evento = new Date('2026-08-28T21:00:00.000Z')  // nivelación
+
+  // Un día antes: abierta, aunque el jueves de la solicitud ya pasó.
+  // Es el caso que motivó el cambio: el alumno veía "venció" con el evento
+  // todavía a 20 horas de distancia.
+  expect(puedeConfirmarAlumno(det, new Date('2026-08-27T21:00:00.000Z'), evento)).toBe(true)
+  // A 3 h 01 min: todavía alcanza
+  expect(puedeConfirmarAlumno(det, new Date('2026-08-28T17:59:00.000Z'), evento)).toBe(true)
+  // A 3 h exactas: ya no
+  expect(puedeConfirmarAlumno(det, new Date('2026-08-28T18:00:00.000Z'), evento)).toBe(false)
+  // Con el evento ya pasado: tampoco
+  expect(puedeConfirmarAlumno(det, new Date('2026-08-28T22:00:00.000Z'), evento)).toBe(false)
+})
+
+test('sin horario asignado el plazo no corre: queda abierta', () => {
+  const det = { fecha: '2026-08-25T18:00:00.000Z' }
+  // El alumno no tiene qué confirmar todavía (el panel le oculta el botón),
+  // pero decir "venció" sería falso: no ha tenido oportunidad.
+  expect(puedeConfirmarAlumno(det, new Date('2026-09-30T18:00:00.000Z'))).toBe(true)
+  expect(estadoConfirmacion(det, new Date('2026-09-30T18:00:00.000Z'))).toBe('abierta')
 })
 
 test('una vez confirmada no vuelve a estar abierta ni se cancela', () => {
@@ -69,14 +83,15 @@ test('una vez confirmada no vuelve a estar abierta ni se cancela', () => {
   expect(debeCancelarse(det, new Date('2026-08-28T18:00:00.000Z'))).toBe(false)
 })
 
-test('sin confirmar: vencida a las 09:00, cancelable recien a las 22:00', () => {
+test('la cancelación automática sigue en el jueves 22:00', () => {
   const det = { fecha: '2026-08-25T18:00:00.000Z' }
   const jueves0900 = new Date('2026-08-27T13:00:00.000Z')
   const jueves2159 = new Date('2026-08-28T01:59:00.000Z') // 21:59 Chile
   const jueves2200 = new Date('2026-08-28T02:00:00.000Z') // 22:00 Chile
-  expect(estadoConfirmacion(det, jueves0900)).toBe('vencida')
-  // Entre 09:00 y 22:00 esta vencida para el alumno pero AUN NO se cancela:
-  // es la ventana en que Servicio la puede confirmar a mano.
+  // El plazo del ALUMNO ya no depende del jueves — sin evento sigue abierta.
+  expect(estadoConfirmacion(det, jueves0900)).toBe('abierta')
+  // La cancelación del cron NO cambió: sigue corriendo el jueves 22:00 sobre
+  // las nivelaciones sin confirmar que todavía no tienen evento agendado.
   expect(debeCancelarse(det, jueves0900)).toBe(false)
   expect(debeCancelarse(det, jueves2159)).toBe(false)
   expect(debeCancelarse(det, jueves2200)).toBe(true)
@@ -86,6 +101,7 @@ test('sin solicitud no hay nada que confirmar ni cancelar', () => {
   expect(estadoConfirmacion(null)).toBe('sin-solicitud')
   expect(estadoConfirmacion({})).toBe('sin-solicitud')
   expect(puedeConfirmarAlumno(null)).toBe(false)
+  expect(puedeConfirmarAlumno({}, new Date(), '2026-08-28T21:00:00.000Z')).toBe(false)
   expect(debeCancelarse(null)).toBe(false)
 })
 

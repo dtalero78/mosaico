@@ -102,6 +102,19 @@ export const GET = handlerWithAuth(async (request, context, session) => {
     const det = niv?.detalleNivelacion || null;
     // Vale mientras la nivelación siga viva: pedida o ya aprobada sin dictarse.
     if (det?.fecha && (niv?.nivelacion === true || niv?.aprobadoNivelacion === true)) {
+      // El plazo se cuenta desde el HORARIO ASIGNADO, así que hace falta el
+      // evento. Sin agendamiento la confirmación queda abierta: el alumno aún
+      // no tiene qué confirmar y el panel le oculta el botón.
+      const ev = await queryOne<{ dia: string }>(
+        `SELECT MIN(c."dia") AS dia
+           FROM "ACADEMICA_BOOKINGS" b
+           JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+          WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
+            AND b."cancelo" IS NOT TRUE
+            AND c."tipo" = 'NIVELACION'
+            AND c."dia" > NOW()`,
+        [(student as any).academicaId]
+      ).catch(() => null);
       nivelacionSolicitud = {
         fecha: det.fecha,
         modulo: det.modulo ?? null,
@@ -109,7 +122,7 @@ export const GET = handlerWithAuth(async (request, context, session) => {
         confirmadoEn: det.confirmadoEn ?? null,
         confirmadoPor: det.confirmadoPor ?? null,
         corte: corteConfirmacion(det.fecha),
-        estado: estadoConfirmacion(det),
+        estado: estadoConfirmacion(det, new Date(), ev?.dia ?? null),
       };
     }
   }

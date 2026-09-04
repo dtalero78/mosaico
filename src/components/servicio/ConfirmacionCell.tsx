@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { estadoConfirmacion, corteConfirmacion } from '@/lib/nivelacion-confirmacion'
+import { estadoConfirmacion, HORAS_ANTES_CONFIRMACION } from '@/lib/nivelacion-confirmacion'
 
 /**
  * Celda "Confirmación" de las pestañas de Nivelaciones.
@@ -16,10 +16,12 @@ import { estadoConfirmacion, corteConfirmacion } from '@/lib/nivelacion-confirma
  * que el backend permite no se pueden separar.
  */
 export default function ConfirmacionCell({
-  academicaId, fechaSolicitud, confirmadoEn, confirmadoPor, puedeGestionar, onConfirmed, soloLectura,
+  academicaId, fechaSolicitud, fechaEvento, confirmadoEn, confirmadoPor, puedeGestionar, onConfirmed, soloLectura,
 }: {
   academicaId?: string | null
   fechaSolicitud: string | null
+  /** Horario asignado. El plazo se cuenta desde aquí; sin él, aún no corre. */
+  fechaEvento?: string | null
   confirmadoEn: string | null
   confirmadoPor: string | null
   /** Permiso SERVICIO.NIVELACIONES.GESTION: habilita confirmar a mano. */
@@ -29,7 +31,7 @@ export default function ConfirmacionCell({
   soloLectura?: boolean
 }) {
   const [guardando, setGuardando] = useState(false)
-  const estado = estadoConfirmacion({ fecha: fechaSolicitud, confirmadoEn })
+  const estado = estadoConfirmacion({ fecha: fechaSolicitud, confirmadoEn }, new Date(), fechaEvento ?? null)
 
   if (estado === 'sin-solicitud') return <span className="text-gray-300">—</span>
 
@@ -70,10 +72,16 @@ export default function ConfirmacionCell({
   }
 
   const vencida = estado === 'vencida'
-  const corte = corteConfirmacion(fechaSolicitud)
+  // El plazo se cuenta desde el horario asignado; sin agendamiento todavía no
+  // corre, y el título lo dice para no dar a entender que el alumno se demoró.
   const badge = vencida
-    ? { cls: 'bg-red-100 text-red-700', txt: 'Sin confirmar', title: `El plazo venció el ${corte.replace('T', ' ')} (hora de Chile)` }
-    : { cls: 'bg-amber-100 text-amber-700', txt: 'Pendiente', title: `El usuario puede confirmar hasta el ${corte.replace('T', ' ')} (hora de Chile)` }
+    ? { cls: 'bg-red-100 text-red-700', txt: 'Sin confirmar',
+        title: `El plazo venció: quedan menos de ${HORAS_ANTES_CONFIRMACION} horas para la nivelación` }
+    : fechaEvento
+      ? { cls: 'bg-amber-100 text-amber-700', txt: 'Pendiente',
+          title: `Puede confirmar hasta ${HORAS_ANTES_CONFIRMACION} horas antes de la nivelación` }
+      : { cls: 'bg-amber-100 text-amber-700', txt: 'Pendiente',
+          title: 'Sin horario asignado: el plazo empieza a correr cuando se agrupe' }
 
   return (
     <span className="inline-flex items-center gap-1 whitespace-nowrap">

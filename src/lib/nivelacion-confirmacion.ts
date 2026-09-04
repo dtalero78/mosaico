@@ -29,6 +29,18 @@ export { TZ_OPERACION };
 export const DIA_CORTE = 4;
 /** Hora (Chile) en que el alumno deja de poder confirmar. */
 export const HORA_CIERRE_CONFIRMACION = 9;
+
+/**
+ * Horas antes del evento hasta las que el alumno puede confirmar.
+ *
+ * El plazo se cuenta desde el HORARIO ASIGNADO, no desde una fecha fija del
+ * calendario. Antes era el jueves 09:00 de la semana de la solicitud, y eso
+ * dejaba fuera el caso normal: una nivelación pedida el miércoles y agendada
+ * para el viernes le vencía el jueves por la mañana, con el evento todavía a
+ * un día de distancia. El alumno veía "el plazo venció" con 20 horas por
+ * delante. Contarlo desde el evento es lo que el panel le promete.
+ */
+export const HORAS_ANTES_CONFIRMACION = 3;
 /** Hora (Chile) en que el sistema cancela lo que nadie confirmó. */
 export const HORA_CANCELACION = 22;
 
@@ -130,18 +142,35 @@ export type EstadoConfirmacion = 'sin-solicitud' | 'confirmada' | 'abierta' | 'v
  * En qué punto del ciclo está la confirmación.
  *  - `confirmada`: alguien ya la confirmó (el alumno o Servicio).
  *  - `abierta`: el alumno todavía puede confirmarla.
- *  - `vencida`: pasaron las 09:00 del jueves; sólo Servicio puede.
+ *  - `vencida`: quedan menos de HORAS_ANTES_CONFIRMACION para el evento; sólo
+ *    Servicio puede confirmarla a mano.
+ *
+ * SIN evento asignado la confirmación queda `abierta`: el alumno no tiene qué
+ * confirmar todavía y el panel le oculta el botón, pero decir "venció" sería
+ * falso — no ha tenido oportunidad. El plazo empieza a correr cuando Servicio
+ * agrupa la nivelación y le asigna horario.
  */
-export function estadoConfirmacion(det: DetalleNivelacion | null | undefined, now: Date = new Date()): EstadoConfirmacion {
+export function estadoConfirmacion(
+  det: DetalleNivelacion | null | undefined,
+  now: Date = new Date(),
+  fechaEvento?: any,
+): EstadoConfirmacion {
   if (!det?.fecha) return 'sin-solicitud';
   if (det.confirmadoEn) return 'confirmada';
-  const corte = corteConfirmacion(det.fecha);
-  return corte && ahoraEnChile(now) < corte ? 'abierta' : 'vencida';
+  if (!fechaEvento) return 'abierta';
+  const ev = fechaEvento instanceof Date ? fechaEvento : new Date(fechaEvento);
+  if (isNaN(ev.getTime())) return 'abierta';
+  const horas = (ev.getTime() - now.getTime()) / 3_600_000;
+  return horas > HORAS_ANTES_CONFIRMACION ? 'abierta' : 'vencida';
 }
 
 /** ¿Puede el ALUMNO confirmar ahora mismo? Servicio no pasa por aquí. */
-export function puedeConfirmarAlumno(det: DetalleNivelacion | null | undefined, now: Date = new Date()): boolean {
-  return estadoConfirmacion(det, now) === 'abierta';
+export function puedeConfirmarAlumno(
+  det: DetalleNivelacion | null | undefined,
+  now: Date = new Date(),
+  fechaEvento?: any,
+): boolean {
+  return estadoConfirmacion(det, now, fechaEvento) === 'abierta';
 }
 
 /** ¿Ya se debe cancelar por falta de confirmación? (jueves 22:00 cumplido) */
@@ -152,4 +181,4 @@ export function debeCancelarse(det: DetalleNivelacion | null | undefined, now: D
 }
 
 export const MENSAJE_CONFIRMACION_VENCIDA =
-  'El plazo para confirmar venció (jueves 09:00). Comunícate con el Área de Servicio.';
+  `El plazo para confirmar venció (menos de ${HORAS_ANTES_CONFIRMACION} horas para la nivelación). Comunícate con el Área de Servicio.`;

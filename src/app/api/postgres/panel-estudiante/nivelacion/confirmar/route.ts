@@ -34,7 +34,21 @@ export const POST = handlerWithAuth(async (_request, _ctx, session) => {
   if (det.confirmadoEn) {
     return successResponse({ confirmadoEn: det.confirmadoEn, confirmadoPor: det.confirmadoPor ?? null, yaEstaba: true });
   }
-  if (!puedeConfirmarAlumno(det)) throw new ValidationError(MENSAJE_CONFIRMACION_VENCIDA);
+  // El plazo se cuenta desde el HORARIO ASIGNADO. Se resuelve aquí y no se
+  // acepta del cliente: quien confirma no debe poder decidir su propio plazo.
+  const ev = await queryOne<{ dia: string }>(
+    `SELECT MIN(c."dia") AS dia
+       FROM "ACADEMICA_BOOKINGS" b
+       JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+      WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
+        AND b."cancelo" IS NOT TRUE
+        AND c."tipo" = 'NIVELACION'
+        AND c."dia" > NOW()`,
+    [student.academicaId]
+  ).catch(() => null);
+  if (!puedeConfirmarAlumno(det, new Date(), ev?.dia ?? null)) {
+    throw new ValidationError(MENSAJE_CONFIRMACION_VENCIDA);
+  }
 
   const confirmadoEn = new Date().toISOString();
   const nuevo = { ...det, confirmadoEn, confirmadoPor: 'ESTUDIANTE', confirmadoPorNombre: null };

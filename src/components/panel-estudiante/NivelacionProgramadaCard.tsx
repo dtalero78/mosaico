@@ -6,8 +6,10 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 
-// La nivelación se puede cancelar hasta 24 h antes del evento.
-const CANCEL_DEADLINE_HOURS = 24
+// La nivelación se puede cancelar hasta 3 h antes del evento. El servidor
+// rechaza a los 60 min (CANCEL_DEADLINE_MINUTES, común a todos los bookings),
+// así que este límite es más estricto: nunca deja pedir algo que se rechace.
+const CANCEL_DEADLINE_HOURS = 3
 
 /** Lo que `/panel-estudiante/me` devuelve en `profile.nivelacionSolicitud`. */
 export interface NivelacionSolicitud {
@@ -66,15 +68,6 @@ export default function NivelacionProgramadaCard({
 
   const confirmada = solicitud?.estado === 'confirmada'
   const puedeConfirmar = solicitud?.estado === 'abierta'
-  // 'YYYY-MM-DDTHH:mm' de Chile → texto legible sin volver a pasar por Date
-  // (el corte YA está resuelto a hora chilena; convertirlo lo movería otra vez).
-  const corteTexto = (() => {
-    const c = solicitud?.corte
-    if (!c) return ''
-    const [f, h] = c.split('T')
-    const [y, m, d] = f.split('-').map(Number)
-    return `${format(new Date(y, m - 1, d), "EEEE d 'de' MMMM", { locale: es })} a las ${h}`
-  })()
 
   const confirmar = async () => {
     setConfirmando(true)
@@ -134,7 +127,9 @@ export default function NivelacionProgramadaCard({
         </div>
 
         <div className="flex-shrink-0 flex flex-col items-end gap-2">
-          {puedeConfirmar && (
+          {/* Sólo con el agendamiento hecho: confirmar sin horario asignado no
+              dice nada, y el alumno no puede saber si le sirve esa hora. */}
+          {puedeConfirmar && booking && (
             <button
               onClick={confirmar}
               disabled={confirmando}
@@ -157,7 +152,7 @@ export default function NivelacionProgramadaCard({
               </button>
             ) : (
               <span className="text-xs text-gray-400 self-center">
-                No cancelable (&lt; 24 h)
+                No cancelable (&lt; 3 h)
               </span>
             ))}
         </div>
@@ -173,7 +168,7 @@ export default function NivelacionProgramadaCard({
       ) : confirmada ? (
         <p className="text-xs text-orange-800/80 mt-3">
           Contamos con tu asistencia a la nivelación. Si no puedes asistir, recuerda cancelarla
-          con al menos 24 horas de anticipación.
+          con al menos 3 horas de anticipación.
         </p>
       ) : puedeConfirmar ? (
         <>
@@ -181,10 +176,10 @@ export default function NivelacionProgramadaCard({
             Tienes una nivelación programada. Cuando tu horario esté disponible, confírmalo con el
             botón verde. A partir de ese momento, contaremos con tu asistencia.
           </p>
-          {/* El plazo se conserva aparte: sin él el alumno no sabe hasta cuándo
-              puede confirmar ni que la nivelación se cancela sola. */}
+          {/* El plazo se cuenta desde el horario del evento, no desde una fecha
+              fija: el botón sólo aparece cuando ya hay agendamiento. */}
           <p className="text-xs text-orange-800/80 mt-1">
-            Confirma antes del <strong>{corteTexto}</strong>. Si no confirmas, la nivelación se cancela.
+            Confirma al menos con <strong>tres horas</strong> antes del horario que se te asigne.
           </p>
         </>
       ) : pedida ? (
@@ -195,7 +190,7 @@ export default function NivelacionProgramadaCard({
         /* Ya agendada y sin confirmación pendiente. */
         <p className="text-xs text-orange-800/80 mt-3">
           Contamos con tu asistencia a la nivelación. Si no puedes asistir, recuerda cancelarla
-          con al menos 24 horas de anticipación.
+          con al menos 3 horas de anticipación.
         </p>
       )}
     </div>
