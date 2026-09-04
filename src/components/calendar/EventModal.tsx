@@ -656,6 +656,8 @@ export default function EventModal({
     eventData: any
     oldLabel: string
     newLabel: string
+    /** Inscritos sin asistencia marcada: sus agendamientos se actualizan. */
+    inscritos: number
   } | null>(null)
   /** Modal bloqueante cuando el evento tiene inscritos y se intenta cambiar
    *  nivel/step. Sólo permite cerrar (Salir) — no permite proceder. */
@@ -747,12 +749,15 @@ export default function EventModal({
         eventData.nombreEvento = undefined
       }
 
-      // Guarda integridad: si estamos editando Y cambia nivel o step (nombreEvento),
-      // detectamos antes y mostramos modal apropiado:
-      //   - Si el evento tiene inscritos > 0 → modal BLOQUEANTE (sólo Salir)
-      //   - Si tiene 0 inscritos → modal de confirmación "BN3 - Step 11 → P1 - Step 16"
-      // Esto evita corromper historiales de bookings (que apuntan al nivel/step
-      // del evento). La validación se replica en el backend como defensa.
+      // Guarda de integridad al cambiar nivel o step (nombreEvento):
+      //   - Si alguien YA CURSÓ la clase (asistencia marcada) → modal BLOQUEANTE
+      //   - Si no → modal de confirmación "BN3 - Step 11 → P1 - Step 16"
+      //
+      // Lo que bloquea es la asistencia registrada, no la inscripción: en un
+      // evento que aún no se dicta nadie cursó nada, así que corregir la lección
+      // es arreglar un error de captura. Los agendamientos se actualizan solos
+      // con la lección nueva. El backend valida lo mismo como autoridad final
+      // (y mira además participación y evaluación, que aquí no se conocen).
       if (editingEvent) {
         const oldNivel = (editingEvent as any).nivel || (editingEvent as any).tituloONivel || ''
         const oldStep  = (editingEvent as any).step  || (editingEvent as any).nombreEvento || ''
@@ -762,16 +767,17 @@ export default function EventModal({
         const stepChanged  = oldStep && newStep && oldStep !== newStep
         if (nivelChanged || stepChanged) {
           const inscritos = Number((editingEvent as any).inscritos ?? 0)
+          const cursaron  = Number((editingEvent as any).asistieron ?? 0)
           const oldLabel = `${oldNivel}${oldStep ? ` - ${oldStep}` : ''}`
           const newLabel = `${newNivel}${newStep ? ` - ${newStep}` : ''}`
-          if (inscritos > 0) {
-            setNivelChangeBlocked({ oldLabel, newLabel, inscritos })
+          if (cursaron > 0) {
+            setNivelChangeBlocked({ oldLabel, newLabel, inscritos: cursaron })
             setLoading(false)
             return
           }
-          // 0 inscritos → mostrar confirmación. Si el advisor también cambió,
+          // Nadie cursó todavía → confirmación. Si el advisor también cambió,
           // se mostrará el modal de advisor DESPUÉS (en confirmNivelChange).
-          setPendingNivelChange({ eventData, oldLabel, newLabel })
+          setPendingNivelChange({ eventData, oldLabel, newLabel, inscritos })
           setLoading(false)
           return
         }
@@ -1337,11 +1343,11 @@ export default function EventModal({
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
           <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              🚫 No se puede cambiar el nivel
+              🚫 La clase ya se dictó
             </h3>
             <p className="text-sm text-gray-700 mb-4">
-              Este evento tiene <strong>{nivelChangeBlocked.inscritos}</strong> estudiante(s) inscrito(s).
-              Cambiar el nivel o step corromperá sus historiales de bookings.
+              <strong>{nivelChangeBlocked.inscritos}</strong> estudiante(s) ya tienen asistencia registrada
+              en este evento. Cambiar la lección dejaría su historial apuntando a una que no cursaron.
             </p>
             <div className="bg-gray-50 border border-gray-200 rounded p-3 mb-4 text-sm">
               <div className="text-gray-500 text-xs">Cambio intentado</div>
@@ -1350,7 +1356,7 @@ export default function EventModal({
               </div>
             </div>
             <p className="text-xs text-gray-500 mb-4">
-              Para cambiar el nivel: cancela las inscripciones primero, o crea un evento nuevo con el nivel correcto.
+              Crea un evento nuevo con la lección correcta. Un evento que todavía no se dicta sí se puede corregir, aunque tenga inscritos.
             </p>
             <div className="flex justify-end">
               <button
@@ -1365,8 +1371,9 @@ export default function EventModal({
         </div>
       )}
 
-      {/* Modal de confirmación de cambio de nivel/step — sólo se llega aquí
-          si inscritos === 0. Botón Confirmar / Cancelar. No pide motivo. */}
+      {/* Modal de confirmación de cambio de nivel/step — se llega aquí cuando
+          NADIE cursó la clase todavía. Puede haber inscritos: sus agendamientos
+          se actualizan con la lección nueva, y el modal lo dice. */}
       {pendingNivelChange && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
           <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
@@ -1387,9 +1394,17 @@ export default function EventModal({
                 <div className="font-medium text-blue-700">{pendingNivelChange.newLabel}</div>
               </div>
             </div>
-            <p className="text-xs text-emerald-700 mb-4">
-              ✓ Evento sin inscritos — el cambio es seguro.
-            </p>
+            {pendingNivelChange.inscritos > 0 ? (
+              <p className="text-xs text-amber-700 mb-4">
+                Hay <strong>{pendingNivelChange.inscritos}</strong> estudiante(s) inscrito(s), pero
+                ninguno tiene asistencia registrada: la clase todavía no se dictó. Sus
+                agendamientos quedarán con la lección nueva.
+              </p>
+            ) : (
+              <p className="text-xs text-emerald-700 mb-4">
+                ✓ Evento sin inscritos — el cambio es seguro.
+              </p>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 type="button"

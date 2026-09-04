@@ -434,6 +434,27 @@ class CalendarioRepositoryClass extends BaseRepository {
   }
 
   /**
+   * Inscritos que YA CURSARON la clase: tienen asistencia, participación o
+   * evaluación registrada.
+   *
+   * Es lo que distingue "corregir un error de captura" de "reescribir el
+   * historial": en un evento que todavía no se dicta nadie cursó nada, así que
+   * cambiarle la lección no falsea el pasado de nadie.
+   */
+  async countEnrollmentsWithRecord(eventId: string): Promise<number> {
+    const row = await queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM "ACADEMICA_BOOKINGS"
+        WHERE ("eventoId" = $1 OR "idEvento" = $1)
+          AND "cancelo" IS NOT TRUE
+          AND ("asistio" IS TRUE OR "asistencia" IS TRUE
+               OR "participacion" IS TRUE OR "noAprobo" IS TRUE
+               OR "calificacion" IS NOT NULL)`,
+      [eventId]
+    );
+    return parseInt(row?.count ?? '0', 10);
+  }
+
+  /**
    * Batch count active enrollments for multiple events in a single query.
    * Returns a map of eventId → count.
    */

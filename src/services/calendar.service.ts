@@ -293,18 +293,23 @@ export async function updateEvent(
     data.tituloONivel = `${event.curso} - ${data.tituloONivel}`;
   }
 
-  // Guarda integridad: cambiar nivel/step de un evento que ya tiene
-  // estudiantes inscritos corrompe sus historiales (los bookings quedan
-  // apuntando a un nivel/step distinto al que el estudiante realmente cursó).
-  // Si el admin quiere "reorganizar" el evento, primero debe desinscribir o
-  // cancelar a los estudiantes — esta validación lo fuerza.
+  // Guarda de integridad: cambiar nivel/step reescribe el historial de quienes
+  // YA CURSARON la clase — sus bookings quedarían apuntando a una lección
+  // distinta de la que realmente vieron.
+  //
+  // Lo que bloquea es la ASISTENCIA REGISTRADA, no la inscripción: en un evento
+  // que todavía no se dicta nadie cursó nada, así que corregir la lección es
+  // arreglar un error de captura y debe poder hacerse sin desinscribir a nadie.
+  // Antes bastaba con tener inscritos, y eso dejaba sin arreglo los eventos mal
+  // creados: 7.500+ sesiones futuras con inscritos quedaban congeladas.
+  // Los bookings se sincronizan más abajo con el nivel/step nuevo.
   const isNivelChange = !!data.nivel && data.nivel !== event.nivel;
   const isStepChange  = !!data.step  && data.step  !== event.step;
   if (isNivelChange || isStepChange) {
-    const activeCount = await CalendarioRepository.countActiveEnrollments(eventId);
-    if (activeCount > 0) {
+    const cursaron = await CalendarioRepository.countEnrollmentsWithRecord(eventId);
+    if (cursaron > 0) {
       throw new ValidationError(
-        `No se puede cambiar el nivel/step de este evento: tiene ${activeCount} estudiante(s) inscrito(s). Cancela las inscripciones primero o crea un evento nuevo.`,
+        `No se puede cambiar el nivel/step de este evento: ${cursaron} estudiante(s) ya tienen asistencia o evaluación registrada. Cambiarlo dejaría su historial apuntando a una lección que no cursaron. Crea un evento nuevo con la lección correcta.`,
       );
     }
   }

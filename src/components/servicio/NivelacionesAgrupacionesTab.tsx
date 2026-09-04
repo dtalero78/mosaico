@@ -29,7 +29,7 @@ interface Row {
   conteo: number
   fecha: string | null
 }
-interface Guia { id: string; nombre: string }
+interface Guia { id: string; nombre: string; zoom?: string | null }
 
 /** Clave de agrupación: la nivelación se dicta por (curso, lección). */
 const claveGrupo = (r: Row) => `${r.curso || '—'}||${r.leccion || ''}`
@@ -301,6 +301,28 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
   // puede dictar otro guía en otro horario.
   const primero = grupo.rows[0]
   const [advisor, setAdvisor] = useState(primero?.guiaId || '')
+
+  // TODOS los guías activos, no sólo los de los cursos de estos alumnos.
+  // La lista que llega por props alimenta el FILTRO de la tabla (ahí ofrecer un
+  // guía sin filas sólo confunde), pero aquí se elige quién DICTA la nivelación
+  // y puede ser cualquiera: con la lista filtrada salían 3 de 26.
+  const [todosGuias, setTodosGuias] = useState<Guia[]>(guias)
+  useEffect(() => {
+    let vivo = true
+    fetch('/api/postgres/guias', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        if (!vivo) return
+        const lista = (j?.guias || []).map((g: any) => ({
+          id: g._id,
+          nombre: g.nombreCompleto || [g.primerNombre, g.primerApellido].filter(Boolean).join(' '),
+          zoom: g.zoom || null,
+        })).filter((g: any) => g.id && g.nombre)
+        if (lista.length) setTodosGuias(lista)
+      })
+      .catch(() => { /* se conserva la lista de props */ })
+    return () => { vivo = false }
+  }, [])
   const [fecha, setFecha] = useState(hoyLocal())
   const [hora, setHora] = useState('19:00')
   const [linkZoom, setLinkZoom] = useState(primero?.guiaZoom || '')
@@ -360,10 +382,20 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="gg-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía *</label>
-              <select id="gg-guia" value={advisor} onChange={e => setAdvisor(e.target.value)}
+              {/* El Zoom sigue al guía: al elegir otro, dejar la sala del guía
+                  original mandaría a los alumnos a una reunión que no es la suya.
+                  Sólo se pisa si el guía nuevo tiene sala; si no, se conserva lo
+                  escrito para no borrar un link puesto a mano. */}
+              <select id="gg-guia" value={advisor}
+                onChange={e => {
+                  const id = e.target.value
+                  setAdvisor(id)
+                  const z = todosGuias.find(g => g.id === id)?.zoom
+                  if (z) setLinkZoom(z)
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 <option value="">— Elegir guía —</option>
-                {guias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                {todosGuias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
               </select>
             </div>
             <div>
