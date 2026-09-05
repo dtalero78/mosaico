@@ -18,6 +18,8 @@ import { PeopleRepository } from '@/repositories/people.repository';
 import { ids } from '@/lib/id-generator';
 import { query, queryOne } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
+import { spacesClient, SPACES_BUCKET, SPACES_CDN } from '@/lib/spaces';
+import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { computePlataformaScope, getSessionPlataforma, buildPlataformaWhereSql, type PlataformaScope } from '@/lib/recaudos-scope';
 
 const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe4807f2';
@@ -44,6 +46,9 @@ const UPDATABLE_FIELDS = [
   'numeroFactura',
   'documentosAdjuntos',
   'tipoCartera',
+  'valorAplicado',
+  'vlrpenalidad',
+  'penalidad',
 ];
 
 // Valores canónicos del tipo de cartera (mayo 2026).
@@ -261,6 +266,7 @@ export const pagosTitularesService = {
     opts: {
       estado?: 'validado' | 'pendiente';
       cuotaTipo?: 'regular' | 'inscripcion';
+      vista?: 'verificacion' | 'facturacion';
       fechaDesde?: string | null;
       fechaHasta?: string | null;
       search?: string | null;
@@ -286,6 +292,7 @@ export const pagosTitularesService = {
     const { rows, total } = await PagosTitularesRepository.findAllWithTitular({
       estado: opts.estado,
       cuotaTipo: opts.cuotaTipo ?? 'regular',
+      vista: opts.vista ?? 'verificacion',
       fechaDesde: opts.fechaDesde ?? null,
       fechaHasta: opts.fechaHasta ?? null,
       search: opts.search ?? null,
@@ -370,6 +377,13 @@ export const pagosTitularesService = {
       numeroReferencia: input.numeroReferencia ?? null,
       numeroFactura: input.numeroFactura ?? null,
       documentosAdjuntos: Array.isArray(input.documentosAdjuntos) ? input.documentosAdjuntos : [],
+      // Lo que este pago descuenta del saldo. Se persiste para no tener que
+      // recalcularlo en cada lectura y para que un ajuste manual quede fijo.
+      valorAplicado: valorAplicar,
+      // Si el pago es una penalidad, su valor va aparte: mezclarlo con el pago
+      // haría que una multa se leyera como abono a la deuda.
+      penalidad: input.penalidad ?? false,
+      vlrpenalidad: input.penalidad ? (input.vlrpenalidad ?? input.valorPagado ?? null) : (input.vlrpenalidad ?? null),
       validado: false,
       createdBy,
     };
@@ -433,8 +447,10 @@ export const pagosTitularesService = {
     if (!existing) throw new NotFoundError('PAGOS_TITULARES', id);
     if (existing.validado) throw new ValidationError('El pago ya está validado');
 
+    // La factura ya NO se pide aquí: validar sólo VERIFICA el pago y recalcula
+    // el saldo. El número se registra después, en el paso Facturación, que es
+    // donde el área de recaudos lo tiene a la mano. Si viene, se guarda igual.
     const factura = (numeroFactura || '').trim();
-    if (!factura) throw new ValidationError('Número de factura es requerido para validar');
 
     const updated = await PagosTitularesRepository.validar(id, validadoPor, factura, fechaValidacion);
     if (!updated) throw new ValidationError('No se pudo validar el pago');
@@ -720,5 +736,90 @@ export const pagosTitularesService = {
     );
 
     return { tipoCarteraAnterior: previo, tipoCarteraNuevo: nuevoTipo };
+  },
+
+  /**
+   * Anexa documentos a un pago ya registrado (comprobantes, factura escaneada).
+   * Se concatenan sobre los existentes para no pisar lo que otro haya subido.
+   */
+  async addDocumentos(id: string, docs: any[]): Promise<PagoTitular> {
+    const existing = await PagosTitularesRepository.findById(id);
+    if (!existing) throw new NotFoundError('PAGOS_TITULARES', id);
+
+    const clean = (Array.isArray(docs) ? docs : [])
+      .filter(d => d && typeof d.url === 'string' && d.url.trim())
+      .map(d => ({
+        url: String(d.url).trim(),
+        nombre: d.nombre ? String(d.nombre) : null,
+        tipo: d.tipo ? String(d.tipo) : null,
+        fechaSubida: d.fechaSubida ? String(d.fechaSubida) : new Date().toISOString(),
+      }));
+    if (!clean.length) throw new ValidationError('No hay documentos válidos para adjuntar');
+
+    const updated = await PagosTitularesRepository.appendDocumentos(id, clean);
+    if (!updated) throw new ValidationError('No se pudo adjuntar la documentación');
+    return updated;
+  },
+
+  /**
+   * Quita un documento del pago. Se permite aunque el pago esté validado: un
+   * adjunto es evidencia, no un dato financiero, y corregir un archivo mal
+   * subido no debería obligar a revertir la validación. Best-effort: borra
+   * también el objeto en Spaces si la url es de nuestro bucket.
+   */
+  async removeDocumento(id: string, url: string): Promise<PagoTitular> {
+    const existing = await PagosTitularesRepository.findById(id);
+    if (!existing) throw new NotFoundError('PAGOS_TITULARES', id);
+    const u = (url || '').trim();
+    if (!u) throw new ValidationError('url del documento requerida');
+
+    const updated = await PagosTitularesRepository.removeDocumento(id, u);
+    if (!updated) throw new ValidationError('No se pudo eliminar el documento');
+
+    try {
+      if (u.startsWith(SPACES_CDN + '/')) {
+        const key = decodeURIComponent(u.slice(SPACES_CDN.length + 1));
+        await spacesClient.send(new DeleteObjectCommand({ Bucket: SPACES_BUCKET, Key: key }));
+      }
+    } catch (err: any) {
+      console.warn(`[pagos-titulares] no se pudo borrar el objeto de Spaces: ${err?.message || err}`);
+    }
+    return updated;
+  },
+
+  /**
+   * Paso Facturación: le pone el número de factura a un pago YA verificado.
+   *
+   * Es el segundo tiempo del pipeline. `validar` verifica y mueve el saldo;
+   * esto sólo registra la factura y saca el pago de la cola. Deliberadamente
+   * NO toca el saldo: el dinero ya se aplicó al verificar, y volver a tocarlo
+   * aquí lo contaría dos veces.
+   */
+  async facturar(
+    id: string,
+    numeroFactura: string,
+    documento?: { url?: string; nombre?: string; tipo?: string } | null,
+  ): Promise<PagoTitular> {
+    const factura = (numeroFactura || '').trim();
+    if (!factura) throw new ValidationError('El número de factura es obligatorio');
+
+    const existing = await PagosTitularesRepository.findById(id);
+    if (!existing) throw new NotFoundError('PAGOS_TITULARES', id);
+    if (!existing.validado) throw new ValidationError('Solo se puede facturar un pago ya verificado');
+
+    const updated = await PagosTitularesRepository.facturar(id, factura);
+    if (!updated) throw new ValidationError('No se pudo registrar la factura');
+
+    // El archivo de la factura es opcional; el cliente ya lo subió a Spaces.
+    if (documento && typeof documento.url === 'string' && documento.url.trim()) {
+      const withDoc = await PagosTitularesRepository.appendDocumentos(id, [{
+        url: documento.url.trim(),
+        nombre: documento.nombre ? String(documento.nombre) : `Factura ${factura}`,
+        tipo: documento.tipo ? String(documento.tipo) : null,
+        fechaSubida: new Date().toISOString(),
+      }]);
+      if (withDoc) return withDoc;
+    }
+    return updated;
   },
 };

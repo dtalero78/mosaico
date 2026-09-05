@@ -48,6 +48,11 @@ export interface PagoTitular {
   medioPago: string | null;
   numeroReferencia: string | null;
   numeroFactura: string | null;
+  /** Lo que el pago descuenta del saldo = valorPagado + descuento (regla MOSAICO). */
+  valorAplicado: number | null;
+  /** Valor cobrado como penalidad; va aparte para no mezclarse con el pago. */
+  vlrpenalidad: number | null;
+  penalidad: boolean;
   documentosAdjuntos: any[];
   validado: boolean;
   createdBy: string | null;
@@ -85,13 +90,15 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          "pagoTercero", "idTercero", "fechaPago", "fechaVencimiento", "fechaReporte",
          "plan", "vlrTotalProg", "numCuota", "cuotasTotal", "valorCuota", "valorPagado",
          "saldo", "descuento", "inscripcion", "medioPago", "numeroReferencia",
-         "numeroFactura", "documentosAdjuntos", "validado", "createdBy"
+         "numeroFactura", "documentosAdjuntos", "validado", "createdBy",
+         "valorAplicado", "vlrpenalidad", "penalidad"
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, $8, $9, $10,
          $11, $12, $13, $14, $15, $16,
          $17, $18, $19, $20, $21,
-         $22, $23::jsonb, $24, $25
+         $22, $23::jsonb, $24, $25,
+         $26, $27, $28
        )
        RETURNING *`,
       [
@@ -120,6 +127,9 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
         JSON.stringify(data.documentosAdjuntos ?? []),
         data.validado ?? false,
         data.createdBy ?? null,
+        data.valorAplicado ?? null,
+        data.vlrpenalidad ?? null,
+        data.penalidad ?? false,
       ]
     );
     return this.parse(row)!;
@@ -138,6 +148,13 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
     estado?: 'validado' | 'pendiente';
     /** 'regular' (cuotas numCuota>0, default) | 'inscripcion' (cuota #0). */
     cuotaTipo?: 'regular' | 'inscripcion';
+    /**
+     * 'verificacion' (default) lista lo pendiente de verificar de la cuota que
+     * diga cuotaTipo. 'facturacion' es otra cola: lo YA verificado que todavía
+     * no tiene número de factura, mezclando pagos e inscripciones — a esas
+     * alturas la distinción ya no importa, lo que falta es la factura.
+     */
+    vista?: 'verificacion' | 'facturacion';
     fechaDesde?: string | null;
     fechaHasta?: string | null;
     search?: string | null;
@@ -150,20 +167,30 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
     limit: number;
     offset: number;
   }): Promise<{ rows: any[]; total: number }> {
-    // cuota #0 = inscripción (pestaña "Inscripciones pendientes"); resto = cuotas regulares.
-    const cuotaCond = opts.cuotaTipo === 'inscripcion'
-      ? `COALESCE(pt."numCuota", 0) = 0`
-      : `COALESCE(pt."numCuota", 0) > 0`;
+    const esFacturacion = opts.vista === 'facturacion';
     const conds: string[] = [
-      cuotaCond,
       // Excluye contratos de prueba (PRB-) — viven solo en /admin/contratos-prueba.
       `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
     ];
+
+    if (esFacturacion) {
+      // Cola de facturación: verificados que aún no tienen número de factura.
+      // No filtra por tipo de cuota — pagos e inscripciones se facturan igual.
+      conds.push(`pt."validado" = true`);
+      conds.push(`(pt."numeroFactura" IS NULL OR TRIM(pt."numeroFactura") = '')`);
+    } else {
+      // cuota #0 = inscripción (pestaña "Inscripciones"); resto = cuotas regulares.
+      conds.push(opts.cuotaTipo === 'inscripcion'
+        ? `COALESCE(pt."numCuota", 0) = 0`
+        : `COALESCE(pt."numCuota", 0) > 0`);
+    }
     const params: any[] = [];
     let i = 1;
 
-    if (opts.estado === 'validado') conds.push(`pt."validado" = true`);
-    else if (opts.estado === 'pendiente') conds.push(`pt."validado" = false`);
+    if (!esFacturacion) {
+      if (opts.estado === 'validado') conds.push(`pt."validado" = true`);
+      else if (opts.estado === 'pendiente') conds.push(`pt."validado" = false`);
+    }
 
     if (opts.fechaDesde) { conds.push(`pt."fechaPago" >= $${i}::date`); params.push(opts.fechaDesde); i++; }
     if (opts.fechaHasta) { conds.push(`pt."fechaPago" <= $${i}::date`); params.push(opts.fechaHasta); i++; }
@@ -233,7 +260,10 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          p."segundoApellido" AS "titular_segundoApellido",
          p."numeroId"        AS "titular_numeroId",
          p."contrato"        AS "titular_contrato",
-         p."plataforma"      AS "titular_plataforma"
+         p."plataforma"      AS "titular_plataforma",
+         -- MOSAICO guarda el NOMBRE del comercial en PEOPLE.asesor (LGS usa una
+         -- columna aparte porque allá ese campo lleva el correo).
+         p."asesor"          AS "titular_asesorNombre"
        FROM "PAGOS_TITULARES" pt
        JOIN "PEOPLE" p ON p."_id" = pt."idPeople"
        ${whereClause}
@@ -531,6 +561,61 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
        WHERE "_id" = $1
        RETURNING *`,
       [id, validadoPor, numeroFactura, fechaValidacion]
+    );
+    return this.parse(row);
+  }
+
+  /**
+   * Anexa documentos al pago. Se concatena sobre el array existente en vez de
+   * reemplazarlo, para no perder lo que otro usuario adjuntó entre medias.
+   */
+  async appendDocumentos(id: string, docs: any[]): Promise<PagoTitular | null> {
+    const row = await queryOne<PagoTitular>(
+      `UPDATE "PAGOS_TITULARES"
+       SET "documentosAdjuntos" = COALESCE("documentosAdjuntos", '[]'::jsonb) || $2::jsonb,
+           "_updatedDate" = NOW()
+       WHERE "_id" = $1
+       RETURNING *`,
+      [id, JSON.stringify(docs)]
+    );
+    return this.parse(row);
+  }
+
+  /**
+   * Quita del array el documento cuya `url` coincide. Se permite aunque el pago
+   * esté validado: un adjunto es evidencia, no un dato financiero — corregir una
+   * foto equivocada no debería exigir revertir la validación.
+   */
+  async removeDocumento(id: string, url: string): Promise<PagoTitular | null> {
+    const row = await queryOne<PagoTitular>(
+      `UPDATE "PAGOS_TITULARES"
+       SET "documentosAdjuntos" = COALESCE((
+             SELECT jsonb_agg(elem)
+             FROM jsonb_array_elements(COALESCE("documentosAdjuntos", '[]'::jsonb)) elem
+             WHERE elem->>'url' <> $2
+           ), '[]'::jsonb),
+           "_updatedDate" = NOW()
+       WHERE "_id" = $1
+       RETURNING *`,
+      [id, url]
+    );
+    return this.parse(row);
+  }
+
+  /**
+   * Segundo paso del pipeline: le pone el número de factura a un pago YA
+   * verificado. No toca el saldo — eso lo hizo `validar`; aquí sólo se registra
+   * la factura y el pago sale de la cola de Facturación. El `WHERE validado`
+   * impide facturar algo que nadie verificó.
+   */
+  async facturar(id: string, numeroFactura: string): Promise<PagoTitular | null> {
+    const row = await queryOne<PagoTitular>(
+      `UPDATE "PAGOS_TITULARES"
+       SET "numeroFactura" = $2,
+           "_updatedDate" = NOW()
+       WHERE "_id" = $1 AND "validado" = true
+       RETURNING *`,
+      [id, numeroFactura]
     );
     return this.parse(row);
   }

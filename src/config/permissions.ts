@@ -114,7 +114,14 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     module: Module.PERSON,
     section: 'Financiera',
     name: 'Botón "Generar Recibo de Pago"',
-    description: 'Genera y descarga el PDF del recibo de un pago validado (formato LGS-#### con numeración consecutiva automática). Solo aparece cuando el pago ya está validado',
+    description: 'Genera y descarga el PDF del recibo de un pago validado (formato MOS-#### con numeración consecutiva automática). Solo aparece cuando el pago ya está validado',
+  },
+  {
+    code: PersonPermission.PAGOS_FACTURAR,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Facturar"',
+    description: 'Registra el número de factura de un pago ya verificado, desde la pestaña Facturación del Centro de Validación. El pago entra a esa cola al verificarlo (validado sin factura) y sale al facturarlo. Sin este permiso el botón no aparece',
   },
   {
     code: PersonPermission.VER_DOCUMENTACION,
