@@ -11,7 +11,8 @@ export type EstadoCaso =
   | 'EN_GESTION' | 'RESUELTO' | 'PROCESO_DE_CIERRE' | 'PROPUESTA_DE_CAMBIO'
   | 'CIERRA_PROGRAMA' | 'REMITIDO_A_ACADEMICA' | 'PROGRAMA_CONGELADO'
   | 'PRE_JURIDICO' | 'SIN_CONTACTO' | 'REMITIDO_A_COORDINACION'
-  | 'REMITIDO_A_SERVICIO_ACADEMICO' | 'REMITIDO_A_NIVELACION' | 'REMITIDO_A_FINANZAS';
+  | 'REMITIDO_A_SERVICIO_ACADEMICO' | 'REMITIDO_A_NIVELACION' | 'REMITIDO_A_FINANZAS'
+  | 'SALON_CAMBIADO' | 'HOLD_ACTIVADO' | 'NIVELACION_AGENDADA';
 
 /** El único estado que deja el caso ABIERTO. Es el "Pendiente" del informe. */
 export const ESTADO_ABIERTO: EstadoCaso = 'EN_GESTION';
@@ -49,12 +50,15 @@ export const ESTADOS: EstadoCaso[] = [ESTADO_ABIERTO, ...ESTADOS_CIERRE];
 export const ESTADO_LABEL: Record<EstadoCaso, string> = {
   EN_GESTION: 'En gestión — mantiene abierto',
   RESUELTO: 'Cerrado',
-  PROCESO_DE_CIERRE: 'Cierre financiero',
+  PROCESO_DE_CIERRE: 'En Proceso de Cierre',
   CIERRA_PROGRAMA: 'Cierre financiero',   // fusionado; sólo para datos viejos
-  PROPUESTA_DE_CAMBIO: 'Cambio Curso',
+  PROPUESTA_DE_CAMBIO: 'Curso Cambiado',
   REMITIDO_A_SERVICIO_ACADEMICO: 'Servicio Académico',
   REMITIDO_A_NIVELACION: 'Nivelación',
-  REMITIDO_A_FINANZAS: 'Área Financiera',
+  REMITIDO_A_FINANZAS: 'Derivado Finanzas',
+  SALON_CAMBIADO: 'Salón Cambiado',
+  HOLD_ACTIVADO: 'Hold Activado',
+  NIVELACION_AGENDADA: 'Nivelación Agendada',
   REMITIDO_A_ACADEMICA: 'Cambio de Nivel',
   PROGRAMA_CONGELADO: 'Solicitud Congelamiento',
   PRE_JURIDICO: 'Envío Pre-jurídico',
@@ -101,7 +105,7 @@ export const ESTADOS_NIVELACION: EstadoCaso[] = [
 
 export const ESTADOS_FINANCIEROS: EstadoCaso[] = [
   'REMITIDO_A_FINANZAS',      // el genérico del botón Asignar
-  'PROCESO_DE_CIERRE',        // Cierre financiero
+  'PROCESO_DE_CIERRE',        // En Proceso de Cierre
   'CIERRA_PROGRAMA',          // idem (legado fusionado)
   'PRE_JURIDICO',             // Envío Pre-jurídico
 ];
@@ -121,8 +125,100 @@ export const ESTADO_COLOR: Record<EstadoCaso, string> = {
   REMITIDO_A_SERVICIO_ACADEMICO: 'bg-indigo-100 text-indigo-800',
   REMITIDO_A_NIVELACION: 'bg-orange-100 text-orange-800',
   REMITIDO_A_FINANZAS: 'bg-rose-100 text-rose-800',
+  SALON_CAMBIADO: 'bg-indigo-100 text-indigo-800',
+  HOLD_ACTIVADO: 'bg-violet-100 text-violet-800',
+  NIVELACION_AGENDADA: 'bg-orange-100 text-orange-800',
 };
 
 export function estadoColor(e: string | null | undefined): string {
   return ESTADO_COLOR[e as EstadoCaso] || 'bg-gray-100 text-gray-700';
 }
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * ÁREA y ESTADO son dos cosas distintas.
+ *
+ * El ÁREA dice a qué bandeja pertenece el caso y se conserva mientras el área
+ * lo trabaje. El ESTADO dice en qué punto va esa gestión. Con un solo campo,
+ * marcar "en gestión" un caso de Nivelaciones habría borrado que era de
+ * Nivelaciones — por eso el área vive en su propia columna.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export type AreaCaso = 'ACADEMICOS' | 'NIVELACIONES' | 'COORDINADOR' | 'FINANCIEROS';
+
+export const AREAS: AreaCaso[] = [
+  'ACADEMICOS', 'NIVELACIONES', 'COORDINADOR', 'FINANCIEROS',
+];
+
+export const AREA_LABEL: Record<AreaCaso, string> = {
+  ACADEMICOS: 'Servicio Académico',
+  NIVELACIONES: 'Nivelación',
+  COORDINADOR: 'Coordinador Académico',
+  FINANCIEROS: 'Área Financiera',
+};
+
+/** Nombre de la PESTAÑA de cada área (el label de arriba es el del destino). */
+export const AREA_PESTANA: Record<AreaCaso, string> = {
+  ACADEMICOS: 'Académicos',
+  NIVELACIONES: 'Nivelaciones',
+  COORDINADOR: 'Coordinador',
+  FINANCIEROS: 'Financieros',
+};
+
+export const AREA_COLOR: Record<AreaCaso, string> = {
+  ACADEMICOS: 'bg-indigo-100 text-indigo-800',
+  NIVELACIONES: 'bg-orange-100 text-orange-800',
+  COORDINADOR: 'bg-teal-100 text-teal-800',
+  FINANCIEROS: 'bg-rose-100 text-rose-800',
+};
+
+/** El estado con el que un caso ENTRA a un área al asignarlo. */
+export const ESTADO_AL_ASIGNAR: Record<AreaCaso, EstadoCaso> = {
+  ACADEMICOS: 'REMITIDO_A_SERVICIO_ACADEMICO',
+  NIVELACIONES: 'REMITIDO_A_NIVELACION',
+  COORDINADOR: 'REMITIDO_A_COORDINACION',
+  FINANCIEROS: 'REMITIDO_A_FINANZAS',
+};
+
+/**
+ * Estados que SACAN el caso de su bandeja y lo mandan al Histórico.
+ *
+ * Los sub-estados de área cierran porque son el resultado de la gestión: una vez
+ * cambiado el salón, no queda nada por hacer ahí. La excepción es "En Proceso de
+ * Cierre", que describe algo todavía en curso y por eso el caso sigue a la vista
+ * de Finanzas.
+ */
+export const ESTADOS_QUE_CIERRAN: EstadoCaso[] = [
+  'RESUELTO',
+  'SIN_CONTACTO',
+  'SALON_CAMBIADO',
+  'HOLD_ACTIVADO',
+  'NIVELACION_AGENDADA',
+  'PROPUESTA_DE_CAMBIO',   // Curso Cambiado
+  'PROGRAMA_CONGELADO',
+  'PRE_JURIDICO',
+  'CIERRA_PROGRAMA',
+];
+
+export function cierraElCaso(e: string | null | undefined): boolean {
+  return !!e && ESTADOS_QUE_CIERRAN.includes(e as EstadoCaso);
+}
+
+/**
+ * Lo que ofrece el desplegable de la ficha del alumno según el área asignada.
+ * "En gestión" y "Cerrado" están en todas; lo demás es propio del área.
+ */
+export const ESTADOS_POR_AREA: Record<AreaCaso, EstadoCaso[]> = {
+  ACADEMICOS:   ['EN_GESTION', 'SALON_CAMBIADO', 'HOLD_ACTIVADO', 'RESUELTO'],
+  NIVELACIONES: ['EN_GESTION', 'NIVELACION_AGENDADA', 'RESUELTO'],
+  COORDINADOR:  ['EN_GESTION', 'PROPUESTA_DE_CAMBIO', 'REMITIDO_A_FINANZAS', 'RESUELTO'],
+  FINANCIEROS:  ['EN_GESTION', 'PROCESO_DE_CIERRE', 'RESUELTO'],
+};
+
+/**
+ * Estados que MUEVEN el caso a otra área en vez de cerrarlo. Hoy sólo uno:
+ * Coordinación puede pasarle el caso a Finanzas sin darlo por terminado.
+ */
+export const TRASLADA_A_AREA: Partial<Record<EstadoCaso, AreaCaso>> = {
+  REMITIDO_A_FINANZAS: 'FINANCIEROS',
+};

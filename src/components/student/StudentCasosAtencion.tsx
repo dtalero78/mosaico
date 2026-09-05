@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { TZ_OPERACION } from '@/lib/cursos-campaign'
-import { ESTADO_ABIERTO, ESTADOS_CIERRE, ESTADO_LABEL, estadoLabel } from '@/lib/casos-atencion-estados'
-import type { EstadoCaso } from '@/lib/casos-atencion-estados'
+import {
+  ESTADO_ABIERTO, ESTADO_LABEL, estadoLabel, cierraElCaso,
+  ESTADOS_POR_AREA, AREA_PESTANA, AREA_COLOR,
+} from '@/lib/casos-atencion-estados'
+import type { EstadoCaso, AreaCaso } from '@/lib/casos-atencion-estados'
 
 /**
  * Pestaña "Casos Atención" de la ficha del estudiante.
@@ -167,7 +170,15 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
   if (!d) return <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">Cargando el caso…</div>
 
   const c = d.caso
-  const abierto = c.estado === ESTADO_ABIERTO
+  // Vivo mientras no haya cerrado: un caso asignado a un área se sigue gestionando
+  // aunque su estado ya no sea EN_GESTION.
+  const abierto = !cierraElCaso(c.estado)
+  const area = (c.area || null) as AreaCaso | null
+  // Lo que ofrece el desplegable: si aún no tiene área, sólo puede seguir abierto
+  // o cerrarse — asignarla es cosa de la bandeja de Servicio, no de aquí.
+  const opciones: EstadoCaso[] = area
+    ? ESTADOS_POR_AREA[area]
+    : [ESTADO_ABIERTO, 'RESUELTO']
   // Intentos por canal, para la grilla canal × intento.
   const porCanal = (canal: string) => d.contactos.filter((x: any) => x.canal === canal)
   const maxIntentos = Math.max(1, ...CANALES.map(k => porCanal(k.id).length))
@@ -217,14 +228,32 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
             </p>
           )}
         </div>
-        <div className="min-w-[260px]">
-          <label className="block text-xs text-gray-500 mb-1">Estado</label>
+        <div className="min-w-[280px]">
+          {/* Indicador: dónde está el caso. ASIGNADO nombra la bandeja que lo tiene;
+              EN GESTIÓN es el que sigue en Servicio; CERRADO, el que ya terminó. */}
+          <div className="flex items-center gap-2 mb-2">
+            {!abierto ? (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-800">
+                CERRADO
+              </span>
+            ) : area ? (
+              <>
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-red-100 text-red-700">
+                  ASIGNADO
+                </span>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${AREA_COLOR[area]}`}>
+                  {AREA_PESTANA[area]}
+                </span>
+              </>
+            ) : (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
+                EN GESTIÓN
+              </span>
+            )}
+          </div>
           <select value={nuevoEstado} onChange={e => setNuevoEstado(e.target.value as EstadoCaso)} disabled={!abierto || busy}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100">
-            <option value={ESTADO_ABIERTO}>{ESTADO_LABEL[ESTADO_ABIERTO]}</option>
-            <optgroup label="Cierran el caso">
-              {ESTADOS_CIERRE.map(e => <option key={e} value={e}>{ESTADO_LABEL[e]}</option>)}
-            </optgroup>
+            {opciones.map(e => <option key={e} value={e}>{ESTADO_LABEL[e]}</option>)}
           </select>
           {!abierto && (
             <p className="text-xs text-gray-500 mt-1">

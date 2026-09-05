@@ -6,8 +6,7 @@ import { ValidationError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
 import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
 import {
-  ESTADOS_CIERRE, ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS, ESTADOS_COORDINACION,
-  ESTADOS_NIVELACION,
+  ESTADOS_QUE_CIERRAN, type AreaCaso,
 } from '@/lib/casos-atencion-estados'
 
 /**
@@ -35,12 +34,17 @@ import {
  */
 const MAX_ROWS = 5000
 
-const AREAS: Record<string, string[]> = {
-  historico: ESTADOS_CIERRE,
-  academicos: ESTADOS_ACADEMICOS,
-  financieros: ESTADOS_FINANCIEROS,
-  nivelaciones: ESTADOS_NIVELACION,
-  coordinacion: ESTADOS_COORDINACION,
+/**
+ * Las cuatro bandejas de área filtran por la COLUMNA `area` y muestran el caso
+ * mientras su estado no lo cierre — así un caso asignado sigue a la vista de su
+ * área tanto si está "en gestión" como en un sub-estado que no termina.
+ * El Histórico va por ESTADO: es lo que ya cerró, venga del área que venga.
+ */
+const AREA_DE_PESTANA: Record<string, AreaCaso> = {
+  academicos: 'ACADEMICOS',
+  nivelaciones: 'NIVELACIONES',
+  coordinacion: 'COORDINADOR',
+  financieros: 'FINANCIEROS',
 }
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
@@ -48,8 +52,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   const { searchParams } = new URL(request.url)
   const area = (searchParams.get('area') || 'historico').trim()
-  const estados = AREAS[area]
-  if (!estados) throw new ValidationError('Área no válida')
+  const areaCol = AREA_DE_PESTANA[area]
+  if (area !== 'historico' && !areaCol) throw new ValidationError('Área no válida')
 
   const campaign = (searchParams.get('campaign') || '').trim()
   const curso = (searchParams.get('curso') || '').trim()
@@ -60,10 +64,13 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const startDate = (searchParams.get('startDate') || '').trim()
   const endDate = (searchParams.get('endDate') || '').trim()
 
-  const params: any[] = [estados]
+  const params: any[] = [ESTADOS_QUE_CIERRAN]
   let i = 2
   const where: string[] = [
-    `ca."estado"::text = ANY($1)`,
+    area === 'historico'
+      ? `ca."estado"::text = ANY($1)`
+      // En su bandeja mientras no cierre: "en gestión" y los sub-estados en curso.
+      : `ca."area" = '${areaCol}' AND NOT (ca."estado"::text = ANY($1))`,
     `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
   ]
 
@@ -153,8 +160,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        LEFT JOIN "CURSOS_CAMPAIGN" cc
          ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
-      WHERE ca."estado"::text = ANY($1) AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
-    [estados]
+      WHERE ${area === 'historico'
+        ? `ca."estado"::text = ANY($1)`
+        : `ca."area" = '${areaCol}' AND NOT (ca."estado"::text = ANY($1))`}
+        AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
+    [ESTADOS_QUE_CIERRAN]
   )).rows
 
   const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean)))

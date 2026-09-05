@@ -67,7 +67,7 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     const r = await cambiarEstado(id, String(body.estado) as EstadoCaso, actor, body.motivo);
     return successResponse({
       ...r,
-      message: r.cerrado ? 'Caso cerrado y enviado al histórico.' : 'Sin cambios.',
+      message: r.cerrado ? 'Caso cerrado y enviado al histórico.' : 'Estado actualizado.',
     });
   }
 

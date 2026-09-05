@@ -2,7 +2,8 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { ValidationError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
-import { ESTADO_ABIERTO } from '@/services/casos-atencion.service';
+import { ESTADO_ABIERTO, cierraElCaso } from '@/services/casos-atencion.service';
+import { ESTADOS_QUE_CIERRAN } from '@/lib/casos-atencion-estados';
 
 /**
  * GET /api/postgres/casos-atencion?academicaId=X
@@ -19,19 +20,19 @@ export const GET = handlerWithAuth(async (request) => {
   if (!academicaId) throw new ValidationError('Falta academicaId.');
 
   const { rows } = await query<any>(
-    `SELECT c."_id", c."codigo", c."tema", c."estado", c."numeroCaso", c."contrato",
+    `SELECT c."_id", c."codigo", c."tema", c."estado", c."area", c."numeroCaso", c."contrato",
             c."abiertoEn", c."cerradoEn", c."reincidenciaNivel", c."reincidenciaPatron",
             (SELECT COUNT(*)::int FROM "CASOS_REPORTES" r WHERE r."casoId" = c."_id") AS reportes,
             (SELECT COUNT(*)::int FROM "CASOS_REPORTES" r
               WHERE r."casoId" = c."_id" AND r."leido" = false) AS "sinLeer"
        FROM "CASOS_ATENCION" c
       WHERE c."academicaId" = $1
-      ORDER BY (c."estado" = '${ESTADO_ABIERTO}') DESC,
+      ORDER BY (NOT (c."estado"::text = ANY($2))) DESC,
                COALESCE(c."cerradoEn", c."abiertoEn") DESC`,
-    [academicaId]
+    [academicaId, ESTADOS_QUE_CIERRAN]
   );
 
-  const abiertos = rows.filter(r => r.estado === ESTADO_ABIERTO);
+  const abiertos = rows.filter(r => !cierraElCaso(r.estado));
   return successResponse({
     academicaId,
     casos: rows,

@@ -5,7 +5,10 @@ import { queryOne, withTransaction } from '@/lib/postgres'
 import { ServicioPermission } from '@/types/permissions'
 import { ValidationError, NotFoundError } from '@/lib/errors'
 import { ids } from '@/lib/id-generator'
-import { ESTADOS_CIERRE, ESTADO_LABEL, type EstadoCaso } from '@/lib/casos-atencion-estados'
+import {
+  ESTADOS_CIERRE, ESTADO_LABEL, ESTADO_AL_ASIGNAR, AREA_LABEL,
+  type EstadoCaso, type AreaCaso, AREAS,
+} from '@/lib/casos-atencion-estados'
 
 /**
  * POST /api/postgres/students/[id]/caso-atencion   (id = ACADEMICA._id)
@@ -36,20 +39,20 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
   const body = await req.json().catch(() => ({}))
   const bookingId = String(body?.bookingId || '').trim()
   const comentario = String(body?.comentario || '').trim()
-  const estado = (String(body?.estado || 'RESUELTO').trim() || 'RESUELTO') as EstadoCaso
+  // El modal manda el ÁREA; "Cerrar" no manda ninguna y sólo cierra el caso.
+  const area = (String(body?.area || '').trim() || null) as AreaCaso | null
+  if (area && !AREAS.includes(area)) throw new ValidationError(`Área no válida: ${area}`)
+  const estado: EstadoCaso = area ? ESTADO_AL_ASIGNAR[area] : 'RESUELTO'
   if (!academicaId) throw new ValidationError('academicaId requerido')
   if (!bookingId) throw new ValidationError('bookingId requerido')
   // Sólo estados de cierre: asignar a un área saca el caso de la bandeja.
-  if (!ESTADOS_CIERRE.includes(estado)) throw new ValidationError(`Estado no válido: ${estado}`)
   // El comentario se exige al CERRAR (hay que justificar por qué el caso no
   // requiere nada más) y al derivar a NIVELACIÓN, donde el texto ES el encargo:
   // qué hay que reforzarle al alumno. En las otras derivaciones es opcional,
   // porque la justificación la dará el área que lo reciba.
-  const EXIGEN_COMENTARIO: EstadoCaso[] = ['RESUELTO', 'REMITIDO_A_NIVELACION']
-  if (EXIGEN_COMENTARIO.includes(estado) && !comentario) {
-    throw new ValidationError(estado === 'RESUELTO'
-      ? 'El comentario es obligatorio al cerrar el caso'
-      : 'El detalle de la nivelación es obligatorio')
+  if (!area && !comentario) throw new ValidationError('El comentario es obligatorio al cerrar el caso')
+  if (area === 'NIVELACIONES' && !comentario) {
+    throw new ValidationError('El detalle de la nivelación es obligatorio')
   }
 
   // Datos del caso para el historial (curso, lección, fecha del evento, texto).
@@ -84,6 +87,7 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
     fechaEvento: info.fechaEvento ? new Date(info.fechaEvento).toISOString() : null,
     estado,
     estadoLabel: ESTADO_LABEL[estado] || estado,
+    area,
     resueltoPor: session?.user?.email || null,
     resueltoPorNombre: (session?.user as any)?.name || null,
   }
@@ -105,19 +109,20 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
     if (info.casoId) {
       await client.query(
         `UPDATE "CASOS_ATENCION"
-            SET "estado" = $3::estado_caso, "cerradoPor" = $2, "cerradoEn" = NOW(), "_updatedDate" = NOW()
+            SET "estado" = $3::estado_caso, "area" = $4,
+                "cerradoPor" = $2, "cerradoEn" = NOW(), "_updatedDate" = NOW()
           WHERE "_id" = $1`,
-        [info.casoId, session?.user?.email || null, estado]
+        [info.casoId, session?.user?.email || null, estado, area]
       )
       await client.query(
         `INSERT INTO "CASOS_ESTADO_HISTORIAL"("_id","casoId","estadoAnterior","estadoNuevo","autorEmail","autorNombre","motivo")
          VALUES ($1,$2,$3,$7::estado_caso,$4,$5,$6)`,
         [ids.comment(), info.casoId, info.estadoCaso || 'EN_GESTION',
          session?.user?.email || null, (session?.user as any)?.name || null,
-         comentario || `Asignado a ${ESTADO_LABEL[estado] || estado}`, estado]
+         comentario || `Asignado a ${area ? AREA_LABEL[area] : 'Cerrado'}`, estado]
       )
     }
   })
 
-  return successResponse({ ok: true, casoCerrado: !!info.casoId, estado })
+  return successResponse({ ok: true, casoCerrado: !!info.casoId, estado, area })
 })

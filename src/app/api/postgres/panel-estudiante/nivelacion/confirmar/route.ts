@@ -1,5 +1,6 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
+import { ids } from '@/lib/id-generator';
 import { resolveStudentFromSession } from '@/services/panel-estudiante.service';
 import { query, queryOne } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
@@ -58,5 +59,38 @@ export const POST = handlerWithAuth(async (_request, _ctx, session) => {
     [student.academicaId, JSON.stringify(nuevo)]
   );
 
-  return successResponse({ confirmadoEn, confirmadoPor: 'ESTUDIANTE', corte: corteConfirmacion(det.fecha) });
+  // Si el alumno tiene un caso asignado a NIVELACIONES, confirmar cierra ese
+  // encargo: la nivelación quedó agendada Y confirmada, que es justo lo que el
+  // área esperaba. Best-effort — la confirmación del alumno ya se guardó y no
+  // debe deshacerse porque falle el arrastre del caso.
+  let casoActualizado: string | null = null;
+  try {
+    const caso = await queryOne<{ _id: string; estado: string }>(
+      `SELECT "_id", "estado"::text AS estado FROM "CASOS_ATENCION"
+        WHERE "academicaId" = $1 AND "area" = 'NIVELACIONES'
+          AND "estado"::text NOT IN ('RESUELTO','NIVELACION_AGENDADA')
+        ORDER BY "_createdDate" DESC LIMIT 1`,
+      [student.academicaId]
+    );
+    if (caso) {
+      await query(
+        `UPDATE "CASOS_ATENCION"
+            SET "estado" = 'NIVELACION_AGENDADA', "cerradoEn" = NOW(),
+                "cerradoPor" = 'sistema', "_updatedDate" = NOW()
+          WHERE "_id" = $1`,
+        [caso._id]
+      );
+      await query(
+        `INSERT INTO "CASOS_ESTADO_HISTORIAL"("_id","casoId","estadoAnterior","estadoNuevo","autorEmail","autorNombre","motivo")
+         VALUES ($1,$2,$3,'NIVELACION_AGENDADA',NULL,'Sistema',$4)`,
+        [ids.comment(), caso._id, caso.estado,
+         'La nivelación quedó agendada y el alumno la confirmó.']
+      );
+      casoActualizado = caso._id;
+    }
+  } catch (e) {
+    console.warn('[nivelacion/confirmar] no se pudo arrastrar el caso:', e);
+  }
+
+  return successResponse({ confirmadoEn, confirmadoPor: 'ESTUDIANTE', corte: corteConfirmacion(det.fecha), casoActualizado });
 });

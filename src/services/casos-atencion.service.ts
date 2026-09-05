@@ -28,11 +28,13 @@ import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 export type { EstadoCaso } from '@/lib/casos-atencion-estados';
 export {
   ESTADO_ABIERTO, ESTADOS_CIERRE, ESTADOS, ESTADO_LABEL, estadoLabel,
+  cierraElCaso, TRASLADA_A_AREA,
   ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS, ESTADO_COLOR, estadoColor,
 } from '@/lib/casos-atencion-estados';
 import {
   ESTADO_ABIERTO, ESTADOS_CIERRE, ESTADOS, ESTADO_LABEL,
   ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS,
+  cierraElCaso, TRASLADA_A_AREA,
 } from '@/lib/casos-atencion-estados';
 import type { EstadoCaso } from '@/lib/casos-atencion-estados';
 
@@ -304,28 +306,39 @@ export async function cambiarEstado(
   if (!ESTADOS.includes(estado)) throw new ValidationError(`Estado inválido: "${nuevo}".`);
 
   const caso = await queryOne<any>(
-    `SELECT "_id","estado","acuerdo","fechaCompromiso" FROM "CASOS_ATENCION" WHERE "_id" = $1`,
+    `SELECT "_id","estado","area","acuerdo","fechaCompromiso" FROM "CASOS_ATENCION" WHERE "_id" = $1`,
     [casoId]
   );
   if (!caso) throw new NotFoundError('Caso de atención', casoId);
-  if (caso.estado !== ESTADO_ABIERTO) {
+  // Se puede tocar mientras no haya cerrado. Un caso asignado a un área sigue
+  // vivo aunque su estado no sea EN_GESTION — el área lo está trabajando.
+  if (cierraElCaso(caso.estado)) {
     throw new ValidationError('El caso ya está cerrado: es de solo lectura.');
   }
   if (estado === caso.estado) return { casoId, estado, cerrado: false };
 
-  // R5: cerrar exige el acuerdo registrado.
-  if (!String(caso.acuerdo || '').trim() || !caso.fechaCompromiso) {
+  const cierra = cierraElCaso(estado);
+  // R5: sólo al CERRAR hace falta el acuerdo. Volver a "en gestión" o pasar a un
+  // sub-estado en curso no termina nada, así que no lo exige.
+  if (cierra && (!String(caso.acuerdo || '').trim() || !caso.fechaCompromiso)) {
     throw new ValidationError(
       'Para cerrar el caso hace falta el acuerdo con el apoderado y la fecha de compromiso.'
     );
   }
 
+  // Hay estados que MUEVEN el caso a otra área en vez de terminarlo: Coordinación
+  // puede pasárselo a Finanzas sin darlo por cerrado.
+  const areaDestino = TRASLADA_A_AREA[estado] ?? caso.area ?? null;
+
   await transaction(async (client) => {
     await client.query(
       `UPDATE "CASOS_ATENCION"
-          SET "estado" = $1, "cerradoPor" = $2, "cerradoEn" = NOW(), "_updatedDate" = NOW()
+          SET "estado" = $1, "area" = $4,
+              "cerradoPor" = CASE WHEN $5 THEN $2 ELSE "cerradoPor" END,
+              "cerradoEn"  = CASE WHEN $5 THEN NOW() ELSE "cerradoEn" END,
+              "_updatedDate" = NOW()
         WHERE "_id" = $3`,
-      [estado, actor.email || actor.nombre || null, casoId]
+      [estado, actor.email || actor.nombre || null, casoId, areaDestino, cierra]
     );
     await client.query(
       `INSERT INTO "CASOS_ESTADO_HISTORIAL"("_id","casoId","estadoAnterior","estadoNuevo","autorEmail","autorNombre","motivo")
@@ -334,7 +347,7 @@ export async function cambiarEstado(
     );
   });
 
-  return { casoId, estado, cerrado: true };
+  return { casoId, estado, cerrado: cierra };
 }
 
 /** Agrega un intento de contacto (R8: sólo se agregan; el nº es automático). */

@@ -40,7 +40,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     // El universo sigue siendo el agendamiento marcado por el guía, pero si su
     // caso ya se cerró desde la ficha del alumno deja de ser bandeja: pasa al
     // Histórico. Sin caso enlazado (datos viejos) se considera abierto.
+    // Abierto y SIN asignar: en cuanto se le da un área pasa a la bandeja de esa
+    // área, aunque su estado siga siendo "en gestión".
     `(ca."estado" IS NULL OR ca."estado"::text = '${ESTADO_ABIERTO}')`,
+    `ca."area" IS NULL`,
   ]
   const params: any[] = []
   let i = 1
@@ -88,7 +91,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        -- guía) y el estado vive en CASOS_ATENCION: sin este JOIN la columna
        -- decía siempre "Pendiente" aunque el caso ya estuviera cerrado.
        LEFT JOIN LATERAL (
-         SELECT x."estado", x."codigo" FROM "CASOS_ATENCION" x
+         SELECT x."estado", x."codigo", x."area" FROM "CASOS_ATENCION" x
           WHERE x."academicaId" = a."_id"
             AND x."eventoOrigenId" = COALESCE(b."eventoId", b."idEvento")
           ORDER BY x."_createdDate" DESC LIMIT 1

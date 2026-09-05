@@ -87,20 +87,20 @@ const TABS: TabCfg[] = [
  * "Cerrar" no manda a ninguna bandeja: el caso no deja nada pendiente y sólo va
  * al Histórico. Por eso es el único que exige comentario.
  */
-const DESTINOS: { estado: string; label: string; detalle: string; clase: string }[] = [
-  { estado: 'REMITIDO_A_SERVICIO_ACADEMICO', label: 'Servicio Académico',
+const DESTINOS: { area: string | null; label: string; detalle: string; clase: string }[] = [
+  { area: 'ACADEMICOS', label: 'Servicio Académico',
     detalle: 'Cambio de nivel, congelamiento y demás trámites del área.',
     clase: 'border-indigo-300 text-indigo-800 hover:bg-indigo-50' },
-  { estado: 'REMITIDO_A_NIVELACION', label: 'Nivelación',
+  { area: 'NIVELACIONES', label: 'Nivelación',
     detalle: 'Al alumno hay que reforzarle un punto del curso.',
     clase: 'border-orange-300 text-orange-800 hover:bg-orange-50' },
-  { estado: 'REMITIDO_A_COORDINACION', label: 'Coordinador Académico',
+  { area: 'COORDINADOR', label: 'Coordinador Académico',
     detalle: 'La decisión la toma el Coordinador (incluye cambio de curso).',
     clase: 'border-teal-300 text-teal-800 hover:bg-teal-50' },
-  { estado: 'REMITIDO_A_FINANZAS', label: 'Área Financiera',
+  { area: 'FINANCIEROS', label: 'Área Financiera',
     detalle: 'Cierre financiero o cobranza pre-jurídica.',
     clase: 'border-rose-300 text-rose-800 hover:bg-rose-50' },
-  { estado: 'RESUELTO', label: 'Cerrar',
+  { area: null, label: 'Cerrar',
     detalle: 'Se resolvió y no requiere nada más. Pide comentario.',
     clase: 'border-gray-300 text-gray-700 hover:bg-gray-50' },
 ]
@@ -116,7 +116,7 @@ const MUESTRA_DETALLE = (t: Tab) => t === 'nivelaciones'
  * requiere nada más) y NIVELACIÓN (el texto ES el encargo — qué hay que
  * reforzarle al alumno — y es lo que se muestra en la columna Detalle).
  */
-const EXIGE_TEXTO = (d: string | null) => d === 'RESUELTO' || d === 'REMITIDO_A_NIVELACION'
+const EXIGE_TEXTO = (d: string | null | undefined) => d === null || d === 'NIVELACIONES'
 
 const ES_GESTION = (t: Tab) =>
   t === 'historico' || t === 'academicos' || t === 'financieros' ||
@@ -207,7 +207,8 @@ function CasosAtencionContent() {
   // Modal de "Resuelto" (pestaña Casos)
   const [resolver, setResolver] = useState<Row | null>(null)
   const [comentario, setComentario] = useState('')
-  const [destino, setDestino] = useState<string | null>(null)
+  // `undefined` = todavía no eligió; `null` = eligió Cerrar (que no tiene área).
+  const [destino, setDestino] = useState<string | null | undefined>(undefined)
   const [saving, setSaving] = useState(false)
 
   // Confirmación del WhatsApp (pestaña Asistencia)
@@ -332,8 +333,8 @@ function CasosAtencionContent() {
   }
 
   const confirmarResuelto = async () => {
-    if (!resolver || !destino) return
-    const cierra = destino === 'RESUELTO'
+    if (!resolver || destino === undefined) return
+    const cierra = destino === null
     if (EXIGE_TEXTO(destino) && !comentario.trim()) {
       toast.error(cierra ? 'El comentario es obligatorio al cerrar'
         : 'El detalle de la nivelación es obligatorio'); return
@@ -343,13 +344,13 @@ function CasosAtencionContent() {
       const res = await fetch(`/api/postgres/students/${resolver.academicaId}/caso-atencion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: resolver.bookingId, comentario: comentario.trim(), estado: destino }),
+        body: JSON.stringify({ bookingId: resolver.bookingId, comentario: comentario.trim(), area: destino }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
       toast.success(cierra ? 'Caso cerrado'
-        : `Caso asignado a ${DESTINOS.find(d => d.estado === destino)?.label || destino}`)
+        : `Caso asignado a ${DESTINOS.find(d => d.area === destino)?.label || destino}`)
       setRows(prev => prev.filter(x => x.bookingId !== resolver.bookingId))
-      setResolver(null); setComentario(''); setDestino(null)
+      setResolver(null); setComentario(''); setDestino(undefined)
     } catch (e: any) {
       toast.error(e?.message || 'Error')
     } finally {
@@ -694,7 +695,7 @@ function CasosAtencionContent() {
                       {r.estado && r.estado !== ESTADO_ABIERTO ? estadoLabel(r.estado) : 'Pendiente'}
                     </span>
                     <button type="button" title="Asignar el caso a un área o cerrarlo"
-                      onClick={() => { setResolver(r); setComentario(''); setDestino(null) }}
+                      onClick={() => { setResolver(r); setComentario(''); setDestino(undefined) }}
                       disabled={!canGestion}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
                       <CheckCircleIcon className="h-4 w-4" /> Asignar
@@ -792,9 +793,9 @@ function CasosAtencionContent() {
             <p className="block text-sm font-medium text-gray-700 mb-2">¿A dónde va el caso?</p>
             <div className="space-y-2 mb-4">
               {DESTINOS.map(d => (
-                <button key={d.estado} type="button" onClick={() => setDestino(d.estado)} disabled={saving}
+                <button key={d.label} type="button" onClick={() => setDestino(d.area)} disabled={saving}
                   className={`w-full text-left px-3 py-2.5 rounded-lg border-2 transition-colors disabled:opacity-50 ${
-                    destino === d.estado ? d.clase + ' ring-2 ring-offset-1 ring-primary-400' : d.clase
+                    destino === d.area ? d.clase + ' ring-2 ring-offset-1 ring-primary-400' : d.clase
                   }`}>
                   <span className="block text-sm font-semibold">{d.label}</span>
                   <span className="block text-xs opacity-80">{d.detalle}</span>
@@ -803,28 +804,28 @@ function CasosAtencionContent() {
             </div>
 
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {destino === 'REMITIDO_A_NIVELACION' ? 'Detalle de la nivelación' : 'Comentario'}
+              {destino === 'NIVELACIONES' ? 'Detalle de la nivelación' : 'Comentario'}
               {EXIGE_TEXTO(destino) && <span className="text-red-500"> *</span>}
             </label>
             <textarea
               value={comentario}
               onChange={e => setComentario(e.target.value)}
               rows={3}
-              placeholder={destino === 'RESUELTO'
+              placeholder={destino === null
                 ? 'Describe cómo se resolvió el caso…'
-                : destino === 'REMITIDO_A_NIVELACION'
+                : destino === 'NIVELACIONES'
                 ? 'Qué hay que reforzarle al alumno. Se verá en la columna Detalle.'
                 : 'Opcional: qué debe atender el área que lo reciba.'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
             />
             <p className="text-xs text-gray-400 mt-1">Se agrega al historial del estudiante y el caso sale de esta bandeja.</p>
             <div className="flex justify-end gap-2 mt-5">
-              <button type="button" onClick={() => { setResolver(null); setDestino(null) }} disabled={saving}
+              <button type="button" onClick={() => { setResolver(null); setDestino(undefined) }} disabled={saving}
                 className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
               <button type="button" onClick={confirmarResuelto}
-                disabled={saving || !destino || (EXIGE_TEXTO(destino) && !comentario.trim())}
+                disabled={saving || destino === undefined || (EXIGE_TEXTO(destino) && !comentario.trim())}
                 className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
-                {saving ? 'Guardando…' : destino === 'RESUELTO' ? 'Cerrar caso' : 'Asignar'}
+                {saving ? 'Guardando…' : destino === null ? 'Cerrar caso' : 'Asignar'}
               </button>
             </div>
           </div>
