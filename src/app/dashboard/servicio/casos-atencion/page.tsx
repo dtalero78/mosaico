@@ -106,9 +106,8 @@ const DESTINOS: { estado: string; label: string; detalle: string; clase: string 
 ]
 
 /**
- * En Nivelaciones la columna Estado no distingue nada — todas las filas tienen
- * el mismo — así que su lugar lo ocupa el DETALLE: el comentario con el que se
- * asignó el caso, que es el encargo concreto para el área.
+ * Nivelaciones lleva una columna DETALLE además del Estado: el comentario con
+ * el que se asignó el caso, que ahí es el encargo concreto para el área.
  */
 const MUESTRA_DETALLE = (t: Tab) => t === 'nivelaciones'
 
@@ -291,9 +290,10 @@ function CasosAtencionContent() {
         { header: 'Salón', accessor: (r: Row) => r.salon || '' },
         { header: 'Guía', accessor: (r: Row) => r.guia || '' },
         { header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fechaEstado || null) },
-        MUESTRA_DETALLE(tab)
-          ? { header: 'Detalle', accessor: (r: Row) => r.detalle || '' }
-          : { header: 'Estado', accessor: (r: Row) => estadoLabel(r.estado) },
+        ...(MUESTRA_DETALLE(tab)
+          ? [{ header: 'Detalle', accessor: (r: Row) => r.detalle || '' }]
+          : []),
+        { header: 'Estado', accessor: (r: Row) => estadoLabel(r.estado) },
         { header: 'Caso', accessor: (r: Row) => r.codigoCaso || '' },
         { header: 'Acuerdo', accessor: (r: Row) => r.acuerdo || '' },
         { header: 'Cerrado por', accessor: (r: Row) => r.cerradoPor || '' },
@@ -399,7 +399,7 @@ function CasosAtencionContent() {
   const hayDatos = tab === 'vacias' ? grupos.length > 0 : rows.length > 0
   const columnas = ES_GESTION(tab)
     ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha',
-       MUESTRA_DETALLE(tab) ? 'Detalle' : 'Estado']
+       ...(MUESTRA_DETALLE(tab) ? ['Detalle'] : []), 'Estado']
     : tab === 'casos'
     ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
     : tab === 'asistencia'
@@ -626,12 +626,12 @@ function CasosAtencionContent() {
                     <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fechaEstado || null)}</td>
-                  {MUESTRA_DETALLE(tab) ? (
+                  {MUESTRA_DETALLE(tab) && (
                   <td className="px-3 py-2 text-gray-700">
                     <span className="block max-w-[280px] whitespace-pre-wrap break-words"
                       title={r.detalle || ''}>{r.detalle || '—'}</span>
                   </td>
-                  ) : (
+                  )}
                   <td className="px-3 py-2 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${estadoColor(r.estado)}`}
                       title={[r.codigoCaso ? `Caso ${r.codigoCaso}` : '', r.cerradoPor ? `Cerrado por ${r.cerradoPor}` : '']
@@ -644,7 +644,6 @@ function CasosAtencionContent() {
                       </span>
                     )}
                   </td>
-                  )}
                 </tr>
               )) : tab === 'casos' ? rows.map((r) => (
                 /* Curso · Nombre · Contrato · ID · Salón · Guía · Fecha · Estado */
