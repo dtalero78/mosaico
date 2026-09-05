@@ -106,12 +106,21 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             tit."_id" AS "titularId",
             p."salon",
             COALESCE(c."sesionLeccion", c."step") AS leccion,
-            g."nombreCompleto" AS guia
+            g."nombreCompleto" AS guia,
+            det."motivo" AS detalle
        ${from}
        LEFT JOIN LATERAL (
          SELECT t."_id" FROM "PEOPLE" t
           WHERE t."contrato" = p."contrato" AND t."tipoUsuario" = 'TITULAR' LIMIT 1
        ) tit ON true
+       -- El comentario con que se asignó el caso: la última entrada del
+       -- historial de estados. Se lee de ahí y no de una columna nueva porque
+       -- ahí ya queda, junto con quién lo escribió y cuándo.
+       LEFT JOIN LATERAL (
+         SELECT h."motivo" FROM "CASOS_ESTADO_HISTORIAL" h
+          WHERE h."casoId" = ca."_id"
+          ORDER BY h."_createdDate" DESC LIMIT 1
+       ) det ON true
       ${whereSql}
       ORDER BY curso ASC NULLS LAST, "fechaEstado" DESC NULLS LAST, nombre ASC
       LIMIT ${MAX_ROWS}`,

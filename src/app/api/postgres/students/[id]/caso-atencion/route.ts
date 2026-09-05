@@ -41,11 +41,15 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
   if (!bookingId) throw new ValidationError('bookingId requerido')
   // Sólo estados de cierre: asignar a un área saca el caso de la bandeja.
   if (!ESTADOS_CIERRE.includes(estado)) throw new ValidationError(`Estado no válido: ${estado}`)
-  // El comentario se exige al CERRAR, que es donde había que justificar por qué
-  // el caso no requiere nada más. Al derivarlo a un área es opcional: la
-  // justificación la dará el área que lo reciba.
-  if (estado === 'RESUELTO' && !comentario) {
-    throw new ValidationError('El comentario es obligatorio al cerrar el caso')
+  // El comentario se exige al CERRAR (hay que justificar por qué el caso no
+  // requiere nada más) y al derivar a NIVELACIÓN, donde el texto ES el encargo:
+  // qué hay que reforzarle al alumno. En las otras derivaciones es opcional,
+  // porque la justificación la dará el área que lo reciba.
+  const EXIGEN_COMENTARIO: EstadoCaso[] = ['RESUELTO', 'REMITIDO_A_NIVELACION']
+  if (EXIGEN_COMENTARIO.includes(estado) && !comentario) {
+    throw new ValidationError(estado === 'RESUELTO'
+      ? 'El comentario es obligatorio al cerrar el caso'
+      : 'El detalle de la nivelación es obligatorio')
   }
 
   // Datos del caso para el historial (curso, lección, fecha del evento, texto).

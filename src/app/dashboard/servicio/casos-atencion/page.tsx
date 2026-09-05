@@ -105,6 +105,20 @@ const DESTINOS: { estado: string; label: string; detalle: string; clase: string 
     clase: 'border-gray-300 text-gray-700 hover:bg-gray-50' },
 ]
 
+/**
+ * En Nivelaciones la columna Estado no distingue nada — todas las filas tienen
+ * el mismo — así que su lugar lo ocupa el DETALLE: el comentario con el que se
+ * asignó el caso, que es el encargo concreto para el área.
+ */
+const MUESTRA_DETALLE = (t: Tab) => t === 'nivelaciones'
+
+/**
+ * Destinos que exigen texto: CERRAR (hay que justificar por qué el caso no
+ * requiere nada más) y NIVELACIÓN (el texto ES el encargo — qué hay que
+ * reforzarle al alumno — y es lo que se muestra en la columna Detalle).
+ */
+const EXIGE_TEXTO = (d: string | null) => d === 'RESUELTO' || d === 'REMITIDO_A_NIVELACION'
+
 const ES_GESTION = (t: Tab) =>
   t === 'historico' || t === 'academicos' || t === 'financieros' ||
   t === 'coordinador' || t === 'nivelaciones'
@@ -132,6 +146,7 @@ interface Row {
   casoId?: string
   acuerdo?: string | null
   cerradoPor?: string | null
+  detalle?: string | null
   fechaEstado?: string | null
   // Sólo en la pestaña Asistencia
   contactadoApoderado?: boolean
@@ -273,7 +288,9 @@ function CasosAtencionContent() {
         { header: 'Salón', accessor: (r: Row) => r.salon || '' },
         { header: 'Guía', accessor: (r: Row) => r.guia || '' },
         { header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fechaEstado || null) },
-        { header: 'Estado', accessor: (r: Row) => estadoLabel(r.estado) },
+        MUESTRA_DETALLE(tab)
+          ? { header: 'Detalle', accessor: (r: Row) => r.detalle || '' }
+          : { header: 'Estado', accessor: (r: Row) => estadoLabel(r.estado) },
         { header: 'Caso', accessor: (r: Row) => r.codigoCaso || '' },
         { header: 'Acuerdo', accessor: (r: Row) => r.acuerdo || '' },
         { header: 'Cerrado por', accessor: (r: Row) => r.cerradoPor || '' },
@@ -314,7 +331,10 @@ function CasosAtencionContent() {
   const confirmarResuelto = async () => {
     if (!resolver || !destino) return
     const cierra = destino === 'RESUELTO'
-    if (cierra && !comentario.trim()) { toast.error('El comentario es obligatorio al cerrar'); return }
+    if (EXIGE_TEXTO(destino) && !comentario.trim()) {
+      toast.error(cierra ? 'El comentario es obligatorio al cerrar'
+        : 'El detalle de la nivelación es obligatorio'); return
+    }
     setSaving(true)
     try {
       const res = await fetch(`/api/postgres/students/${resolver.academicaId}/caso-atencion`, {
@@ -375,7 +395,8 @@ function CasosAtencionContent() {
 
   const hayDatos = tab === 'vacias' ? grupos.length > 0 : rows.length > 0
   const columnas = ES_GESTION(tab)
-    ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
+    ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha',
+       MUESTRA_DETALLE(tab) ? 'Detalle' : 'Estado']
     : tab === 'casos'
     ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
     : tab === 'asistencia'
@@ -592,6 +613,12 @@ function CasosAtencionContent() {
                     <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fechaEstado || null)}</td>
+                  {MUESTRA_DETALLE(tab) ? (
+                  <td className="px-3 py-2 text-gray-700">
+                    <span className="block max-w-[280px] whitespace-pre-wrap break-words"
+                      title={r.detalle || ''}>{r.detalle || '—'}</span>
+                  </td>
+                  ) : (
                   <td className="px-3 py-2 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${estadoColor(r.estado)}`}
                       title={[r.codigoCaso ? `Caso ${r.codigoCaso}` : '', r.cerradoPor ? `Cerrado por ${r.cerradoPor}` : '']
@@ -604,6 +631,7 @@ function CasosAtencionContent() {
                       </span>
                     )}
                   </td>
+                  )}
                 </tr>
               )) : tab === 'casos' ? rows.map((r) => (
                 /* Curso · Nombre · Contrato · ID · Salón · Guía · Fecha · Estado */
@@ -763,7 +791,8 @@ function CasosAtencionContent() {
             </div>
 
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Comentario{destino === 'RESUELTO' && <span className="text-red-500"> *</span>}
+              {destino === 'REMITIDO_A_NIVELACION' ? 'Detalle de la nivelación' : 'Comentario'}
+              {EXIGE_TEXTO(destino) && <span className="text-red-500"> *</span>}
             </label>
             <textarea
               value={comentario}
@@ -771,6 +800,8 @@ function CasosAtencionContent() {
               rows={3}
               placeholder={destino === 'RESUELTO'
                 ? 'Describe cómo se resolvió el caso…'
+                : destino === 'REMITIDO_A_NIVELACION'
+                ? 'Qué hay que reforzarle al alumno. Se verá en la columna Detalle.'
                 : 'Opcional: qué debe atender el área que lo reciba.'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
             />
@@ -779,7 +810,7 @@ function CasosAtencionContent() {
               <button type="button" onClick={() => { setResolver(null); setDestino(null) }} disabled={saving}
                 className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
               <button type="button" onClick={confirmarResuelto}
-                disabled={saving || !destino || (destino === 'RESUELTO' && !comentario.trim())}
+                disabled={saving || !destino || (EXIGE_TEXTO(destino) && !comentario.trim())}
                 className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
                 {saving ? 'Guardando…' : destino === 'RESUELTO' ? 'Cerrar caso' : 'Asignar'}
               </button>
