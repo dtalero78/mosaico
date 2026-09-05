@@ -191,6 +191,7 @@ function CasosAtencionContent() {
   const [salon, setSalon] = useState('')
   const [leccion, setLeccion] = useState('')
   const [guia, setGuia] = useState('')
+  const [usuario, setUsuario] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
@@ -252,15 +253,17 @@ function CasosAtencionContent() {
 
   useEffect(() => { fetchData(tab) }, [tab, fetchData])
 
-  const filtros = { campaign, curso, salon, leccion, guia, startDate, endDate }
+  const filtros = { campaign, curso, salon, leccion, guia, usuario, startDate, endDate }
   const aplicar = () => fetchData(tab, filtros)
 
   const borrar = () => {
-    setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
+    setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setUsuario('')
+    setStartDate(''); setEndDate('')
     fetchData(tab)
   }
   const cambiarTab = (t: Tab) => {
-    setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setStartDate(''); setEndDate('')
+    setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setUsuario('')
+    setStartDate(''); setEndDate('')
     setTab(t)
   }
 
@@ -454,7 +457,17 @@ function CasosAtencionContent() {
 
       {/* Filtros */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 ${
+          tab === 'vacias' ? 'xl:grid-cols-7' : 'xl:grid-cols-8'} gap-3`}>
+          {tab !== 'vacias' && (
+          <div>
+            <label htmlFor="ca-usuario" className="block text-xs font-medium text-gray-500 mb-1">Nombre o ID</label>
+            <input id="ca-usuario" type="text" value={usuario} onChange={e => setUsuario(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') aplicar() }}
+              placeholder="Nombre o documento"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Campaña</label>
             <select value={campaign} onChange={e => setCampaign(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">

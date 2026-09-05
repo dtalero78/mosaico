@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { ValidationError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
+import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
 import {
   ESTADOS_CIERRE, ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS, ESTADOS_COORDINACION,
   ESTADOS_NIVELACION,
@@ -55,6 +56,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const salon = (searchParams.get('salon') || '').trim()
   const leccion = (searchParams.get('leccion') || '').trim()
   const guia = (searchParams.get('guia') || '').trim()
+  const usuario = (searchParams.get('usuario') || '').trim()
   const startDate = (searchParams.get('startDate') || '').trim()
   const endDate = (searchParams.get('endDate') || '').trim()
 
@@ -79,6 +81,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (salon)   { where.push(`p."salon" = $${i++}`); params.push(salon) }
   if (leccion) { where.push(`COALESCE(c."sesionLeccion", c."step") = $${i++}`); params.push(leccion) }
   if (guia)    { where.push(`cc."guia" = $${i++}`); params.push(guia) }
+  if (usuario) {
+    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i)
+    where.push(c.sql); params.push(...c.params); i += 2
+  }
 
   const from = `
        FROM "CASOS_ATENCION" ca

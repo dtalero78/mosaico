@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { cupoOcupadoSql } from '@/lib/cupo'
 import { ServicioPermission } from '@/types/permissions'
+import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
 import { ESTADO_ABIERTO } from '@/lib/casos-atencion-estados'
 
 /**
@@ -26,6 +27,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const salon = (searchParams.get('salon') || '').trim()
   const leccion = (searchParams.get('leccion') || '').trim()
   const guia = (searchParams.get('guia') || '').trim()
+  const usuario = (searchParams.get('usuario') || '').trim()
   const startDate = (searchParams.get('startDate') || '').trim()
   const endDate = (searchParams.get('endDate') || '').trim()
 
@@ -49,6 +51,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (guia)    { where.push(`cc."guia" = $${i++}`); params.push(guia) }
   if (startDate) { where.push(`COALESCE(c."dia", b."fechaEvento") >= $${i++}::date`); params.push(startDate) }
   if (endDate)   { where.push(`COALESCE(c."dia", b."fechaEvento") < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
+  if (usuario) {
+    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i)
+    where.push(c.sql); params.push(...c.params); i += 2
+  }
 
   const rows = (await query(
     `SELECT b."_id" AS "bookingId",
