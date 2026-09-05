@@ -44,7 +44,7 @@ const TABS: TabCfg[] = [
     id: 'vacias', label: 'Sesiones vacías',
     endpoint: '/api/postgres/reports/servicio/casos-atencion/sesiones-vacias',
     vacio: 'No hubo clases vacías',
-    descripcion: 'Sesiones de la semana a las que no asistió ningún estudiante, agrupadas por curso y salón.',
+    descripcion: 'Sesiones de la semana a las que no asistió ningún estudiante, agrupadas por campaña, curso y salón.',
   },
   {
     id: 'academicos', label: 'Académicos',
@@ -163,7 +163,7 @@ interface SesionVacia {
   fecha: string | null
   inscritos: number
 }
-interface Grupo { curso: string; salon: string; sesiones: SesionVacia[] }
+interface Grupo { campaign: string; curso: string; salon: string; sesiones: SesionVacia[] }
 interface Guia { id: string; nombre: string }
 
 const fmtFecha = (f: string | null) => (f ? new Date(f).toLocaleDateString('es-CL') : '—')
@@ -269,8 +269,9 @@ function CasosAtencionContent() {
 
   const exportar = () => {
     if (tab === 'vacias') {
-      const planas = grupos.flatMap(g => g.sesiones.map(s => ({ ...s, curso: g.curso, salon: g.salon })))
+      const planas = grupos.flatMap(g => g.sesiones.map(s => ({ ...s, campaign: g.campaign, curso: g.curso, salon: g.salon })))
       exportToExcel(planas, [
+        { header: 'Campaña', accessor: r => r.campaign || '' },
         { header: 'Curso', accessor: r => r.curso || '' },
         { header: 'Salón', accessor: r => r.salon || '' },
         { header: 'Inscritos que faltaron', accessor: r => (r.inscritos ?? '') },
@@ -555,10 +556,10 @@ function CasosAtencionContent() {
                 <tr><td colSpan={columnas.length} className="px-3 py-10 text-center text-gray-400">{cfg.vacio}</td></tr>
               ) : tab === 'vacias' ? (
                 grupos.map(g => (
-                  <Fragment key={`${g.curso}-${g.salon}`}>
+                  <Fragment key={`${g.campaign}-${g.curso}-${g.salon}`}>
                     <tr className="bg-primary-50/60 border-y border-primary-100">
                       <td colSpan={columnas.length} className="px-3 py-2 text-xs font-bold uppercase tracking-wide text-primary-700">
-                        {g.curso} · Salón {g.salon}
+                        {g.campaign} · {g.curso} · Salón {g.salon}
                         <span className="ml-2 font-medium text-primary-600/70 normal-case">
                           {g.sesiones.length} sesión(es) sin asistentes
                         </span>

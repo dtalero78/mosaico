@@ -103,17 +103,22 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        ) ins ON true
       WHERE ${where.join(' AND ')}
         AND ins."asistieron" = 0
-      ORDER BY curso ASC NULLS LAST, salon ASC NULLS LAST, c."dia" DESC
+      ORDER BY campaign ASC NULLS LAST, curso ASC NULLS LAST, salon ASC NULLS LAST, c."dia" DESC
       LIMIT ${MAX_ROWS}`,
     params
   )).rows
 
-  // Agrupado por curso + salón (lo que pidió el reporte).
-  const grupos: Array<{ curso: string; salon: string; sesiones: any[] }> = []
+  // Agrupado por CAMPAÑA + curso + salón. La campaña entra en la llave porque el
+  // mismo (curso, salón) se repite en varias campañas con distinto guía — sin ella
+  // el encabezado sumaba en un solo grupo sesiones de salones que no son el mismo.
+  const grupos: Array<{ campaign: string; curso: string; salon: string; sesiones: any[] }> = []
   const idx = new Map<string, number>()
   for (const r of rows as any[]) {
-    const k = `${r.curso || '—'}|${r.salon || '—'}`
-    if (!idx.has(k)) { idx.set(k, grupos.length); grupos.push({ curso: r.curso || '—', salon: r.salon || '—', sesiones: [] }) }
+    const k = `${r.campaign || '—'}|${r.curso || '—'}|${r.salon || '—'}`
+    if (!idx.has(k)) {
+      idx.set(k, grupos.length)
+      grupos.push({ campaign: r.campaign || '—', curso: r.curso || '—', salon: r.salon || '—', sesiones: [] })
+    }
     grupos[idx.get(k)!].sesiones.push(r)
   }
 
