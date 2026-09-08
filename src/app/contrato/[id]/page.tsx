@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { fillContractTemplate, type ConsentDisplay } from '@/lib/contract-template-filler'
+import { isContratoPrueba, marcaPruebaDataUri } from '@/lib/contrato-prueba'
 
 type PageState = 'LOADING' | 'ERROR' | 'HAS_CONSENT' | 'DOCUMENT_ENTRY' | 'OTP_ENTRY' | 'VERIFIED'
 
@@ -202,6 +203,19 @@ export default function ContratoPublicoPage() {
 
   return (
     <PageShell>
+      {/* Contrato de prueba: se avisa arriba y el texto va bajo marca de agua, para
+          que nadie lo confunda con el contrato real que sí obliga. */}
+      {isContratoPrueba(titular?.contrato) && (
+        <div className="mb-6 rounded-lg border-2 border-rose-300 bg-rose-50 px-4 py-3 text-center">
+          <p className="text-sm font-bold uppercase tracking-wide text-rose-700">
+            Contrato de prueba sin validez legal
+          </p>
+          <p className="mt-1 text-xs text-rose-600">
+            Este documento es una simulación interna y no genera ninguna obligación.
+          </p>
+        </div>
+      )}
+
       {/* Titular info */}
       <div className="text-center mb-6">
         <h2 className="text-xl font-bold text-gray-900">
@@ -243,7 +257,7 @@ export default function ContratoPublicoPage() {
       )}
 
       {/* Contract text */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-6 max-h-[50vh] overflow-y-auto">
+      <div style={isContratoPrueba(titular?.contrato) ? { backgroundImage: `url("${marcaPruebaDataUri()}")`, backgroundRepeat: 'repeat' } : undefined} className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-6 max-h-[50vh] overflow-y-auto">
         <div className="prose prose-sm max-w-none whitespace-pre-wrap font-serif text-gray-800 leading-relaxed text-sm">
           {contractText}
         </div>

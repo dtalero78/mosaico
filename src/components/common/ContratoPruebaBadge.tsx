@@ -7,9 +7,10 @@
  * con reales. Estos contratos NO aparecen en informes y pueden purgarse
  * en Mantenimiento > Usuarios > Contratos Prueba.
  */
-export function isContratoPrueba(contrato?: string | null): boolean {
-  return typeof contrato === 'string' && /^PRB-/i.test(contrato);
-}
+// La regla (y la marca de agua) viven en el lib, que tambien usan el PDF y la
+// pagina publica. Se re-exporta aqui para no romper los imports existentes.
+import { isContratoPrueba } from '@/lib/contrato-prueba';
+export { isContratoPrueba };
 
 export function ContratoPruebaBadge({ contrato }: { contrato?: string | null }) {
   if (!isContratoPrueba(contrato)) return null;

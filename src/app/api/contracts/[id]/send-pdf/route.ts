@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError } from '@/lib/errors';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
+import { isContratoPrueba } from '@/lib/contrato-prueba';
 import { getAsesorInfo } from '@/lib/asesor';
 import { archiveContractPdfFromUrl } from '@/services/contract-archive.service';
 import { templatePlataformaFor } from '@/lib/contract-template';
@@ -21,11 +22,13 @@ export const POST = handler(async (_request, { params }) => {
     [titularId]
   );
   if (!titular) throw new NotFoundError('Titular', titularId);
-  // Contrato de prueba (PRB-): no se envía PDF al cliente (defensa server-side
-  // además de ocultar el botón en la UI).
-  if (/^PRB-/i.test(String(titular.contrato || ''))) {
-    throw new ValidationError('Es un contrato de prueba: no se puede enviar el PDF.');
-  }
+  // Contrato de prueba (PRB-): SÍ se envía. Antes se rechazaba aquí; ahora el
+  // contrato de prueba se ejercita de punta a punta y lo que sale va marcado —
+  // buildContractHtml le pone la marca de agua "CONTRATO DE PRUEBA SIN VALIDEZ
+  // LEGAL" repetida en todas las páginas. Lo único que NO hace es archivarse en
+  // Drive (más abajo): CONTRATOS MOS es de donde se bajan los contratos reales
+  // y meterle pruebas la vuelve poco fiable.
+  const esPrueba = isContratoPrueba(titular.contrato);
   if (!titular.celular) throw new ValidationError('El titular no tiene celular registrado');
   if (!titular.plataforma) throw new ValidationError('El titular no tiene plataforma asignada');
 
@@ -115,10 +118,12 @@ export const POST = handler(async (_request, { params }) => {
   // 7. Archivar el PDF (Drive propio si está configurado, si no BSL→LGS) en
   //    paralelo con el envío de WhatsApp. Destino resuelto en archiveContractPdfFromUrl,
   //    con el mismo nombre MOS_<contrato> que auto-approve/autoaprobar/regenerate-drive.
-  const uploadPromise = archiveContractPdfFromUrl(
-    tempPdfUrl,
-    buildContractFileBase(titular.contrato, titularId),
-  ).then(r => r.driveUpload).catch(() => ({}));
+  const uploadPromise = esPrueba
+    ? Promise.resolve({} as any)
+    : archiveContractPdfFromUrl(
+        tempPdfUrl,
+        buildContractFileBase(titular.contrato, titularId),
+      ).then(r => r.driveUpload).catch(() => ({}));
 
   // 8. Send PDF via Whapi using the API2PDF direct URL (clean S3 link, no redirects)
   const phone = titular.celular.toString().replace(/\D/g, '');

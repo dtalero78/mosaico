@@ -8,6 +8,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
 import { htmlToPdfBuffer } from '@/lib/pdf';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
+import { isContratoPrueba } from '@/lib/contrato-prueba';
 import { uploadPdfToDrive, isDriveConfigured } from '@/lib/gdrive';
 import { putBuffer, deleteObject, getPresignedGetUrl } from '@/lib/spaces';
 import { templatePlataformaFor } from '@/lib/contract-template';
@@ -102,6 +103,13 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
 
   // HTML y presentación (membrete con logo + "Página X de Y") compartidos con
   // send-pdf y auto-approve, para que los tres PDFs salgan idénticos.
+  // Los contratos de prueba (PRB-) no se archivan: esta pantalla existe para
+  // reponer el contrato en Drive, y CONTRATOS MOS guarda sólo los reales. El
+  // PDF de una prueba se obtiene con "Enviar PDF" desde el propio contrato.
+  if (isContratoPrueba(titular.contrato)) {
+    throw new ValidationError('Es un contrato de prueba: no se archiva en Drive.');
+  }
+
   const htmlContent = buildContractHtml(contractText, titular.contrato);
 
   // 1. Generar el PDF con Chromium propio (sin API2PDF)

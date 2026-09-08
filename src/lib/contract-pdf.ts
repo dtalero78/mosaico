@@ -1,6 +1,7 @@
 import 'server-only';
 import fs from 'fs';
 import path from 'path';
+import { isContratoPrueba, marcaPruebaCss, marcaPruebaHtml } from './contrato-prueba';
 
 /**
  * Presentación del PDF del contrato: HTML + membrete (logo + Nº de contrato) y
@@ -142,6 +143,7 @@ export function buildContractPdfOptions(contrato?: string | null, isImpulsa = fa
  * el margen de la página.
  */
 export function buildContractHtml(contractText: string, contrato?: string | null): string {
+  const esPrueba = isContratoPrueba(contrato);
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -158,8 +160,9 @@ export function buildContractHtml(contractText: string, contrato?: string | null
       white-space: pre-wrap;
       word-wrap: break-word;
     }
+    ${esPrueba ? marcaPruebaCss() : ''}
   </style>
 </head>
-<body>${contractText}</body>
+<body>${esPrueba ? marcaPruebaHtml() : ''}${contractText}</body>
 </html>`;
 }

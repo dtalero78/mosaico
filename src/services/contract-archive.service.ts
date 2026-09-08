@@ -2,6 +2,7 @@ import 'server-only';
 import { queryOne, queryMany } from '@/lib/postgres';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
+import { isContratoPrueba } from '@/lib/contrato-prueba';
 import { getAsesorInfo } from '@/lib/asesor';
 import { isDriveConfigured, uploadPdfToDrive } from '@/lib/gdrive';
 import { templatePlataformaFor } from '@/lib/contract-template';
@@ -152,6 +153,10 @@ export async function generateAndArchiveContractPdf(
     return { ok: false, reason: 'API2PDF sin PDF', pdfUrl: null, driveUpload: null };
   }
   const pdfUrl: string = pdfData.pdf;
+
+  // Un contrato de prueba (PRB-) genera su PDF —marcado— pero NO se archiva:
+  // CONTRATOS MOS es la carpeta de la que se bajan los contratos reales.
+  if (isContratoPrueba(built.contrato)) return { ok: true, pdfUrl, driveUpload: null };
 
   // Destino (Drive propio o BSL) resuelto en un solo sitio, MOS_<contrato>.
   const archived = await archiveContractPdfFromUrl(pdfUrl, buildContractFileBase(built.contrato, titularId));

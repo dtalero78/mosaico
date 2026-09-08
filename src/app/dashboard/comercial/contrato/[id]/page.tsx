@@ -29,6 +29,7 @@ import { fillContractTemplate, type ConsentDisplay } from '@/lib/contract-templa
 import { templatePlataformaFor } from '@/lib/contract-template'
 import ReservaCupoBanner from '@/components/comercial/ReservaCupoBanner'
 import { isContratoPrueba } from '@/components/common/ContratoPruebaBadge'
+import { marcaPruebaCss, marcaPruebaHtml } from '@/lib/contrato-prueba'
 import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
 
 // ── Field definitions ──
@@ -1088,7 +1089,16 @@ export default function ContratoDetailPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      {!isContratoPrueba(titular?.contrato) ? (<>
+                      {/* Un contrato de prueba (PRB-) usa los mismos tres botones: lo que
+                          sale de él va con la marca de agua y su PDF no se archiva en Drive. */}
+                      {isContratoPrueba(titular?.contrato) && (
+                        <span
+                          className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2"
+                          title="El PDF, la impresión y la página que abre el titular llevan la marca CONTRATO DE PRUEBA SIN VALIDEZ LEGAL. El PDF no se archiva en Drive."
+                        >
+                          🧪 Prueba — sale con marca de agua
+                        </span>
+                      )}
                       <button
                         onClick={sendContractWhatsApp}
                         disabled={sendingWhatsApp || !titular?.celular}
@@ -1114,6 +1124,8 @@ export default function ContratoDetailPage() {
                       <button
                         onClick={() => {
                           if (typeof window !== 'undefined') {
+                            // La impresión de un contrato de prueba lleva la misma marca que el PDF.
+                            const esPrueba = isContratoPrueba(titular?.contrato)
                             const printWindow = window.open('', '_blank')
                             if (printWindow) {
                               printWindow.document.write(`
@@ -1123,9 +1135,10 @@ export default function ContratoDetailPage() {
                                     <style>
                                       body { font-family: Georgia, serif; padding: 40px; line-height: 1.6; white-space: pre-wrap; font-size: 14px; color: #1a1a1a; }
                                       @media print { body { padding: 20px; } }
+                                      ${esPrueba ? marcaPruebaCss() : ''}
                                     </style>
                                   </head>
-                                  <body>${contractHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</body>
+                                  <body>${esPrueba ? marcaPruebaHtml() : ''}${contractHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</body>
                                 </html>
                               `)
                               printWindow.document.close()
@@ -1139,11 +1152,6 @@ export default function ContratoDetailPage() {
                       >
                         Imprimir
                       </button>
-                      </>) : (
-                        <span className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                          🧪 Contrato de prueba — firma, envío de PDF e impresión deshabilitados.
-                        </span>
-                      )}
                       <button
                         onClick={() => setShowCloseConfirm(true)}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium"
