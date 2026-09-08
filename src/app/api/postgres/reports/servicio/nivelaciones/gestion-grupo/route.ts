@@ -5,6 +5,7 @@ import { ValidationError } from '@/lib/errors'
 import { createEvent } from '@/services/calendar.service'
 import { enrollStudents } from '@/services/enrollment.service'
 import { ServicioPermission } from '@/types/permissions'
+import { query, queryOne } from '@/lib/postgres'
 
 /**
  * POST /api/postgres/reports/servicio/nivelaciones/gestion-grupo
@@ -24,6 +25,21 @@ import { ServicioPermission } from '@/types/permissions'
  */
 const MAX_ALUMNOS = 60
 
+/**
+ * Confirmada la agrupación, el grupo pasa a ser el EVENTO: el borrador ya no
+ * aporta y dejarlo colgado haría que un alumno agendado siguiera contando en un
+ * grupo sin agendar. Si el evento se borra, vuelven a Agrupaciones sin grupo.
+ */
+async function limpiarGrupoBorrador(academicaIds: string[]) {
+  await query(
+    `UPDATE "ACADEMICA"
+        SET "detalleNivelacion" = COALESCE("detalleNivelacion", '{}'::jsonb) - 'grupoId',
+            "_updatedDate" = NOW()
+      WHERE "_id" = ANY($1::text[])`,
+    [academicaIds]
+  )
+}
+
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.NIVELACIONES_GESTION)
 
@@ -35,6 +51,53 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   if (!academicaIds.length) throw new ValidationError('Selecciona al menos un estudiante.')
   if (academicaIds.length > MAX_ALUMNOS) {
     throw new ValidationError(`Máximo ${MAX_ALUMNOS} estudiantes por grupo.`)
+  }
+
+  // ── Modo "sumar a una sesión ya agendada" ──
+  // Para el alumno que queda solo en Agrupaciones sin nadie de su curso con quien
+  // agruparse, pero que sí encaja en una nivelación ya creada. Aquí NO se crea
+  // evento: sólo se inscribe en el existente, que debe seguir siendo futuro
+  // (sumarlo a uno ya dictado lo dejaría con una ausencia que nunca ocurrió).
+  const eventoExistenteId = String(body?.eventoExistenteId || '').trim()
+  if (eventoExistenteId) {
+    const ev = await queryOne<{ _id: string; dia: Date; tipo: string | null; sesionCerrada: boolean | null }>(
+      `SELECT "_id", "dia", "tipo", "sesionCerrada" FROM "CALENDARIO" WHERE "_id" = $1`,
+      [eventoExistenteId]
+    )
+    if (!ev) throw new ValidationError('La nivelación indicada ya no existe.')
+    if (String(ev.tipo || '').toUpperCase() !== 'NIVELACION') {
+      throw new ValidationError('El evento indicado no es una nivelación.')
+    }
+    if (ev.sesionCerrada === true) throw new ValidationError('Esa nivelación ya fue registrada.')
+    if (new Date(ev.dia).getTime() <= Date.now()) {
+      throw new ValidationError('Esa nivelación ya se dictó: elige una futura o crea un grupo nuevo.')
+    }
+
+    let sumados = 0
+    let sumarError: string | null = null
+    try {
+      const res = await enrollStudents({
+        eventId: ev._id,
+        studentIds: academicaIds,
+        agendadoPor: session?.user?.name || undefined,
+        agendadoPorEmail: session?.user?.email || undefined,
+        agendadoPorRol: (session?.user as any)?.role || undefined,
+        sessionRole: (session?.user as any)?.role || undefined,
+      })
+      sumados = res.enrolled
+    } catch (e: any) {
+      sumarError = e?.message || 'Error al agendar a los estudiantes'
+    }
+    if (!sumarError) await limpiarGrupoBorrador(academicaIds)
+
+    return successResponse({
+      event: ev,
+      enrolled: sumados,
+      enrollError: sumarError,
+      message: sumarError
+        ? `No se pudo sumar a la nivelación: ${sumarError}`
+        : `${sumados} usuario(s) sumado(s) a la nivelación ya agendada`,
+    })
   }
 
   const advisor = String(body?.advisor || '').trim()
@@ -100,6 +163,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       sessionRole: (session?.user as any)?.role || undefined,
     })
     enrolled = res.enrolled
+    await limpiarGrupoBorrador(academicaIds)
   } catch (e: any) {
     enrollError = e?.message || 'Error al agendar a los estudiantes'
   }

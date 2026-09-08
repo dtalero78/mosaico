@@ -98,7 +98,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             g."nombreCompleto" AS guia,
             g."zoom" AS "guiaZoom",
             COALESCE(a."NivelacionCount", 0)::int AS conteo,
-            (a."detalleNivelacion"->>'fecha') AS fecha
+            (a."detalleNivelacion"->>'fecha') AS fecha,
+            -- Grupo en borrador: ya se decidió que van juntos, falta ponerle
+            -- fecha y guía. Hasta entonces siguen aquí (ver grupo-borrador).
+            (a."detalleNivelacion"->>'grupoId') AS "grupoId"
        FROM "ACADEMICA" a
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
        LEFT JOIN "CURSOS_CAMPAIGN" cc
@@ -133,5 +136,25 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     new Map(opts.filter((o: any) => o.guia_id).map((o: any) => [o.guia_id, { id: o.guia_id, nombre: o.guia_nombre }])).values()
   )
 
-  return successResponse({ rows, total: rows.length, cursos, lecciones, guias })
+  // Nivelaciones YA agendadas y aún por dictar. Alimentan la alternativa de sumar
+  // a una sesión existente, para el alumno que queda solo y no tiene con quién
+  // agruparse. Sólo futuras: sumar a una ya dictada le dejaría una ausencia que
+  // nunca ocurrió.
+  const sesionesAbiertas = (await query(
+    `SELECT c."_id", c."dia", c."curso", c."nivel" AS modulo, c."step" AS leccion,
+            g."nombreCompleto" AS guia,
+            COUNT(bk."_id")::int AS inscritos
+       FROM "CALENDARIO" c
+       LEFT JOIN "GUIAS" g ON g."_id" = c."advisor"
+       LEFT JOIN "ACADEMICA_BOOKINGS" bk
+         ON (bk."eventoId" = c."_id" OR bk."idEvento" = c."_id") AND bk."cancelo" IS NOT TRUE
+      WHERE UPPER(COALESCE(c."tipo", '')) = 'NIVELACION'
+        AND c."dia" > NOW()
+        AND c."sesionCerrada" IS NOT TRUE
+      GROUP BY c."_id", c."dia", c."curso", c."nivel", c."step", g."nombreCompleto"
+      ORDER BY c."dia" ASC
+      LIMIT 50`
+  )).rows
+
+  return successResponse({ rows, total: rows.length, cursos, lecciones, guias, sesionesAbiertas })
 })

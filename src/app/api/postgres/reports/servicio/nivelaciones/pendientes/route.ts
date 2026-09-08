@@ -180,10 +180,16 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   // La lección se filtra aquí y no en SQL porque la que vale es la del evento.
   if (leccion) rows = rows.filter((r) => (r.leccion || '') === leccion)
-  rows.sort((a, b) =>
-    String(a.eventoDia || '').localeCompare(String(b.eventoDia || ''))
-    || String(a.curso || '').localeCompare(String(b.curso || ''))
-    || String(a.nombre || '').localeCompare(String(b.nombre || '')))
+  // Orden por FECHA DE SOLICITUD: lo que importa aquí es quién lleva más tiempo
+  // esperando su nivelación, no cuándo cae la sesión. Las que no la tengan
+  // registrada (nivelaciones viejas) van al final en vez de encabezar la lista.
+  rows.sort((a, b) => {
+    const fa = a.fechaSolicitud || '9999'
+    const fb = b.fechaSolicitud || '9999'
+    return String(fa).localeCompare(String(fb))
+      || String(a.curso || '').localeCompare(String(b.curso || ''))
+      || String(a.nombre || '').localeCompare(String(b.nombre || ''))
+  })
 
   // Catálogos sobre el universo de la pestaña (sin los filtros aplicados), para
   // poder volver a ampliar la consulta después de acotarla.

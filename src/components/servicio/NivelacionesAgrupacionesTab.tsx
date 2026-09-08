@@ -28,11 +28,28 @@ interface Row {
   guiaZoom: string | null
   conteo: number
   fecha: string | null
+  /** Grupo armado a mano que aún no se agenda (ver endpoint grupo-borrador). */
+  grupoId: string | null
 }
 interface Guia { id: string; nombre: string; zoom?: string | null }
+interface SesionAbierta {
+  _id: string
+  dia: string
+  curso: string | null
+  modulo: string | null
+  leccion: string | null
+  guia: string | null
+  inscritos: number
+}
 
-/** Clave de agrupación: la nivelación se dicta por (curso, lección). */
-const claveGrupo = (r: Row) => `${r.curso || '—'}||${r.leccion || ''}`
+/**
+ * Clave de agrupación. Un grupo ARMADO a mano manda sobre la sugerencia: sus
+ * alumnos van juntos aunque tengan lecciones distintas, que es justo para lo
+ * que se arma. Sin grupo armado, se sugiere por (curso, lección), que es como
+ * se dicta una nivelación por defecto.
+ */
+const claveGrupo = (r: Row) =>
+  r.grupoId ? `G:${r.grupoId}` : `S:${r.curso || '—'}||${r.leccion || ''}`
 
 interface Grupo {
   key: string
@@ -41,6 +58,10 @@ interface Grupo {
   modulo: string | null
   tema: string | null
   rows: Row[]
+  /** id del grupo armado; null cuando es sólo la sugerencia por curso+lección. */
+  grupoId: string | null
+  /** true si dentro conviven varias lecciones (sólo posible armándolo a mano). */
+  mixto: boolean
 }
 
 export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, onMoved }: {
@@ -65,6 +86,8 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [modalGrupo, setModalGrupo] = useState<Grupo | null>(null)
+  const [guardando, setGuardando] = useState(false)
+  const [sesionesAbiertas, setSesionesAbiertas] = useState<SesionAbierta[]>([])
 
   const fetchData = useCallback(async (f?: Record<string, string>) => {
     setLoading(true)
@@ -75,6 +98,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
       if (r.error) throw new Error(r.error)
       setRows(r.rows || [])
       setCursos(r.cursos || []); setLecciones(r.lecciones || []); setGuias(r.guias || [])
+      setSesionesAbiertas(r.sesionesAbiertas || [])
       setSel(new Set())
       onCount?.(r.rows?.length || 0)
     } catch (e: any) {
@@ -103,17 +127,99 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
       const k = claveGrupo(r)
       let g = map.get(k)
       if (!g) {
-        g = { key: k, curso: r.curso || '—', leccion: r.leccion, modulo: r.modulo, tema: r.tema, rows: [] }
+        g = {
+          key: k, curso: r.curso || '—', leccion: r.leccion, modulo: r.modulo, tema: r.tema,
+          rows: [], grupoId: r.grupoId || null, mixto: false,
+        }
         map.set(k, g)
       }
       // El módulo/tema del grupo sale de la primera fila que lo traiga: hay
       // solicitudes viejas marcadas sin lección que no lo tienen.
       if (!g.modulo && r.modulo) g.modulo = r.modulo
       if (!g.tema && r.tema) g.tema = r.tema
+      if (g.leccion && r.leccion && g.leccion !== r.leccion) g.mixto = true
       g.rows.push(r)
     }
-    return Array.from(map.values())
+    // Los grupos ya armados van primero: son los que esperan que se les ponga
+    // fecha, mientras que las sugerencias sólo son candidatos.
+    return Array.from(map.values()).sort((a, b) =>
+      (a.grupoId ? 0 : 1) - (b.grupoId ? 0 : 1)
+      || a.curso.localeCompare(b.curso)
+      || String(a.leccion || '').localeCompare(String(b.leccion || '')))
   }, [rows])
+
+  /** Grupos ya armados: destino posible al que sumar más usuarios. */
+  const gruposArmados = useMemo(() => grupos.filter(g => g.grupoId), [grupos])
+  /** ¿Algún seleccionado pertenece ya a un grupo? Habilita "Quitar del grupo". */
+  const haySeleccionEnGrupo = useMemo(
+    () => rows.some(r => sel.has(r.academicaId) && r.grupoId),
+    [rows, sel])
+
+  /** Arma un grupo con lo seleccionado, o lo suma a uno ya armado. */
+  const armarGrupo = async (grupoId?: string) => {
+    const ids = Array.from(sel)
+    if (!ids.length) { toast.error('Marca al menos un usuario'); return }
+    setGuardando(true)
+    try {
+      const res = await fetch('/api/postgres/reports/servicio/nivelaciones/grupo-borrador', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'agregar', academicaIds: ids, grupoId }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j?.error || 'No se pudo armar el grupo')
+      toast.success(grupoId
+        ? `${ids.length} usuario(s) sumado(s) al grupo (${j.totalEnGrupo} en total)`
+        : `Grupo armado con ${ids.length} usuario(s)`)
+      setSel(new Set())
+      fetchData({ curso, leccion, guia })
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo armar el grupo')
+    } finally { setGuardando(false) }
+  }
+
+  /** Saca a los seleccionados de su grupo: vuelven a la sugerencia por lección. */
+  const sacarDelGrupo = async () => {
+    const ids = Array.from(sel)
+    if (!ids.length) { toast.error('Marca al menos un usuario'); return }
+    setGuardando(true)
+    try {
+      const res = await fetch('/api/postgres/reports/servicio/nivelaciones/grupo-borrador', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'quitar', academicaIds: ids }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j?.error || 'No se pudo quitar del grupo')
+      toast.success(`${ids.length} usuario(s) fuera del grupo`)
+      setSel(new Set())
+      fetchData({ curso, leccion, guia })
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo quitar del grupo')
+    } finally { setGuardando(false) }
+  }
+
+  /** Suma los seleccionados a una nivelación ya agendada (pasan a Pendientes). */
+  const sumarASesion = async (eventoExistenteId: string) => {
+    const ids = Array.from(sel)
+    if (!ids.length) { toast.error('Marca al menos un usuario'); return }
+    setGuardando(true)
+    try {
+      const res = await fetch('/api/postgres/reports/servicio/nivelaciones/gestion-grupo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ academicaIds: ids, eventoExistenteId }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j?.error || 'No se pudo sumar a la nivelación')
+      toast.success(j?.message || 'Usuarios sumados a la nivelación')
+      setSel(new Set())
+      fetchData({ curso, leccion, guia })
+      onMoved?.()
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo sumar a la nivelación')
+    } finally { setGuardando(false) }
+  }
 
   const toggle = (id: string) => setSel(prev => {
     const n = new Set(prev)
@@ -177,6 +283,64 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
         </div>
       </div>
 
+      {/* Acciones sobre lo seleccionado. Sólo aparecen con algo marcado: el grupo
+          se arma aquí y NO se agenda todavía, así se puede esperar a que lleguen
+          más solicitudes y sumarlas al mismo grupo. */}
+      {canGestion && sel.size > 0 && (
+        <div className="bg-primary-50 border border-primary-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-primary-900">
+            {sel.size} seleccionado(s):
+          </span>
+          <button type="button" onClick={() => armarGrupo()} disabled={guardando}
+            className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
+            Armar grupo nuevo
+          </button>
+          {gruposArmados.length > 0 && (
+            <select
+              value=""
+              disabled={guardando}
+              onChange={e => { if (e.target.value) armarGrupo(e.target.value) }}
+              aria-label="Sumar a un grupo ya armado"
+              className="px-3 py-1.5 text-sm border border-primary-300 rounded-lg bg-white"
+            >
+              <option value="">Sumar a un grupo armado…</option>
+              {gruposArmados.map(g => (
+                <option key={g.grupoId!} value={g.grupoId!}>
+                  {g.curso} · {g.leccion || 'varias lecciones'} ({g.rows.length})
+                </option>
+              ))}
+            </select>
+          )}
+          {sesionesAbiertas.length > 0 && (
+            <select
+              value=""
+              disabled={guardando}
+              onChange={e => { if (e.target.value) sumarASesion(e.target.value) }}
+              aria-label="Sumar a una nivelación ya agendada"
+              className="px-3 py-1.5 text-sm border border-emerald-300 rounded-lg bg-white text-emerald-800"
+            >
+              <option value="">Sumar a una sesión ya agendada…</option>
+              {sesionesAbiertas.map(s => (
+                <option key={s._id} value={s._id}>
+                  {new Date(s.dia).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  {' · '}{s.curso || '—'} · {s.leccion || 'sin lección'} ({s.inscritos})
+                </option>
+              ))}
+            </select>
+          )}
+          {haySeleccionEnGrupo && (
+            <button type="button" onClick={sacarDelGrupo} disabled={guardando}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-white">
+              Quitar del grupo
+            </button>
+          )}
+          <button type="button" onClick={() => setSel(new Set())}
+            className="ml-auto px-2 py-1.5 text-sm text-gray-500 hover:text-gray-700">
+            Desmarcar
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">Cargando…</div>
       ) : grupos.length === 0 ? (
@@ -202,10 +366,30 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
                   <div className="min-w-0">
                     <span className="font-semibold text-gray-800">{g.curso}</span>
                     <span className="mx-2 text-gray-300">·</span>
-                    <span className="font-medium text-gray-700">{g.leccion || 'Sin lección asignada'}</span>
-                    {g.modulo && <span className="ml-2 text-xs text-gray-400">{g.modulo}</span>}
-                    {g.tema && <span className="block text-xs text-gray-400 truncate max-w-[420px]" title={g.tema}>{g.tema}</span>}
+                    <span className="font-medium text-gray-700">
+                      {g.mixto ? 'Varias lecciones' : (g.leccion || 'Sin lección asignada')}
+                    </span>
+                    {g.modulo && !g.mixto && <span className="ml-2 text-xs text-gray-400">{g.modulo}</span>}
+                    {g.tema && !g.mixto && <span className="block text-xs text-gray-400 truncate max-w-[420px]" title={g.tema}>{g.tema}</span>}
+                    {g.mixto && (
+                      <span className="block text-xs text-gray-400 truncate max-w-[420px]">
+                        {Array.from(new Set(g.rows.map(r => r.leccion || 'sin lección'))).join(' · ')}
+                      </span>
+                    )}
                   </div>
+                  {/* Armado = ya se decidió que van juntos, sólo falta la fecha.
+                      Sugerido = coinciden en curso y lección, nadie lo ha confirmado. */}
+                  {g.grupoId ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-primary-100 text-primary-700"
+                      title="Grupo armado: se le puede seguir sumando gente hasta confirmar la agrupación">
+                      Grupo armado
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500"
+                      title="Sugerencia por curso y lección: aún no es un grupo">
+                      Sugerido
+                    </span>
+                  )}
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
                     {g.rows.length} alumno(s)
                   </span>
@@ -213,11 +397,11 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
                     type="button"
                     onClick={() => abrirGestion(g)}
                     disabled={!canGestion || marcados === 0}
-                    title={canGestion ? 'Crear la nivelación y agendar a los seleccionados' : 'Sin permiso de gestión'}
+                    title={canGestion ? 'Confirmar la agrupación: crea la nivelación y la manda a Pendientes' : 'Sin permiso de gestión'}
                     className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium"
                   >
                     <UserGroupIcon className="h-5 w-5" />
-                    Gestión de grupo{marcados ? ` (${marcados})` : ''}
+                    Confirmar y agendar{marcados ? ` (${marcados})` : ''}
                   </button>
                 </div>
                 <div className="overflow-x-auto">
@@ -387,6 +571,14 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
         </div>
 
         <div className="p-5 space-y-4">
+          {/* Un grupo armado a mano puede juntar lecciones distintas, pero el
+              evento lleva UNA: se avisa cuál queda, para que no sorprenda. */}
+          {grupo.mixto && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              Este grupo reúne <strong>varias lecciones</strong> ({Array.from(new Set(grupo.rows.map(r => r.leccion || 'sin lección'))).join(' · ')}).
+              La nivelación se creará con la lección que elijas abajo; los demás usuarios quedan agendados igual.
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="gg-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía *</label>
