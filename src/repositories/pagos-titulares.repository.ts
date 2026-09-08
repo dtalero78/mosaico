@@ -33,7 +33,10 @@ export interface PagoTitular {
    *  pagó realmente el titular). Nullable para retrocompatibilidad. */
   fechaReporte: string | null;
   fechaValidacion: string | null;
-  plan: number | null;
+  /** Tipo Plan: Contado | Credito | Colaborador. La columna es TEXT en las tres
+   *  tablas que lo guardan (PEOPLE, FINANCIEROS, PAGOS_TITULARES) desde que dejó de
+   *  ser un código numérico; el tipo se había quedado en number. */
+  plan: string | null;
   vlrTotalProg: number | null;
   numCuota: number | null;
   valorCuota: number | null;

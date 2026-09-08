@@ -41,8 +41,10 @@ export const GET = handler(async (request, { params }) => {
   }
 
   return successResponse({
-    // .replace colapsa el doble espacio que dejan los nombres con espacio al borde.
-    nombre: [p.primerNombre, p.segundoNombre].filter(Boolean).join(' ').replace(/s+/g, ' ').trim(),
+    // split+filter colapsa el doble espacio que dejan los nombres con espacio al
+    // borde. Se evita una regex a propósito: al escribirla desde el shell se perdió
+    // la barra invertida y `/s+/g` borraba las eses ("Jose" -> "Jo e").
+    nombre: [p.primerNombre, p.segundoNombre].filter(Boolean).join(' ').split(' ').filter(Boolean).join(' '),
     contrato: p.contrato || '',
     // En MOSAICO los documentos se guardan sin puntos ni guiones; se normaliza
     // igual por si el cliente los tecleó al firmar.
