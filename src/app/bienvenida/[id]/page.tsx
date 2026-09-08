@@ -176,7 +176,7 @@ function BienvenidaContent() {
             <dl className="bv-acta-datos">
               {contrato && <div className="bv-dato"><dt>Contrato</dt><dd className="bv-mono">{contrato}</dd></div>}
               {fecha && <div className="bv-dato"><dt>Fecha y hora</dt><dd>{fecha}</dd></div>}
-              {documento && <div className="bv-dato"><dt>Documento</dt><dd className="bv-mono">{documento}</dd></div>}
+              {documento && <div className="bv-dato"><dt>RUS</dt><dd className="bv-mono">{documento}</dd></div>}
               <div className="bv-dato">
                 <dt>Verificación</dt>
                 <dd>{tipoAprobacion === 'AUTOMATICA' ? 'Aprobación administrativa' : 'WhatsApp · Código OTP'}</dd>

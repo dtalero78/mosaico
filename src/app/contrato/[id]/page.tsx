@@ -99,7 +99,7 @@ export default function ContratoPublicoPage() {
 
   const handleSendOtp = async () => {
     if (!numeroDocumento.trim()) {
-      setOtpError('Ingresa tu numero de documento')
+      setOtpError('Ingresa tu numero de RUS')
       return
     }
     try {
@@ -225,7 +225,7 @@ export default function ContratoPublicoPage() {
               </h3>
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-blue-700">
                 {consentStatus.consent.numeroDocumento && (
-                  <div><span className="font-medium">Documento:</span> {consentStatus.consent.numeroDocumento}</div>
+                  <div><span className="font-medium">RUS:</span> {consentStatus.consent.numeroDocumento}</div>
                 )}
                 {consentStatus.consent.timestampAcceptacion && (
                   <div><span className="font-medium">Fecha:</span> {new Date(consentStatus.consent.timestampAcceptacion).toLocaleString('es-CO')}</div>
@@ -254,14 +254,14 @@ export default function ContratoPublicoPage() {
         <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
           <h3 className="text-base font-semibold text-gray-900 mb-1">Firma Digital</h3>
           <p className="text-sm text-gray-500 mb-4">
-            Ingresa tu numero de documento para recibir un codigo de verificacion por WhatsApp.
+            Ingresa tu numero de RUS para recibir un codigo de verificacion por WhatsApp.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
               value={numeroDocumento}
               onChange={(e) => { setNumeroDocumento(e.target.value); setOtpError('') }}
-              placeholder="Numero de documento"
+              placeholder="Numero de RUS"
               className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2 border"
               onKeyDown={(e) => e.key === 'Enter' && handleSendOtp()}
             />
@@ -333,7 +333,7 @@ export default function ContratoPublicoPage() {
                 onClick={() => { setPageState('DOCUMENT_ENTRY'); setOtpCode(''); setOtpError('') }}
                 className="px-4 py-2.5 text-gray-500 hover:text-gray-700 text-sm"
               >
-                Cambiar documento
+                Cambiar RUS
               </button>
             </div>
           </div>

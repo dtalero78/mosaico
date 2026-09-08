@@ -50,7 +50,7 @@ export async function sendConsentOtp(
   }
 
   if (person.numeroId !== numeroDocumento) {
-    throw new ValidationError('El numero de documento no coincide');
+    throw new ValidationError('El numero de RUS no coincide');
   }
 
   const celular = person.celular;
