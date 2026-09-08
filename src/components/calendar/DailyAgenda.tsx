@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { XMarkIcon, PencilIcon } from '@heroicons/react/24/outline'
@@ -22,6 +22,12 @@ interface CalendarEvent {
   inscritos?: number
   asistieron?: number
   _createdDate?: string | Date
+  // Columnas propias de CALENDARIO. Solo las llenan los eventos creados a mano; los
+  // generados por el motor de cursos las dejan en NULL y arman "Campana - Curso - Salon"
+  // dentro de tituloONivel, asi que los filtros caen a ese texto cuando faltan.
+  campaign?: string | null
+  curso?: string | null
+  salon?: string | null
 }
 
 interface Advisor {
@@ -52,7 +58,9 @@ export default function DailyAgenda({
   onCreateEvent,
   onDateChange
 }: DailyAgendaProps) {
-  const [selectedNivel, setSelectedNivel] = useState<string>('all')
+  const [selectedCampaign, setSelectedCampaign] = useState<string>('all')
+  const [selectedCurso, setSelectedCurso] = useState<string>('all')
+  const [selectedGuia, setSelectedGuia] = useState<string>('all')
 
   // Validar fecha
   const date = selectedDate && selectedDate instanceof Date && !isNaN(selectedDate.getTime())
@@ -93,43 +101,6 @@ export default function DailyAgenda({
     }
   }
 
-  // Extract base nivel code: "BN2 - Step 9" → "BN2", "P1 - TRAINING - Step 19" → "P1"
-  const extractNivelCode = (tituloONivel: string) =>
-    (tituloONivel || '').split(' - ')[0].trim()
-
-  const availableNiveles = Array.from(
-    new Set(eventsForSelectedDay.map(e => extractNivelCode(e.tituloONivel)))
-  ).sort()
-
-  // Filtrar eventos por nivel seleccionado
-  const filteredEvents = selectedNivel === 'all'
-    ? eventsForSelectedDay
-    : eventsForSelectedDay.filter(e => extractNivelCode(e.tituloONivel) === selectedNivel)
-
-  // Generar horas del día desde las 6:00 AM hasta las 23:00
-  const hours = Array.from({ length: 18 }, (_, i) => i + 6)
-
-  // Agrupar eventos por hora SOLO del día seleccionado y filtrados por nivel
-  const eventsByHour = hours.map(hour => {
-    const hourEvents = filteredEvents.filter(event => {
-      const eventDate = new Date(event.dia)
-      const eventHour = eventDate.getHours()
-      return eventHour === hour
-    })
-
-    return {
-      hour,
-      events: hourEvents.sort((a, b) => {
-        const timeA = new Date(a.dia).getTime()
-        const timeB = new Date(b.dia).getTime()
-        if (timeA !== timeB) return timeA - timeB
-        const createdA = a._createdDate ? new Date(a._createdDate).getTime() : 0
-        const createdB = b._createdDate ? new Date(b._createdDate).getTime() : 0
-        return createdA - createdB
-      })
-    }
-  })
-
   // Función para obtener el nombre del advisor
   const getAdvisorName = (event: any): string => {
     // Primero, verificar si ya tenemos advisorNombre calculado
@@ -169,6 +140,142 @@ export default function DailyAgenda({
 
     return null
   }
+
+  // Los eventos generados por el motor de cursos dejan campaign/curso en NULL y arman
+  // "Campana - Curso - Salon" en tituloONivel; los creados a mano llenan las columnas
+  // pero su titulo tiene otra forma. Se prefiere la columna y se cae al texto.
+  const tituloSegmento = (tituloONivel: string, i: number) =>
+    ((tituloONivel || '').split(' - ')[i] || '').trim()
+
+  const eventCampaign = (e: CalendarEvent) =>
+    (e.campaign || '').trim() || tituloSegmento(e.tituloONivel, 0)
+
+  const eventCurso = (e: CalendarEvent) => {
+    const col = (e.curso || '').trim()
+    // 'Todos' es el comodin del modal de creacion: no identifica un curso.
+    if (col && col.toUpperCase() !== 'TODOS') return col
+    return tituloSegmento(e.tituloONivel, 1)
+  }
+
+  const matchCampaign = (e: CalendarEvent) =>
+    selectedCampaign === 'all' || eventCampaign(e) === selectedCampaign
+  const matchCurso = (e: CalendarEvent) =>
+    selectedCurso === 'all' || eventCurso(e) === selectedCurso
+  const matchGuia = (e: CalendarEvent) =>
+    selectedGuia === 'all' || getAdvisorId(e) === selectedGuia
+
+  const filteredEvents = eventsForSelectedDay.filter(
+    e => matchCampaign(e) && matchCurso(e) && matchGuia(e)
+  )
+
+  const uniqOrdenado = (valores: string[]) =>
+    Array.from(new Set(valores.filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'))
+
+  // Los tres desplegables listan SIEMPRE todo lo del dia, sin acotarse entre si: al
+  // acotarlos, elegir campana + curso podia dejar un desplegable con una sola opcion
+  // y al usuario sin forma de cambiar de seleccion. Las combinaciones imposibles no
+  // llegan a darse porque al mover un filtro se limpian los otros que queden huerfanos.
+  const availableCampaigns = uniqOrdenado(eventsForSelectedDay.map(eventCampaign))
+  const availableCursos = uniqOrdenado(eventsForSelectedDay.map(eventCurso))
+  const availableGuias = Array.from(
+    eventsForSelectedDay
+      .reduce((acc, e) => {
+        const id = getAdvisorId(e)
+        if (id) acc.set(id, getAdvisorName(e))
+        return acc
+      }, new Map<string, string>())
+      .entries()
+  ).sort((a, b) => a[1].localeCompare(b[1], 'es'))
+
+  const nombreGuiaSeleccionado =
+    availableGuias.find(([id]) => id === selectedGuia)?.[1] || selectedGuia
+
+  const filtrosActivos = [
+    selectedCampaign !== 'all' ? selectedCampaign : null,
+    selectedCurso !== 'all' ? selectedCurso : null,
+    selectedGuia !== 'all' ? nombreGuiaSeleccionado : null,
+  ].filter(Boolean) as string[]
+  const hayFiltroActivo = filtrosActivos.length > 0
+
+  // Al elegir un filtro, los OTROS dos pueden quedar sin eventos que los respalden
+  // (p.ej. el curso elegido no se dicta en la campana recien seleccionada). Se limpian
+  // solo esos: el filtro que el usuario acaba de tocar siempre se respeta, porque
+  // devolverlo a 'all' descartaria justo lo que pidio.
+  const limpiarFiltrosHuerfanos = (
+    base: CalendarEvent[],
+    excepto: 'campaign' | 'curso' | 'guia'
+  ) => {
+    if (excepto !== 'campaign' && selectedCampaign !== 'all' &&
+        !base.some(e => eventCampaign(e) === selectedCampaign)) {
+      setSelectedCampaign('all')
+    }
+    if (excepto !== 'curso' && selectedCurso !== 'all' &&
+        !base.some(e => eventCurso(e) === selectedCurso)) {
+      setSelectedCurso('all')
+    }
+    if (excepto !== 'guia' && selectedGuia !== 'all' &&
+        !base.some(e => getAdvisorId(e) === selectedGuia)) {
+      setSelectedGuia('all')
+    }
+  }
+
+  const cambiarCampaign = (valor: string) => {
+    setSelectedCampaign(valor)
+    limpiarFiltrosHuerfanos(
+      eventsForSelectedDay.filter(e => valor === 'all' || eventCampaign(e) === valor),
+      'campaign'
+    )
+  }
+
+  const cambiarCurso = (valor: string) => {
+    setSelectedCurso(valor)
+    limpiarFiltrosHuerfanos(
+      eventsForSelectedDay.filter(e => valor === 'all' || eventCurso(e) === valor),
+      'curso'
+    )
+  }
+
+  const cambiarGuia = (valor: string) => {
+    setSelectedGuia(valor)
+    limpiarFiltrosHuerfanos(
+      eventsForSelectedDay.filter(e => valor === 'all' || getAdvisorId(e) === valor),
+      'guia'
+    )
+  }
+
+  // Otro dia trae otras campanas, cursos y guias: arrastrar los filtros anteriores
+  // mostraria una agenda vacia sin decir por que. Se abre el dia completo.
+  const diaKey = date.toDateString()
+  useEffect(() => {
+    setSelectedCampaign('all')
+    setSelectedCurso('all')
+    setSelectedGuia('all')
+  }, [diaKey])
+
+  // Generar horas del día desde las 6:00 AM hasta las 23:00
+  const hours = Array.from({ length: 18 }, (_, i) => i + 6)
+
+  // Agrupar eventos por hora SOLO del día seleccionado y ya filtrados
+  const eventsByHour = hours.map(hour => {
+    const hourEvents = filteredEvents.filter(event => {
+      const eventDate = new Date(event.dia)
+      const eventHour = eventDate.getHours()
+      return eventHour === hour
+    })
+
+    return {
+      hour,
+      events: hourEvents.sort((a, b) => {
+        const timeA = new Date(a.dia).getTime()
+        const timeB = new Date(b.dia).getTime()
+        if (timeA !== timeB) return timeA - timeB
+        const createdA = a._createdDate ? new Date(a._createdDate).getTime() : 0
+        const createdB = b._createdDate ? new Date(b._createdDate).getTime() : 0
+        return createdA - createdB
+      })
+    }
+  })
+
 
   // Función para obtener el color según el tipo de evento
   const getEventColor = (tipo: string) => {
@@ -216,20 +323,51 @@ export default function DailyAgenda({
           </h3>
           <p className="text-sm text-gray-500">
             {eventsForSelectedDay.length} evento{eventsForSelectedDay.length !== 1 ? 's' : ''} programado{eventsForSelectedDay.length !== 1 ? 's' : ''}
-            {selectedNivel !== 'all' && ` (${filteredEvents.length} en ${selectedNivel})`}
+            {hayFiltroActivo && ` (${filteredEvents.length} tras filtrar: ${filtrosActivos.join(' · ')})`}
           </p>
         </div>
-        <div className="flex gap-2">
-          {availableNiveles.length > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {availableCampaigns.length > 0 && (
             <select
-              value={selectedNivel}
-              onChange={(e) => setSelectedNivel(e.target.value)}
+              value={selectedCampaign}
+              onChange={(e) => cambiarCampaign(e.target.value)}
+              aria-label="Filtrar por campaña"
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="all">Todos los niveles</option>
-              {availableNiveles.map(nivel => (
-                <option key={nivel} value={nivel}>
-                  {nivel}
+              <option value="all">Todas las CAMPAÑAS</option>
+              {availableCampaigns.map(campaign => (
+                <option key={campaign} value={campaign}>
+                  {campaign}
+                </option>
+              ))}
+            </select>
+          )}
+          {availableCursos.length > 0 && (
+            <select
+              value={selectedCurso}
+              onChange={(e) => cambiarCurso(e.target.value)}
+              aria-label="Filtrar por curso"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="all">Todos los cursos</option>
+              {availableCursos.map(curso => (
+                <option key={curso} value={curso}>
+                  {curso}
+                </option>
+              ))}
+            </select>
+          )}
+          {availableGuias.length > 0 && (
+            <select
+              value={selectedGuia}
+              onChange={(e) => cambiarGuia(e.target.value)}
+              aria-label="Filtrar por guía"
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="all">Todos los guías</option>
+              {availableGuias.map(([id, nombre]) => (
+                <option key={id} value={id}>
+                  {nombre}
                 </option>
               ))}
             </select>
@@ -370,7 +508,7 @@ export default function DailyAgenda({
       {filteredEvents.length > 0 && (
         <div className="mt-6 pt-4 border-t border-gray-200">
           <h4 className="text-sm font-medium text-gray-900 mb-2">
-            Resumen {selectedNivel !== 'all' ? `- ${selectedNivel}` : 'del día'}
+            Resumen {hayFiltroActivo ? `- ${filtrosActivos.join(' · ')}` : 'del día'}
           </h4>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
