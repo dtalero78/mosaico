@@ -20,6 +20,7 @@ export default function ContratoPublicoPage() {
   const [financial, setFinancial] = useState<any>(null)
   const [contractText, setContractText] = useState('')
   const [consentStatus, setConsentStatus] = useState<ConsentDisplay | null>(null)
+  const [bienvenidaToken, setBienvenidaToken] = useState('')
 
   // OTP flow
   const [numeroDocumento, setNumeroDocumento] = useState('')
@@ -74,14 +75,20 @@ export default function ContratoPublicoPage() {
     loadData()
   }, [loadData])
 
-  // Redirect al sitio de MOSAICO tras la verificación exitosa
+  // Tras firmar, el cliente aterriza en su constancia (/bienvenida/[id]), que le
+  // agradece y le explica el proceso de aprobación. La llave solo la emite el
+  // endpoint de verificación: sin ella no hay nada que mostrar y sale al sitio.
   useEffect(() => {
     if (pageState !== 'VERIFIED') return
     const timer = setTimeout(() => {
-      router.replace('https://mosaicosoroban.cl')
+      if (bienvenidaToken) {
+        router.replace(`/bienvenida/${titularId}?t=${encodeURIComponent(bienvenidaToken)}`)
+      } else {
+        router.replace('https://mosaicosoroban.cl')
+      }
     }, 2000)
     return () => clearTimeout(timer)
-  }, [pageState, router])
+  }, [pageState, router, titularId, bienvenidaToken])
 
   // Resend cooldown timer
   useEffect(() => {
@@ -145,6 +152,7 @@ export default function ContratoPublicoPage() {
         setOtpError(data.error || 'Codigo incorrecto o expirado')
         return
       }
+      setBienvenidaToken(data.bienvenidaToken || '')
       setConsentStatus({
         hasConsent: true,
         consent: {
