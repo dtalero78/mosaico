@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { MantenimientoPermission } from '@/types/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
+import CambiarRolTab from '@/components/admin/CambiarRolTab'
 import { exportToExcel } from '@/lib/export-excel'
 import { ArrowLeftIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 
@@ -36,6 +38,11 @@ export default function ConsultarUsuariosPage() {
   const [busca, setBusca] = useState('')
   const [verClaves, setVerClaves] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<'consultar' | 'cambiar'>('consultar')
+  // La pestaña de cambio de rol lleva permiso propio: dar de alta un usuario y
+  // cambiarle los privilegios a uno existente no son la misma decisión.
+  const { hasPermission } = usePermissions()
+  const puedeCambiarRol = hasPermission(MantenimientoPermission.CAMBIAR_ROL)
 
   // Cargar la lista de roles (con conteo) al montar.
   useEffect(() => {
@@ -93,7 +100,26 @@ export default function ConsultarUsuariosPage() {
             <ArrowLeftIcon className="w-4 h-4" /> Crear Usuarios
           </button>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Consultar usuarios por rol</h1>
-          <p className="text-gray-500 mb-6">Email, nombre, ID, usuario y clave de las cuentas de login.</p>
+          <p className="text-gray-500 mb-4">Email, nombre, ID, usuario y clave de las cuentas de login.</p>
+
+          {/* Pestañas — la de cambiar rol sólo aparece con su permiso */}
+          {puedeCambiarRol && (
+            <div className="flex gap-1 border-b border-gray-200 mb-6">
+              {([
+                ['consultar', 'Consultar'],
+                ['cambiar', 'Cambiar rol'],
+              ] as const).map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setTab(id)}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                    tab === id ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {tab === "cambiar" && puedeCambiarRol ? <CambiarRolTab roles={roles} /> : (<>
 
           {/* Controles */}
           <div className="flex flex-wrap items-end gap-3 mb-4">
@@ -192,6 +218,7 @@ export default function ConsultarUsuariosPage() {
               </div>
             </div>
           )}
+          </>)}
         </div>
       </PermissionGuard>
     </DashboardLayout>

@@ -1173,6 +1173,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /admin/roles/create. Crea nuevos roles con sus permisos asociados',
   },
   {
+    code: MantenimientoPermission.CAMBIAR_ROL,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Cambiar el rol de un usuario',
+    description: 'Pestaña "Cambiar rol" en /admin/roles/create/consultar. Cambia el rol de una cuenta existente, lo que cambia lo que esa persona puede ver y hacer. NO permite asignar ADMIN ni SUPER_ADMIN, ni tocar a quien ya los tenga, ni cambiarse el rol a uno mismo; todo cambio queda auditado. Es un permiso aparte de "Crear Rol" porque dar de alta un usuario y cambiarle los privilegios a uno existente no son la misma decisión',
+  },
+  {
     code: MantenimientoPermission.GENERAR_CONTRATO,
     module: Module.MANTENIMIENTO,
     section: 'Usuarios',
