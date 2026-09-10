@@ -772,7 +772,9 @@ export default function AgendaSesionesPage() {
           const newEvent = {
             ...data.event,
             dia: new Date(data.event.dia),
-            inscritos: 0,
+            // Al crear una recuperación se agenda al salón completo: el contador
+            // debe salir con ellos y no en cero (el refresh de abajo lo confirma).
+            inscritos: Number((data as any).agendados) || 0,
             asistieron: 0,
             advisorNombre: getAdvisorName(data.event.advisor)
           }

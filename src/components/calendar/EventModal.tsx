@@ -661,6 +661,18 @@ export default function EventModal({
   } | null>(null)
   /** Modal bloqueante cuando el evento tiene inscritos y se intenta cambiar
    *  nivel/step. Sólo permite cerrar (Salir) — no permite proceder. */
+  /**
+   * RECUPERACIÓN: al guardarla se ofrece agendar al salón completo. Se pide la
+   * lista ANTES de crear el evento, se confirma, y evento + agendamientos se
+   * mandan juntos: si se crearan por separado, un fallo dejaría la recuperación
+   * creada y sin nadie dentro.
+   */
+  const [pendingRecuperacion, setPendingRecuperacion] = useState<{
+    eventData: any
+    alumnos: Array<{ academicaId: string; nombre: string; numeroId: string }>
+  } | null>(null)
+  const [recuSeleccion, setRecuSeleccion] = useState<Record<string, boolean>>({})
+
   const [nivelChangeBlocked, setNivelChangeBlocked] = useState<{
     oldLabel: string
     newLabel: string
@@ -795,6 +807,25 @@ export default function EventModal({
         setReassignMotivo('')
         setReassignSkipLog(false)
         return
+      }
+
+      // RECUPERACIÓN nueva: antes de crearla, ofrecer el salón para agendar.
+      if (!editingEvent && formData.evento === 'RECUPERACION') {
+        try {
+          const qs = new URLSearchParams({
+            campaign: formData.campaign, curso: formData.curso, salon: formData.salon,
+          })
+          const res = await fetch(`/api/postgres/events/alumnos-salon?${qs}`)
+          const json = await res.json()
+          if (!res.ok) { setError(json?.error || 'No se pudo cargar el salón'); return }
+          const alumnos = json?.items || []
+          // Todos marcados: confirmar sin tocar nada agenda al salón completo.
+          const sel: Record<string, boolean> = {}
+          alumnos.forEach((a: any) => { sel[a.academicaId] = true })
+          setRecuSeleccion(sel)
+          setPendingRecuperacion({ eventData, alumnos })
+          return
+        } finally { setLoading(false) }
       }
 
       onSave(eventData)
@@ -1264,6 +1295,72 @@ export default function EventModal({
       </div>
 
       {/* Modal de confirmación de cambio de advisor (Ctrl Horas hook) */}
+      {/* RECUPERACIÓN: confirmar a quién se agenda */}
+      {pendingRecuperacion && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Agendar la recuperación</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {formData.curso} · Salón {formData.salon} · {formData.campaign}
+            </p>
+
+            {pendingRecuperacion.alumnos.length === 0 ? (
+              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-3 mb-4">
+                Este salón no tiene alumnos con cupo activo. La recuperación se creará vacía y
+                podrás inscribir a mano desde el evento.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-700">
+                    <strong>{Object.values(recuSeleccion).filter(Boolean).length}</strong> de{' '}
+                    {pendingRecuperacion.alumnos.length} alumno(s)
+                  </span>
+                  <div className="flex gap-2">
+                    <button type="button" className="text-xs text-blue-600 hover:underline"
+                      onClick={() => { const s: Record<string, boolean> = {}; pendingRecuperacion.alumnos.forEach(a => { s[a.academicaId] = true }); setRecuSeleccion(s) }}>
+                      Marcar todos
+                    </button>
+                    <button type="button" className="text-xs text-gray-500 hover:underline"
+                      onClick={() => setRecuSeleccion({})}>
+                      Ninguno
+                    </button>
+                  </div>
+                </div>
+                <div className="border border-gray-200 rounded-md max-h-64 overflow-y-auto divide-y divide-gray-100 mb-4">
+                  {pendingRecuperacion.alumnos.map(a => (
+                    <label key={a.academicaId} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input type="checkbox" className="h-4 w-4"
+                        checked={!!recuSeleccion[a.academicaId]}
+                        onChange={e => setRecuSeleccion(prev => ({ ...prev, [a.academicaId]: e.target.checked }))} />
+                      <span className="flex-1 text-sm text-gray-900">{a.nombre}</span>
+                      <span className="text-xs text-gray-500 tabular-nums">{a.numeroId}</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setPendingRecuperacion(null)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm">
+                Cancelar
+              </button>
+              <button type="button"
+                onClick={() => {
+                  const ids = Object.entries(recuSeleccion).filter(([, v]) => v).map(([k]) => k)
+                  const data = { ...pendingRecuperacion.eventData, agendarAlumnos: ids }
+                  setPendingRecuperacion(null)
+                  onSave(data)
+                }}
+                className="px-4 py-2 bg-rose-600 text-white rounded-md hover:bg-rose-700 text-sm font-medium">
+                Crear y agendar ({Object.values(recuSeleccion).filter(Boolean).length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pendingAdvisorChange && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
           <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">

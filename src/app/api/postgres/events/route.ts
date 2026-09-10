@@ -2,6 +2,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { createEvent } from '@/services/calendar.service';
+import { enrollStudents } from '@/services/enrollment.service';
 import { ValidationError } from '@/lib/errors';
 
 /**
@@ -134,8 +135,45 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     compartidoCon,
   });
 
+  // Agendar de una vez a los alumnos elegidos (RECUPERACIÓN: se ofrece el salón
+  // completo al guardar). Va aquí y no en una segunda llamada del navegador
+  // porque un fallo a media vía dejaría la recuperación creada y sin nadie
+  // dentro — el mismo motivo por el que 'Gestión de grupo' de nivelaciones
+  // también crea y agenda en un solo endpoint.
+  let agendados = 0;
+  let errorAgendamiento: string | null = null;
+  const aAgendar: string[] = Array.isArray(body.agendarAlumnos)
+    ? body.agendarAlumnos.filter((x: any) => typeof x === 'string' && x.trim())
+    : [];
+  if (aAgendar.length > 0 && (event as any)?._id) {
+    try {
+      const rol = (session?.user as any)?.role;
+      const r: any = await enrollStudents({
+        eventId: (event as any)._id,
+        studentIds: aAgendar,
+        agendadoPor: session?.user?.name || session?.user?.email || undefined,
+        agendadoPorEmail: session?.user?.email || undefined,
+        agendadoPorRol: rol,
+        // El rol REAL de la sesión, nunca del body: habilita el bypass de
+        // capacidad e inactivos sólo a quien de verdad lo tiene.
+        sessionRole: rol,
+      });
+      agendados = Array.isArray(r?.bookings) ? r.bookings.length : aAgendar.length;
+    } catch (err: any) {
+      // El evento YA existe: no se deshace por esto. Se informa para que se
+      // pueda completar a mano en vez de perder lo creado.
+      errorAgendamiento = err?.message || 'No se pudieron agendar los alumnos';
+    }
+  }
+
   return successResponse({
     event,
-    message: 'Evento creado exitosamente',
+    agendados,
+    errorAgendamiento,
+    message: errorAgendamiento
+      ? `Evento creado, pero no se pudo agendar: ${errorAgendamiento}`
+      : agendados > 0
+        ? `Evento creado con ${agendados} alumno(s) agendado(s)`
+        : 'Evento creado exitosamente',
   });
 });
