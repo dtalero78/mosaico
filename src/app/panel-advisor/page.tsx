@@ -335,6 +335,8 @@ function PanelAdvisorContent() {
         return 'bg-yellow-400'
       case 'NIVELACION':
         return 'bg-amber-500'
+      case 'RECUPERACION':
+        return 'bg-rose-500'
       default:
         return 'bg-gray-500'
     }

@@ -23,7 +23,7 @@ import { esSesionEvaluacion, esModuloEvaluacion } from '@/lib/evaluacion'
 interface CalendarioEvent {
   _id: string
   nombreEvento: string
-  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA'
+  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
   tipo?: string
   dia: string
   advisor: string                          // ADVISORS._id (UUID)

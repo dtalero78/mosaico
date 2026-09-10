@@ -15,7 +15,7 @@ import { es } from 'date-fns/locale'
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -793,7 +793,17 @@ export default function AgendaSesionesPage() {
             loadMonthEvents()
           }, 1000)
         } else {
-          setError('Error al crear el evento')
+          // El servidor explica POR QUÉ rechazó (día sin clase, solape del guía,
+          // curso lleno...). Antes se descartaba y la pantalla decía sólo "Error al
+          // crear el evento", así que el motivo real no llegaba nunca al usuario.
+          let serverMsg = ''
+          try {
+            const json = await response.json()
+            serverMsg = json?.error || json?.message || ''
+          } catch { /* response sin JSON válido */ }
+          setError(serverMsg
+            ? `Error al crear el evento: ${serverMsg}`
+            : `Error al crear el evento (HTTP ${response.status})`)
         }
       }
 

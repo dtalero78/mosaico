@@ -113,7 +113,7 @@ export async function createEvent(data: {
   // generarse; los eventos sueltos (Welcome, nivelaciones, talleres) se crean a
   // mano y nada los detenía — por eso llegó a haber un Welcome el 18 de septiembre,
   // que es feriado legal.
-  await assertNoEsFestivo(data.fecha || String(data.dia).slice(0, 10));
+  await assertNoEsFestivo(data.fecha || String(data.dia).slice(0, 10), data.tipo);
 
   const tipo = data.tipo;
 
@@ -250,8 +250,12 @@ export async function updateEvent(
   if (!event) throw new NotFoundError('Event', eventId);
 
   // Mover un evento a un día sin clase es lo mismo que crearlo ahí.
+  // El tipo cae al del evento guardado: al mover una recuperación el payload no
+  // siempre reenvía `tipo`, y sin este respaldo la exención valdría al crearla
+  // pero no al reprogramarla.
   if (data.fecha || data.dia) {
-    await assertNoEsFestivo(data.fecha || String(data.dia).slice(0, 10));
+    const tipoEfectivo = data.tipo ?? (event as any).tipo ?? (event as any).evento;
+    await assertNoEsFestivo(data.fecha || String(data.dia).slice(0, 10), tipoEfectivo);
   }
 
   // tipo y evento son la MISMA cosa en CALENDARIO (legacy: el campo se llamaba

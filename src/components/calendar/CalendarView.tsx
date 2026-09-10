@@ -15,7 +15,7 @@ interface Advisor {
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -100,6 +100,8 @@ export default function CalendarView({
         return 'bg-yellow-100 text-yellow-800'
       case 'NIVELACION':
         return 'bg-amber-100 text-amber-800'
+      case 'RECUPERACION':
+        return 'bg-rose-100 text-rose-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -221,6 +223,14 @@ export default function CalendarView({
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded bg-amber-100"></span>
           <span className="text-gray-600">NIVELACIÓN</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded bg-yellow-100"></span>
+          <span className="text-gray-600">OLIMPIADA</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded bg-rose-100"></span>
+          <span className="text-gray-600">RECUPERACIÓN</span>
         </div>
       </div>
     </div>

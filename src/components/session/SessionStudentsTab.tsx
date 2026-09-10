@@ -18,7 +18,7 @@ import { HORAS_NIVELACION } from '@/lib/nivelacion-confirmacion'
 interface CalendarioEvent {
   _id: string
   nombreEvento: string
-  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA'
+  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
   tipo?: string
   dia: string
   advisor: string

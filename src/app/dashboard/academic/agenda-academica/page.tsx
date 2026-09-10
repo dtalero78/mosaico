@@ -14,7 +14,7 @@ import { formatEventTimeRange } from '@/lib/event-duration'
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -368,6 +368,7 @@ export default function AgendaAcademicaPage() {
       case 'WELCOME': return 'bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-200'
       case 'OLIMPIADA': return 'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200'
       case 'NIVELACION': return 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+      case 'RECUPERACION': return 'bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200'
     }
   }

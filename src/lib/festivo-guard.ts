@@ -2,6 +2,9 @@ import 'server-only';
 import { ValidationError } from './errors';
 import { esFestivoChile } from './festivos-chile';
 
+/** Único tipo de evento que SÍ puede agendarse en un día sin clase. */
+export const TIPO_EXENTO_FESTIVO = 'RECUPERACION';
+
 /**
  * Un evento no puede caer en un día sin clase: ni feriado legal de Chile ni día
  * declarado por Académico. Vale para crear un evento y para mover uno a esa fecha.
@@ -13,7 +16,12 @@ import { esFestivoChile } from './festivos-chile';
  * Los días declarados se leen de la base; si la consulta falla (tabla aún no
  * creada) queda el calendario legal, que no depende de la base.
  */
-export async function assertNoEsFestivo(fecha: string): Promise<void> {
+export async function assertNoEsFestivo(fecha: string, tipo?: string | null): Promise<void> {
+  // RECUPERACION es la excepción, y es su razón de ser: repone una clase que no
+  // se dictó, y justamente lo que hay que reponer suele caer en la semana de
+  // festivos. Bloquearla haría imposible agendar la reposición.
+  if (String(tipo || '').toUpperCase() === TIPO_EXENTO_FESTIVO) return;
+
   const f = String(fecha || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return;
 
