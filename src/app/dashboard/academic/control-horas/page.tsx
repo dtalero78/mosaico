@@ -313,7 +313,9 @@ export function ControlHorasContent({
       iso != null && new Date(iso).getTime() <= nowMs
     const countByTipo = (tipo: string | null) => {
       switch ((tipo || '').toUpperCase()) {
-        case 'SESSION': t.sessions++; break
+        // La recuperación repone una sesión: cuenta con ellas, no aparte.
+        case 'SESSION':
+        case 'RECUPERACION': t.sessions++; break
         case 'CLUB':    t.clubs++; break
         case 'WELCOME': t.welcome++; break
       }

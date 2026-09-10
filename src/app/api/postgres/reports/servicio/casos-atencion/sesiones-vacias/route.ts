@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { cupoOcupadoSql } from '@/lib/cupo'
 import { ServicioPermission } from '@/types/permissions'
+import { TIPOS_FUERA_DE_CASOS_SQL } from '@/lib/tipos-sesion'
 
 /**
  * GET /api/postgres/reports/servicio/casos-atencion/sesiones-vacias
@@ -20,7 +21,7 @@ import { ServicioPermission } from '@/types/permissions'
  */
 const MAX_ROWS = 2000
 
-const ES_SESION = `UPPER(COALESCE(c."tipo", 'SESSION')) NOT IN ('CLUB','NIVELACION','COMPLEMENTARIA','WELCOME','OLIMPIADA')`
+const ES_SESION = `UPPER(COALESCE(c."tipo", 'SESSION')) NOT IN (${TIPOS_FUERA_DE_CASOS_SQL})`
 
 // En los cursos MOSAICO la lección vive en `sesionLeccion`/`sesionModulo`
 // (CALENDARIO."step" queda NULL en esos eventos).

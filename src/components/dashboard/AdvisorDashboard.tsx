@@ -146,7 +146,7 @@ export default function AdvisorDashboard() {
 
     const countTipoStep = (tipo: string | null, step: string | null) => {
       const t = (tipo || '').toUpperCase()
-      if (t === 'SESSION')      k.sessions++
+      if (t === 'SESSION' || t === 'RECUPERACION') k.sessions++
       else if (t === 'CLUB')    isTrainingStep(step) ? k.training++ : k.clubs++
       else if (t === 'WELCOME') k.welcome++
     }

@@ -5,6 +5,7 @@ import { query } from '@/lib/postgres'
 import { cupoOcupadoSql } from '@/lib/cupo'
 import { ServicioPermission } from '@/types/permissions'
 import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
+import { TIPOS_FUERA_DE_CASOS_SQL } from '@/lib/tipos-sesion'
 
 /**
  * GET /api/postgres/reports/servicio/casos-atencion/asistencia
@@ -21,7 +22,7 @@ import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
 const MAX_ROWS = 5000
 
 // Los mismos tipos que cuentan como "sesión" en el resto del motor académico.
-const ES_SESION = `UPPER(COALESCE(c."tipo", b."tipo", b."tipoEvento", 'SESSION')) NOT IN ('CLUB','NIVELACION','COMPLEMENTARIA','WELCOME','OLIMPIADA')`
+const ES_SESION = `UPPER(COALESCE(c."tipo", b."tipo", b."tipoEvento", 'SESSION')) NOT IN (${TIPOS_FUERA_DE_CASOS_SQL})`
 
 // En los cursos MOSAICO el evento guarda la lección en `sesionLeccion`/`sesionModulo`
 // (CALENDARIO."step" queda NULL); `b."step"` es el respaldo para datos antiguos.
