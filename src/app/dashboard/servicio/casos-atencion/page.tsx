@@ -10,6 +10,7 @@ import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
 import { estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel } from '@/lib/casos-atencion-estados'
+import { hoyEnChile } from '@/lib/cursos-campaign'
 
 /**
  * Las seis vistas de la pantalla. Los filtros son los mismos para todas.
@@ -132,6 +133,45 @@ const MUESTRA_TIPO = (t: Tab) => t !== 'asistencia' && t !== 'vacias'
 const ES_GESTION = (t: Tab) =>
   t === 'historico' || t === 'academicos' || t === 'financieros' ||
   t === 'coordinador' || t === 'nivelaciones'
+
+/**
+ * Todas las pestañas abren con las DOS ÚLTIMAS SEMANAS, menos Casos de Atención.
+ *
+ * Casos queda sin corte porque es la bandeja de lo que está abierto y esperando
+ * gestión: un caso que nadie tocó hace tres semanas es justo el que no puede
+ * desaparecer de la vista. Las demás miran un período —qué pasó esta quincena— y
+ * ahí el corte es lo que hace la lista legible.
+ *
+ * Las fechas se precargan VISIBLES en los filtros y no como un default escondido
+ * en el servidor: así se lee en pantalla qué período se está mirando y se puede
+ * ampliar. (Los endpoints conservan su propio default como respaldo.)
+ */
+const DEFAULT_DOS_SEMANAS = (t: Tab) => t !== 'casos'
+
+/**
+ * Lunes de la semana pasada → domingo de la semana en curso, en hora de Chile.
+ *
+ * Semanas completas de lunes a domingo y no "los últimos 14 días" porque es como
+ * se mira el resto del módulo (la clase de la semana, el informe semanal): un
+ * corte a mitad de semana partiría el período que el gestor tiene en la cabeza.
+ * El día se toma en Chile —no del reloj del navegador— o alguien en Colombia
+ * vería un rango corrido un día.
+ */
+function rangoDosSemanas(): { desde: string; hasta: string } {
+  const d = new Date(`${hoyEnChile()}T00:00:00Z`)
+  const lunesOffset = (d.getUTCDay() + 6) % 7          // 0 = lunes
+  const desde = new Date(d)
+  desde.setUTCDate(d.getUTCDate() - lunesOffset - 7)   // lunes de la semana pasada
+  const hasta = new Date(desde)
+  hasta.setUTCDate(desde.getUTCDate() + 13)            // domingo de la semana en curso
+  const iso = (x: Date) => x.toISOString().slice(0, 10)
+  return { desde: iso(desde), hasta: iso(hasta) }
+}
+
+/** Las fechas con que abre cada pestaña. Casos de Atención abre sin corte. */
+function fechasPorDefecto(t: Tab): { desde: string; hasta: string } {
+  return DEFAULT_DOS_SEMANAS(t) ? rangoDosSemanas() : { desde: '', hasta: '' }
+}
 
 interface Row {
   bookingId: string
@@ -265,20 +305,31 @@ function CasosAtencionContent() {
     }
   }, [])
 
-  useEffect(() => { fetchData(tab) }, [tab, fetchData])
+  /**
+   * Al entrar y al cambiar de pestaña, las fechas por defecto se ponen en los
+   * filtros y se consultan con ellas. Se resuelven aquí —a partir del tab— y no
+   * leyendo el state, para que escribir una fecha a mano no dispare la consulta:
+   * eso sigue siendo cosa de "Aplicar filtros".
+   */
+  useEffect(() => {
+    const { desde, hasta } = fechasPorDefecto(tab)
+    setStartDate(desde); setEndDate(hasta)
+    fetchData(tab, desde ? { startDate: desde, endDate: hasta } : undefined)
+  }, [tab, fetchData])
 
   const filtros = { campaign, curso, salon, leccion, guia, usuario, startDate, endDate }
   const aplicar = () => fetchData(tab, filtros)
 
+  /** "Borrar filtros" devuelve a la pestaña su período por defecto, no a vacío. */
   const borrar = () => {
     setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setUsuario('')
-    setStartDate(''); setEndDate('')
-    fetchData(tab)
+    const { desde, hasta } = fechasPorDefecto(tab)
+    setStartDate(desde); setEndDate(hasta)
+    fetchData(tab, desde ? { startDate: desde, endDate: hasta } : undefined)
   }
   const cambiarTab = (t: Tab) => {
     setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setUsuario('')
-    setStartDate(''); setEndDate('')
-    setTab(t)
+    setTab(t)   // las fechas las repone el efecto, según la pestaña
   }
 
   const exportar = () => {
@@ -525,8 +576,8 @@ function CasosAtencionContent() {
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
         </div>
-        {(tab === 'asistencia' || tab === 'vacias') && !startDate && !endDate && (
-          <p className="text-xs text-gray-400 mt-2">Mostrando la semana en curso (lunes a domingo). Usa las fechas para consultar otro período.</p>
+        {DEFAULT_DOS_SEMANAS(tab) && (
+          <p className="text-xs text-gray-400 mt-2">Abre con las dos últimas semanas (lunes a domingo). Cambia las fechas para consultar otro período.</p>
         )}
         <div className="flex flex-wrap items-center gap-2 mt-4">
           <button type="button" onClick={aplicar} disabled={loading}
