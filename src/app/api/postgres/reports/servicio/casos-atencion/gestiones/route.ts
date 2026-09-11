@@ -107,6 +107,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const rows = (await query(
     `SELECT ca."_id" AS "casoId",
             ca."codigo" AS "codigoCaso",
+            ca."tema"::text AS "tipoCaso",
             ca."estado"::text AS estado,
             ca."acuerdo",
             ca."cerradoPor",

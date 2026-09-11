@@ -222,3 +222,27 @@ export const ESTADOS_POR_AREA: Record<AreaCaso, EstadoCaso[]> = {
 export const TRASLADA_A_AREA: Partial<Record<EstadoCaso, AreaCaso>> = {
   REMITIDO_A_FINANZAS: 'FINANCIEROS',
 };
+
+/**
+ * El TIPO del caso: sobre qué es. Se captura al reportar y no cambia.
+ *
+ * En la interfaz se llama "Tipo" y no "tema" porque en estas mismas pantallas ya
+ * hay un "tema" que es otra cosa —el de la lección del currículo, que sale bajo
+ * la columna Lección— y dos cosas con el mismo nombre en la misma tabla no se
+ * distinguen. La columna y el ENUM de PostgreSQL siguen llamándose `tema`:
+ * renombrarlos obligaría a recrear el tipo sin ganar nada.
+ *
+ * Vive aquí, fuera de `server-only`, porque lo usan la bandeja de Servicio, la
+ * ficha del alumno y el servicio: era la tercera copia de la misma lista.
+ */
+export type TipoCaso = 'ASISTENCIA' | 'CONDUCTA' | 'DESEMPENO' | 'SALUD' | 'PAGO' | 'OTRO';
+
+export const TIPO_CASO_LABEL: Record<string, string> = {
+  ASISTENCIA: 'Asistencia', CONDUCTA: 'Conducta', DESEMPENO: 'Desempeño',
+  SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro',
+};
+
+export function tipoCasoLabel(t: string | null | undefined): string {
+  if (!t) return '';
+  return TIPO_CASO_LABEL[String(t).toUpperCase()] || String(t);
+}

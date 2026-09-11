@@ -46,13 +46,18 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
   if (!academicaId) throw new ValidationError('academicaId requerido')
   if (!bookingId) throw new ValidationError('bookingId requerido')
   // Sólo estados de cierre: asignar a un área saca el caso de la bandeja.
-  // El comentario se exige al CERRAR (hay que justificar por qué el caso no
-  // requiere nada más) y al derivar a NIVELACIÓN, donde el texto ES el encargo:
-  // qué hay que reforzarle al alumno. En las otras derivaciones es opcional,
-  // porque la justificación la dará el área que lo reciba.
-  if (!area && !comentario) throw new ValidationError('El comentario es obligatorio al cerrar el caso')
-  if (area === 'NIVELACIONES' && !comentario) {
-    throw new ValidationError('El detalle de la nivelación es obligatorio')
+  // TODO movimiento exige comentario: es lo que la bitácora del caso muestra
+  // junto a cada paso, y un movimiento sin explicación no le dice nada a quien
+  // revise el caso después. El mensaje cambia según el destino porque la razón
+  // es distinta: al CERRAR hay que justificar por qué el caso no requiere nada
+  // más, y al derivar a NIVELACIÓN el texto ES el encargo (qué reforzarle al
+  // alumno); en las demás derivaciones, el contexto con el que el área recibe.
+  if (!comentario) {
+    throw new ValidationError(
+      !area ? 'El comentario es obligatorio al cerrar el caso'
+        : area === 'NIVELACIONES' ? 'El detalle de la nivelación es obligatorio'
+          : `El comentario es obligatorio al asignar el caso a ${AREA_LABEL[area]}`
+    )
   }
 
   // Datos del caso para el historial (curso, lección, fecha del evento, texto).

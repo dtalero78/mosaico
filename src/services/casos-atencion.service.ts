@@ -317,6 +317,15 @@ export async function cambiarEstado(
   }
   if (estado === caso.estado) return { casoId, estado, cerrado: false };
 
+  // Todo movimiento del caso deja dicho POR QUÉ. Antes el comentario sólo se
+  // exigía al asignar desde la bandeja, así que cerrar desde la ficha del alumno
+  // dejaba la entrada del historial en blanco: la bitácora mostraba el cambio
+  // sin explicación y nadie podía saber la razón del cierre.
+  const comentario = String(motivo || '').trim();
+  if (!comentario) {
+    throw new ValidationError('Hace falta un comentario que explique el movimiento del caso.');
+  }
+
   const cierra = cierraElCaso(estado);
   // R5: sólo al CERRAR hace falta el acuerdo. Volver a "en gestión" o pasar a un
   // sub-estado en curso no termina nada, así que no lo exige.
@@ -343,11 +352,50 @@ export async function cambiarEstado(
     await client.query(
       `INSERT INTO "CASOS_ESTADO_HISTORIAL"("_id","casoId","estadoAnterior","estadoNuevo","autorEmail","autorNombre","motivo")
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [ids.comment(), casoId, caso.estado, estado, actor.email || null, actor.nombre || null, motivo || null]
+      [ids.comment(), casoId, caso.estado, estado, actor.email || null, actor.nombre || null, comentario]
     );
   });
 
   return { casoId, estado, cerrado: cierra };
+}
+
+/**
+ * Agrega una nota a la bitácora del caso (columna `seguimiento`).
+ *
+ * Es el único movimiento que no tiene otra tabla donde vivir: un intento de
+ * contacto va a CASOS_CONTACTOS, un cambio de estado a CASOS_ESTADO_HISTORIAL y
+ * un reporte a CASOS_REPORTES. La nota es lo que pasa entremedio y no cambia
+ * nada del caso ("llamé, quedó de responder mañana").
+ *
+ * Append-only, y el append lo hace PostgreSQL (`jsonb || jsonb`) dentro de la
+ * misma sentencia: leer-modificar-escribir desde la app perdería una de dos
+ * notas escritas a la vez.
+ */
+export async function agregarNotaSeguimiento(casoId: string, texto: string, actor: Actor) {
+  const t = String(texto || '').trim();
+  if (!t) throw new ValidationError('La nota de seguimiento no puede ir vacía.');
+  if (t.length > 2000) throw new ValidationError('La nota es demasiado larga (máximo 2000 caracteres).');
+
+  const caso = await queryOne<{ estado: string }>(
+    `SELECT "estado" FROM "CASOS_ATENCION" WHERE "_id" = $1`, [casoId]
+  );
+  if (!caso) throw new NotFoundError('Caso de atención', casoId);
+  if (cierraElCaso(caso.estado)) throw new ValidationError('El caso está cerrado: es de solo lectura.');
+
+  const entrada = {
+    fecha: new Date().toISOString(),
+    texto: t,
+    autorEmail: actor.email || null,
+    autorNombre: actor.nombre || null,
+  };
+  await query(
+    `UPDATE "CASOS_ATENCION"
+        SET "seguimiento" = COALESCE("seguimiento", '[]'::jsonb) || $1::jsonb,
+            "_updatedDate" = NOW()
+      WHERE "_id" = $2`,
+    [JSON.stringify([entrada]), casoId]
+  );
+  return entrada;
 }
 
 /** Agrega un intento de contacto (R8: sólo se agregan; el nº es automático). */
@@ -507,11 +555,54 @@ export async function getCasoDetalle(casoId: string) {
     [caso.academicaId]
   );
 
+  // La bitácora del caso: la FUSIÓN de las cuatro fuentes, en orden
+  // cronológico. No se guarda armada en ninguna parte porque cada hecho ya vive
+  // en su tabla (el reporte, el cambio de estado, el intento de contacto) y sólo
+  // la nota suelta necesitaba columna propia. Copiar aquí lo demás crearía una
+  // segunda verdad que se separa en cuanto algo se escriba por otra vía.
+  const notas: any[] = Array.isArray(caso.seguimiento) ? caso.seguimiento : [];
+  const timeline = [
+    ...reportes.rows.map((r: any) => ({
+      tipo: 'REPORTE' as const,
+      fecha: r._createdDate,
+      autor: r.guiaNombre || r.registradoPorNombre || null,
+      texto: r.texto,
+      meta: { tema: r.tema, abrioCaso: r.abrioCaso, registradoPor: r.registradoPorNombre || null },
+    })),
+    ...historial.rows.map((h: any) => ({
+      tipo: 'ESTADO' as const,
+      fecha: h._createdDate,
+      autor: h.autorNombre || h.autorEmail || null,
+      texto: h.motivo || null,
+      meta: {
+        estadoAnterior: h.estadoAnterior,
+        estadoNuevo: h.estadoNuevo,
+        cierra: cierraElCaso(h.estadoNuevo),
+      },
+    })),
+    ...contactos.rows.map((k: any) => ({
+      tipo: 'CONTACTO' as const,
+      fecha: k._createdDate,
+      autor: k.autorNombre || k.autorEmail || null,
+      texto: k.observacion || null,
+      meta: { canal: k.canal, intento: k.intento, resultado: k.resultado },
+    })),
+    ...notas.map((n: any) => ({
+      tipo: 'NOTA' as const,
+      fecha: n.fecha,
+      autor: n.autorNombre || n.autorEmail || null,
+      texto: n.texto,
+      meta: {},
+    })),
+  ].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
   return {
     caso,
     reportes: reportes.rows,
     contactos: contactos.rows,
     historial: historial.rows,
+    seguimiento: notas,
+    timeline,
     otrosCasosAbiertos: otrosAbiertos.rows,
     casosCerrados: cerrados.rows,
     reportesEnEsteCaso: reportes.rows.length,

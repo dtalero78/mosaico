@@ -77,6 +77,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             b."advisorAnotaciones" AS caso,
             COALESCE(ca."estado"::text, '${ESTADO_ABIERTO}') AS estado,
             ca."codigo" AS "codigoCaso",
+            -- Tipo del CASO (Asistencia, Conducta, Pago...): va bajo el guia.
+            ca."tema"::text AS "tipoCaso",
             COALESCE(c."dia", b."fechaEvento") AS fecha,
             COUNT(*) OVER (PARTITION BY a."_id")::int AS conteo
        FROM "ACADEMICA_BOOKINGS" b
@@ -91,7 +93,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        -- guía) y el estado vive en CASOS_ATENCION: sin este JOIN la columna
        -- decía siempre "Pendiente" aunque el caso ya estuviera cerrado.
        LEFT JOIN LATERAL (
-         SELECT x."estado", x."codigo", x."area" FROM "CASOS_ATENCION" x
+         SELECT x."estado", x."codigo", x."area", x."tema" FROM "CASOS_ATENCION" x
           WHERE x."academicaId" = a."_id"
             AND x."eventoOrigenId" = COALESCE(b."eventoId", b."idEvento")
           ORDER BY x."_createdDate" DESC LIMIT 1

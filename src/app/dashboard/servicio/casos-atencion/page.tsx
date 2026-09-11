@@ -9,7 +9,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
-import { estadoLabel, estadoColor, ESTADO_ABIERTO } from '@/lib/casos-atencion-estados'
+import { estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel } from '@/lib/casos-atencion-estados'
 
 /**
  * Las seis vistas de la pantalla. Los filtros son los mismos para todas.
@@ -85,7 +85,8 @@ const TABS: TabCfg[] = [
  * en lib/casos-atencion-estados, así que aquí sólo se nombra el estado.
  *
  * "Cerrar" no manda a ninguna bandeja: el caso no deja nada pendiente y sólo va
- * al Histórico. Por eso es el único que exige comentario.
+ * al Histórico. Todos exigen comentario — es lo que la bitácora del caso muestra
+ * junto a este movimiento.
  */
 const DESTINOS: { area: string | null; label: string; detalle: string; clase: string }[] = [
   { area: 'ACADEMICOS', label: 'Servicio Académico',
@@ -101,7 +102,7 @@ const DESTINOS: { area: string | null; label: string; detalle: string; clase: st
     detalle: 'Cierre financiero o cobranza pre-jurídica.',
     clase: 'border-rose-300 text-rose-800 hover:bg-rose-50' },
   { area: null, label: 'Cerrar',
-    detalle: 'Se resolvió y no requiere nada más. Pide comentario.',
+    detalle: 'Se resolvió y no requiere nada más.',
     clase: 'border-gray-300 text-gray-700 hover:bg-gray-50' },
 ]
 
@@ -112,11 +113,21 @@ const DESTINOS: { area: string | null; label: string; detalle: string; clase: st
 const MUESTRA_DETALLE = (t: Tab) => t === 'nivelaciones'
 
 /**
- * Destinos que exigen texto: CERRAR (hay que justificar por qué el caso no
- * requiere nada más) y NIVELACIÓN (el texto ES el encargo — qué hay que
- * reforzarle al alumno — y es lo que se muestra en la columna Detalle).
+ * TODO destino exige texto. La razón cambia según cuál —al CERRAR hay que
+ * justificar por qué el caso no requiere nada más, al derivar a NIVELACIÓN el
+ * texto ES el encargo, y en las demás es el contexto con el que el área recibe—
+ * pero el comentario es lo que la bitácora del caso muestra junto a cada
+ * movimiento, y un paso sin explicación no le dice nada a quien lo revise
+ * después. Validado también en el servidor, no sólo bloqueando el botón.
  */
-const EXIGE_TEXTO = (d: string | null | undefined) => d === null || d === 'NIVELACIONES'
+const EXIGE_TEXTO = (_d: string | null | undefined) => true
+
+/**
+ * El TIPO del caso se muestra bajo el guía sólo donde hay caso. Asistencia y
+ * Sesiones vacías no lo son —son las inasistencias de la semana y las clases sin
+ * asistentes—, así que ahí no hay tipo que mostrar.
+ */
+const MUESTRA_TIPO = (t: Tab) => t !== 'asistencia' && t !== 'vacias'
 
 const ES_GESTION = (t: Tab) =>
   t === 'historico' || t === 'academicos' || t === 'financieros' ||
@@ -133,7 +144,10 @@ interface Row {
   titularId: string | null
   salon: string | null
   leccion: string | null
+  /** Tema de la LECCIÓN del currículo (sale bajo la columna Lección). */
   tema: string | null
+  /** TIPO del caso: Asistencia · Conducta · … (sale bajo el guía). */
+  tipoCaso?: string | null
   guia: string | null
   caso: string | null
   conteo: number
@@ -291,6 +305,7 @@ function CasosAtencionContent() {
         { header: 'ID', accessor: (r: Row) => r.numeroId || '' },
         { header: 'Salón', accessor: (r: Row) => r.salon || '' },
         { header: 'Guía', accessor: (r: Row) => r.guia || '' },
+        { header: 'Tipo', accessor: (r: Row) => tipoCasoLabel(r.tipoCaso) },
         { header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fechaEstado || null) },
         ...(MUESTRA_DETALLE(tab)
           ? [{ header: 'Detalle', accessor: (r: Row) => r.detalle || '' }]
@@ -310,6 +325,7 @@ function CasosAtencionContent() {
       { header: 'ID', accessor: (r: Row) => r.numeroId || '' },
       { header: 'Salón', accessor: (r: Row) => r.salon || '' },
       { header: 'Guía', accessor: (r: Row) => r.guia || '' },
+      { header: 'Tipo', accessor: (r: Row) => tipoCasoLabel(r.tipoCaso) },
     ] : [
       { header: 'Curso', accessor: (r: Row) => r.curso || '' },
       { header: 'Nombre', accessor: (r: Row) => r.nombre || '' },
@@ -626,6 +642,9 @@ function CasosAtencionContent() {
                   <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
                   <td className="px-3 py-2 text-gray-600">
                     <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
+                    {MUESTRA_TIPO(tab) && r.tipoCaso && (
+                      <span className="block text-xs text-gray-400">{tipoCasoLabel(r.tipoCaso)}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fechaEstado || null)}</td>
                   {MUESTRA_DETALLE(tab) && (
@@ -684,6 +703,9 @@ function CasosAtencionContent() {
                   <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
                   <td className="px-3 py-2 text-gray-600">
                     <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
+                    {MUESTRA_TIPO(tab) && r.tipoCaso && (
+                      <span className="block text-xs text-gray-400">{tipoCasoLabel(r.tipoCaso)}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
@@ -728,6 +750,9 @@ function CasosAtencionContent() {
                       pantalla: se acota y el completo queda en el tooltip. */}
                   <td className="px-3 py-2 text-gray-600">
                     <span className="block max-w-[150px] truncate" title={r.guia || ''}>{r.guia || '—'}</span>
+                    {MUESTRA_TIPO(tab) && r.tipoCaso && (
+                      <span className="block text-xs text-gray-400">{tipoCasoLabel(r.tipoCaso)}</span>
+                    )}
                   </td>
 
                   {/* Sólo la pestaña Asistencia llega aquí: la de Casos tiene su
@@ -816,7 +841,7 @@ function CasosAtencionContent() {
                 ? 'Describe cómo se resolvió el caso…'
                 : destino === 'NIVELACIONES'
                 ? 'Qué hay que reforzarle al alumno. Se verá en la columna Detalle.'
-                : 'Opcional: qué debe atender el área que lo reciba.'}
+                : 'Qué debe atender el área que lo reciba.'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
             />
             <p className="text-xs text-gray-400 mt-1">Se agrega al historial del estudiante y el caso sale de esta bandeja.</p>

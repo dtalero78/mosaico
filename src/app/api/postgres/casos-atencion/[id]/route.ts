@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { ValidationError } from '@/lib/errors';
 import {
   getCasoDetalle, cambiarEstado, agregarContacto, guardarGestion, marcarReportesLeidos,
+  agregarNotaSeguimiento,
   type EstadoCaso,
 } from '@/services/casos-atencion.service';
 import { recalcularEnSegundoPlano, resolverReincidenciaInmediata } from '@/services/casos-reincidencia.service';
@@ -13,10 +14,14 @@ import { recalcularEnSegundoPlano, resolverReincidenciaInmediata } from '@/servi
  * GET    → el caso completo: reportes, intentos de contacto, historial de
  *          estados, otros casos abiertos del alumno y su histórico de cerrados.
  *          Al abrirlo marca los reportes como leídos (R7).
- * PATCH  → gestión. Tres acciones, según lo que traiga el body:
- *            { estado, motivo? }                       cambia el estado (cierra, R5)
+ * PATCH  → gestión. Cuatro acciones, según lo que traiga el body:
+ *            { estado, motivo }                        cambia el estado (cierra, R5)
  *            { contacto: {canal, resultado, obs?} }    agrega un intento (R8)
- *            { acuerdo?, fechaCompromiso?, ... }       guarda acuerdo / finanzas
+ *            { nota }                                  agrega a la bitácora
+ *            { acuerdo?, fechaCompromiso?, ... }       guarda el acuerdo
+ *
+ * El `motivo` del cambio de estado es OBLIGATORIO: es lo que la bitácora muestra
+ * junto al movimiento, y sin él la entrada queda sin explicación.
  *
  * No hay DELETE: los casos no se borran, se cierran cambiando de estado.
  */
@@ -61,6 +66,11 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
       observacion: body.contacto.observacion ?? null,
     }, actor);
     return successResponse({ contacto: c, message: `Intento ${c.intento} de ${c.canal} registrado.` });
+  }
+
+  if (body?.nota !== undefined) {
+    const n = await agregarNotaSeguimiento(id, String(body.nota || ''), actor);
+    return successResponse({ nota: n, message: 'Nota agregada al seguimiento.' });
   }
 
   if (body?.estado) {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ArrowTopRightOnSquareIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { TZ_OPERACION } from '@/lib/cursos-campaign'
 import {
-  ESTADO_ABIERTO, ESTADO_LABEL, estadoLabel, cierraElCaso,
+  ESTADO_ABIERTO, ESTADO_LABEL, estadoLabel, cierraElCaso, tipoCasoLabel,
   ESTADOS_POR_AREA, AREA_PESTANA, AREA_COLOR,
 } from '@/lib/casos-atencion-estados'
 import type { EstadoCaso, AreaCaso } from '@/lib/casos-atencion-estados'
@@ -12,18 +12,18 @@ import type { EstadoCaso, AreaCaso } from '@/lib/casos-atencion-estados'
 /**
  * Pestaña "Casos Atención" de la ficha del estudiante.
  *
- * Orden del mockup, de arriba abajo: cabecera con el selector de estado,
- * reportes (el contenido del caso, primero), indicadores, contexto
- * administrativo, gestión de contacto, acuerdo, finanzas e histórico.
+ * Orden, de arriba abajo: cabecera con el selector de estado, reportes (el
+ * contenido del caso, primero), indicadores, contexto administrativo, gestión de
+ * contacto, acuerdo, seguimiento e histórico.
  *
  * Lo único editable es la gestión: los reportes vienen del panel del guía y son
  * inmutables, y el contexto administrativo se deriva de sus fuentes.
+ *
+ * El **Seguimiento** es la bitácora del caso y se arma fusionando lo que ya
+ * queda escrito en cada sitio (reportes, cambios de estado, intentos de
+ * contacto) con las notas de gestión, que son lo único con columna propia.
  */
 
-const TEMA_LABEL: Record<string, string> = {
-  ASISTENCIA: 'Asistencia', CONDUCTA: 'Conducta', DESEMPENO: 'Desempeño',
-  SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro',
-}
 const CANALES = [
   { id: 'LLAMADA', label: 'Llamada' },
   { id: 'WHATSAPP', label: 'WhatsApp' },
@@ -46,6 +46,34 @@ const RESULTADO_COLOR: Record<string, string> = {
 }
 const REINCIDENCIA_COLOR: Record<string, string> = {
   BAJA: 'text-emerald-700', MEDIA: 'text-amber-700', ALTA: 'text-red-700',
+}
+
+/** Cómo se pinta cada clase de movimiento en la bitácora. */
+const MOV_META: Record<string, { label: string; punto: string; chip: string }> = {
+  REPORTE:  { label: 'Reportado',   punto: 'bg-amber-400',   chip: 'bg-amber-100 text-amber-700' },
+  ESTADO:   { label: 'Movimiento',  punto: 'bg-primary-500', chip: 'bg-primary-100 text-primary-700' },
+  CONTACTO: { label: 'Contacto',    punto: 'bg-sky-400',     chip: 'bg-sky-100 text-sky-700' },
+  NOTA:     { label: 'Nota',        punto: 'bg-gray-400',    chip: 'bg-gray-100 text-gray-600' },
+}
+
+const CANAL_LABEL: Record<string, string> = {
+  LLAMADA: 'Llamada', WHATSAPP: 'WhatsApp', EMAIL: 'Email',
+}
+
+/** El titular de cada entrada de la bitácora, según de qué movimiento se trate. */
+function tituloMovimiento(m: any): string {
+  if (m.tipo === 'REPORTE') {
+    return m.meta?.abrioCaso ? 'Reportado — abrió el caso' : 'Nuevo reporte'
+  }
+  if (m.tipo === 'ESTADO') {
+    if (m.meta?.cierra) return `Cerrado — ${estadoLabel(m.meta.estadoNuevo)}`
+    return `Pasa a ${estadoLabel(m.meta?.estadoNuevo)}`
+  }
+  if (m.tipo === 'CONTACTO') {
+    const canal = CANAL_LABEL[m.meta?.canal] || m.meta?.canal || ''
+    return `${canal} · intento ${m.meta?.intento ?? '—'}`
+  }
+  return 'Nota de seguimiento'
 }
 
 // Los timestamps viajan en UTC y se muestran en la hora de la plataforma.
@@ -72,10 +100,14 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
   const [acuerdo, setAcuerdo] = useState('')
   const [fechaCompromiso, setFechaCompromiso] = useState('')
   const [responsable, setResponsable] = useState('')
-  const [finanzas, setFinanzas] = useState('')
   const [nuevoEstado, setNuevoEstado] = useState(ESTADO_ABIERTO)
   const [agregando, setAgregando] = useState<string | null>(null)   // canal
   const [resultado, setResultado] = useState('CONTESTO')
+  // Bitácora: la nota que se está escribiendo y el comentario obligatorio con
+  // que se confirma un cambio de estado.
+  const [nota, setNota] = useState('')
+  const [motivoCambio, setMotivoCambio] = useState('')
+  const [confirmando, setConfirmando] = useState(false)
 
   const cargarLista = useCallback(async () => {
     const r = await fetch(`/api/postgres/casos-atencion?academicaId=${encodeURIComponent(studentId)}`, { cache: 'no-store' })
@@ -95,7 +127,6 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
     setAcuerdo(j.caso.acuerdo || '')
     setFechaCompromiso(j.caso.fechaCompromiso ? String(j.caso.fechaCompromiso).slice(0, 10) : '')
     setResponsable(j.caso.responsable || '')
-    setFinanzas(j.caso.seguimientoFinanzas || '')
     setNuevoEstado(j.caso.estado)
   }, [])
 
@@ -139,17 +170,36 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
   }
 
   /**
-   * Guarda la gestión y, si el estado cambió, cierra el caso DESPUÉS: cerrar
-   * exige que el acuerdo ya esté persistido, así que el orden importa. Si el
-   * guardado falla no se intenta el cierre.
+   * Guarda la gestión. Si el estado cambió NO se guarda de una: se abre la
+   * confirmación, porque todo movimiento del caso exige un comentario que
+   * explique por qué — es lo que queda en la bitácora.
    */
   const guardar = async () => {
     if (!casoId || !d) return
-    const cambiaEstado = nuevoEstado !== d.caso.estado
+    if (nuevoEstado !== d.caso.estado) { setMotivoCambio(''); setConfirmando(true); return }
+    await patch({ acuerdo, fechaCompromiso: fechaCompromiso || null, responsable })
+  }
+
+  /**
+   * Confirma el cambio de estado. El acuerdo se guarda ANTES porque cerrar exige
+   * que ya esté persistido (R5), así que el orden importa; si el guardado falla
+   * no se intenta el cambio.
+   */
+  const confirmarCambio = async () => {
+    if (!casoId || !d || !motivoCambio.trim()) return
     const ok = await patch({
-      acuerdo, fechaCompromiso: fechaCompromiso || null, responsable, seguimientoFinanzas: finanzas,
-    }, cambiaEstado ? 'Gestión guardada, cerrando el caso…' : undefined)
-    if (ok && cambiaEstado) await patch({ estado: nuevoEstado })
+      acuerdo, fechaCompromiso: fechaCompromiso || null, responsable,
+    }, 'Gestión guardada, aplicando el cambio…')
+    if (!ok) return
+    const hecho = await patch({ estado: nuevoEstado, motivo: motivoCambio.trim() })
+    if (hecho) { setConfirmando(false); setMotivoCambio('') }
+  }
+
+  /** Agrega una nota a la bitácora (no cambia el estado del caso). */
+  const agregarNota = async () => {
+    if (!nota.trim()) return
+    const ok = await patch({ nota: nota.trim() }, 'Nota agregada al seguimiento.')
+    if (ok) setNota('')
   }
 
   if (loading) {
@@ -180,6 +230,10 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
     ? ESTADOS_POR_AREA[area]
     : [ESTADO_ABIERTO, 'RESUELTO']
   // Intentos por canal, para la grilla canal × intento.
+  // La bitácora llega ya fusionada y ordenada del servidor (reportes + cambios
+  // de estado + contactos + notas): aquí sólo se pinta.
+  const timeline: any[] = Array.isArray(d.timeline) ? d.timeline : []
+  const ultimoMov = timeline.length ? timeline[timeline.length - 1] : null
   const porCanal = (canal: string) => d.contactos.filter((x: any) => x.canal === canal)
   const maxIntentos = Math.max(1, ...CANALES.map(k => porCanal(k.id).length))
   const conRespuesta = d.contactos.filter((x: any) => ['CONTESTO', 'RESPONDIO'].includes(x.resultado)).length
@@ -200,7 +254,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
               className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${x._id === casoId
                 ? 'bg-primary-600 text-white border-primary-600'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
-              {x.codigo} · {TEMA_LABEL[x.tema] || x.tema}
+              {x.codigo} · {tipoCasoLabel(x.tema)}
               {x.estado !== ESTADO_ABIERTO && <span className="opacity-70"> (cerrado)</span>}
               {x.sinLeer > 0 && <span className="ml-1 inline-block w-2 h-2 rounded-full bg-red-500" title={`${x.sinLeer} reporte(s) sin leer`} />}
             </button>
@@ -222,7 +276,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
               {d.otrosCasosAbiertos.map((o: any) => (
                 <button key={o._id} type="button" onClick={() => setCasoId(o._id)}
                   className="text-primary-600 hover:underline mr-3">
-                  ↗ Este alumno tiene otro caso abierto: {TEMA_LABEL[o.tema] || o.tema}
+                  ↗ Este alumno tiene otro caso abierto: {tipoCasoLabel(o.tema)}
                 </button>
               ))}
             </p>
@@ -276,7 +330,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
                 <span className="text-gray-500">{fmt(r._createdDate)}</span>
                 <span className="text-gray-800">{r.guiaNombre || '—'}</span>
                 <span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">
-                  {TEMA_LABEL[r.tema] || r.tema}
+                  {tipoCasoLabel(r.tema)}
                 </span>
                 {r.abrioCaso
                   ? <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">Abrió el caso</span>
@@ -293,30 +347,56 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
         </ul>
       </section>
 
-      {/* 3 · Indicadores */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-500">Caso del alumno</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">N.º {c.numeroCaso}</p>
+      {/* 3 · Indicadores. Cuatro en una fila y compactos: el detalle de cada uno
+          vive más abajo (la bitácora completa, el histórico), así que aquí basta
+          con el número y una línea de contexto. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-[11px] uppercase tracking-wide text-gray-500">Caso del alumno</p>
+          <p className="text-2xl font-bold text-gray-900 mt-0.5 leading-tight">N.º {c.numeroCaso}</p>
+          <p className="text-[11px] text-gray-400 mt-1 truncate" title={c.codigo || ''}>{c.codigo || ''}</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-500">Reportes acumulados</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">
-            {d.reportesEnEsteCaso} <span className="text-base font-normal text-gray-400">de {d.reportesTotalesAlumno}</span>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-[11px] uppercase tracking-wide text-gray-500">Reportes acumulados</p>
+          <p className="text-2xl font-bold text-gray-900 mt-0.5 leading-tight">
+            {d.reportesEnEsteCaso} <span className="text-sm font-normal text-gray-400">de {d.reportesTotalesAlumno}</span>
           </p>
+          <p className="text-[11px] text-gray-400 mt-1 truncate">Tipo: {tipoCasoLabel(c.tema) || '—'}</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-500 flex items-center gap-2">
+        {/* Seguimiento: cuánto se ha movido el caso y qué fue lo último. El
+            recorrido completo está en la bitácora, más abajo. */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-[11px] uppercase tracking-wide text-gray-500">Seguimiento</p>
+          <p className="text-2xl font-bold text-gray-900 mt-0.5 leading-tight">
+            {timeline.length} <span className="text-sm font-normal text-gray-400">movim.</span>
+          </p>
+          {ultimoMov ? (
+            <p className="text-[11px] text-gray-500 mt-1 leading-snug">
+              <span className="block truncate" title={tituloMovimiento(ultimoMov)}>{tituloMovimiento(ultimoMov)}</span>
+              <span className="block text-gray-400 truncate">
+                {fmt(ultimoMov.fecha, false)}{ultimoMov.autor ? ` · ${ultimoMov.autor}` : ''}
+              </span>
+            </p>
+          ) : (
+            <p className="text-[11px] text-gray-400 mt-1">Sin movimientos</p>
+          )}
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <p className="text-[11px] uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
             Reincidencia
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700">IA</span>
+            <span className="px-1 py-px rounded text-[9px] font-semibold bg-indigo-100 text-indigo-700">IA</span>
           </p>
-          <p className={`text-3xl font-bold mt-1 ${REINCIDENCIA_COLOR[c.reincidenciaNivel] || 'text-gray-400'}`}>
+          <p className={`text-2xl font-bold mt-0.5 leading-tight ${REINCIDENCIA_COLOR[c.reincidenciaNivel] || 'text-gray-400'}`}>
             {c.reincidenciaNivel ? c.reincidenciaNivel[0] + c.reincidenciaNivel.slice(1).toLowerCase() : 'Calculando…'}
           </p>
-          <p className="text-xs text-gray-500 mt-1">
-            {c.reincidenciaPatron ? `Patrón: ${c.reincidenciaPatron}` : 'Se calcula al abrir el caso'}
+          <p className="text-[11px] text-gray-500 mt-1 leading-snug">
+            <span className="block truncate" title={c.reincidenciaPatron || ''}>
+              {c.reincidenciaPatron ? `Patrón: ${c.reincidenciaPatron}` : 'Se calcula al abrir el caso'}
+            </span>
             {c.reincidenciaFactores?.resumen && (
-              <span className="block mt-0.5 text-gray-400">{c.reincidenciaFactores.resumen}</span>
+              <span className="block text-gray-400 truncate" title={c.reincidenciaFactores.resumen}>
+                {c.reincidenciaFactores.resumen}
+              </span>
             )}
           </p>
         </div>
@@ -439,23 +519,119 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
         </div>
       </section>
 
-      {/* 7 · Seguimiento finanzas */}
+      {/* 7 · Seguimiento: la bitácora del caso.
+          Se arma con lo que YA queda escrito en cada sitio —el reporte del guía,
+          cada cambio de estado con su comentario, cada intento de contacto— más
+          las notas de gestión, que son lo único que no tenía dónde vivir. Por eso
+          no hay aquí una copia del recorrido: se fusiona al leer. */}
       <section className="bg-white border border-gray-200 rounded-xl p-5">
-        <h3 className="font-semibold text-gray-900 mb-3">Seguimiento finanzas</h3>
-        <textarea value={finanzas} onChange={e => setFinanzas(e.target.value)} disabled={!abierto} rows={2}
-          placeholder="Repactación enviada; pendiente confirmación"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100" />
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="font-semibold text-gray-900">Seguimiento</h3>
+          <span className="text-xs text-gray-400">{timeline.length} movimiento(s)</span>
+        </div>
+
+        {timeline.length === 0 ? (
+          <p className="text-sm text-gray-400">Todavía no hay movimientos registrados.</p>
+        ) : (
+          <ol className="relative border-l border-gray-200 ml-1.5 space-y-4">
+            {timeline.map((m: any, i: number) => {
+              const meta = MOV_META[m.tipo] || MOV_META.NOTA
+              return (
+                <li key={`${m.tipo}-${i}`} className="relative pl-4">
+                  {/* El punto va centrado sobre la línea del <ol>: el borde
+                      izquierdo cae en left:0 del <li>, y el punto mide 10px. */}
+                  <span className={`absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-white ${meta.punto}`} />
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className={`px-2 py-0.5 rounded-full font-medium ${meta.chip}`}>{meta.label}</span>
+                    <span className="font-medium text-gray-800">{tituloMovimiento(m)}</span>
+                    <span className="text-gray-400">{fmt(m.fecha)}</span>
+                    {m.autor && <span className="text-gray-500">· {m.autor}</span>}
+                    {m.tipo === 'REPORTE' && m.meta?.tema && (
+                      <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {tipoCasoLabel(m.meta.tema)}
+                      </span>
+                    )}
+                    {m.tipo === 'CONTACTO' && m.meta?.resultado && (
+                      <span className={`px-2 py-0.5 rounded-full font-medium ${RESULTADO_COLOR[m.meta.resultado] || ''}`}>
+                        {RESULTADOS.find(r => r.id === m.meta.resultado)?.label || m.meta.resultado}
+                      </span>
+                    )}
+                  </div>
+                  {m.texto && <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{m.texto}</p>}
+                </li>
+              )
+            })}
+          </ol>
+        )}
+
+        {abierto && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <label className="block text-xs text-gray-500 mb-1">Agregar al seguimiento</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <textarea value={nota} onChange={e => setNota(e.target.value)} rows={2}
+                placeholder="La apoderada pidió que la llamemos el viernes por la tarde"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              <button type="button" disabled={busy || !nota.trim()} onClick={agregarNota}
+                className="px-4 py-2 h-fit rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
+                Agregar
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Los reportes, las asignaciones y los intentos de contacto entran solos. Aquí van las notas de la gestión.
+            </p>
+          </div>
+        )}
       </section>
 
       {abierto && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
-            Al salir de “En gestión” el caso se cierra y pasa al histórico. Requiere acuerdo registrado.
+            Al salir de “En gestión” el caso se cierra y pasa al histórico. Requiere acuerdo registrado
+            y un comentario que explique el movimiento.
           </p>
           <button type="button" disabled={busy} onClick={guardar}
             className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-            {busy ? 'Guardando…' : nuevoEstado !== c.estado ? 'Guardar y cerrar caso' : 'Guardar'}
+            {busy ? 'Guardando…' : nuevoEstado !== c.estado ? 'Aplicar cambio…' : 'Guardar'}
           </button>
+        </div>
+      )}
+
+      {/* Confirmación del cambio de estado: el comentario es obligatorio porque
+          es lo que la bitácora muestra junto al movimiento. Antes el cambio se
+          aplicaba de una y la entrada del historial quedaba sin explicación. */}
+      {confirmando && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5">
+            <h3 className="font-semibold text-gray-900">
+              {cierraElCaso(nuevoEstado) ? 'Cerrar el caso' : 'Mover el caso'}
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              {estadoLabel(c.estado)} → <span className="font-medium text-gray-900">{ESTADO_LABEL[nuevoEstado]}</span>
+              {cierraElCaso(nuevoEstado) && ' · pasa al histórico y queda en solo lectura'}
+            </p>
+
+            <label className="block text-sm font-medium text-gray-700 mt-4 mb-1">
+              Comentario <span className="text-red-500">*</span>
+            </label>
+            <textarea value={motivoCambio} onChange={e => setMotivoCambio(e.target.value)} rows={3}
+              placeholder={cierraElCaso(nuevoEstado)
+                ? 'Por qué se cierra el caso y cómo quedó resuelto…'
+                : 'Qué motiva el movimiento…'}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <p className="text-[11px] text-gray-400 mt-1">Queda en el seguimiento del caso, con tu nombre y la fecha.</p>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button type="button" disabled={busy}
+                onClick={() => { setConfirmando(false); setNuevoEstado(c.estado) }}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="button" disabled={busy || !motivoCambio.trim()} onClick={confirmarCambio}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
+                {busy ? 'Guardando…' : cierraElCaso(nuevoEstado) ? 'Cerrar caso' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -479,7 +655,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
                     {estadoLabel(h.estado)}
                   </span>
                   <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                    {h.reportes} reporte(s) · {(TEMA_LABEL[h.tema] || h.tema).toLowerCase()}
+                    {h.reportes} reporte(s) · {tipoCasoLabel(h.tema).toLowerCase()}
                   </span>
                 </div>
                 {h.acuerdo && <p className="text-sm text-gray-600 mt-2"><span className="text-gray-500">Acuerdo:</span> {h.acuerdo}</p>}
