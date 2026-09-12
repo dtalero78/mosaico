@@ -4,7 +4,8 @@
  * GET ?estado=&fechaInicio=&fechaFin=&search=&page=&pageSize=
  *   → lista paginada de pagos del Centro de Validación de Pagos.
  *
- * Excluye cuota #0 (inscripción auto-validada al crear el contrato).
+ * La cuota #0 (inscripción) nace SIN verificar y vive en su propia pestaña:
+ *   cuotaTipo=inscripcion → Verificación Inscripción.
  *
  * Gateado por RECAUDOS.GESTION.VER (server-side defensa en profundidad,
  * además del PermissionGuard del frontend).

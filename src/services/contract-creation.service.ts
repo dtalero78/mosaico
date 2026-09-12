@@ -563,7 +563,18 @@ export async function createFullContract(input: CreateContractInput) {
     );
     created.financiero = finResult.rows[0];
 
-    // 5. PAGOS_TITULARES cuota #0 — best effort.
+    // 5. PAGOS_TITULARES cuota #0 (la inscripción) — best effort.
+    //
+    // Nace SIN verificar (validado=false), igual que cualquier otra cuota: el
+    // contrato firmado dice que se pactó la inscripción, no que el dinero haya
+    // entrado. Recaudos la verifica en Centro de Validación › Verificación
+    // Inscripción y sólo entonces pasa a Facturación.
+    //
+    // Antes nacía validada a nombre de quien creó el contrato, así que esa
+    // pestaña estaba siempre vacía y el control no existía en la práctica.
+    // Consecuencia buscada: mientras no se verifique, el Saldo a la Fecha del
+    // titular muestra el plan completo — syncFinancieroSaldo sólo suma lo
+    // validado, que es la misma regla que ya rige para las cuotas normales.
     try {
       const totalPlanNum    = parseMoney(financial.totalPlan);
       const inscripcionNum  = parseMoney(financial.pagoInscripcion);
@@ -601,7 +612,7 @@ export async function createFullContract(input: CreateContractInput) {
            COALESCE($15::date, CURRENT_DATE), $6::date, 0, $7, $8,
            $9, $10, $11, $12, 0,
            $13, '[]'::jsonb,
-           true, COALESCE($15::date, CURRENT_DATE), $14,
+           false, NULL, NULL,
            $14, 'normal', $16, NOW(), NOW()
          ) RETURNING "_id"`,
         [
