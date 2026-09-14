@@ -39,12 +39,18 @@ export default function SearchBar() {
     })
 
     // From PEOPLE: only show TITULARs (BENEFICIARIOs always come from ACADEMICA)
-    // Also deduplicate TITULARs by numeroId (in case DB has duplicate records)
+    // La llave de dedupe es (numeroId + contrato), NO el numeroId solo: un titular
+    // PUEDE tener varios contratos y cada uno es su propia fila en PEOPLE. Con la
+    // llave anterior el buscador mostraba UNO ARBITRARIO de ellos (el orden es por
+    // nombre, así que ni siquiera el más reciente) y escondía el resto, sin forma de
+    // llegar al otro. Lo que sí sigue colapsando es la fila repetida de verdad:
+    // mismo numeroId Y mismo contrato.
     const seenTitularIds = new Set<string>()
     const filteredPeople = fromPeople.filter((r: any) => {
       if (r.tipoUsuario !== 'TITULAR') return false
-      if (seenTitularIds.has(r.numeroId)) return false
-      seenTitularIds.add(r.numeroId)
+      const clave = String(r.numeroId) + '|' + String(r.contrato ?? '')
+      if (seenTitularIds.has(clave)) return false
+      seenTitularIds.add(clave)
       return true
     })
 
