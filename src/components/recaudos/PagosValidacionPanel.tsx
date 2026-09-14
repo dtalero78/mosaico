@@ -55,6 +55,12 @@ interface PagoRow {
   titular_plataforma: string | null
   titular_asesorNombre: string | null
   documentosAdjuntos: DocAdjunto[] | null
+  /**
+   * Documentación del TITULAR (PEOPLE.documentacion). La cuota #0 nace sin
+   * adjuntos propios: el comprobante y el contrato firmado se suben a la
+   * persona, así que esta es la evidencia real de una inscripción.
+   */
+  titular_documentacion: DocAdjunto[] | null
 }
 
 interface DisplayUser { _id: string; email: string; nombre: string; rol: string }
@@ -74,6 +80,31 @@ function getLocalToday(): string {
 function fmtDate(d: string | null): string {
   if (!d) return '—'
   try { return new Date(d).toLocaleDateString('es', { timeZone: 'UTC' }) } catch { return '—' }
+}
+
+/** Lista de adjuntos del modal. Vive fuera del panel porque la usan las DOS
+ *  secciones (documentos del pago y del titular) y duplicarla las haría
+ *  divergir al primer ajuste. */
+function DocsList({ docs, vacio }: { docs: DocAdjunto[]; vacio: string }) {
+  if (!docs.length) return <p className="text-xs text-gray-400 italic">{vacio}</p>
+  return (
+    <ul className="space-y-2">
+      {docs.map((d, idx) => (
+        <li key={`${d.url}-${idx}`} className="border border-gray-200 rounded-lg p-2">
+          {(d.tipo || '').startsWith('image/') ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={d.url} alt={d.nombre || `doc-${idx}`} className="max-h-48 rounded mb-2" />
+          ) : null}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-gray-600 truncate" title={d.nombre || ''}>{d.nombre || `Documento ${idx + 1}`}</span>
+            <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline whitespace-nowrap">
+              Abrir <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+            </a>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 export default function PagosValidacionPanel({ variant }: { variant: Variant }) {
@@ -115,7 +146,10 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
   // Modales
   const [validateModal, setValidateModal] = useState<{ id: string; numCuota: number | null; titular: string; medioPago: string | null } | null>(null)
   const [validating, setValidating] = useState(false)
-  const [docsModal, setDocsModal] = useState<{ titular: string; numCuota: number | null; docs: DocAdjunto[] } | null>(null)
+  // El modal separa los adjuntos del PAGO de los del TITULAR: son evidencias
+  // distintas (el comprobante de esta cuota vs. el contrato y los documentos de
+  // la persona) y mezclarlas haría dudar de qué se está mirando.
+  const [docsModal, setDocsModal] = useState<{ titular: string; contrato: string | null; numCuota: number | null; docsPago: DocAdjunto[]; docsTitular: DocAdjunto[] } | null>(null)
 
   // Modal Facturar (pestaña Facturación)
   const [facturarModal, setFacturarModal] = useState<{ id: string; idPeople: string; numCuota: number | null; titular: string } | null>(null)
@@ -513,7 +547,25 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
           <p className="p-6 text-sm text-gray-400 italic text-center">No hay {isFacturacion ? 'pagos por facturar' : countLabel.toLowerCase()} con los filtros seleccionados</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            {/*
+              Anchos FIJOS por columna. Con `min-w-full` y contenido corto el
+              navegador reparte el sobrante entre las columnas angostas (Cuota
+              siempre dice "Insc.", # Ref. suele venir vacía) y deja huecos en
+              medio mientras Acciones se sale del borde derecho. Fijándolos, el
+              espacio sobrante se lo queda Titular, que es el que lo aprovecha.
+            */}
+            <table className="w-full min-w-[1080px] table-fixed text-sm">
+              <colgroup>
+                {showBulk && <col style={{ width: 36 }} />}
+                <col />{/* Titular — absorbe el sobrante */}
+                <col style={{ width: 150 }} />
+                <col style={{ width: 92 }} />
+                <col style={{ width: 104 }} />
+                <col style={{ width: 64 }} />
+                <col style={{ width: 92 }} />
+                <col style={{ width: 168 }} />
+                <col style={{ width: 236 }} />
+              </colgroup>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr className="whitespace-nowrap text-xs uppercase tracking-wide">
                   {showBulk && (
@@ -539,6 +591,12 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                   const titularNombre = `${p.titular_primerNombre} ${p.titular_primerApellido}`.trim()
                   const gr = (p.gestorRecaudo || '').toLowerCase()
                   const g = displayUsers.find(u => u._id === p.gestorRecaudo) || displayUsers.find(u => (u.email || '').toLowerCase() === gr)
+                  // Evidencia de dos orígenes: los adjuntos de ESTE pago y la
+                  // documentación de la PERSONA. En inscripciones el pago casi
+                  // nunca trae adjuntos propios — la evidencia vive en el titular.
+                  const docsPago = Array.isArray(p.documentosAdjuntos) ? p.documentosAdjuntos : []
+                  const docsTitular = Array.isArray(p.titular_documentacion) ? p.titular_documentacion : []
+                  const totalDocs = docsPago.length + docsTitular.length
                   return (
                     <tr key={p._id} className={`hover:bg-gray-50 ${selected.has(p._id) ? 'bg-emerald-50/40' : ''}`}>
                       {showBulk && (
@@ -552,10 +610,10 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                         </td>
                       )}
                       <td className="px-2 py-2 align-top">
-                        <Link href={`/person/${p.idPeople}?tab=financiera`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
+                        <Link href={`/person/${p.idPeople}?tab=financiera`} target="_blank" rel="noopener noreferrer" title={titularNombre} className="block truncate text-blue-600 hover:underline font-medium">
                           {titularNombre || '—'}
                         </Link>
-                        <div className="text-[11px] text-gray-500">ID {p.titular_numeroId}</div>
+                        <div className="text-[11px] text-gray-500 truncate">ID {p.titular_numeroId}</div>
                       </td>
                       <td className="px-2 py-2 text-gray-700 align-top whitespace-nowrap">
                         <div>{p.titular_contrato || '—'}</div>
@@ -593,10 +651,14 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                       </td>
                       <td className="px-2 py-2 text-right align-top">
                         <div className="flex items-center justify-end gap-1 whitespace-nowrap">
-                          {canVerDocs && Array.isArray(p.documentosAdjuntos) && p.documentosAdjuntos.length > 0 && (
-                            <button type="button" onClick={() => setDocsModal({ titular: titularNombre, numCuota: p.numCuota, docs: p.documentosAdjuntos as DocAdjunto[] })}
-                              title={`Ver ${p.documentosAdjuntos.length} documento(s) del pago`} className="inline-flex items-center gap-0.5 px-1.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200">
-                              <PaperClipIcon className="h-3.5 w-3.5" /> {p.documentosAdjuntos.length}
+                          {canVerDocs && totalDocs > 0 && (
+                            <button type="button" onClick={() => setDocsModal({ titular: titularNombre, contrato: p.titular_contrato, numCuota: p.numCuota, docsPago, docsTitular })}
+                              title={[
+                                docsPago.length ? `${docsPago.length} del pago` : null,
+                                docsTitular.length ? `${docsTitular.length} del titular` : null,
+                              ].filter(Boolean).join(' · ')}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200">
+                              <PaperClipIcon className="h-3.5 w-3.5" /> {totalDocs}
                             </button>
                           )}
                           {/* Verificación: Editar + Validar (pendientes) */}
@@ -781,26 +843,28 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">📎 Documentos del pago</h3>
+              <h3 className="text-lg font-bold text-gray-900">📎 Documentos</h3>
               <button type="button" onClick={() => setDocsModal(null)} title="Cerrar" className="text-gray-400 hover:text-gray-600"><XMarkIcon className="h-5 w-5" /></button>
             </div>
-            <p className="text-sm text-gray-600">{docsModal.titular}{docsModal.numCuota != null ? ` · ${docsModal.numCuota === 0 ? 'inscripción' : `cuota ${docsModal.numCuota}`}` : ''} — {docsModal.docs.length} documento(s).</p>
-            <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {docsModal.docs.map((d, idx) => (
-                <li key={idx} className="border border-gray-200 rounded-lg p-2">
-                  {(d.tipo || '').startsWith('image/') ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={d.url} alt={d.nombre || `doc-${idx}`} className="max-h-48 rounded mb-2" />
-                  ) : null}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-600 truncate">{d.nombre || `Documento ${idx + 1}`}</span>
-                    <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline whitespace-nowrap">
-                      Abrir <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
-                    </a>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <p className="text-sm text-gray-600">
+              <strong>{docsModal.titular}</strong>
+              {docsModal.contrato ? ` · ${docsModal.contrato}` : ''}
+              {docsModal.numCuota != null ? ` · ${docsModal.numCuota === 0 ? 'inscripción' : `cuota ${docsModal.numCuota}`}` : ''}
+            </p>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+              <section>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                  Del pago ({docsModal.docsPago.length})
+                </h4>
+                <DocsList docs={docsModal.docsPago} vacio="Este pago no tiene adjuntos propios." />
+              </section>
+              <section>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                  Del titular ({docsModal.docsTitular.length})
+                </h4>
+                <DocsList docs={docsModal.docsTitular} vacio="El titular no tiene documentación cargada." />
+              </section>
+            </div>
           </div>
         </div>
       )}

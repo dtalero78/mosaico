@@ -266,7 +266,12 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          p."plataforma"      AS "titular_plataforma",
          -- MOSAICO guarda el NOMBRE del comercial en PEOPLE.asesor (LGS usa una
          -- columna aparte porque allá ese campo lleva el correo).
-         p."asesor"          AS "titular_asesorNombre"
+         p."asesor"          AS "titular_asesorNombre",
+         -- Documentación del TITULAR (PEOPLE.documentacion): el comprobante y el
+         -- contrato firmado se adjuntan a la PERSONA, no al pago. La cuota #0 se
+         -- crea sin adjuntos propios, así que sin esto la pestaña de inscripciones
+         -- no tendría de dónde mirar la evidencia que se está verificando.
+         COALESCE(p."documentacion", '[]'::jsonb) AS "titular_documentacion"
        FROM "PAGOS_TITULARES" pt
        JOIN "PEOPLE" p ON p."_id" = pt."idPeople"
        ${whereClause}
