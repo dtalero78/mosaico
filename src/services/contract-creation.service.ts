@@ -12,13 +12,21 @@ import { apoderadoPorDefectoEsTitular, resolverApoderado } from '@/lib/apoderado
 import { RESERVA_CUPO_MIN } from '@/lib/cupo';
 import { asegurarCupoSalon } from '@/services/cupo-guard.service';
 import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
+import { assertPuedeInscribirBeneficiario } from '@/services/inscripcion-beneficiario.service';
 
 /**
  * Regla numeroId MOSAICO:
- *  - Los **beneficiarios** (alumnos) NO pueden existir ya en PEOPLE (un alumno = un
- *    contrato) ni repetirse en el formulario → se rechaza duro.
+ *  - Un **beneficiario** (alumno) sólo puede estar INSCRITO en UN contrato, así que
+ *    no puede repetirse en el formulario ni tener otra inscripción viva.
  *  - El **titular** SÍ puede tener varios contratos (mismo numeroId). Eso NO se rechaza
  *    aquí; la ruta lo detecta con `buscarTitularExistente` y pide confirmación (modal).
+ *
+ * ⚠ Antes bastaba con que el numeroId EXISTIERA en PEOPLE para rechazar, sin mirar
+ * si era una inscripción o sólo una titularidad: eso bloqueaba a todo titular que
+ * quisiera cursar, aunque el mensaje de error ya decía la regla correcta. Ahora la
+ * decisión la toma `assertPuedeInscribirBeneficiario`, la misma que usa el alta de
+ * beneficiario sobre un contrato existente.
+ *
  * Compartida por Crear Contrato y Migrar Contrato.
  */
 export async function validarNumeroIds(titular: any, beneficiarios: any[]) {
@@ -28,17 +36,13 @@ export async function validarNumeroIds(titular: any, beneficiarios: any[]) {
   if (dupEnFormulario) {
     throw new ValidationError(`numeroId duplicado en el formulario: ${dupEnFormulario}. Solo el titular puede ser su propio beneficiario (marque "¿Este titular será beneficiario?").`);
   }
-  // Sólo los BENEFICIARIOS existentes bloquean (el titular se confirma aparte).
+  // Cada beneficiario del formulario pasa por la regla de inscripción. El número
+  // de contrato aún no existe (se genera después de validar), así que va en null:
+  // ninguna fila previa puede ser "de este mismo contrato".
   const benefIds: string[] = ((beneficiarios || []).map((b: any) => b?.numeroId))
     .filter((x: any) => typeof x === 'string' && x.trim() !== '');
-  if (benefIds.length > 0) {
-    const yaExiste = await query(
-      `SELECT DISTINCT "numeroId" FROM "PEOPLE" WHERE "numeroId" = ANY($1)`,
-      [benefIds]
-    );
-    if (yaExiste.rows.length > 0) {
-      throw new ValidationError(`numeroId de beneficiario ya registrado: ${yaExiste.rows.map((r: any) => r.numeroId).join(', ')}. Un beneficiario no puede estar en dos contratos.`);
-    }
+  for (const benefId of benefIds) {
+    await assertPuedeInscribirBeneficiario(benefId, null);
   }
 }
 

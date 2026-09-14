@@ -3,7 +3,8 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { PersonPermission } from '@/types/permissions';
 import { query, queryOne, transaction } from '@/lib/postgres';
-import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
+import { NotFoundError, ValidationError } from '@/lib/errors';
+import { assertPuedeInscribirBeneficiario } from '@/services/inscripcion-beneficiario.service';
 import {
   insertBeneficiarioTx,
   incrementarCupoCurso,
@@ -60,10 +61,11 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     throw new ValidationError(`Campos requeridos: ${faltantes.join(', ')}`);
   }
 
-  // numeroId único (regla MOSAICO: sólo el titular puede compartirlo con su propia
-  // inscripción como beneficiario, y eso se resuelve al crear el contrato).
-  const dup = await queryOne(`SELECT "_id" FROM "PEOPLE" WHERE "numeroId" = $1 LIMIT 1`, [body.numeroId]);
-  if (dup) throw new ConflictError(`Ya existe una persona con el número de ID ${body.numeroId}`);
+  // Regla de inscripción: una persona sólo puede ser beneficiario de UN contrato.
+  // Antes se rechazaba CUALQUIER numeroId que ya existiera en PEOPLE, lo que
+  // bloqueaba al titular que se inscribe en su PROPIO contrato después de la
+  // aprobación — que es justo lo que la regla permite.
+  await assertPuedeInscribirBeneficiario(body.numeroId, titular.contrato);
 
   // El curso debe existir en la campaña y estar activo.
   const curso = await queryOne<any>(
