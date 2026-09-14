@@ -8,6 +8,8 @@ import { PermissionGuard } from '@/components/permissions'
 import { ComercialPermission } from '@/types/permissions'
 import { cursosVisiblesContrato, esMenores } from '@/lib/cursos-campaign'
 import { generateUserLogin } from '@/lib/user-login'
+import { normalizeNumeroId } from '@/lib/numeroid-normalize'
+import { normalizeTelefono } from '@/lib/telefono-normalize'
 import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 
@@ -900,7 +902,7 @@ function CrearContratoContent() {
                       }
                     }}
                     onChange={(e) => {
-                      const clean = e.target.value.replace(/[^A-Z0-9]/g, '').toUpperCase()
+                      const clean = normalizeNumeroId(e.target.value)
                       setTitular({...titular, numeroId: clean})
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
@@ -1022,7 +1024,7 @@ function CrearContratoContent() {
                   <input
                     type="tel"
                     value={titular.celular}
-                    onChange={(e) => setTitular({...titular, celular: e.target.value})}
+                    onChange={(e) => setTitular({...titular, celular: normalizeTelefono(e.target.value)})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Número sin prefijo"
                   />
@@ -1034,7 +1036,7 @@ function CrearContratoContent() {
                   <input
                     type="tel"
                     value={titular.telefono}
-                    onChange={(e) => setTitular({...titular, telefono: e.target.value})}
+                    onChange={(e) => setTitular({...titular, telefono: normalizeTelefono(e.target.value)})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
@@ -1439,7 +1441,7 @@ function CrearContratoContent() {
                               }
                             }}
                             onChange={(e) => {
-                              const clean = e.target.value.replace(/[^A-Z0-9]/g, '').toUpperCase()
+                              const clean = normalizeNumeroId(e.target.value)
                               updateBeneficiario(index, 'numeroId', clean)
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
@@ -1474,7 +1476,7 @@ function CrearContratoContent() {
                           <input
                             type="tel"
                             value={beneficiario.celular}
-                            onChange={(e) => updateBeneficiario(index, 'celular', e.target.value)}
+                            onChange={(e) => updateBeneficiario(index, 'celular', normalizeTelefono(e.target.value))}
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
                               benefCelularWarn(index) ? 'border-amber-400' : 'border-gray-300'
                             }`}
@@ -1528,7 +1530,7 @@ function CrearContratoContent() {
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
                             <input type="tel" value={beneficiario.apoderadoTelefono || ''} disabled={!!beneficiario.titularEsApoderado}
-                              onChange={(e) => updateBeneficiario(index, 'apoderadoTelefono', e.target.value)}
+                              onChange={(e) => updateBeneficiario(index, 'apoderadoTelefono', normalizeTelefono(e.target.value))}
                               placeholder="Teléfono del apoderado"
                               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100" />
                           </div>

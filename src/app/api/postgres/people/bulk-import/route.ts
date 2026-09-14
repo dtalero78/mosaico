@@ -4,6 +4,8 @@ import { ComercialPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { query, queryOne } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
+import { normalizeNumeroId } from '@/lib/numeroid-normalize';
+import { normalizeTelefonoOrNull } from '@/lib/telefono-normalize';
 
 const ALLOWED_FIELDS = [
   'numeroId', 'primerNombre', 'segundoNombre', 'primerApellido', 'segundoApellido',
@@ -37,6 +39,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   for (const reg of registros) {
     try {
+      // El CSV lo escribe una persona: llega con puntos, guiones y "+56 9 ...".
+      reg.numeroId = normalizeNumeroId(reg.numeroId);
+      if (reg.celular !== undefined) reg.celular = normalizeTelefonoOrNull(reg.celular);
+      if (reg.telefono !== undefined) reg.telefono = normalizeTelefonoOrNull(reg.telefono);
+
       if (!reg.numeroId || !reg.primerNombre || !reg.primerApellido) {
         errores.push(`Fila ${reg.fila || '?'}: Faltan campos obligatorios (numeroId, primerNombre, primerApellido)`);
         fallidos++;

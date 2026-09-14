@@ -2,6 +2,7 @@ import 'server-only';
 import { query } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { ESTADOS_LIBERAN_CUPO } from '@/lib/cupo-estados';
+import { normalizeNumeroId } from '@/lib/numeroid-normalize';
 
 /**
  * Regla de INSCRIPCIÓN como beneficiario (MOSAICO).
@@ -92,7 +93,10 @@ export async function assertPuedeInscribirBeneficiario(
   numeroId: string,
   contratoDestino: string | null
 ): Promise<void> {
-  const id = String(numeroId || '').trim();
+  // Se compara NORMALIZADO a los DOS lados: quedan 21 filas legadas guardadas con
+  // puntos y guiones ("26.008.510-7"), y sin esto una persona que ya está inscrita
+  // ahí pasaría el filtro por la diferencia de signos.
+  const id = normalizeNumeroId(numeroId);
   if (!id) return;
 
   const r = await query<Fila>(
@@ -112,7 +116,7 @@ export async function assertPuedeInscribirBeneficiario(
           ORDER BY t2."_createdDate" DESC NULLS LAST
           LIMIT 1
        ) t ON TRUE
-      WHERE p."numeroId" = $1`,
+      WHERE UPPER(REGEXP_REPLACE(COALESCE(p."numeroId", ''), '[.[:space:]_-]', '', 'g')) = $1`,
     [id]
   );
   if (!r.rows.length) return;

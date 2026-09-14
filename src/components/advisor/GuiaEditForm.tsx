@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { normalizeNumeroId } from '@/lib/numeroid-normalize'
+import { normalizeTelefono } from '@/lib/telefono-normalize'
 import { useRouter } from 'next/navigation'
 import { CameraIcon, UserCircleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -210,7 +212,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
                 <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-sm text-gray-600 whitespace-nowrap min-w-[3.5rem] justify-center">
                   {INDICATIVO[form.pais] || '—'}
                 </span>
-                <input type="tel" value={form.telefono} onChange={e => set('telefono', e.target.value.replace(/[^\d]/g, ''))}
+                <input type="tel" value={form.telefono} onChange={e => set('telefono', normalizeTelefono(e.target.value))}
                   placeholder="Número sin indicativo" className={inputCls() + ' rounded-l-none'} />
               </div>
             </div>
@@ -227,7 +229,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
               {errors.clave && <p className="text-red-500 text-xs mt-1">{errors.clave}</p>}
             </div>
             {/* Número de Identificación — reubicado (antes iba junto al teléfono) */}
-            <Field label="Número de Identificación" value={form.numeroId} onChange={v => set('numeroId', v.replace(/[^A-Z0-9]/gi, '').toUpperCase())} cls={inputCls} />
+            <Field label="Número de Identificación" value={form.numeroId} onChange={v => set('numeroId', normalizeNumeroId(v))} cls={inputCls} />
             <Field label="Fecha de Nacimiento" value={form.fechaNacimiento} onChange={v => set('fechaNacimiento', v)} type="date" cls={inputCls} />
             <div className="col-span-2">
               <Field label="Domicilio" value={form.domicilio} onChange={v => set('domicilio', v)} cls={inputCls} />

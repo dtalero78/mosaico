@@ -3,6 +3,7 @@ import { query, queryOne, queryMany, parseJsonbFields } from '@/lib/postgres';
 import { handler, handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { buildDynamicUpdate } from '@/lib/query-builder';
+import { normalizeTelefonoOrNull } from '@/lib/telefono-normalize';
 
 /**
  * GET /api/postgres/people/[id]
@@ -380,6 +381,14 @@ export const PATCH = handlerWithAuth(async (
   // vistas de edición mandan '' → null para "limpiar", lo que rompía estas columnas.
   for (const f of ['primerNombre', 'primerApellido']) {
     if (body[f] === null) body[f] = '';
+  }
+
+  // Los teléfonos se guardan en puros dígitos. Se normalizan aquí y no sólo en el
+  // formulario porque este PATCH lo usan varias pantallas (ficha del titular, Lista
+  // de Usuarios, edición del contrato) y basta que una se olvide para volver a meter
+  // un "+56 9 ..." que después nadie encuentra.
+  for (const campo of ['celular', 'telefono', 'apoderadoTelefono'] as const) {
+    if (body[campo] !== undefined) body[campo] = normalizeTelefonoOrNull(body[campo]);
   }
 
   const built = buildDynamicUpdate('PEOPLE', body, PEOPLE_UPDATE_FIELDS);

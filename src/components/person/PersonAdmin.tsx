@@ -11,6 +11,8 @@ import { contratoRetieneCupo, motivoLiberadoPorContrato } from '@/lib/cupo-estad
 import { PersonPermission } from '@/types/permissions'
 import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
 import { generateUserLogin } from '@/lib/user-login'
+import { normalizeNumeroId } from '@/lib/numeroid-normalize'
+import { normalizeTelefono } from '@/lib/telefono-normalize'
 import { estadoContratoTitular, estadoContratoBadgeClass, ESTADO_EN_GESTION } from '@/lib/estado-contrato'
 import { esAprobado } from '@/lib/estados'
 
@@ -1400,7 +1402,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     <div>
                       <label className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Teléfono</label>
                       <input type="tel" value={apoderadoForm.apoderadoTelefono}
-                        onChange={e => setApoderadoForm(f => ({ ...f, apoderadoTelefono: e.target.value }))}
+                        onChange={e => setApoderadoForm(f => ({ ...f, apoderadoTelefono: normalizeTelefono(e.target.value) }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
                     </div>
                     <div>
@@ -1552,7 +1554,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Celular *</label>
                       <input type="tel" value={beneficiaryData.celular}
-                        onChange={(e) => handleBeneficiaryDataChange('celular', e.target.value)}
+                        onChange={(e) => handleBeneficiaryDataChange('celular', normalizeTelefono(e.target.value))}
                         className="input-field" placeholder="Número de celular" />
                     </div>
                     <div>
@@ -1643,7 +1645,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                         <input
                           type="text"
                           value={beneficiaryData.numeroId}
-                          onChange={(e) => handleBeneficiaryDataChange('numeroId', e.target.value)}
+                          onChange={(e) => handleBeneficiaryDataChange('numeroId', normalizeNumeroId(e.target.value))}
                           className="input-field"
                           placeholder="Número de ID"
                         />
@@ -1742,7 +1744,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                           <input
                             type="tel"
                             value={beneficiaryData.celular}
-                            onChange={(e) => handleBeneficiaryDataChange('celular', e.target.value)}
+                            onChange={(e) => handleBeneficiaryDataChange('celular', normalizeTelefono(e.target.value))}
                             className="input-field flex-1"
                             placeholder="Número de celular"
                           />
@@ -1802,7 +1804,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono del apoderado</label>
                           <input type="tel" value={beneficiaryData.apoderadoTelefono}
-                            onChange={(e) => handleBeneficiaryDataChange('apoderadoTelefono', e.target.value)}
+                            onChange={(e) => handleBeneficiaryDataChange('apoderadoTelefono', normalizeTelefono(e.target.value))}
                             className="input-field" />
                         </div>
                         <div>

@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { CameraIcon, UserCircleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
+import { normalizeNumeroId } from '@/lib/numeroid-normalize'
 
 const PAISES = [
   'Colombia', 'Mexico', 'Argentina', 'Chile', 'Peru', 'Ecuador', 'Venezuela',
@@ -211,7 +212,7 @@ export default function NuevoGuiaPage() {
                 onChange={v => updateField('primerApellido', v)} error={errors.primerApellido}
                 placeholder="Ej: Pérez García" required />
               <Field label="Número de Identificación" value={form.numeroId}
-                onChange={v => updateField('numeroId', v.replace(/[^A-Z0-9]/g, '').toUpperCase())}
+                onChange={v => updateField('numeroId', normalizeNumeroId(v))}
                 error={errors.numeroId} placeholder="Ej: 12345678K"
                 hint="Solo letras mayúsculas y números" required />
               <Field label="Domicilio" value={form.domicilio}

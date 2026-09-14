@@ -12,6 +12,8 @@ import { apoderadoPorDefectoEsTitular, resolverApoderado } from '@/lib/apoderado
 import { RESERVA_CUPO_MIN } from '@/lib/cupo';
 import { asegurarCupoSalon } from '@/services/cupo-guard.service';
 import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
+import { normalizeNumeroId } from '@/lib/numeroid-normalize';
+import { normalizeTelefonoOrNull } from '@/lib/telefono-normalize';
 import { assertPuedeInscribirBeneficiario } from '@/services/inscripcion-beneficiario.service';
 
 /**
@@ -30,8 +32,11 @@ import { assertPuedeInscribirBeneficiario } from '@/services/inscripcion-benefic
  * Compartida por Crear Contrato y Migrar Contrato.
  */
 export async function validarNumeroIds(titular: any, beneficiarios: any[]) {
-  const incomingIds: string[] = [titular.numeroId, ...((beneficiarios || []).map((b: any) => b?.numeroId))]
-    .filter((x: any) => typeof x === 'string' && x.trim() !== '');
+  // Se comparan NORMALIZADOS: "8.986.549-2" y "89865492" son la misma persona,
+  // y sin esto el duplicado del formulario se colaría por la diferencia de puntos.
+  const incomingIds: string[] = [titular?.numeroId, ...((beneficiarios || []).map((b: any) => b?.numeroId))]
+    .map((x: any) => normalizeNumeroId(x))
+    .filter((x: string) => x !== '');
   const dupEnFormulario = incomingIds.find((id, i) => incomingIds.indexOf(id) !== i);
   if (dupEnFormulario) {
     throw new ValidationError(`numeroId duplicado en el formulario: ${dupEnFormulario}. Solo el titular puede ser su propio beneficiario (marque "¿Este titular será beneficiario?").`);
@@ -40,7 +45,8 @@ export async function validarNumeroIds(titular: any, beneficiarios: any[]) {
   // de contrato aún no existe (se genera después de validar), así que va en null:
   // ninguna fila previa puede ser "de este mismo contrato".
   const benefIds: string[] = ((beneficiarios || []).map((b: any) => b?.numeroId))
-    .filter((x: any) => typeof x === 'string' && x.trim() !== '');
+    .map((x: any) => normalizeNumeroId(x))
+    .filter((x: string) => x !== '');
   for (const benefId of benefIds) {
     await assertPuedeInscribirBeneficiario(benefId, null);
   }
@@ -160,7 +166,19 @@ export async function insertBeneficiarioTx(
     exigirMatriculaAbierta?: boolean;
   }
 ): Promise<any> {
-  const { b, titularId, contrato, plataforma, vigencia, finalContrato } = args;
+  // El documento y los teléfonos se normalizan AQUÍ, en el punto donde se
+  // escriben, y no sólo en el formulario: por esta función entran también Migrar
+  // Contrato, el importador de PDF y el alta masiva, que no pasan por ningún
+  // input. Un "8.986.549-2" guardado tal cual es una persona DISTINTA de
+  // "89865492" para toda consulta posterior — buscador, regla de inscripción y
+  // cruces con ACADEMICA comparan el texto.
+  const b: BeneficiarioInput = {
+    ...args.b,
+    numeroId: normalizeNumeroId(args.b.numeroId),
+    celular: normalizeTelefonoOrNull(args.b.celular),
+    apoderadoTelefono: normalizeTelefonoOrNull(args.b.apoderadoTelefono),
+  };
+  const { titularId, contrato, plataforma, vigencia, finalContrato } = args;
   const confirmarCupo = args.confirmarCupo === true;
   const benefId = ids.person();
 
@@ -438,7 +456,19 @@ export interface CreateContractInput {
  * numeroId (dup en formulario / dup existente salvo titular-beneficiario).
  */
 export async function createFullContract(input: CreateContractInput) {
-  const { contrato, titular, financial, beneficiarios, titularEsBeneficiario, tipoPlan, createdBy, clientToday } = input;
+  const { contrato, financial, beneficiarios, titularEsBeneficiario, tipoPlan, createdBy, clientToday } = input;
+  // Mismo criterio que en `insertBeneficiarioTx`: el titular se normaliza en el
+  // punto de escritura. Sus cinco teléfonos (propio, fijo, apoderado y las dos
+  // referencias) quedan en puros dígitos — que es lo que ya espera Whapi.
+  const titular = {
+    ...input.titular,
+    numeroId: normalizeNumeroId(input.titular?.numeroId),
+    celular: normalizeTelefonoOrNull(input.titular?.celular),
+    telefono: normalizeTelefonoOrNull(input.titular?.telefono),
+    apoderadoTelefono: normalizeTelefonoOrNull(input.titular?.apoderadoTelefono),
+    telefonoRefUno: normalizeTelefonoOrNull(input.titular?.telefonoRefUno),
+    telefonoRefDos: normalizeTelefonoOrNull(input.titular?.telefonoRefDos),
+  };
 
   // finalContrato = hoy + vigencia meses (misma regla que Crear Contrato).
   const vigenciaMeses = parseInt(financial?.vigencia || '0', 10);

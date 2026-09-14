@@ -7,6 +7,8 @@ import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, TrashIcon, CheckCircleIcon } f
 import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
 import { cursosVisiblesContrato } from '@/lib/cursos-campaign'
 import { generateUserLogin } from '@/lib/user-login'
+import { normalizeNumeroId } from '@/lib/numeroid-normalize'
+import { normalizeTelefono } from '@/lib/telefono-normalize'
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -487,7 +489,7 @@ export default function MigrarContratoPage() {
                   <input
                     type="text"
                     value={titular.numeroId}
-                    onChange={e => setTitular(t => ({ ...t, numeroId: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))}
+                    onChange={e => setTitular(t => ({ ...t, numeroId: normalizeNumeroId(e.target.value) }))}
                     onKeyDown={e => { if (!/[A-Za-z0-9]/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault() }}
                     placeholder="Solo letras mayúsculas y números"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
@@ -529,13 +531,13 @@ export default function MigrarContratoPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Celular * {getPhonePrefix() && <span className="text-gray-400">({getPhonePrefix()})</span>}
                   </label>
-                  <input type="text" value={titular.celular} onChange={e => setTitular(t => ({ ...t, celular: e.target.value.replace(/\D/g, '') }))}
+                  <input type="text" value={titular.celular} onChange={e => setTitular(t => ({ ...t, celular: normalizeTelefono(e.target.value) }))}
                     placeholder="Solo dígitos sin prefijo"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono fijo</label>
-                  <input type="text" value={titular.telefono} onChange={e => setTitular(t => ({ ...t, telefono: e.target.value.replace(/\D/g, '') }))}
+                  <input type="text" value={titular.telefono} onChange={e => setTitular(t => ({ ...t, telefono: normalizeTelefono(e.target.value) }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
                 </div>
               </div>
@@ -607,7 +609,7 @@ export default function MigrarContratoPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Teléfono *</label>
-                    <input type="text" value={titular.telRefUno} onChange={e => setTitular(t => ({ ...t, telRefUno: e.target.value.replace(/\D/g, '') }))}
+                    <input type="text" value={titular.telRefUno} onChange={e => setTitular(t => ({ ...t, telRefUno: normalizeTelefono(e.target.value) }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
                   </div>
                 </div>
@@ -627,7 +629,7 @@ export default function MigrarContratoPage() {
                   </div>
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Teléfono</label>
-                    <input type="text" value={titular.telRefDos} onChange={e => setTitular(t => ({ ...t, telRefDos: e.target.value.replace(/\D/g, '') }))}
+                    <input type="text" value={titular.telRefDos} onChange={e => setTitular(t => ({ ...t, telRefDos: normalizeTelefono(e.target.value) }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
                   </div>
                 </div>
@@ -838,7 +840,7 @@ export default function MigrarContratoPage() {
                       <label className="block text-xs font-medium text-gray-700 mb-1">Número de ID *</label>
                       <input type="text"
                         value={currentBenef.numeroId}
-                        onChange={e => setCurrentBenef(b => ({ ...b, numeroId: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))}
+                        onChange={e => setCurrentBenef(b => ({ ...b, numeroId: normalizeNumeroId(e.target.value) }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
                     </div>
                     <div>
@@ -861,7 +863,7 @@ export default function MigrarContratoPage() {
                       </label>
                       <input type="text"
                         value={currentBenef.celular}
-                        onChange={e => setCurrentBenef(b => ({ ...b, celular: e.target.value.replace(/\D/g, '') }))}
+                        onChange={e => setCurrentBenef(b => ({ ...b, celular: normalizeTelefono(e.target.value) }))}
                         placeholder="Solo dígitos"
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500" />
                     </div>
@@ -932,7 +934,7 @@ export default function MigrarContratoPage() {
                         <input type="text"
                           value={currentBenef.apoderadoTelefono}
                           disabled={currentBenef.titularEsApoderado}
-                          onChange={e => setCurrentBenef(b => ({ ...b, apoderadoTelefono: e.target.value.replace(/\D/g, '') }))}
+                          onChange={e => setCurrentBenef(b => ({ ...b, apoderadoTelefono: normalizeTelefono(e.target.value) }))}
                           placeholder="Solo dígitos"
                           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed" />
                       </div>
