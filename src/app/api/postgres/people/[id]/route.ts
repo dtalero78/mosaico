@@ -112,6 +112,12 @@ export const GET = handler(async (
           "horarioCurso",
           "campaign",
           "cupoLiberado",
+          -- Cómo salió del salón: el badge de cupo y el botón "Activar" se deciden
+          -- con esto. Un inactivado por admin NO ocupa cupo (regla lib/cupo) aunque
+          -- "cupoLiberado" siga en false, y si salió por REEMPLAZO no se le ofrece
+          -- volver, porque su asiento ya es de otro.
+          "suspenddata",
+          "cupoHistory",
           "fechaOnHold",
           "_createdDate"
         FROM "PEOPLE"
@@ -165,6 +171,9 @@ export const GET = handler(async (
           cupoLiberado: ben.cupoLiberado === true,
           // El OnHold también suelta el asiento: la ficha lo muestra en el badge.
           fechaOnHold: ben.fechaOnHold || null,
+          // Última suspensión: dice si lo sacó un admin y con qué tipo de salida.
+          // De ahí salen el badge de cupo y si se ofrece «Activar».
+          suspenddata: ben.suspenddata || null,
           existeEnAcademica: !!academicCheck,
           _createdDate: ben._createdDate,
         });

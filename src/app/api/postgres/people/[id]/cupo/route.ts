@@ -9,6 +9,7 @@ import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.
 import { esAprobadoSql } from '@/lib/estados';
 import { query, queryOne, transaction } from '@/lib/postgres';
 import { asegurarCupoSalon } from '@/services/cupo-guard.service';
+import { liberarCupoBeneficiario, registrarCupoAsignado } from '@/services/cupo-liberacion.service';
 
 /**
  * POST /api/postgres/people/[id]/cupo   (id = PEOPLE._id del BENEFICIARIO)
@@ -91,48 +92,16 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
   // (ver `motivoNoAprobable` en approval.service). Para volver a entrar hay que
   // pasar por "Asignar cupo", que exige elegir destino con disponibilidad.
   if (liberar) {
-    await query(
-      `UPDATE "PEOPLE"
-          SET "cupoLiberado" = true, "cupoLiberadoPor" = $1, "cupoLiberadoEn" = NOW(),
-            "cupoReservadoHasta" = NULL,
-              "campaign" = NULL, "tipoCurso" = NULL, "horarioCurso" = NULL, "salon" = NULL,
-              "_updatedDate" = NOW()
-        WHERE "_id" = $2`,
-      [email, id]
-    );
-    // ACADEMICA sigue al beneficiario (si ya tiene ficha).
-    await query(
-      `UPDATE "ACADEMICA" SET "campaign" = NULL, "salon" = NULL, "_updatedDate" = NOW()
-        WHERE "numeroId" = (SELECT "numeroId" FROM "PEOPLE" WHERE "_id" = $1)`,
-      [id]
-    ).catch(() => { /* best-effort: puede no tener ficha aún */ });
-
-    // Soltar el salón es soltar también sus clases FUTURAS: si ya no ocupa asiento,
-    // no debe seguir en la lista de su guía. Las PASADAS se conservan — son su
-    // historia. Misma regla que "Cambio Académico".
-    const soltadas = await query(
-      `DELETE FROM "ACADEMICA_BOOKINGS" b
-        USING "CALENDARIO" c
-        WHERE (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
-          AND c."dia" >= NOW()
-          AND (b."idEstudiante" = ANY($1::text[]) OR b."studentId" = ANY($1::text[]))
-        RETURNING c."_id" AS evid`,
-      [academicaIds]
-    );
-    const evs = Array.from(new Set((soltadas.rows || []).map((r: any) => r.evid).filter(Boolean)));
-    if (evs.length) {
-      await query(
-        `UPDATE "CALENDARIO" SET "inscritos" = GREATEST(0, COALESCE("inscritos",0) - 1), "_updatedDate" = NOW()
-          WHERE "_id" = ANY($1::text[])`, [evs]);
-    }
-
+    const res = await liberarCupoBeneficiario(id, {
+      origen: 'MANUAL',
+      motivo: typeof b?.motivo === 'string' ? (b.motivo.trim() || null) : null,
+      realizadoPor: email,
+      realizadoPorNombre: (session as any)?.user?.name || null,
+    });
     return successResponse({
       ok: true, cupoLiberado: true, nombre: persona.nombre,
-      clasesSoltadas: soltadas.rowCount ?? 0,
-      cursoBorrado: {
-        campaign: persona.campaign || null, tipoCurso: persona.tipoCurso || null,
-        horarioCurso: persona.horarioCurso || null, salon: persona.salon || null,
-      },
+      clasesSoltadas: res?.clasesSoltadas ?? 0,
+      cursoBorrado: res?.cursoBorrado ?? { campaign: null, tipoCurso: null, horarioCurso: null, salon: null },
     });
   }
 
@@ -219,6 +188,13 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
       { soloFuturos: true, agendadoPor: `Asignar cupo (${email})` }
     ).catch(() => 0);
   }
+
+  await registrarCupoAsignado(id, destino, {
+    origen: 'ASIGNACION',
+    motivo: typeof b?.motivo === 'string' ? (b.motivo.trim() || null) : null,
+    realizadoPor: email,
+    realizadoPorNombre: (session as any)?.user?.name || null,
+  });
 
   return successResponse({
     ok: true, cupoLiberado: false, nombre: persona.nombre,

@@ -5,6 +5,7 @@ import { toggleStatus } from '@/services/student.service';
 import { cambiarCursoAcademico } from '@/services/cambio-academico.service';
 import { PeopleRepository } from '@/repositories/people.repository';
 import { ValidationError } from '@/lib/errors';
+import { parseTipoSalida } from '@/lib/tipo-salida-cupo';
 import { queryOne } from '@/lib/postgres';
 
 /**
@@ -18,10 +19,16 @@ import { queryOne } from '@/lib/postgres';
  * persisted in PEOPLE.suspenddata along with the executor's email taken
  * from the NextAuth session. The body cannot spoof `realizadoPor`.
  *
- * Al INACTIVAR un beneficiario se LIBERA su cupo (regla lib/cupo). Por eso, al
- * REACTIVAR (active=true) se DEBE indicar `destino` {campaign, tipoCurso,
- * horarioCurso, salon} + `academicaId`: se valida cupo del destino y se mueve al
- * alumno allí (reusa Cambio Académico) ANTES de reactivar.
+ * Al INACTIVAR se SUELTA el asiento del alumno: se borra su curso, se sueltan sus
+ * clases futuras y queda escrito en `cupoHistory` de dónde salió
+ * (`liberarCupoBeneficiario`). Por eso al REACTIVAR (active=true) se DEBE indicar
+ * `destino` {campaign, tipoCurso, horarioCurso, salon} + `academicaId`: ya no tiene
+ * salón al que volver, hay que elegirle uno con cupo.
+ *
+ * `tipoSalida` es OBLIGATORIO al inactivar y dice cómo sale:
+ *   'REEMPLAZO' — su asiento se le da a otro; no se le ofrece "Activar".
+ *   'TEMPORAL'  — puede volver eligiendo un salón con cupo.
+ * Las dos sueltan el asiento igual; lo que cambia es el regreso.
  *
  * suspendcount increments only on INACTIVACION.
  */
@@ -33,6 +40,16 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   if (active === undefined) throw new ValidationError('active (boolean) is required');
   if (typeof motivo !== 'string' || !motivo.trim()) {
     throw new ValidationError('motivo (texto) es obligatorio');
+  }
+
+  // El tipo de salida se exige aquí, no sólo en el formulario: es lo que decide si
+  // el alumno podrá volver, y un cliente que no lo mande dejaría esa decisión sin
+  // tomar y el asiento en el aire.
+  const tipoSalida = active === false ? parseTipoSalida(body.tipoSalida) : null;
+  if (active === false && tipoSalida === null) {
+    throw new ValidationError(
+      'tipoSalida es obligatorio al inactivar: "REEMPLAZO" (su cupo pasa a otro) o "TEMPORAL" (podrá volver).'
+    );
   }
 
   const realizadoPor = (session?.user as any)?.email || 'unknown';
@@ -68,6 +85,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     motivo: motivo.trim(),
     realizadoPor,
     realizadoPorNombre,
+    tipoSalida: (tipoSalida as 'REEMPLAZO' | 'TEMPORAL' | null),
   });
 
   return successResponse({
@@ -79,6 +97,8 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     previousStatus: result.previousStatus,
     newStatus: result.newStatus,
     suspenddata: result.suspenddata ?? null,
+    cupoLiberado: (result as any).cupoLiberado ?? false,
+    clasesSoltadas: (result as any).clasesSoltadas ?? 0,
   });
 });
 

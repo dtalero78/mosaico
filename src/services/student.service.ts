@@ -12,6 +12,7 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { finSemanaSiguienteUTC } from '@/lib/semana';
+import { liberarCupoBeneficiario, type TipoSalidaCupo } from '@/services/cupo-liberacion.service';
 import { isContractExpired } from '@/lib/contract-expiry';
 import { extractStepNumber as extractStepNum, isJumpStep, isExitosa, aproboElJump, getClassType, esTrainingClub } from '@/lib/motor-academico';
 
@@ -379,6 +380,13 @@ interface ToggleStatusOptions {
   motivo: string;
   realizadoPor: string;        // email of the admin executing the action
   realizadoPorNombre?: string; // optional display name
+  /**
+   * Cómo sale el alumno del salón. Sólo aplica al INACTIVAR y sólo a un
+   * BENEFICIARIO: 'REEMPLAZO' le da su asiento a otro (no vuelve desde la ficha)
+   * y 'TEMPORAL' deja abierta la puerta ("Activar" sigue, exigiendo un salón con
+   * cupo). Las dos sueltan el asiento igual — lo que cambia es el regreso.
+   */
+  tipoSalida?: TipoSalidaCupo | null;
 }
 
 export async function toggleStatus(id: string, active: boolean, opts: ToggleStatusOptions) {
@@ -391,8 +399,26 @@ export async function toggleStatus(id: string, active: boolean, opts: ToggleStat
     return { student: person, statusChanged: false };
   }
 
+  // Inactivar a un alumno es sacarlo del salón: se suelta su asiento, se borra su
+  // curso y se sueltan sus clases futuras, y queda escrito de dónde salió. Va
+  // ANTES del toggle a propósito: el toggle es idempotente (arriba corta si ya
+  // está en ese estado), así que si esto fallara después, el reintento saldría por
+  // el corte y el asiento quedaría tomado por alguien que ya no cursa.
+  // Sobre un TITULAR no hace nada: el cupo es del alumno.
+  let liberacion: { clasesSoltadas: number } | null = null;
+  if (wantInactive) {
+    liberacion = await liberarCupoBeneficiario(id, {
+      origen: 'INACTIVACION',
+      tipoSalida: opts.tipoSalida ?? null,
+      motivo: opts.motivo,
+      realizadoPor: opts.realizadoPor,
+      realizadoPorNombre: opts.realizadoPorNombre ?? null,
+    });
+  }
+
   const suspendData = {
     accion: (wantInactive ? 'INACTIVACION' : 'REACTIVACION') as 'INACTIVACION' | 'REACTIVACION',
+    tipoSalida: wantInactive ? (opts.tipoSalida ?? null) : null,
     motivo: opts.motivo,
     fecha: new Date().toISOString(),
     realizadoPor: opts.realizadoPor,
@@ -438,6 +464,8 @@ export async function toggleStatus(id: string, active: boolean, opts: ToggleStat
     previousStatus: currentlyInactive,
     newStatus: wantInactive,
     suspenddata: suspendData,
+    clasesSoltadas: liberacion?.clasesSoltadas ?? 0,
+    cupoLiberado: liberacion !== null,
   };
 }
 

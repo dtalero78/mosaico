@@ -13,6 +13,7 @@ import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoC
 import { generateUserLogin } from '@/lib/user-login'
 import { normalizeNumeroId } from '@/lib/numeroid-normalize'
 import { normalizeTelefono } from '@/lib/telefono-normalize'
+import { ofreceReactivar, fueInactivadoPorAdmin, type TipoSalidaCupo } from '@/lib/tipo-salida-cupo'
 import { estadoContratoTitular, estadoContratoBadgeClass, ESTADO_EN_GESTION } from '@/lib/estado-contrato'
 import { esAprobado } from '@/lib/estados'
 
@@ -161,6 +162,11 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     | { kind: 'beneficiary'; activate: boolean; beneficiary: Beneficiary }
   const [suspendTarget, setSuspendTarget] = useState<SuspendTarget | null>(null)
   const [suspendMotivo, setSuspendMotivo] = useState('')
+  // Cómo sale el alumno del salón al inactivarlo. Obligatorio (el servidor
+  // también lo exige): decide si se le ofrecerá volver.
+  //   REEMPLAZO → su asiento pasa a otro; no se le ofrece "Activar".
+  //   TEMPORAL  → puede volver eligiendo un salón con cupo.
+  const [suspendTipoSalida, setSuspendTipoSalida] = useState<TipoSalidaCupo | ''>('')
   const [isSubmittingSuspend, setIsSubmittingSuspend] = useState(false)
 
   // Reactivación de beneficiario: cascada Campaña → Curso → Salón destino (con cupo).
@@ -447,6 +453,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     // + suspendcount) en lugar de PATCH directo a /people/[id].
     setSuspendTarget({ kind: 'beneficiary', activate: false, beneficiary })
     setSuspendMotivo('')
+    setSuspendTipoSalida('')
   }
 
   const handleActivateBeneficiary = (beneficiary: Beneficiary) => {
@@ -458,6 +465,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     setRcRowKey(`${b.horarioCurso || ''}||${beneficiary.salon || ''}`)
     setSuspendTarget({ kind: 'beneficiary', activate: true, beneficiary })
     setSuspendMotivo('')
+    setSuspendTipoSalida('')
   }
 
   const confirmDeleteBeneficiary = async () => {
@@ -610,6 +618,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     const activate = person.estadoInactivo === true // si está inactivo, queremos activar
     setSuspendTarget({ kind: 'contract', activate })
     setSuspendMotivo('')
+    setSuspendTipoSalida('')
   }
 
   /**
@@ -621,6 +630,10 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     if (!suspendTarget) return
     if (!suspendMotivo.trim()) {
       alert('El motivo es obligatorio.')
+      return
+    }
+    if (!suspendTarget.activate && !suspendTipoSalida) {
+      alert('Elige cómo sale del salón: Reemplazo de beneficiario o Inactivación temporal.')
       return
     }
 
@@ -650,14 +663,21 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
 
       let failures = 0
       let lastError = ''
+      // Cuántas clases futuras se soltaron en total: es la parte del efecto que no
+      // se ve en la tarjeta, así que se dice en el resumen.
+      let clasesSoltadas = 0
       for (const id of ids) {
         const res = await fetch(`/api/postgres/students/${id}/toggle-status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ active: activate, motivo, destino, academicaId }),
+          body: JSON.stringify({
+            active: activate, motivo, destino, academicaId,
+            tipoSalida: activate ? undefined : suspendTipoSalida,
+          }),
         })
         const data = await res.json().catch(() => ({}))
         if (!res.ok || !data.success) { failures++; lastError = data?.error || data?.message || lastError }
+        else clasesSoltadas += Number(data?.clasesSoltadas || 0)
       }
 
       if (failures === 0) {
@@ -672,17 +692,24 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
           alert(`✅ Beneficiario reactivado en ${destino.tipoCurso} · ${destino.salon || destino.horarioCurso} (${destino.campaign}).`)
           window.location.href = window.location.href
         } else {
-          // Beneficiario individual (inactivar): actualizar lista local sin recargar
+          // Inactivar ya no es sólo un cambio de estado: suelta el asiento, borra el
+          // curso y las clases futuras. Parchear la lista en memoria dejaría la
+          // tarjeta mostrando un salón que el alumno ya no tiene, así que se recarga.
           const ben = suspendTarget.beneficiary
-          setCurrentBeneficiaries(prev =>
-            prev.map(b =>
-              b._id === ben._id
-                ? { ...b, estado: activate ? 'Aprobado' : ('Inactivo' as any), estadoInactivo: !activate }
-                : b
-            )
+          const definitivo = suspendTipoSalida === 'REEMPLAZO'
+          alert(
+            `✅ ${ben.nombre} ${ben.apellido} quedó inactivo.
+
+` +
+            `Su cupo quedó libre y salió del salón.
+` +
+            (clasesSoltadas > 0 ? `Clases futuras soltadas: ${clasesSoltadas}.
+` : '') +
+            (definitivo
+              ? 'Salida por REEMPLAZO: su asiento queda para otro y no se le ofrecerá reactivar.'
+              : 'Inactivación TEMPORAL: puede volver con "Activar", eligiendo un salón con cupo.')
           )
-          setSuspendTarget(null)
-          setSuspendMotivo('')
+          window.location.href = window.location.href
         }
       } else {
         alert(`❌ Error al cambiar estado: ${failures} de ${ids.length} fallaron${lastError ? `\n\n${lastError}` : ''}`)
@@ -700,6 +727,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     if (isSubmittingSuspend) return
     setSuspendTarget(null)
     setSuspendMotivo('')
+    setSuspendTipoSalida('')
   }
 
   const handleEditBeneficiary = async (beneficiaryId: string) => {
@@ -1230,9 +1258,15 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                         o a mano con el botón de abajo. */}
                     {(() => {
                       const liberadoManual = cupoLocal[beneficiary._id] ?? (beneficiary as any).cupoLiberado === true
+                      // Inactivar suelta el asiento (lo hace `liberarCupoBeneficiario`),
+                      // así que el badge debe decirlo. No basta con `estadoInactivo`:
+                      // TODO beneficiario pendiente nace inactivo. La señal de que un
+                      // admin lo sacó es `suspenddata.accion === 'INACTIVACION'`.
+                      const sacadoPorAdmin = fueInactivadoPorAdmin((beneficiary as any).suspenddata)
                       // El asiento también se suelta SOLO: por el estado del contrato
                       // o por OnHold. El badge debe reflejarlo, no sólo el botón.
                       const motivo = liberadoManual ? 'lo liberó un administrador'
+                        : sacadoPorAdmin ? 'un administrador lo inactivó'
                         : motivoContrato ? motivoContrato
                         : (beneficiary as any).fechaOnHold ? 'está en OnHold'
                         : null
@@ -1331,6 +1365,17 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                     // Aprobado y activo → se puede inactivar. Aprobado pero inactivo →
                     // se puede REACTIVAR (pide campaña/curso/salón destino con cupo).
                     beneficiary.estado === 'Inactivo' ? (
+                      // Salió por REEMPLAZO: su cupo es de otro alumno, así que no se
+                      // ofrece volver. Sin tipo de salida (los inactivados antes de esta
+                      // regla) se conserva «Activar» — si no, se quedarían sin camino.
+                      !ofreceReactivar((beneficiary as any).suspenddata) ? (
+                        <span
+                          className="inline-flex items-center px-3 py-1.5 rounded text-xs font-medium bg-gray-100 text-gray-600 border border-gray-300"
+                          title={'Salió por reemplazo de beneficiario: su cupo quedó para otro alumno. Para volver a inscribirlo se agrega como beneficiario nuevo.'}
+                        >
+                          Reemplazado
+                        </span>
+                      ) : (
                       <PermissionGuard permission={PersonPermission.ACTIVAR_DESACTIVAR}>
                         <button
                           onClick={() => handleActivateBeneficiary(beneficiary)}
@@ -1340,6 +1385,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                           Activar
                         </button>
                       </PermissionGuard>
+                      )
                     ) : (
                       <PermissionGuard permission={PersonPermission.ACTIVAR_DESACTIVAR}>
                         <button
@@ -2069,6 +2115,61 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 </h3>
               </div>
 
+              {/* Inactivar SUELTA el asiento: borra el curso y las clases futuras.
+                  Como eso no se deshace solo, se dice antes y se obliga a declarar
+                  si el alumno podrá volver o si su cupo pasa a otro. */}
+              {!activate && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <p className="text-sm font-semibold text-red-800 mb-1">
+                    Esta acción no se puede deshacer
+                  </p>
+                  <p className="text-xs text-red-700 mb-3">
+                    {isContract
+                      ? 'Cada beneficiario del contrato sale de su salón: se suelta su cupo, se borra su curso y se sueltan sus clases futuras.'
+                      : 'El alumno sale de su salón: se suelta su cupo, se borra su curso y se sueltan sus clases futuras.'}
+                    {' '}El asiento queda libre y otro lo puede tomar. Las clases ya dictadas se conservan,
+                    y de dónde salió queda escrito en su historial de cupo.
+                  </p>
+                  <p className="text-xs font-medium text-gray-800 mb-2">
+                    ¿Cómo sale? <span className="text-red-600">*</span>
+                  </p>
+                  <div className="space-y-2">
+                    {([
+                      {
+                        v: 'REEMPLAZO' as const,
+                        titulo: isContract ? 'Salida definitiva' : 'Reemplazo de beneficiario',
+                        detalle: 'Su cupo queda para otro alumno. No se ofrecerá reactivar desde esta ficha.',
+                      },
+                      {
+                        v: 'TEMPORAL' as const,
+                        titulo: 'Inactivación temporal',
+                        detalle: 'Podrá volver con «Activar», eligiendo campaña, curso y salón con cupo disponible.',
+                      },
+                    ]).map((op) => (
+                      <label
+                        key={op.v}
+                        className={`flex items-start gap-2 rounded-md border p-2 cursor-pointer transition-colors ${
+                          suspendTipoSalida === op.v ? 'border-red-500 bg-white' : 'border-gray-200 bg-white/60 hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="tipo-salida-cupo"
+                          className="mt-0.5"
+                          checked={suspendTipoSalida === op.v}
+                          onChange={() => setSuspendTipoSalida(op.v)}
+                          disabled={isSubmittingSuspend}
+                        />
+                        <span className="text-xs">
+                          <span className="block font-semibold text-gray-900">{op.titulo}</span>
+                          <span className="block text-gray-600">{op.detalle}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="mb-4">
                 <p className="text-sm text-gray-600 mb-3">
                   Vas a <strong>{verbo.toLowerCase()}</strong> {targetLabel}. Esta acción queda
@@ -2151,7 +2252,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 <button
                   type="button"
                   onClick={confirmSuspendAction}
-                  disabled={isSubmittingSuspend || !suspendMotivo.trim() || (activate && !isContract && (!rcSelected || rcFull))}
+                  disabled={isSubmittingSuspend || !suspendMotivo.trim() || (!activate && !suspendTipoSalida) || (activate && !isContract && (!rcSelected || rcFull))}
                   className={`flex-1 ${btnColor} border border-transparent rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center`}
                 >
                   {isSubmittingSuspend ? (
