@@ -2,6 +2,7 @@ import 'server-only';
 import { withTransaction, queryOne } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
+import { deshacerListo } from '@/services/gestion-cupo.service';
 
 /**
  * Borrado completo de un contrato y todos sus registros.
@@ -31,12 +32,18 @@ export interface FilasBorradas {
 
 export interface PurgaResultado {
   contrato: string;
+  /** _id del titular. Lo usa la UI para reintentar la baja sobre ESE contrato. */
+  titularId?: string;
   status: 'ok' | 'error' | 'rechazado';
   borrados?: FilasBorradas;
   /** Personas que están en otro contrato y por eso se conservaron. */
   conservados?: { numeroId: string; nombre: string; otrosContratos: string[] }[];
   error?: string;
+  /** Por qué se rechazó. La UI decide con esto, no con el texto. */
+  motivoCodigo?: MotivoNoBaja;
 }
+
+export type MotivoNoBaja = 'aprobado' | 'finalizado' | 'listo' | 'sin-titular' | 'sin-contrato';
 
 export interface PurgaContexto {
   tipoPurga: string;
@@ -57,11 +64,13 @@ export interface PurgaContexto {
  */
 export function motivoNoDableDeBaja(titular: {
   aprobacion?: string | null; gestionContratoListo?: boolean | null; contrato?: string | null;
-}): string | null {
+}): { codigo: MotivoNoBaja; mensaje: string } | null {
   const a = String(titular.aprobacion || '').trim().toLowerCase();
-  if (['aprobado', 'aprobada'].includes(a)) return 'El contrato está APROBADO.';
-  if (a === 'finalizada') return 'El contrato está finalizado.';
-  if (titular.gestionContratoListo === true) return 'El contrato ya está marcado como LISTO (tiene el cupo tomado).';
+  if (['aprobado', 'aprobada'].includes(a)) return { codigo: 'aprobado', mensaje: 'El contrato está APROBADO.' };
+  if (a === 'finalizada') return { codigo: 'finalizado', mensaje: 'El contrato está finalizado.' };
+  if (titular.gestionContratoListo === true) {
+    return { codigo: 'listo', mensaje: 'El contrato ya está marcado como LISTO (tiene el cupo tomado).' };
+  }
   return null;
 }
 
@@ -186,25 +195,41 @@ export async function purgarContrato(contrato: string, ctx: PurgaContexto): Prom
  * nada y no abortan el resto.
  */
 export async function darDeBajaContratos(
-  titularIds: string[], ctx: Omit<PurgaContexto, 'tipoPurga'>
+  titularIds: string[], ctx: Omit<PurgaContexto, 'tipoPurga'>,
+  opts: { deshacerListo?: boolean } = {}
 ): Promise<PurgaResultado[]> {
   const out: PurgaResultado[] = [];
   for (const id of titularIds) {
     const t = await queryOne<any>(
       `SELECT "_id","contrato","aprobacion","gestionContratoListo","primerNombre","primerApellido"
          FROM "PEOPLE" WHERE "_id" = $1 AND "tipoUsuario" = 'TITULAR'`, [id]);
-    if (!t) { out.push({ contrato: id, status: 'rechazado', error: 'No se encontró el titular.' }); continue; }
-    if (!t.contrato) { out.push({ contrato: id, status: 'rechazado', error: 'El titular no tiene número de contrato.' }); continue; }
+    if (!t) { out.push({ titularId: id, contrato: id, status: 'rechazado', error: 'No se encontró el titular.', motivoCodigo: 'sin-titular' }); continue; }
+    if (!t.contrato) { out.push({ titularId: id, contrato: id, status: 'rechazado', error: 'El titular no tiene número de contrato.', motivoCodigo: 'sin-contrato' }); continue; }
 
-    const motivo = motivoNoDableDeBaja(t);
-    if (motivo) { out.push({ contrato: t.contrato, status: 'rechazado', error: motivo }); continue; }
+    let motivo = motivoNoDableDeBaja(t);
+
+    // El «listo» SÍ se puede revertir: suelta los asientos y el contrato vuelve
+    // a ser dable de baja. Sólo cuando quien pidió la baja lo autorizó —soltar
+    // cupos en silencio dejaría asientos moviéndose sin que nadie lo pidiera—, y
+    // sólo para ese código: aprobado y finalizado siguen rechazándose.
+    if (motivo?.codigo === 'listo' && opts.deshacerListo) {
+      try {
+        await deshacerListo({ titularId: t._id, actor: ctx.actorEmail, motivo: `Revertido para dar de baja el contrato. ${ctx.motivo}` });
+        motivo = null;
+      } catch (e: any) {
+        out.push({ titularId: t._id, contrato: t.contrato, status: 'error', error: `No se pudo revertir el listo: ${e?.message || 'error desconocido'}`, motivoCodigo: 'listo' });
+        continue;
+      }
+    }
+
+    if (motivo) { out.push({ titularId: t._id, contrato: t.contrato, status: 'rechazado', error: motivo.mensaje, motivoCodigo: motivo.codigo }); continue; }
 
     try {
       const r = await purgarContrato(t.contrato, { ...ctx, tipoPurga: 'BAJA_CONTRATO' });
       const { conservados, ...borrados } = r;
-      out.push({ contrato: t.contrato, status: 'ok', borrados, conservados });
+      out.push({ titularId: t._id, contrato: t.contrato, status: 'ok', borrados, conservados });
     } catch (e: any) {
-      out.push({ contrato: t.contrato, status: 'error', error: e?.message || 'Error desconocido' });
+      out.push({ titularId: t._id, contrato: t.contrato, status: 'error', error: e?.message || 'Error desconocido' });
     }
   }
   return out;

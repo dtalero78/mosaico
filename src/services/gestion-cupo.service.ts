@@ -3,6 +3,7 @@ import { query, transaction } from '@/lib/postgres';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { lockSalon } from '@/services/cupo-guard.service';
+import { entradaCupoHistory, type CursoDelAlumno } from '@/services/cupo-liberacion.service';
 
 /**
  * Confirmación del CUPO al marcar un contrato como "listo" (Gestión Contrato).
@@ -319,5 +320,110 @@ export async function marcarListoConCupo(opts: {
     );
 
     return { confirmados: aConfirmar.length, sobrecupos, movidos };
+  });
+}
+
+/** Lo que se soltó al revertir el «listo». */
+export interface ResultadoDeshacerListo {
+  contrato: string;
+  asientosSoltados: number;
+  beneficiarios: { nombre: string; curso: string | null }[];
+}
+
+/**
+ * Revierte el «listo»: suelta los asientos y devuelve el contrato a la bandeja.
+ *
+ * Es el reverso exacto de `marcarListoConCupo` y vive a su lado a propósito —
+ * marcar y desmarcar tienen que tocar las MISMAS columnas o el contrato queda a
+ * medio camino: sin la marca del titular pero con los asientos todavía tomados,
+ * que es justo el estado que no se puede diagnosticar desde ninguna pantalla.
+ *
+ * ⚠ El alumno CONSERVA su curso. Sólo pierde el asiento: vuelve a ser una
+ * asignación provisional, igual que antes de marcar listo. Eso lo distingue de
+ * `liberarCupoBeneficiario`, que además le borra el curso y sus clases futuras.
+ *
+ * Lo único que NO se deshace es un cambio de horario que se hubiera hecho al
+ * marcar listo: el alumno se queda donde se le dejó. Devolverlo al horario viejo
+ * exigiría guardar de dónde venía y, sobre todo, que ese asiento siguiera libre
+ * — y no tiene por qué estarlo.
+ */
+export async function deshacerListo(opts: {
+  titularId: string;
+  actor: string;
+  motivo?: string | null;
+}): Promise<ResultadoDeshacerListo> {
+  const { titularId, actor } = opts;
+
+  return transaction(async (client) => {
+    const t = await client.query(
+      `SELECT "_id","contrato","gestionContratoListo","aprobacion"
+         FROM "PEOPLE" WHERE "_id"=$1 AND "tipoUsuario"='TITULAR'`,
+      [titularId]
+    );
+    if (!t.rows.length) throw new NotFoundError('No se encontró el titular.');
+    const titular = t.rows[0];
+
+    if (titular.gestionContratoListo !== true) {
+      throw new ValidationError('El contrato no está marcado como listo.');
+    }
+    // Un contrato aprobado ya tiene alumnos con clases agendadas en ese salón:
+    // soltarles el asiento los dejaría cursando un cupo que el sistema da por
+    // libre, y otro podría ocuparlo.
+    if (['aprobado', 'aprobada'].includes(String(titular.aprobacion || '').trim().toLowerCase())) {
+      throw new ValidationError('El contrato está APROBADO: sus alumnos ya ocupan el salón y el asiento no se puede soltar desde aquí.');
+    }
+
+    const { rows: confirmados } = await client.query(
+      `SELECT "_id","primerNombre","primerApellido","campaign","tipoCurso","horarioCurso","salon"
+         FROM "PEOPLE"
+        WHERE "contrato"=$1 AND "tipoUsuario"='BENEFICIARIO' AND "cupoConfirmado" IS TRUE
+        ORDER BY "primerApellido","primerNombre"`,
+      [titular.contrato]
+    );
+
+    const beneficiarios: ResultadoDeshacerListo['beneficiarios'] = [];
+
+    for (const b of confirmados) {
+      const curso: CursoDelAlumno = {
+        campaign: b.campaign ?? null,
+        tipoCurso: b.tipoCurso ?? null,
+        horarioCurso: b.horarioCurso ?? null,
+        salon: b.salon ?? null,
+      };
+      // La bitácora del cupo: sin esto, un asiento que aparece y desaparece del
+      // salón no tiene quién lo explique.
+      const entrada = entradaCupoHistory('LISTO_DESHECHO', curso, {
+        origen: 'MANUAL',
+        motivo: opts.motivo ?? null,
+        realizadoPor: actor,
+      }, 0);
+
+      await client.query(
+        `UPDATE "PEOPLE"
+            SET "cupoConfirmado" = false, "cupoConfirmadoPor" = NULL, "cupoConfirmadoEn" = NULL,
+                -- La autorización de sobrecupo valía para ESE marcado: si se
+                -- vuelve a marcar listo, hay que volver a autorizarla.
+                "sobrecupoAutorizado" = false, "sobrecupoAutorizadoPor" = NULL, "sobrecupoAutorizadoEn" = NULL,
+                "cupoHistory" = COALESCE("cupoHistory", '[]'::jsonb) || $2::jsonb,
+                "_updatedDate" = NOW()
+          WHERE "_id" = $1`,
+        [b._id, JSON.stringify([entrada])]
+      );
+
+      beneficiarios.push({
+        nombre: nombreDe(b),
+        curso: b.tipoCurso ? `${b.tipoCurso} ${b.horarioCurso || ''}`.trim() : null,
+      });
+    }
+
+    await client.query(
+      `UPDATE "PEOPLE"
+          SET "gestionContratoListo" = false, "gestionContratoListoBy" = NULL,
+              "gestionContratoListoDate" = NULL, "_updatedDate" = NOW()
+        WHERE "_id" = $1 AND "tipoUsuario" = 'TITULAR'`,
+      [titularId]
+    );
+
+    return { contrato: titular.contrato, asientosSoltados: confirmados.length, beneficiarios };
   });
 }

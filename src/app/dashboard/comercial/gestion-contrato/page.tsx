@@ -47,6 +47,8 @@ export default function GestionContratoPage() {
   const [bajaMotivo, setBajaMotivo] = useState('')
   const [bajaConfirm, setBajaConfirm] = useState(false)
   const [bajaResultado, setBajaResultado] = useState<any>(null)
+  // Deshacer listo: suelta los asientos, el alumno CONSERVA su curso.
+  const [deshacer, setDeshacer] = useState<any>(null)
   const puedeSobrecupo = hasPermission(ComercialPermission.GESTION_CONTRATO_SOBRECUPO)
   const puedeDarBaja = hasPermission(ComercialPermission.GESTION_CONTRATO_DAR_BAJA)
 
@@ -98,24 +100,63 @@ export default function GestionContratoPage() {
   })
   const marcarTodos = (on: boolean) => setMarcados(on ? new Set(rows.map(r => r._id)) : new Set())
 
-  /** Da de baja (BORRA) los contratos marcados. El servidor revalida cada uno. */
-  const darDeBaja = async () => {
+  /**
+   * Da de baja (BORRA) los contratos marcados. El servidor revalida cada uno.
+   *
+   * `deshacerListo` se manda SÓLO desde el modal de resultado, sobre los que
+   * fueron rechazados por estar listos: revierte la marca —soltando sus
+   * asientos— y entonces los borra, en un solo paso. Nunca por defecto: soltar
+   * cupos en silencio movería asientos que nadie pidió mover.
+   */
+  const darDeBaja = async (opts: { ids?: string[]; motivo?: string; deshacerListo?: boolean } = {}) => {
+    const ids = opts.ids ?? Array.from(marcados)
+    const motivo = opts.motivo ?? bajaMotivo
     setSaving(true)
     try {
       const res = await fetch('/api/postgres/comercial/gestion-contrato/baja', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: Array.from(marcados), motivo: bajaMotivo }),
+        body: JSON.stringify({ ids, motivo, deshacerListo: opts.deshacerListo === true }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
 
-      setBajaResultado(res)
-      const okIds = new Set(res.resultados.filter((r: any) => r.status === 'ok').map((r: any) => r.contrato))
-      setRows(prev => prev.filter(x => !okIds.has(x.contrato)))
+      // El motivo viaja con el resultado: el reintento lo reusa, y para
+      // entonces el campo del formulario ya se limpió.
+      setBajaResultado({ ...res, motivoUsado: motivo })
+      const okIds = new Set(res.resultados.filter((r: any) => r.status === 'ok').map((r: any) => r.titularId))
+      setRows(prev => prev.filter(x => !okIds.has(x._id)))
       setMarcados(new Set())
       setBajaOpen(false); setBajaMotivo(''); setBajaConfirm(false)
       toast.success(res.message)
     } catch (e: any) { toast.error(e?.message || 'Error') } finally { setSaving(false) }
   }
+
+  /**
+   * Revierte el «Dejar listo»: suelta los asientos del salón y el contrato
+   * vuelve a la gestión comercial.
+   *
+   * ⚠ NO es lo mismo que "Liberar cupo": el alumno **conserva su curso**, que
+   * vuelve a ser provisional como antes de gestionarlo. Por eso el contrato se
+   * queda en la lista marcado como pendiente, en vez de desaparecer.
+   */
+  const deshacerListoRow = async (r: any) => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/postgres/comercial/gestion-contrato/deshacer-listo', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: r._id }),
+      }).then(x => x.json())
+      if (res.error) throw new Error(res.error)
+      toast.success(res.message || `Contrato ${r.contrato || ''}: listo revertido`)
+      setRows(prev => prev.map(x => (x._id === r._id ? { ...x, gestionListo: false } : x)))
+      setPendientes(n => n + 1)
+      setDeshacer(null)
+    } catch (e: any) { toast.error(e?.message || 'Error') } finally { setSaving(false) }
+  }
+
+  // Rechazados por estar LISTOS: son los únicos que se pueden desbloquear desde
+  // el propio modal de resultado. Aprobado y finalizado no se ofrecen.
+  const bloqueadosPorListo: any[] = (bajaResultado?.resultados || [])
+    .filter((r: any) => r.status !== 'ok' && r.motivoCodigo === 'listo' && r.titularId)
 
   return (
     <DashboardLayout>
@@ -263,6 +304,14 @@ export default function GestionContratoPage() {
                             <button onClick={() => setConfirmar(r)}
                               className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700">✓ Dejar listo</button>
                           )}
+                          {/* El reverso exacto de "Dejar listo": suelta el
+                              asiento del salón. Sobre un contrato aprobado no
+                              se ofrece — sus alumnos ya ocupan el salón. */}
+                          {r.gestionListo && !esAprobadoRow(r) && (
+                            <button onClick={() => setDeshacer(r)}
+                              title="Suelta los cupos del salón; el alumno conserva su curso"
+                              className="px-2.5 py-1.5 rounded-lg border border-amber-300 text-amber-700 text-xs font-medium hover:bg-amber-50 whitespace-nowrap">↩ Deshacer listo</button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -283,6 +332,32 @@ export default function GestionContratoPage() {
                 <div className="mt-6 flex justify-end gap-3">
                   <button onClick={() => setConfirmar(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cancelar</button>
                   <button onClick={() => dejarListo(confirmar)} disabled={saving} className="px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">{saving ? 'Guardando…' : 'Confirmar'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Deshacer listo ≠ liberar cupo: se sueltan los asientos pero el
+              alumno conserva su curso. El modal lo dice con todas las letras. */}
+          {deshacer && (
+            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setDeshacer(null)}>
+              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Deshacer listo</h3>
+                <p className="text-sm text-gray-600">
+                  El contrato <strong>{deshacer.contrato}</strong> de <strong>{deshacer.nombre}</strong> vuelve
+                  a la gestión comercial y queda pendiente de dejar listo.
+                </p>
+                <p className="mt-3 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  Se <strong>sueltan los cupos</strong> que tenía tomados en el salón: quedan libres para otro alumno.
+                  <br />
+                  Cada beneficiario <strong>conserva su curso</strong> — vuelve a ser provisional, como antes de gestionarlo.
+                </p>
+                <div className="mt-6 flex justify-end gap-3">
+                  <button onClick={() => setDeshacer(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cancelar</button>
+                  <button onClick={() => deshacerListoRow(deshacer)} disabled={saving}
+                    className="px-5 py-2 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50">
+                    {saving ? 'Revirtiendo…' : 'Deshacer listo'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -338,7 +413,7 @@ export default function GestionContratoPage() {
                 <div className="mt-6 flex justify-end gap-3">
                   <button onClick={() => { setBajaOpen(false); setBajaConfirm(false) }}
                     className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cancelar</button>
-                  <button onClick={darDeBaja} disabled={saving || !bajaConfirm || !bajaMotivo.trim()}
+                  <button onClick={() => darDeBaja()} disabled={saving || !bajaConfirm || !bajaMotivo.trim()}
                     className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50">
                     {saving ? 'Borrando…' : `Dar de baja (${marcados.size})`}
                   </button>
@@ -369,7 +444,25 @@ export default function GestionContratoPage() {
                     </li>
                   ))}
                 </ul>
-                <div className="mt-6 flex justify-end">
+                {bloqueadosPorListo.length > 0 && (
+                  <div className="mt-3 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    {bloqueadosPorListo.length} contrato(s) tienen el <strong>cupo tomado</strong>. Puedes
+                    desmarcarlos y darlos de baja en un solo paso: se sueltan sus asientos del salón y
+                    después se borran, con el mismo motivo.
+                  </div>
+                )}
+                <div className="mt-6 flex flex-wrap justify-end gap-3">
+                  {bloqueadosPorListo.length > 0 && (
+                    <button disabled={saving}
+                      onClick={() => darDeBaja({
+                        ids: bloqueadosPorListo.map(r => r.titularId),
+                        motivo: bajaResultado.motivoUsado,
+                        deshacerListo: true,
+                      })}
+                      className="px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                      {saving ? 'Procesando…' : 'Desmarcar listo y dar de baja (' + bloqueadosPorListo.length + ')'}
+                    </button>
+                  )}
                   <button onClick={() => setBajaResultado(null)}
                     className="px-5 py-2 rounded-lg bg-gray-800 text-white text-sm font-medium hover:bg-gray-900">Cerrar</button>
                 </div>

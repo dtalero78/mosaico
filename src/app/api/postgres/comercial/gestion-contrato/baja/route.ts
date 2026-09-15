@@ -21,6 +21,11 @@ import { darDeBajaContratos } from '@/services/purga-contrato.service';
  *   - scope de líder: no se puede dar de baja el contrato de otro equipo
  *   - NI aprobado NI listo (`motivoNoDableDeBaja`)
  *   - motivo obligatorio y máximo 50 por operación
+ *
+ * `deshacerListo: true` levanta SÓLO el rechazo por «listo»: revierte la marca,
+ * suelta los asientos y entonces da de baja. No hace falta permiso aparte —
+ * quien puede borrar el contrato entero puede soltarle el asiento. Aprobado y
+ * finalizado siguen rechazándose: ahí hay alumnos con clases y accesos.
  */
 const MAX = 50;
 
@@ -30,6 +35,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const b = await request.json().catch(() => ({}));
   const idsPedidos: string[] = Array.isArray(b?.ids) ? b.ids.map((x: any) => String(x || '').trim()).filter(Boolean) : [];
   const motivo = String(b?.motivo || '').trim();
+  // Lo pide explícitamente el modal de resultado; nunca por defecto.
+  const deshacerListoPedido = b?.deshacerListo === true;
 
   if (!idsPedidos.length) throw new ValidationError('No hay contratos marcados.');
   if (!motivo) throw new ValidationError('El motivo es obligatorio.');
@@ -63,10 +70,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     actorNombre: (session as any)?.user?.name ?? null,
     ip: ipRaw.split(',')[0].trim(),
     userAgent: request.headers.get('user-agent') || '',
-  });
+  }, { deshacerListo: deshacerListoPedido });
 
   for (const id of fueraDeScope) {
-    resultados.push({ contrato: id, status: 'rechazado', error: 'Fuera de tu equipo comercial.' });
+    resultados.push({ titularId: id, contrato: id, status: 'rechazado', error: 'Fuera de tu equipo comercial.', motivoCodigo: 'sin-titular' });
   }
 
   const ok = resultados.filter(r => r.status === 'ok');

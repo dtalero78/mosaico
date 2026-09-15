@@ -53,9 +53,18 @@ export interface ResultadoLiberacion {
   clasesSoltadas: number;
 }
 
+/** Qué se registra en la bitácora del cupo. */
+export type AccionCupo =
+  /** Soltó el asiento y perdió el curso. */
+  | 'LIBERADO'
+  /** Volvió a tomar un asiento. */
+  | 'ASIGNADO'
+  /** Se revirtió el «listo»: suelta el asiento pero CONSERVA el curso. */
+  | 'LISTO_DESHECHO';
+
 /** Construye la entrada de bitácora. Se guarda tal cual en `cupoHistory`. */
-function entrada(
-  accion: 'LIBERADO' | 'ASIGNADO',
+export function entradaCupoHistory(
+  accion: AccionCupo,
   curso: CursoDelAlumno,
   opts: MovimientoCupoOpts,
   clasesSoltadas: number
@@ -137,7 +146,7 @@ export async function liberarCupoBeneficiario(
             "cupoHistory" = COALESCE("cupoHistory", '[]'::jsonb) || $3::jsonb,
             "_updatedDate" = NOW()
       WHERE "_id" = $2`,
-    [opts.realizadoPor, personId, JSON.stringify([entrada('LIBERADO', cursoBorrado, opts, clasesSoltadas)])]
+    [opts.realizadoPor, personId, JSON.stringify([entradaCupoHistory('LIBERADO', cursoBorrado, opts, clasesSoltadas)])]
   );
 
   // ACADEMICA sigue al beneficiario (si ya tiene ficha).
@@ -165,6 +174,6 @@ export async function registrarCupoAsignado(
     `UPDATE "PEOPLE"
         SET "cupoHistory" = COALESCE("cupoHistory", '[]'::jsonb) || $2::jsonb
       WHERE "_id" = $1`,
-    [personId, JSON.stringify([entrada('ASIGNADO', destino, opts, 0)])]
+    [personId, JSON.stringify([entradaCupoHistory('ASIGNADO', destino, opts, 0)])]
   ).catch(() => { /* best-effort: la bitácora nunca debe tumbar la asignación */ });
 }
