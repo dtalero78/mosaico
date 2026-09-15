@@ -25,9 +25,16 @@
  * mezclaría dos contratos distintos. Si el destino existe con las MISMAS
  * personas, el renombre repara una desincronización y sí se aplica.
  *
+ * `--solo` acota la corrida a los contratos DESTINO que se le indiquen. Sirve
+ * para reparar una desincronización concreta sin arrastrar de paso a los demás
+ * contratos sucios: renombrar uno cambia el nombre de su PDF en Drive, así que
+ * conviene poder decidir cuáles se mueven y cuándo. Sin el flag, se normaliza
+ * todo lo que se pueda deducir, como siempre.
+ *
  * Uso:
  *   node scripts/normalizar-contratos-a-canonico.js           (ensayo)
  *   node scripts/normalizar-contratos-a-canonico.js --apply
+ *   node scripts/normalizar-contratos-a-canonico.js --solo=01-M5-2444-26,01-M5-2461-26
  */
 require('dotenv').config({ path: '.env.local' });
 const fs = require('fs');
@@ -35,15 +42,37 @@ const { Pool } = require('pg');
 
 const APPLY = process.argv.includes('--apply');
 
+/** Contratos destino a los que se acota la corrida (vacío = todos). */
+const SOLO = new Set(
+  (process.argv.find((a) => a.startsWith('--solo=')) || '')
+    .replace('--solo=', '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
+
 /** Tablas que guardan el número de contrato. */
 const TABLAS = ['PEOPLE', 'ACADEMICA', 'USUARIOS_ROLES', 'FINANCIEROS', 'ACTIVE_STUDENTS', 'auditautoaprov', 'CASOS_ATENCION'];
 
 const RE_PREFIJO = new RegExp('^Contrato\\s*Online\\s*N[.\\s]*[º°o]?\\s*', 'i');
 const RE_NUMERO = new RegExp('^0?(\\d)-(\\d+)-(\\d{2})$');
+/** La forma final a la que se quiere llegar: `01-M5-2444-26`. */
+const RE_CANONICO = new RegExp('^[0-9]{2}-(M[0-9]|I[0-9])-[0-9]+[A-Z]?-[0-9]{2}$');
 
 /** Número canónico, o null si el texto no se puede interpretar sin adivinar. */
 function canonico(valor) {
-  const sinPrefijo = String(valor || '').trim().replace(RE_PREFIJO, '').trim();
+  // Los espacios internos se colapsan: el MISMO contrato aparece con uno y con
+  // dos espacios tras el rótulo, y son la misma suciedad escrita dos veces.
+  const sinPrefijo = String(valor || '')
+    .trim()
+    .replace(RE_PREFIJO, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // El rótulo puede venir delante de un número que YA es canónico
+  // ("Contrato Online N.º 01-M5-2175-26"): entonces basta con quitarlo. Sin
+  // esta rama el valor caía en "no se puede deducir" y quedaba sin normalizar,
+  // aunque el número correcto estuviera ahí escrito.
+  if (RE_CANONICO.test(sinPrefijo)) return sinPrefijo;
   const n = sinPrefijo.match(RE_NUMERO);
   if (!n) return null;
   const seg = n[1] === '6' ? 'I6' : 'M' + n[1];
@@ -55,11 +84,20 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-/** numeroId asociados a un contrato, para comprobar que no se mezclan personas. */
+/**
+ * numeroId asociados a un contrato, para comprobar que no se mezclan personas.
+ *
+ * Se miran las TRES tablas que identifican a una persona. Con sólo PEOPLE y
+ * ACADEMICA, un contrato que quedó sucio únicamente en `USUARIOS_ROLES` no
+ * devuelve a nadie, la comparación no encuentra coincidencia y el renombre se
+ * salta como si fuera un choque entre familias distintas — cuando en realidad
+ * son las mismas personas y lo que falta es justamente alinearles el login.
+ */
 async function idsDe(client, contrato) {
   const r = await client.query(
     'SELECT DISTINCT "numeroId" AS id FROM "PEOPLE" WHERE "contrato"=$1 AND "numeroId" IS NOT NULL' +
-    ' UNION SELECT DISTINCT "numeroId" FROM "ACADEMICA" WHERE "contrato"=$1 AND "numeroId" IS NOT NULL',
+    ' UNION SELECT DISTINCT "numeroId" FROM "ACADEMICA" WHERE "contrato"=$1 AND "numeroId" IS NOT NULL' +
+    ' UNION SELECT DISTINCT "numberid" FROM "USUARIOS_ROLES" WHERE "contrato"=$1 AND "numberid" IS NOT NULL',
     [contrato]
   );
   return new Set(r.rows.map((x) => String(x.id).toUpperCase().replace(/[.\s-]/g, '')));
@@ -126,8 +164,25 @@ async function idsDe(client, contrato) {
       plan.push({ viejo: c.contrato, nuevo, filas: c.n, nota });
     }
 
-    console.log('\n=== A NORMALIZAR: ' + plan.length + ' contrato(s) ===');
-    if (plan.length) console.table(plan);
+    // El filtro se aplica DESPUÉS de calcular el plan, para que lo excluido
+    // siga apareciendo y se vea qué queda pendiente.
+    const fuera = SOLO.size ? plan.filter((p) => !SOLO.has(p.nuevo)) : [];
+    const aplicar = SOLO.size ? plan.filter((p) => SOLO.has(p.nuevo)) : plan;
+
+    console.log('\n=== A NORMALIZAR: ' + aplicar.length + ' contrato(s) ===');
+    if (aplicar.length) console.table(aplicar);
+
+    if (fuera.length) {
+      console.log('\n· Fuera de esta corrida por --solo (' + fuera.length + ', se pueden normalizar después):');
+      console.table(fuera.map((p) => ({ viejo: p.viejo, nuevo: p.nuevo, filas: p.filas })));
+    }
+    const noPedidos = [...SOLO].filter((s) => !plan.some((p) => p.nuevo === s));
+    if (noPedidos.length) {
+      console.log('\n⚠ Pedidos en --solo que NO están en el plan: ' + noPedidos.join(', '));
+      console.log('  (ya son canónicos, o se saltaron por conflicto — ver arriba)');
+    }
+    plan.length = 0;
+    plan.push(...aplicar);
 
     if (sinTocar.length) {
       console.log('\n⚠ NO se tocan (el número no se puede deducir sin adivinar):');
