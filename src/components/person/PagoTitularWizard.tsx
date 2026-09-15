@@ -7,6 +7,7 @@ import { api, handleApiError } from '@/hooks/use-api'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
+import { getLocalToday } from '@/lib/fecha-local'
 
 interface PagoTitularWizardProps {
   isOpen: boolean
@@ -75,17 +76,6 @@ interface DraftState {
 }
 
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000 // 72 horas
-
-/** YYYY-MM-DD en zona horaria LOCAL del navegador (no UTC).
- *  new Date().toISOString() devuelve UTC → a las 8 PM en Colombia (UTC-5)
- *  ya es el día siguiente en UTC. Esto evita el corrimiento. */
-function getLocalToday(): string {
-  const d = new Date()
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
-}
 
 const empty = (): DraftState => ({
   fechaPago: getLocalToday(),

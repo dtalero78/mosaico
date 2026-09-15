@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Student, Class } from '@/types'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { visibleEnHistorial } from '@/lib/fecha-semana'
+import { getLocalToday, esFechaPasada } from '@/lib/fecha-local'
 import { welcomeModuloForCurso } from '@/lib/welcome-modulo'
 import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
@@ -71,7 +72,6 @@ export default function StudentAcademic({ student, classes: initialClasses, view
 
   // Nueva Clase modal state
   const [selectedEventType, setSelectedEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | 'RECUPERACION' | ''>('')
-  const [availableDays, setAvailableDays] = useState<{label: string, value: string}[]>([])
   const [selectedDay, setSelectedDay] = useState('')
   const [availableTimes, setAvailableTimes] = useState<{label: string, value: string, disabled?: boolean}[]>([])
   const [selectedTime, setSelectedTime] = useState('')
@@ -254,7 +254,6 @@ export default function StudentAcademic({ student, classes: initialClasses, view
     setSelectedDay('')
     setSelectedTime('')
     setAvailableTimes([])
-    loadAvailableDays()
   }
 
   // Auto-abrir el modal de agendamiento cuando se llega con ?agendar=<TIPO>
@@ -282,36 +281,19 @@ export default function StudentAcademic({ student, classes: initialClasses, view
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  const loadAvailableDays = () => {
-    // Generate next 5 days (including today)
-    const today = new Date()
-    const days = []
-
-    for (let i = 0; i < 5; i++) {
-      const date = new Date()
-      date.setDate(today.getDate() + i)
-
-      const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
-      const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-
-      const dayName = dayNames[date.getDay()]
-      const dayNum = date.getDate()
-      const month = monthNames[date.getMonth()]
-
-      // Usar métodos locales para obtener YYYY-MM-DD en la zona horaria del usuario
-      // NO usar toISOString() porque convierte a UTC y puede cambiar el día
-      const year = date.getFullYear()
-      const monthNum = String(date.getMonth() + 1).padStart(2, '0')
-      const dayStr = String(date.getDate()).padStart(2, '0')
-      const localDateStr = `${year}-${monthNum}-${dayStr}`
-
-      days.push({
-        label: `${dayName}, ${dayNum} ${month}`,
-        value: localDateStr
-      })
-    }
-
-    setAvailableDays(days)
+  /**
+   * "martes, 15 de septiembre de 2026" a partir de un `YYYY-MM-DD`.
+   *
+   * Se construye la fecha con `new Date(año, mes-1, día)` y NO con
+   * `new Date('2026-09-15')`: esa forma la interpreta como medianoche UTC y en
+   * Chile o Colombia se pintaría el día anterior.
+   */
+  const formatDiaLargo = (yyyyMmDd: string): string => {
+    const [y, m, d] = yyyyMmDd.split('-').map(Number)
+    if (!y || !m || !d) return ''
+    return new Date(y, m - 1, d).toLocaleDateString('es', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    })
   }
 
   // Curso REAL del alumno (PEOPLE.tipoCurso; fallback ACADEMICA.curso). Para
@@ -498,6 +480,12 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   }
 
   const handleDayChange = (day: string) => {
+    // El `min` del input pinta en gris los días pasados, pero no impide
+    // teclearlos a mano en todos los navegadores: se rechazan también aquí.
+    if (esFechaPasada(day)) {
+      alert('No se puede agendar en una fecha anterior a hoy.')
+      return
+    }
     setSelectedDay(day)
     setSelectedTime('')
     setAvailableTimes([])
@@ -613,7 +601,6 @@ export default function StudentAcademic({ student, classes: initialClasses, view
           setSelectedEventType('')
           setSelectedDay('')
           setSelectedTime('')
-          setAvailableDays([])
           setAvailableTimes([])
           // Refresh student data
           await refreshStudentData()
@@ -1668,24 +1655,26 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                     </div>
                   </div>
 
-                  {/* Step 2: Day Selection */}
+                  {/* Step 2: Day Selection — calendario, no lista de días.
+                      Abre en el mes corriente y `min` deja en gris lo anterior a hoy;
+                      así se puede agendar cualquier fecha futura, no sólo la semana. */}
                   {selectedEventType && (
                     <div>
                       <h4 className="text-lg font-medium text-gray-900 mb-4">2. Selecciona el día</h4>
                       <div className="relative">
-                        <select
+                        <input
+                          type="date"
                           value={selectedDay}
+                          min={getLocalToday()}
                           onChange={(e) => handleDayChange(e.target.value)}
                           className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-base"
-                        >
-                          <option value="">Selecciona un día...</option>
-                          {availableDays.map((day) => (
-                            <option key={day.value} value={day.value}>
-                              {day.label}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </div>
+                      {selectedDay && (
+                        <p className="mt-2 text-sm text-gray-600">
+                          {formatDiaLargo(selectedDay)}
+                        </p>
+                      )}
                     </div>
                   )}
 

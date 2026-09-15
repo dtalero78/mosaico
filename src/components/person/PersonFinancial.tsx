@@ -9,6 +9,7 @@ import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import { api, handleApiError } from '@/hooks/use-api'
+import { getLocalToday } from '@/lib/fecha-local'
 import PagoTitularWizard from './PagoTitularWizard'
 
 interface PersonFinancialProps {
@@ -97,12 +98,6 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   const openValidarModal = (id: string, numCuota: number | null) => {
     setFacturaInput('')
     setValidateModal({ id, numCuota })
-  }
-
-  // YYYY-MM-DD en TZ local del navegador (evita corrimiento UTC al guardar fechas)
-  const getLocalToday = () => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
   const handleValidarPago = async () => {
