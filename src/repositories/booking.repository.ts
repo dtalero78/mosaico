@@ -11,6 +11,28 @@ import { query, queryOne, queryMany } from '@/lib/postgres';
 import { BaseRepository } from './base.repository';
 import { buildDynamicUpdate } from '@/lib/query-builder';
 
+/**
+ * ¿Este agendamiento es de una sesión WELCOME?
+ *
+ * Los datos vienen de dos épocas: los migrados de Wix NO tienen enlace a
+ * CALENDARIO y marcan el tipo en el propio agendamiento; los nuevos lo tienen en
+ * el evento. Por eso la condición mira las dos fuentes.
+ *
+ * Vive en un solo sitio porque la usan la bandeja de Welcome y la de
+ * reagendamientos: con una copia en cada una, la primera corrección las desalinea
+ * y una lista acabaría mostrando sesiones que la otra no ve.
+ */
+function esWelcomeSql(ab: string, c: string): string {
+  return `(
+    COALESCE(${ab}."tipoEvento", ${ab}."tipo") = 'WELCOME'
+    OR (${c}."tituloONivel" IS NOT NULL AND ${c}."tituloONivel" ILIKE '%WELCOME%')
+    OR ${c}."tipo" = 'WELCOME'
+    OR ${c}."nivel" = 'WELCOME'
+    OR ${ab}."nivel" = 'WELCOME'
+    OR (${ab}."tituloONivel" IS NOT NULL AND ${ab}."tituloONivel" ILIKE '%WELCOME%')
+  )`;
+}
+
 class BookingRepositoryClass extends BaseRepository {
   constructor() {
     super('ACADEMICA_BOOKINGS');
@@ -383,14 +405,7 @@ class BookingRepositoryClass extends BaseRepository {
     // incluidos los históricos de Wix que no tienen enlace a CALENDARIO.
     // LEFT JOIN a CALENDARIO en lugar de INNER JOIN para no perder esos registros.
     const conditions = [
-      `(
-        COALESCE(ab."tipoEvento", ab."tipo") = 'WELCOME'
-        OR (c."tituloONivel" IS NOT NULL AND c."tituloONivel" ILIKE '%WELCOME%')
-        OR c."tipo" = 'WELCOME'
-        OR c."nivel" = 'WELCOME'
-        OR ab."nivel" = 'WELCOME'
-        OR (ab."tituloONivel" IS NOT NULL AND ab."tituloONivel" ILIKE '%WELCOME%')
-      )`,
+      esWelcomeSql('ab', 'c'),
       `(ab."cancelo" IS NULL OR ab."cancelo" = false)`,
     ];
     const params: any[] = [];
@@ -426,6 +441,8 @@ class BookingRepositoryClass extends BaseRepository {
          ab."nivel",
          ab."advisor",
          COALESCE(p."plataforma", a."plataforma", '') as "plataforma",
+         COALESCE(p."campaign", '') as "campaign",
+         COALESCE(c."_id", ab."eventoId", ab."idEvento") as "eventoId",
          COUNT(*) OVER (PARTITION BY COALESCE(ab."studentId", ab."idEstudiante")) as "totalSesionesWelcome"
        FROM "ACADEMICA_BOOKINGS" ab
        LEFT JOIN "CALENDARIO" c ON (c."_id" = ab."eventoId" OR c."_id" = ab."idEvento")
@@ -435,6 +452,101 @@ class BookingRepositoryClass extends BaseRepository {
        WHERE ${conditions.join(' AND ')}
        ORDER BY COALESCE(c."dia", ab."fechaEvento") ASC, ab."primerApellido" ASC, ab."primerNombre" ASC`,
       params
+    );
+  }
+
+  /**
+   * Los que NO asistieron a su sesión WELCOME — la bandeja de reagendamientos.
+   *
+   * «No asistió» = la sesión YA se dictó, el agendamiento sigue vivo (no se
+   * canceló) y nadie marcó asistencia. Un evento que aún no ocurre no es una
+   * inasistencia, por eso el corte es `< NOW()`.
+   *
+   * ⚠ El agendamiento viejo NO se toca al reagendar: el alumno sí faltó y eso es
+   * su historia. Lo que lo saca de la bandeja es **tener una sesión WELCOME
+   * futura**, que se DERIVA aquí con un LATERAL en vez de guardarse en una
+   * bandera — una bandera quedaría desfasada en cuanto se borrara ese evento o
+   * se cancelara el agendamiento (mismo patrón que Nivelaciones).
+   */
+  async findWelcomeInasistentes(startDate?: string, endDate?: string) {
+    const conditions = [
+      esWelcomeSql('ab', 'c'),
+      `(ab."cancelo" IS NULL OR ab."cancelo" = false)`,
+      `COALESCE(c."dia", ab."fechaEvento") < NOW()`,
+      `ab."asistio" IS NOT TRUE`,
+      `ab."asistencia" IS NOT TRUE`,
+    ];
+    const params: any[] = [];
+    let i = 1;
+    if (startDate) { conditions.push(`COALESCE(c."dia", ab."fechaEvento") >= $${i}::timestamptz`); params.push(startDate); i++; }
+    if (endDate) { conditions.push(`COALESCE(c."dia", ab."fechaEvento") <= $${i}::timestamptz`); params.push(endDate); i++; }
+
+    return queryMany(
+      `SELECT
+         ab."_id",
+         COALESCE(ab."studentId", ab."idEstudiante") AS "idEstudiante",
+         COALESCE(ab."primerNombre", a."primerNombre", p."primerNombre", '') AS "primerNombre",
+         COALESCE(ab."primerApellido", a."primerApellido", p."primerApellido", '') AS "primerApellido",
+         COALESCE(p."celular", a."celular", '') AS "celular",
+         COALESCE(p."numeroId", a."numeroId", '') AS "numeroId",
+         COALESCE(p."campaign", '') AS "campaign",
+         COALESCE(p."tipoCurso", '') AS "tipoCurso",
+         COALESCE(p."plataforma", a."plataforma", '') AS "plataforma",
+         COALESCE(c."dia", ab."fechaEvento") AS "fechaEvento",
+         COALESCE(c."_id", ab."eventoId", ab."idEvento") AS "eventoId",
+         COALESCE(c."nivel", ab."nivel", '') AS "modulo",
+         COALESCE(g."nombreCompleto", c."advisor", ab."advisor", '') AS "advisorNombre",
+         rea."fechaEvento" AS "reagendadoA"
+       FROM "ACADEMICA_BOOKINGS" ab
+       LEFT JOIN "CALENDARIO" c ON (c."_id" = ab."eventoId" OR c."_id" = ab."idEvento")
+       LEFT JOIN "GUIAS" g ON g."_id" = c."advisor"
+       LEFT JOIN "ACADEMICA" a ON (ab."studentId" = a."_id" OR ab."idEstudiante" = a."_id")
+       LEFT JOIN "PEOPLE" p ON a."numeroId" = p."numeroId"
+         AND (p."tipoUsuario" = 'BENEFICIARIO' OR p."tipoUsuario" = 'BENEFICIARIA')
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(c2."dia", b2."fechaEvento") AS "fechaEvento"
+           FROM "ACADEMICA_BOOKINGS" b2
+           LEFT JOIN "CALENDARIO" c2 ON (c2."_id" = b2."eventoId" OR c2."_id" = b2."idEvento")
+          WHERE (b2."studentId" = COALESCE(ab."studentId", ab."idEstudiante")
+                 OR b2."idEstudiante" = COALESCE(ab."studentId", ab."idEstudiante"))
+            AND (b2."cancelo" IS NULL OR b2."cancelo" = false)
+            AND ${esWelcomeSql('b2', 'c2')}
+            AND COALESCE(c2."dia", b2."fechaEvento") > NOW()
+          ORDER BY COALESCE(c2."dia", b2."fechaEvento") ASC
+          LIMIT 1
+       ) rea ON TRUE
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY COALESCE(c."dia", ab."fechaEvento") DESC, ab."primerApellido" ASC, ab."primerNombre" ASC`,
+      params
+    );
+  }
+
+  /**
+   * Sesiones WELCOME FUTURAS de un módulo, con su ocupación — las opciones que se
+   * le pueden ofrecer a un alumno al reagendarlo.
+   *
+   * ⚠ Se filtra por MÓDULO (IMPULSA / MOSKIDS / MOSADULTOS) porque cada grupo de
+   * cursos tiene su propio Welcome: sin ese filtro a un alumno de IMPULSA se le
+   * ofrecería la bienvenida de otro programa.
+   */
+  async findWelcomeEventosFuturos(modulo: string) {
+    return queryMany(
+      `SELECT c."_id", c."dia" AS "fechaEvento", c."hora",
+              COALESCE(c."nivel", '') AS "modulo",
+              COALESCE(g."nombreCompleto", c."advisor", '') AS "advisorNombre",
+              COALESCE(c."limiteUsuarios", 0)::int AS "limiteUsuarios",
+              (SELECT COUNT(*)::int FROM "ACADEMICA_BOOKINGS" b
+                WHERE (b."eventoId" = c."_id" OR b."idEvento" = c."_id")
+                  AND (b."cancelo" IS NULL OR b."cancelo" = false)) AS "inscritos"
+         FROM "CALENDARIO" c
+         LEFT JOIN "GUIAS" g ON g."_id" = c."advisor"
+        WHERE (c."tipo" = 'WELCOME' OR c."evento" = 'WELCOME' OR c."nivel" = 'WELCOME'
+               OR (c."tituloONivel" IS NOT NULL AND c."tituloONivel" ILIKE '%WELCOME%'))
+          AND UPPER(COALESCE(c."nivel", '')) = UPPER($1)
+          AND c."dia" > NOW()
+        ORDER BY c."dia" ASC
+        LIMIT 100`,
+      [modulo]
     );
   }
 

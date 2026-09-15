@@ -884,6 +884,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Botón "Exportar CSV"',
     description: 'Descargar welcome sessions como archivo Excel/CSV',
   },
+  {
+    code: ServicioPermission.WELCOME_REAGENDAR,
+    module: Module.SERVICIO,
+    section: 'Welcome Session',
+    name: 'Botón "Reagendar"',
+    description: 'Mover a otra sesión de bienvenida a un alumno que faltó a la suya. La sesión a la que faltó NO se borra: queda como su historia, y lo que lo saca de la bandeja es tener la nueva.',
+  },
 
   // -- Página: Lista Sesiones (/dashboard/servicio/lista-sesiones) --
   {

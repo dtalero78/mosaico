@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { ServicioPermission } from '@/types/permissions'
 import { formatDateTime } from '@/lib/utils'
 import { exportToExcel } from '@/lib/export-excel'
+import { campanasActuales, estadosDeCampanas, ESTADO_CURSO_META } from '@/lib/cursos-campaign'
+import WelcomeReagendamientosTab from '@/components/servicio/WelcomeReagendamientosTab'
 
 interface WelcomeEvent {
   _id: string
@@ -21,10 +23,19 @@ interface WelcomeEvent {
   nivel?: string
   advisor?: string
   plataforma?: string
+  /** Campaña del ALUMNO (PEOPLE.campaign) — el evento WELCOME es comodín. */
+  campaign?: string
   totalSesionesWelcome?: number
 }
 
+type Tab = 'eventos' | 'reagendamientos'
+
+/** Valor del desplegable de campaña: el conjunto "actuales" o una campaña concreta. */
+const CAMPANA_ACTUALES = '__actuales__'
+const CAMPANA_TODAS = '__todas__'
+
 export default function WelcomeSessionPage() {
+  const [tab, setTab] = useState<Tab>('eventos')
   const [welcomeEvents, setWelcomeEvents] = useState<WelcomeEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +45,31 @@ export default function WelcomeSessionPage() {
   const [endDate, setEndDate] = useState('')
   const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'attended' | 'not-attended'>('all')
   const [searchApellido, setSearchApellido] = useState('')
+  const [campanaFiltro, setCampanaFiltro] = useState<string>(CAMPANA_ACTUALES)
+
+  // Catálogo de cursos de campaña: de aquí sale el ESTADO de cada campaña
+  // (matrícula / activa / cerrada) con el MISMO helper que Consulta de Cursos.
+  const [cursosCampaign, setCursosCampaign] = useState<any[]>([])
+
+  useEffect(() => {
+    fetch('/api/postgres/cursos-campaign')
+      .then((r) => r.json())
+      .then((d) => setCursosCampaign(d?.rows || []))
+      .catch(() => setCursosCampaign([]))
+  }, [])
+
+  /** Estado por campaña, para etiquetar cada opción del desplegable. */
+  const estadosCampana = useMemo(() => estadosDeCampanas(cursosCampaign), [cursosCampaign])
+
+  /** Las que se muestran por defecto: en matrícula + la activa más reciente. */
+  const actuales = useMemo(() => campanasActuales(cursosCampaign), [cursosCampaign])
+
+  /** Campañas presentes en los datos cargados, ordenadas por inicio (la más nueva primero). */
+  const campanasEnDatos = useMemo(() => {
+    const set = new Set(welcomeEvents.map((e) => (e.campaign || '').trim()).filter(Boolean))
+    const orden = new Map(estadosCampana.map((c) => [c.campaign, c.inicio || '']))
+    return Array.from(set).sort((a, b) => String(orden.get(b) || '').localeCompare(String(orden.get(a) || '')))
+  }, [welcomeEvents, estadosCampana])
 
   const loadWelcomeEvents = async () => {
     setLoading(true)
@@ -99,6 +135,19 @@ export default function WelcomeSessionPage() {
   // El filtro de fecha ahora se hace en el backend, solo filtramos por apellido y asistencia
   const filteredEvents = welcomeEvents
     .filter((event) => {
+      // Filtro por campaña. La campaña sale del ALUMNO (PEOPLE.campaign): los
+      // eventos WELCOME se crean con campaña comodín, así que preguntárselo al
+      // evento no distinguiría a nadie.
+      if (campanaFiltro !== CAMPANA_TODAS) {
+        const c = (event.campaign || '').trim()
+        if (campanaFiltro === CAMPANA_ACTUALES) {
+          // Mientras el catálogo no haya cargado no se esconde nada.
+          if (actuales.length > 0 && !actuales.includes(c)) return false
+        } else if (c !== campanaFiltro) {
+          return false
+        }
+      }
+
       // Filtro por apellido
       if (searchApellido.trim()) {
         const apellidoCompleto = `${event.primerApellido || ''} ${event.segundoApellido || ''}`.toLowerCase()
@@ -135,6 +184,9 @@ export default function WelcomeSessionPage() {
     setEndDate('')
     setAttendanceFilter('all')
     setSearchApellido('')
+    // "Limpiar" devuelve al DEFAULT de la pantalla, no a "todas": el default es
+    // una decisión de la vista, no un filtro que el usuario puso.
+    setCampanaFiltro(CAMPANA_ACTUALES)
   }
 
   const handleRowClick = (event: WelcomeEvent) => {
@@ -153,12 +205,36 @@ export default function WelcomeSessionPage() {
           <h1 className="text-2xl font-bold text-gray-900">📅 Eventos WELCOME</h1>
         </div>
 
+        {/* Pestañas */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex gap-6" aria-label="Pestañas">
+            {([
+              { id: 'eventos' as Tab, label: 'Eventos WELCOME' },
+              { id: 'reagendamientos' as Tab, label: 'Gestión de Reagendamientos' },
+            ]).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
+                  tab === t.id
+                    ? 'border-purple-600 text-purple-700'
+                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {tab === 'reagendamientos' ? <WelcomeReagendamientosTab /> : (
         <div className="card">
           <div className="card-header pb-6">
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => exportToExcel(filteredEvents, [
                   { header: 'Nombre', accessor: (e) => `${e.primerNombre} ${e.primerApellido}`.trim() },
+                  { header: 'Campaña', accessor: (e) => e.campaign || '' },
                   { header: 'Celular', accessor: (e) => e.celular || '' },
                   { header: 'Fecha Evento', accessor: (e) => formatDateTime(e.fechaEvento) },
                   { header: 'Sesiones', accessor: (e) => e.totalSesionesWelcome || 0 },
@@ -200,7 +276,32 @@ export default function WelcomeSessionPage() {
           <div className="card-content">
             {/* Filtros */}
             <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                <div>
+                  <label htmlFor="campanaFiltro" className="block text-sm font-medium text-gray-700 mb-1">
+                    Campaña
+                  </label>
+                  <select
+                    id="campanaFiltro"
+                    value={campanaFiltro}
+                    onChange={(e) => setCampanaFiltro(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  >
+                    <option value={CAMPANA_ACTUALES}>
+                      Actuales{actuales.length ? ` (${actuales.join(' + ')})` : ''}
+                    </option>
+                    <option value={CAMPANA_TODAS}>Todas</option>
+                    {campanasEnDatos.map((c) => {
+                      const est = estadosCampana.find((e) => e.campaign === c)
+                      return (
+                        <option key={c} value={c}>
+                          {c}{est ? ` — ${ESTADO_CURSO_META[est.estado].label}` : ''}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+
                 <div>
                   <label htmlFor="searchApellido" className="block text-sm font-medium text-gray-700 mb-1">
                     Buscar por apellido
@@ -294,6 +395,7 @@ export default function WelcomeSessionPage() {
                   <thead className="table-header">
                     <tr>
                       <th className="table-header-cell">Nombre Completo</th>
+                      <th className="table-header-cell">Campaña</th>
                       <th className="table-header-cell">Celular</th>
                       <th className="table-header-cell">Fecha Evento</th>
                       <th className="table-header-cell">Sesiones</th>
@@ -311,6 +413,11 @@ export default function WelcomeSessionPage() {
                           <td className="table-cell">
                             <div className="text-sm font-medium text-gray-900">
                               {`${event.primerNombre} ${event.primerApellido}`.trim()}
+                            </div>
+                          </td>
+                          <td className="table-cell">
+                            <div className="text-sm text-gray-500">
+                              {event.campaign || '—'}
                             </div>
                           </td>
                           <td className="table-cell">
@@ -343,7 +450,7 @@ export default function WelcomeSessionPage() {
                       ))
                     ) : !loading ? (
                       <tr>
-                        <td colSpan={5} className="table-cell text-center py-8">
+                        <td colSpan={6} className="table-cell text-center py-8">
                           <div className="text-gray-500">
                             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -360,7 +467,7 @@ export default function WelcomeSessionPage() {
                       </tr>
                     ) : (
                       <tr>
-                        <td colSpan={5} className="table-cell text-center py-8">
+                        <td colSpan={6} className="table-cell text-center py-8">
                           <div className="flex items-center justify-center">
                             <svg className="animate-spin h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -383,6 +490,7 @@ export default function WelcomeSessionPage() {
             )}
           </div>
         </div>
+        )}
         </div>
       </PermissionGuard>
     </DashboardLayout>

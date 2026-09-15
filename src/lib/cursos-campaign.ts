@@ -371,3 +371,61 @@ export const ESTADO_CURSO_META: Record<EstadoCurso, { label: string; cls: string
   activo: { label: 'Activo', cls: 'bg-green-100 text-green-700' },
   cerrado: { label: 'Cerrado', cls: 'bg-gray-200 text-gray-700' },
 };
+
+/** Una campaña con su estado derivado y la fecha en que arranca. */
+export interface CampanaEstado {
+  campaign: string;
+  estado: EstadoCurso;
+  /** Inicio de la campaña = el primero de sus cursos (YYYY-MM-DD). */
+  inicio: string;
+}
+
+/**
+ * Estado de cada CAMPAÑA a partir de las filas de sus cursos.
+ *
+ * El estado es el MISMO concepto que el de un curso (`estadoCurso`) pero
+ * agregado: la campaña arranca con su primer curso y está cerrada cuando el
+ * ÚLTIMO de ellos terminó. Mirar un curso suelto daría una campaña "cerrada"
+ * mientras la mitad de sus salones sigue dictando.
+ */
+export function estadosDeCampanas(
+  rows: Array<{ campaign?: any; inicioCampanaCursos?: any; inicioCurso?: any; finalCurso?: any }>,
+  now: Date = new Date()
+): CampanaEstado[] {
+  const porCampana = new Map<string, { inicio: string; final: string }>();
+  for (const r of rows || []) {
+    const campaign = String(r?.campaign ?? '').trim();
+    if (!campaign) continue;
+    const inicio = soloFecha(r.inicioCampanaCursos ?? r.inicioCurso);
+    const final = soloFecha(r.finalCurso);
+    const acc = porCampana.get(campaign) || { inicio: '', final: '' };
+    if (inicio && (!acc.inicio || inicio < acc.inicio)) acc.inicio = inicio;
+    if (final && (!acc.final || final > acc.final)) acc.final = final;
+    porCampana.set(campaign, acc);
+  }
+  return Array.from(porCampana.entries()).map(([campaign, v]) => ({
+    campaign,
+    inicio: v.inicio,
+    estado: estadoCurso({ inicioCampanaCursos: v.inicio, finalCurso: v.final }, now),
+  }));
+}
+
+/**
+ * Las campañas "actuales": la que está EN MATRÍCULA más la ACTIVA más reciente.
+ *
+ * Es el conjunto con el que abre la bandeja de Welcome: quien se está
+ * matriculando ahora y quien acaba de empezar. Las anteriores siguen
+ * disponibles en el desplegable, pero no se muestran por defecto.
+ */
+export function campanasActuales(
+  rows: Array<{ campaign?: any; inicioCampanaCursos?: any; inicioCurso?: any; finalCurso?: any }>,
+  now: Date = new Date()
+): string[] {
+  const estados = estadosDeCampanas(rows, now);
+  const out = estados.filter((e) => e.estado === 'matricula').map((e) => e.campaign);
+  const activas = estados
+    .filter((e) => e.estado === 'activo')
+    .sort((a, b) => String(b.inicio || '').localeCompare(String(a.inicio || '')));
+  if (activas[0] && !out.includes(activas[0].campaign)) out.push(activas[0].campaign);
+  return out;
+}
