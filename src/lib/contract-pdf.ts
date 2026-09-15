@@ -141,6 +141,12 @@ export function buildContractPdfOptions(contrato?: string | null, isImpulsa = fa
  * OJO: no lleva `@page { margin }`. Los márgenes van en las opciones del PDF —
  * si se definieran en el CSS pisarían al header/footer, que viven justamente en
  * el margen de la página.
+ *
+ * El texto va JUSTIFICADO, que es como se lee un contrato. Con `pre-wrap` eso
+ * sólo estira las líneas que el navegador parte solo: las que terminan en un
+ * salto escrito en la plantilla («Número de contrato: …») se dejan como están,
+ * que es justo lo correcto — son rótulos sueltos o cierre de párrafo, y
+ * estirarlos los dejaría con huecos enormes entre palabras.
  */
 export function buildContractHtml(contractText: string, contrato?: string | null): string {
   const esPrueba = isContratoPrueba(contrato);
@@ -158,6 +164,8 @@ export function buildContractHtml(contractText: string, contrato?: string | null
       margin: 0;
       padding: 0;
       white-space: pre-wrap;
+      text-align: justify;
+      hyphens: auto;
       word-wrap: break-word;
     }
     ${esPrueba ? marcaPruebaCss() : ''}
