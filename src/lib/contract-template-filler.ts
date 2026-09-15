@@ -31,6 +31,46 @@ function fmtDate(value: any): string {
 }
 
 /**
+ * Un monto de FINANCIEROS a número.
+ *
+ * Los importes se guardan como TEXTO (VARCHAR heredado de Wix). Hoy las 686
+ * filas son dígitos puros, pero se limpia cualquier signo por si alguna llegara
+ * editada a mano: en los montos de la plataforma el punto es separador de
+ * MILES y no decimal —la misma suposición que hace `parseCurrency` del
+ * frontend—, así que se descarta con el resto.
+ */
+function montoANumero(value: any): number {
+  if (value == null || value === '') return NaN;
+  const n = parseInt(String(value).replace(/[^\d-]/g, ''), 10);
+  return isNaN(n) ? NaN : n;
+}
+
+/**
+ * El saldo que imprime el CONTRATO es el de la FIRMA, no el vivo.
+ *
+ * ⚠ `FINANCIEROS.saldo` lo REESCRIBE `syncFinancieroSaldo` cada vez que se
+ * valida un pago: es el "Saldo a la Fecha" que muestra la pestaña Financiera de
+ * /person y baja mes a mes. El contrato es el documento que el cliente firmó y
+ * tiene que decir lo que se pactó — leer esa columna hacía que regenerar el PDF
+ * en el mes 6 produjera un texto distinto del que se aceptó, y el
+ * `hashConsentimiento` no lo detecta porque se calcula sobre el consentimiento,
+ * no sobre el bloque financiero.
+ *
+ * Se DERIVA de `totalPlan − pagoInscripcion`: las dos son inmutables (el sync
+ * no las toca) y es la misma resta con la que el wizard lo calcula, donde el
+ * campo Saldo es de sólo lectura y nunca se teclea — así que la fórmula
+ * reproduce exactamente lo firmado, también en los contratos ya creados.
+ *
+ * Si faltara el total se cae al valor guardado, antes que imprimir un vacío.
+ */
+function saldoALaFirma(financial: any): string {
+  const total = montoANumero(financial?.totalPlan);
+  if (isNaN(total)) return financial?.saldo != null ? String(financial.saldo) : '';
+  const inscripcion = montoANumero(financial?.pagoInscripcion);
+  return String(Math.max(0, total - (isNaN(inscripcion) ? 0 : inscripcion)));
+}
+
+/**
  * Fill a contract template with data, replacing {{placeholder}} tokens.
  * Mirrors the Wix TemplateManager.buildData + fillTemplate logic.
  */
@@ -138,7 +178,8 @@ export function fillContractTemplate(
     beneficiarios: beneficiariosText,
     totalPlan: financial?.totalPlan != null ? String(financial.totalPlan) : '',
     pagoInscripcion: financial?.pagoInscripcion != null ? String(financial.pagoInscripcion) : '',
-    saldo: financial?.saldo != null ? String(financial.saldo) : '',
+    // NO es `financial.saldo` — ver saldoALaFirma: esa columna es el saldo VIVO.
+    saldo: saldoALaFirma(financial),
     numeroCuotas: financial?.numeroCuotas != null ? String(financial.numeroCuotas) : '',
     valorCuota: financial?.valorCuota != null ? String(financial.valorCuota) : '',
     formaPago: financial?.formaPago || '',
