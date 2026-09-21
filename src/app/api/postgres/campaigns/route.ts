@@ -31,6 +31,9 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
             -- matrícula se cuenta desde el primero.
             MIN("inicioCurso"::text) OVER (PARTITION BY "campaign") AS "inicioCampanaCursos",
             "duracionCurso","finalCurso","numeroUsuarios","paraMenores","activa",
+            -- Cerrado o ampliado en Ajuste Cursos: Gestión ya no deja editarlo.
+            jsonb_array_length(COALESCE("ajustesHistory", '[]'::jsonb))::int AS "ajustes",
+            "cierreCurso"::text AS "cierreCurso",
             -- cupos = beneficiarios cuyo contrato NO está rechazado/retractado/nulo (ver lib/cupo)
             (SELECT COUNT(*)::int FROM "PEOPLE" pe
                WHERE pe."tipoUsuario"='BENEFICIARIO'

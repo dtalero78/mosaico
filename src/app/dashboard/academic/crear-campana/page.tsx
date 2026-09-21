@@ -9,6 +9,8 @@ import { useTiposCurso } from '@/hooks/use-tipos-curso'
 import { exportToExcel } from '@/lib/export-excel'
 import { PlusIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import ColisionesTab from '@/components/academic/ColisionesTab'
+import AjusteCursosTab from '@/components/academic/AjusteCursosTab'
+import { usePermissions } from '@/hooks/usePermissions'
 import AdicionarSalonModal, { type CursoLite } from '@/components/academic/AdicionarSalonModal'
 import { esHorarioSabado } from '@/lib/grupo-horario'
 
@@ -85,7 +87,14 @@ function CrearCampanaContent() {
   const [inscritosList, setInscritosList] = useState<any[] | null>(null)
   const [inscritosLoading, setInscritosLoading] = useState(false)
   // Pestañas + filtros del Reporte (inputs = draft; se aplican con "Aplicar filtros")
-  const [activeTab, setActiveTab] = useState<'gestion' | 'reporte' | 'colisiones'>('gestion')
+  const [activeTab, setActiveTab] = useState<'gestion' | 'reporte' | 'colisiones' | 'ajuste'>('gestion')
+  // Ajuste Cursos (cerrar / ampliar) lleva su propio permiso: el cierre borra clases.
+  const { hasPermission } = usePermissions()
+  const puedeAjustar = hasPermission(AcademicoPermission.CAMPANA_AJUSTAR)
+  const pestanas: Array<['gestion' | 'reporte' | 'colisiones' | 'ajuste', string]> = [
+    ['gestion', 'Gestión'], ['reporte', 'Reporte'], ['colisiones', 'Colisiones'],
+    ...(puedeAjustar ? [['ajuste', 'Ajuste Cursos'] as ['ajuste', string]] : []),
+  ]
   // Nº de colisiones de la campaña seleccionada, para pintar la pestaña en
   // verde (sin cruces) o rojo (hay cruces por resolver) sin tener que entrar.
   const [colisionesCount, setColisionesCount] = useState<number | null>(null)
@@ -563,7 +572,7 @@ function CrearCampanaContent() {
       {/* Pestañas */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex gap-6">
-          {([['gestion', 'Gestión'], ['reporte', 'Reporte'], ['colisiones', 'Colisiones']] as const).map(([key, label]) => (
+          {pestanas.map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -759,9 +768,17 @@ function CrearCampanaContent() {
                           </span>
                         </td>
                         <td className="whitespace-nowrap">
-                          <button type="button" onClick={() => openEdit(r)} className="text-primary-600 hover:text-primary-700 mr-2" title="Editar curso">
-                            <PencilSquareIcon className="h-5 w-5 inline" />
-                          </button>
+                          {Number(r.ajustes) > 0 ? (
+                            /* Cerrado o ampliado en Ajuste Cursos: editarlo aquí recalcularía
+                               el final desde la duración y desharía el ajuste. */
+                            <span className="text-gray-300 mr-2 cursor-not-allowed" title="Curso cerrado o ampliado en Ajuste Cursos: ya no se puede editar">
+                              <PencilSquareIcon className="h-5 w-5 inline" />
+                            </span>
+                          ) : (
+                            <button type="button" onClick={() => openEdit(r)} className="text-primary-600 hover:text-primary-700 mr-2" title="Editar curso">
+                              <PencilSquareIcon className="h-5 w-5 inline" />
+                            </button>
+                          )}
                           <button type="button" onClick={() => setDeleting(r)} className="text-red-600 hover:text-red-700" title="Eliminar curso">
                             <TrashIcon className="h-5 w-5 inline" />
                           </button>
@@ -1254,6 +1271,14 @@ function CrearCampanaContent() {
         <ColisionesTab
           campaign={gestionSel && gestionSel !== '__NEW__' ? gestionSel : ''}
           onCount={setColisionesCount}
+        />
+      )}
+
+      {activeTab === 'ajuste' && puedeAjustar && (
+        <AjusteCursosTab
+          campanias={campaniasOrdenadas}
+          campaignInicial={gestionSel && gestionSel !== '__NEW__' ? gestionSel : ''}
+          onAjustado={loadExisting}
         />
       )}
 

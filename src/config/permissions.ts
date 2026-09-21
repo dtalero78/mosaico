@@ -769,6 +769,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Página "Crea Campaña" — crear campañas y cursos',
     description: 'Acceso a /dashboard/academic/crear-campana. Crear campañas con sus cursos (tipo de curso, horario, fechas, cupos) en CURSOS_CAMPAIGN. Estos cursos alimentan los dropdowns del wizard de Crear Contrato. Pensado para SUPER_ADMIN / ADMIN / COORDINADOR_ACADEMICO.',
   },
+  {
+    code: AcademicoPermission.CAMPANA_AJUSTAR,
+    module: Module.ACADEMICO,
+    section: 'Crea Campaña',
+    name: 'Ajuste Cursos — cerrar o ampliar un curso',
+    description: 'Pestaña "Ajuste Cursos" de Campañas. Cierre: adelanta el final del curso y BORRA sus clases y agendamientos posteriores a esa fecha. Ampliación: extiende el final y agrega las clases nuevas con sus agendamientos. Un curso ajustado ya no se edita desde Gestión. Requiere además el acceso a Campañas.',
+  },
 
   {
     code: AcademicoPermission.HORARIOS_GESTION,

@@ -29,12 +29,19 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     `SELECT "_id","campaign","tipoCurso","horarioCurso","salon","guia","numeroUsuarios","usuInscritos",
             "paraMenores","activa","duracionCurso",
             "inicioCurso"::text AS "inicioCurso", "inicioCampania"::text AS "inicioCampania",
-            "finalCampaign"::text AS "finalCampaign", "grupoHorarioId"
+            "finalCampaign"::text AS "finalCampaign", "grupoHorarioId",
+            jsonb_array_length(COALESCE("ajustesHistory", '[]'::jsonb))::int AS "ajustes"
      FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`,
     [id]
   );
   if (cur.rows.length === 0) throw new NotFoundError('Curso de campaña no encontrado');
   const row = cur.rows[0];
+  // Un curso cerrado o ampliado en Ajuste Cursos ya no se edita: guardar aquí
+  // recalcula el Final curso desde la duración y regenera todo el calendario, así
+  // que desharía el ajuste.
+  if (Number(row.ajustes) > 0) {
+    throw new ConflictError('Este curso fue cerrado o ampliado en Ajuste Cursos y ya no se puede editar.');
+  }
   const body = await request.json();
 
   // Merge de valores (lo enviado pisa lo actual)

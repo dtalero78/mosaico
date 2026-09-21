@@ -200,6 +200,9 @@ export enum AcademicoPermission {
 
   // Crea Campaña — gestión de campañas/cursos (CURSOS_CAMPAIGN)
   CAMPANA_CREAR = 'ACADEMICO.CAMPANA.CREAR',
+  // Campañas › Ajuste Cursos: cerrar un curso antes de tiempo (borra sus clases
+  // futuras) o ampliarlo (agrega clases). Aparte de CREAR porque el cierre borra.
+  CAMPANA_AJUSTAR = 'ACADEMICO.CAMPANA.AJUSTAR',
   // Catálogo de horarios por tipo de curso (Académico › Horarios): agregar y
   // desactivar. El catálogo sólo llena el desplegable de Campañas.
   HORARIOS_GESTION = 'ACADEMICO.HORARIOS.GESTION',

@@ -1,7 +1,8 @@
 import 'server-only';
 import { query, transaction } from '@/lib/postgres';
+import type { PoolClient } from 'pg';
 import { ids } from '@/lib/id-generator';
-import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
+import { parseHorario } from '@/lib/cursos-campaign';
 import { esFestivoChile } from '@/lib/festivos-chile';
 import { fechasFestivasPersonalizadas } from './festivos-personalizados.service';
 import { eventoCompartidoIdDeGrupo } from '@/lib/grupo-horario-server';
@@ -9,12 +10,7 @@ import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { mapearLeccionesSalon } from './repetir-clase.service';
 import { esAprobadoSql } from '@/lib/estados';
 import { TZ_OPERACION } from '@/lib/cursos-campaign';
-
-/** iso + n días (UTC, sin desfase de zona horaria). */
-function addDaysISO(iso: string, n: number): string {
-  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d) + n * 86400000).toISOString().slice(0, 10);
-}
+import { calcularFechasCurso } from '@/lib/calendario-curso';
 
 /**
  * Generación de eventos de CALENDARIO a partir de un curso de campaña.
@@ -73,47 +69,63 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
   await eliminarEventosCurso(curso._id);
 
   if (!parsed || !inicio || !fin) return 0;
-  const base = fechasEntre(inicio, fin, parsed.dias);
-  if (base.length === 0) return 0;
+  // Feriados de Chile, festivos declarados y suspensiones: NO se agenda clase ese
+  // día; esa sesión se corre al FINAL del curso (se mantiene el nº total de
+  // sesiones = nº de clases del horario en el intervalo). Si el curso se CERRÓ en
+  // Ajuste Cursos, nunca se agenda después de su fecha de cierre.
+  const fechas = calcularFechasCurso({
+    inicio, fin, dias: parsed.dias,
+    noHayClase: await diasSinClaseCurso(curso._id),
+    max: MAX_EVENTOS_POR_CURSO,
+    hasta: await cierreDelCurso(curso._id),
+  });
+  if (fechas.length === 0) return 0;
+  return insertarEventosCurso(curso, fechas);
+}
 
-  // Fechas suspendidas a mano para este curso (Académico › Sesiones › Suspende
-  // Sesión). Se tratan EXACTAMENTE igual que un festivo. Viven en tabla porque
-  // regenerar un curso borra y recrea sus eventos: sin persistirlas, la fecha
-  // suspendida reaparecería.
+/**
+ * Días en que un curso NO tiene clase: feriado de Chile, festivo declarado por
+ * Académico (Sesiones › Festivos, global) o suspensión de ESE curso (Suspende
+ * Sesión). Las suspensiones viven en tabla porque regenerar un curso borra y
+ * recrea sus eventos: sin persistirlas, la fecha suspendida reaparecería.
+ */
+export async function diasSinClaseCurso(cursoId: string): Promise<(fecha: string) => boolean> {
   const susp = await query<{ fecha: string }>(
     `SELECT "fecha"::text AS "fecha" FROM "CURSOS_SUSPENSIONES" WHERE "cursoCampaignId" = $1`,
-    [curso._id]
+    [cursoId]
   ).catch(() => ({ rows: [] as { fecha: string }[] })); // tabla aún no creada → sin suspensiones
   const suspendidas = new Set(susp.rows.map((r) => String(r.fecha).slice(0, 10)));
-
-  // Festivos declarados por Académico (Académico › Sesiones › Festivos), que se
-  // SUMAN a los del calendario de Chile: la semana de Fiestas Patrias, un puente,
-  // un cierre. Son globales, a diferencia de las suspensiones, que son de un curso.
   const personalizados = await fechasFestivasPersonalizadas();
+  return (d: string) => esFestivoChile(d) || personalizados.has(d) || suspendidas.has(d);
+}
 
-  /** No se dicta clase: festivo de Chile, festivo declarado o suspensión del curso. */
-  const noHayClase = (d: string) =>
-    esFestivoChile(d) || personalizados.has(d) || suspendidas.has(d);
+/** Fecha de cierre fijada en Ajuste Cursos (YYYY-MM-DD), o null si no se cerró. */
+export async function cierreDelCurso(cursoId: string): Promise<string | null> {
+  const r = await query<{ c: string | null }>(
+    `SELECT "cierreCurso"::text AS c FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`, [cursoId]
+  ).catch(() => ({ rows: [] as { c: string | null }[] })); // columna aún no creada → sin cierre
+  const c = r.rows[0]?.c;
+  return c ? String(c).slice(0, 10) : null;
+}
 
-  // Feriados de Chile y suspensiones: NO se agenda clase ese día; esa sesión se
-  // corre al FINAL del curso (se mantiene el nº total de sesiones = nº de clases
-  // del horario en el intervalo). Ej.: si un miércoles cae festivo, la última
-  // sesión pasa al siguiente día-clase después de finalCurso.
-  const objetivo = Math.min(base.length, MAX_EVENTOS_POR_CURSO);
-  let fechas = base.filter((d) => !noHayClase(d));
-  if (fechas.length < objetivo) {
-    let cursor = fin;
-    let guard = 0;
-    while (fechas.length < objetivo && guard < 520) {
-      for (const d of fechasEntre(addDaysISO(cursor, 1), addDaysISO(cursor, 7), parsed.dias)) {
-        if (!noHayClase(d)) { fechas.push(d); if (fechas.length >= objetivo) break; }
-      }
-      cursor = addDaysISO(cursor, 7);
-      guard++;
-    }
-  }
-  if (fechas.length > objetivo) fechas = fechas.slice(0, objetivo);
-  fechas.sort();
+/**
+ * Inserta los eventos de un curso en las fechas dadas, SIN borrar los que ya
+ * tiene, y les asigna su lección. Es el único INSERT de eventos de curso: lo usan
+ * la generación completa y la ampliación de Ajuste Cursos, así que una clase
+ * agregada nace con el mismo guía, Zoom, título y enlace de grupo que las demás.
+ */
+export async function insertarEventosCurso(
+  curso: CursoParaEventos,
+  fechas: string[],
+  /**
+   * Dentro de una transacción: el INSERT va por ese cliente y las lecciones NO se
+   * asignan aquí (el que llama lo hace tras el COMMIT, con `mapearLeccionesSalon`),
+   * porque el mapeo lee con otra conexión y no vería las clases aún sin confirmar.
+   */
+  client?: PoolClient,
+): Promise<number> {
+  const parsed = parseHorario(curso.horarioCurso);
+  if (!parsed || fechas.length === 0) return 0;
 
   const hora = parsed.hora.length === 4 ? `0${parsed.hora}` : parsed.hora; // "9:00"→"09:00"
   const salon = (curso.salon || '').trim();
@@ -166,7 +178,12 @@ export async function generarEventosCurso(curso: CursoParaEventos): Promise<numb
     );
   });
 
-  await query(`INSERT INTO "CALENDARIO" (${cols}) VALUES ${rows.join(', ')}`, params);
+  const sql = `INSERT INTO "CALENDARIO" (${cols}) VALUES ${rows.join(', ')}`;
+  if (client) {
+    await client.query(sql, params);
+    return fechas.length;
+  }
+  await query(sql, params);
   // Camino B: asigna a cada sesión su lección (secuencia del curso por fecha).
   try { await mapearLeccionesSalon(curso._id); } catch { /* best-effort */ }
   return fechas.length;
