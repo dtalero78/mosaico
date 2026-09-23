@@ -40,6 +40,18 @@ const PARES = [
   ['5-2831-26', '01-M5-2831-26', 'FINANCIEROS de JULICSA FERNANDEZ, hoy sin enlazar'],
   // La "A" quedó pegada al año; va tras el consecutivo, como en los demás.
   ['Contrato Online N.º 5-2657-26A', '01-M5-2657A-26', 'mueve la A del año al consecutivo'],
+
+  // 23-sep-2026 — el desdoble se hizo a mano y SÓLO en PEOPLE: el alumno, su
+  // login y lo financiero se quedaron con el número viejo. Verificado por
+  // documento a qué familia pertenece cada fila.
+  ['01-M5-2477-26A', '01-M5-2477A-26', 'WALDO AMAS y JULIA AVALOS ya están con la A en el consecutivo'],
+  ['Contrato N.º 5-2451-26', '01-M5-2451A-26', 'KHIARA OJEDA y Sofía Cofré, familia de ANGELA LOBOS (desdoble A)'],
+  ['Contrato Online N.º 5-2451-26', '01-M5-2451B-26', 'CRISTOBAL CORNEJO, familia de RICARDO CORNEJO (desdoble B)'],
+  // Los dos restos sin guiones: su contrato existe en PEOPLE y NO tiene fila
+  // financiera, así que esto se la devuelve. Los montos cuadran con su plan
+  // (1.390.000 − 148.000 = 1.242.000 = 9 × 138.000).
+  ['01-M5285326', '01-M5-2853-26', 'FINANCIEROS de Nataly Cabellos, hoy sin enlazar'],
+  ['Contrato Online N. º 5285326', '01-M5-2853-26', 'auditoría del mismo contrato de Nataly Cabellos'],
 ];
 
 const pool = new Pool({
