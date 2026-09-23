@@ -54,8 +54,12 @@ const SOLO = new Set(
 /** Tablas que guardan el número de contrato. */
 const TABLAS = ['PEOPLE', 'ACADEMICA', 'USUARIOS_ROLES', 'FINANCIEROS', 'ACTIVE_STUDENTS', 'auditautoaprov', 'CASOS_ATENCION'];
 
-const RE_PREFIJO = new RegExp('^Contrato\\s*Online\\s*N[.\\s]*[º°o]?\\s*', 'i');
-const RE_NUMERO = new RegExp('^0?(\\d)-(\\d+)-(\\d{2})$');
+// El rótulo aparece con y sin "Online" ("Contrato N.º 5-2545-26") y a veces
+// pegado al número ("Contrato Online N.º01-M5-2345-26").
+const RE_PREFIJO = new RegExp('^Contrato\\s*(Online\\s*)?N[.\\s]*[º°o]?\\s*', 'i');
+// Tolera el cero delante del país ("05-2373-26"), espacios alrededor de los
+// guiones ("5 - 2234 - 26") y el sufijo de desdoble en el año ("5-2477-26A").
+const RE_NUMERO = new RegExp('^0?(\\d)\\s*-\\s*(\\d+)\\s*-\\s*(\\d{2}[A-Za-z]?)$');
 /** La forma final a la que se quiere llegar: `01-M5-2444-26`. */
 const RE_CANONICO = new RegExp('^[0-9]{2}-(M[0-9]|I[0-9])-[0-9]+[A-Z]?-[0-9]{2}$');
 
@@ -76,7 +80,7 @@ function canonico(valor) {
   const n = sinPrefijo.match(RE_NUMERO);
   if (!n) return null;
   const seg = n[1] === '6' ? 'I6' : 'M' + n[1];
-  return '01-' + seg + '-' + n[2] + '-' + n[3];
+  return '01-' + seg + '-' + n[2] + '-' + n[3].toUpperCase();
 }
 
 const pool = new Pool({
@@ -111,7 +115,7 @@ async function idsDe(client, contrato) {
     // ACADEMICA o USUARIOS_ROLES —el alumno apuntando a un número y su titular
     // a otro—, y mirando sólo PEOPLE esos no se ven y quedan desincronizados.
     const SUCIO = "\"contrato\" IS NOT NULL AND \"contrato\" NOT LIKE 'PRB-%'" +
-      " AND (\"contrato\" ILIKE 'Contrato%Online%' OR \"contrato\" ~ '^0?[0-9]-[0-9]+-[0-9][0-9]$')";
+      " AND (\"contrato\" ILIKE 'Contrato%' OR \"contrato\" ~ '^0?[0-9] *- *[0-9]+ *- *[0-9][0-9][A-Za-z]?$')";
     const fuentes = [];
     for (const t of TABLAS) {
       try {
@@ -140,6 +144,21 @@ async function idsDe(client, contrato) {
         const [a, b] = [await idsDe(client, c.contrato), await idsDe(client, nuevo)];
         const mismos = [...a].some((x) => b.has(x));
         if (!mismos) { conflictos.push({ viejo: c.contrato, nuevo, origen: [...a].join(','), destino: [...b].join(',') }); continue; }
+        // Las mismas personas, pero si AMBOS lados tienen fila de TITULAR en
+        // PEOPLE el renombre dejaría dos titulares con el mismo contrato y lo
+        // rechaza el índice único `idx_people_contrato_titular` — la corrida
+        // entera se cae por uno. Es una fila de titular DUPLICADA (la misma
+        // persona dada de alta dos veces): fusionarlas es decisión de negocio
+        // (a cuál se le cuelgan los beneficiarios y lo financiero), no algo que
+        // se pueda deducir aquí.
+        const dosTitulares = (await client.query(
+          'SELECT COUNT(*) FILTER (WHERE "contrato"=$1)::int a, COUNT(*) FILTER (WHERE "contrato"=$2)::int b' +
+          ' FROM "PEOPLE" WHERE "tipoUsuario"=\'TITULAR\' AND "contrato" IN ($1,$2)', [c.contrato, nuevo]
+        )).rows[0];
+        if (dosTitulares.a > 0 && dosTitulares.b > 0) {
+          conflictos.push({ viejo: c.contrato, nuevo, origen: [...a].join(','), destino: 'el titular está DUPLICADO en las dos formas — fusionar a mano' });
+          continue;
+        }
         nota = 'mismo contrato — el renombre repara la desincronización';
       } else {
         // Destino libre NO basta: si las personas de este contrato ya figuran en
@@ -164,10 +183,33 @@ async function idsDe(client, contrato) {
       plan.push({ viejo: c.contrato, nuevo, filas: c.n, nota });
     }
 
+    // ⚠ DOS valores sucios distintos pueden deducir el MISMO destino — pasa
+    // cuando el mismo número se escribió con dos rótulos y pertenece a familias
+    // distintas ("Contrato N.º 5-2451-26" y "Contrato Online N.º 5-2451-26").
+    // El plan se calcula entero ANTES de escribir, así que la guarda de destino
+    // ocupado no los ve: los dos encuentran el destino libre y el renombre los
+    // fusionaría en un solo contrato. Se saltan los dos — el desdoble con
+    // sufijo A/B es una decisión de negocio, no algo que se pueda deducir.
+    const porDestino = new Map();
+    for (const p of plan) porDestino.set(p.nuevo, (porDestino.get(p.nuevo) || 0) + 1);
+    const duplicados = plan.filter((p) => porDestino.get(p.nuevo) > 1);
+    if (duplicados.length) {
+      for (const d of duplicados) {
+        conflictos.push({ viejo: d.viejo, nuevo: d.nuevo, origen: '', destino: 'otro contrato sucio deduce el MISMO número — revisar a mano' });
+      }
+      const limpio = plan.filter((p) => porDestino.get(p.nuevo) === 1);
+      plan.length = 0;
+      plan.push(...limpio);
+    }
+
     // El filtro se aplica DESPUÉS de calcular el plan, para que lo excluido
     // siga apareciendo y se vea qué queda pendiente.
     const fuera = SOLO.size ? plan.filter((p) => !SOLO.has(p.nuevo)) : [];
-    const aplicar = SOLO.size ? plan.filter((p) => SOLO.has(p.nuevo)) : plan;
+    // COPIA, no la misma referencia: más abajo se vacía `plan` para dejar dentro
+    // sólo lo que se va a aplicar, y con la referencia compartida eso borraba
+    // también `aplicar` — la corrida completa (sin --solo) terminaba en "Nada
+    // que aplicar" aunque el plan tuviera decenas de contratos.
+    const aplicar = SOLO.size ? plan.filter((p) => SOLO.has(p.nuevo)) : [...plan];
 
     console.log('\n=== A NORMALIZAR: ' + aplicar.length + ' contrato(s) ===');
     if (aplicar.length) console.table(aplicar);
