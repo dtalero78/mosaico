@@ -11,6 +11,7 @@ import {
 import { ZOOM_ABRE_MIN_ANTES, zoomDisponible } from '@/lib/zoom-window'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
 
 interface NextClassCardProps {
   events: any[]
@@ -91,7 +92,7 @@ export default function NextClassCard({ events, isLoading }: NextClassCardProps)
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${tipoColor}`}>
-              {nextClass.tipo || nextClass.tipoEvento}
+              {etiquetaTipoEvento(nextClass.tipo || nextClass.tipoEvento)}
             </span>
             <span className="text-sm text-gray-600">
               {nextClass.nivel} - {nextClass.step}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useEvaluarMutation } from '@/hooks/use-evaluations'
 import { checkProfanity, PROFANITY_MESSAGE } from '@/lib/profanity-filter'
+import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
 
 interface PendingItem {
   bookingId: string
@@ -124,7 +125,7 @@ export default function EvaluacionModal({
           {/* Datos del evento */}
           <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1 mb-4 border border-gray-200">
             <div><strong>Advisor:</strong> {item.advisorNombre || '—'}</div>
-            <div><strong>Evento:</strong> {item.tipo}{item.nombreEvento ? ` · ${item.nombreEvento}` : ` · ${item.step}`} · <span className="text-gray-500">{item.nivel}</span></div>
+            <div><strong>Evento:</strong> {etiquetaTipoEvento(item.tipo)}{item.nombreEvento ? ` · ${item.nombreEvento}` : ` · ${item.step}`} · <span className="text-gray-500">{item.nivel}</span></div>
             <div><strong>Fecha:</strong> {fechaFmt}</div>
           </div>
 

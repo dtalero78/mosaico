@@ -25,3 +25,20 @@ export const TIPOS_FUERA_DE_CASOS = [
 
 /** Los tipos anteriores, listos para un `NOT IN (...)` de SQL. */
 export const TIPOS_FUERA_DE_CASOS_SQL = TIPOS_FUERA_DE_CASOS.map(t => `'${t}'`).join(',');
+
+/**
+ * Cómo se llama el tipo de un agendamiento EN PANTALLA.
+ *
+ * El valor guardado es `CLUB` —así se creó, así se sigue creando y así lo
+ * comparan las reglas—, pero en MOSAICO esa actividad se llama **Taller** y así
+ * aparece en el resto de la aplicación. Se traduce sólo al mostrarlo: renombrar
+ * el dato obligaría a tocar las decenas de sitios que comparan `tipo === 'CLUB'`
+ * y dejaría los 68.000 agendamientos ya guardados con el valor viejo.
+ *
+ * Vive aquí para que las cinco pantallas que muestran el tipo de un agendamiento
+ * digan lo mismo; con una copia en cada una, la primera corrección las desalinea.
+ */
+export function etiquetaTipoEvento(tipo?: string | null): string {
+  const t = String(tipo || '').trim();
+  return t.toUpperCase() === 'CLUB' ? 'Taller' : t;
+}

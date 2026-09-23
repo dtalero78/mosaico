@@ -2,6 +2,7 @@
 
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
 
 interface MyEventsSectionProps {
   events: any[]
@@ -58,7 +59,7 @@ export default function MyEventsSection({
                     </td>
                     <td className="py-2.5 px-2">
                       <span className="text-gray-900 font-medium">
-                        {evt.tipo || evt.tipoEvento}
+                        {etiquetaTipoEvento(evt.tipo || evt.tipoEvento)}
                       </span>
                       <span className="text-gray-500 ml-1">
                         {evt.nivel} - {evt.step}

@@ -6,6 +6,7 @@ import { MagnifyingGlassIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outl
 import { exportToExcel } from '@/lib/export-excel'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { InformesPermission } from '@/types/permissions'
+import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
 
 const today       = new Date().toISOString().split('T')[0]
 const firstOfYear = `${new Date().getFullYear()}-01-01`
@@ -215,7 +216,7 @@ export default function InformesUsuariosPage() {
                             ${r.tipo === 'SESSION' ? 'bg-blue-100 text-blue-800'
                               : r.tipo === 'CLUB' ? 'bg-green-100 text-green-800'
                               : 'bg-gray-100 text-gray-700'}`}>
-                            {r.tipo || '—'}
+                            {etiquetaTipoEvento(r.tipo) || '—'}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-blue-600">{r.advisor || '—'}</td>

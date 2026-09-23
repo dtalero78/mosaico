@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { formatDateTime } from '@/lib/utils'
 import { visibleEnHistorial } from '@/lib/fecha-semana'
+import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
 
 interface ClassHistoryProps {
   data: any
@@ -180,7 +181,7 @@ export default function ClassHistory({ data, isLoading }: ClassHistoryProps) {
                   </td>
                   <td className="table-cell">
                     <span className={`badge ${getTypeBadgeClass(item.tipoEvento)}`}>
-                      {item.tipoEvento}
+                      {etiquetaTipoEvento(item.tipoEvento)}
                     </span>
                   </td>
                   <td className="table-cell">

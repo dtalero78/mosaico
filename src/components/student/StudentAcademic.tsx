@@ -13,6 +13,7 @@ import { useSession } from 'next-auth/react'
 import { usePermissions } from '@/hooks/usePermissions'
 import SobrecupoModal, { esSobrecupo, type SobrecupoDetalle } from '@/components/common/SobrecupoModal'
 import { StudentPermission, AcademicoPermission, Role } from '@/types/permissions'
+import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
 
 interface StudentAcademicProps {
   student: Student
@@ -936,7 +937,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                   </td>
                   <td className="table-cell">
                     <span className={`badge ${getTypeBadgeClass((classItem as any).tipoEvento)}`}>
-                      {(classItem as any).tipoEvento}
+                      {etiquetaTipoEvento((classItem as any).tipoEvento)}
                     </span>
                   </td>
                   <td className="table-cell">
