@@ -27,7 +27,12 @@ interface Contrato {
 
 const RECORDS_PER_PAGE = 10
 
-/** Estado consolidado del contrato (Finalizado > Inactivo > Aprobado). */
+/**
+ * Estado consolidado del contrato (Finalizado > Inactivo > Aprobado).
+ *
+ * En la vista "Sin aprobar" no aplica: ahí ninguno está aprobado, así que se
+ * muestra su decisión real (Devuelto, Retractado, Contrato nulo, Pendiente…).
+ */
 function estadoDe(c: Contrato): { key: 'Finalizado' | 'Inactivo' | 'Aprobado'; text: string; color: string } {
   if (c.aprobacion === 'FINALIZADA' || c.estado === 'FINALIZADA') {
     return { key: 'Finalizado', text: 'Finalizado', color: 'bg-red-100 text-red-800' }
@@ -38,11 +43,28 @@ function estadoDe(c: Contrato): { key: 'Finalizado' | 'Inactivo' | 'Aprobado'; t
   return { key: 'Aprobado', text: 'Aprobado', color: 'bg-green-100 text-green-800' }
 }
 
+/** Distintivo de un contrato sin aprobar: su propia decisión, o "Sin decisión". */
+function estadoSinAprobar(c: Contrato): { text: string; color: string } {
+  const v = (c.aprobacion || '').trim()
+  if (!v) return { text: 'Sin decisión', color: 'bg-amber-100 text-amber-800' }
+  const rojos = ['Rechazado', 'Contrato nulo', 'Retractado']
+  return {
+    text: v,
+    color: rojos.includes(v) ? 'bg-red-100 text-red-800'
+      : v === 'Devuelto' ? 'bg-blue-100 text-blue-800'
+      : 'bg-amber-100 text-amber-800',
+  }
+}
+
+/** El valor que cambia el UNIVERSO consultado, no el filtro sobre lo ya traído. */
+const SIN_APROBAR = 'SIN_APROBAR'
+
 const ESTADOS = [
   { value: '', label: 'Todos (aprobados/inactivos/finalizados)' },
   { value: 'Aprobado', label: 'Aprobado' },
   { value: 'Inactivo', label: 'Inactivo' },
   { value: 'Finalizado', label: 'Finalizado' },
+  { value: SIN_APROBAR, label: 'Sin aprobar (firmados)' },
 ]
 
 export default function AprobadosPage() {
@@ -56,14 +78,19 @@ export default function AprobadosPage() {
   const [fechaFin, setFechaFin] = useState<Date | null>(null)
   const [page, setPage] = useState(1)
 
-  const load = async () => {
+  // "Sin aprobar" no filtra lo ya traído: consulta OTRO universo (firmados que
+  // nadie aprobó), así que al elegirlo se vuelve a pedir la lista al servidor.
+  const verSinAprobar = estado === SIN_APROBAR
+
+  const load = async (sinAprobar = verSinAprobar) => {
     setLoading(true)
     try {
-      const r = await fetch('/api/postgres/approvals/aprobados', { cache: 'no-store' }).then(x => x.json())
+      const url = `/api/postgres/approvals/aprobados${sinAprobar ? '?vista=sin-aprobar' : ''}`
+      const r = await fetch(url, { cache: 'no-store' }).then(x => x.json())
       setAll(r.success && r.approvals ? r.approvals : [])
     } catch { setAll([]) } finally { setLoading(false) }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(verSinAprobar) }, [verSinAprobar])
 
   const filtered = (): Contrato[] => {
     let d = [...all]
@@ -72,7 +99,8 @@ export default function AprobadosPage() {
       d = d.filter(c => `${c.primerApellido || ''} ${c.segundoApellido || ''} ${c.primerNombre || ''}`.toLowerCase().includes(s)
         || (c.contrato || '').toLowerCase().includes(s) || (c.numeroId || '').includes(s))
     }
-    if (estado) d = d.filter(c => estadoDe(c).key === estado)
+    // En "Sin aprobar" el corte ya lo hizo el servidor: no hay nada que filtrar.
+    if (estado && !verSinAprobar) d = d.filter(c => estadoDe(c).key === estado)
     if (campaign) d = d.filter(c => (c.campaign || '') === campaign)
     if (fechaInicio) d = d.filter(c => new Date(c._createdDate) >= fechaInicio)
     if (fechaFin) { const f = new Date(fechaFin); f.setHours(23, 59, 59, 999); d = d.filter(c => new Date(c._createdDate) <= f) }
@@ -103,7 +131,11 @@ export default function AprobadosPage() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">✅ Aprobados</h1>
-              <p className="mt-2 text-sm text-gray-700">Contratos aprobados, inactivos y finalizados</p>
+              <p className="mt-2 text-sm text-gray-700">
+                {verSinAprobar
+                  ? 'Contratos firmados que aún nadie ha aprobado, en cualquier estado'
+                  : 'Contratos aprobados, inactivos y finalizados'}
+              </p>
             </div>
             <div className="flex gap-3">
               <button
@@ -115,15 +147,16 @@ export default function AprobadosPage() {
                   { header: 'Plataforma', accessor: (c) => c.plataforma },
                   { header: 'Celular', accessor: (c) => c.celular },
                   { header: 'Email', accessor: (c) => c.email },
-                  { header: 'Estado', accessor: (c) => estadoDe(c).text },
+                  { header: 'Estado', accessor: (c) => (verSinAprobar ? estadoSinAprobar(c).text : estadoDe(c).text) },
                   { header: 'Fecha', accessor: (c) => new Date(c._createdDate).toLocaleDateString() },
-                ], `aprobados-${new Date().toISOString().split('T')[0]}`)}
+                ], `${verSinAprobar ? 'sin-aprobar' : 'aprobados'}-${new Date().toISOString().split('T')[0]}`)}
                 disabled={data.length === 0}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Download className="w-4 h-4" /> Exportar Excel
               </button>
-              <button onClick={load}
+              {/* Lambda, no `onClick={load}`: si no, el MouseEvent entra como argumento. */}
+              <button onClick={() => load()}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
                 <Filter className="w-4 h-4" /> Actualizar
               </button>
@@ -192,7 +225,11 @@ export default function AprobadosPage() {
             <div className="card p-12 text-center">
               <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">Sin registros</h3>
-              <p className="text-gray-500">No hay contratos aprobados/inactivos/finalizados con esos filtros.</p>
+              <p className="text-gray-500">
+                {verSinAprobar
+                  ? 'No hay contratos firmados sin aprobar con esos filtros.'
+                  : 'No hay contratos aprobados/inactivos/finalizados con esos filtros.'}
+              </p>
             </div>
           ) : (
             <div className="card overflow-hidden">
@@ -207,7 +244,7 @@ export default function AprobadosPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {rows.map(c => {
-                      const est = estadoDe(c)
+                      const est = verSinAprobar ? estadoSinAprobar(c) : estadoDe(c)
                       return (
                         <tr key={c._id} className="hover:bg-gray-50 cursor-pointer"
                           onClick={() => window.open(`/person/${c._id}`, '_blank')}>

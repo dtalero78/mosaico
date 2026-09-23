@@ -5,7 +5,7 @@ import { AprobacionPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
 
 /**
- * GET /api/postgres/approvals/aprobados
+ * GET /api/postgres/approvals/aprobados[?vista=sin-aprobar]
  *
  * Titulares con contrato APROBADO o FINALIZADO (consulta del ítem "Aprobados"
  * del submenú Aprobación). Incluye la campaña (de un beneficiario del contrato).
@@ -17,9 +17,27 @@ import { query } from '@/lib/postgres';
  * Retractados salían en una lista llamada "Aprobados" — y además se duplicaban
  * con el Centro, que lista todo lo no aprobado. Un aprobado que después se
  * inactiva no se pierde: sigue entrando por su `aprobacion`.
+ *
+ * `vista=sin-aprobar` cambia el UNIVERSO (no filtra el anterior): los contratos
+ * FIRMADOS que nadie aprobó, en el estado que sea — Devuelto, Retractado,
+ * Contrato nulo, Pendiente o sin decisión. La firma es la misma condición que
+ * usa Gestión Contrato (`hashConsentimiento`), así que las dos pantallas hablan
+ * del mismo conjunto. Los finalizados quedan fuera: ya están en la vista normal.
  */
-export const GET = handlerWithAuth(async (_req, _ctx, session) => {
+const APROBADO_O_FINALIZADO = `(
+  p."aprobacion" IN ('Aprobado','Aprobada','FINALIZADA')
+  OR p."estado" = 'FINALIZADA'
+)`;
+
+const FIRMADO = `p."hashConsentimiento" IS NOT NULL AND p."hashConsentimiento" <> ''`;
+
+export const GET = handlerWithAuth(async (req, _ctx, session) => {
   await requirePermission(session, AprobacionPermission.APROBADOS_VER);
+
+  const sinAprobar = new URL(req.url).searchParams.get('vista') === 'sin-aprobar';
+  const universo = sinAprobar
+    ? `${FIRMADO} AND NOT ${APROBADO_O_FINALIZADO}`
+    : APROBADO_O_FINALIZADO;
 
   const result = await query(
     `SELECT p."_id", p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido",
@@ -36,10 +54,7 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
      ) camp ON true
      WHERE p."tipoUsuario" = 'TITULAR'
        AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
-       AND (
-         p."aprobacion" IN ('Aprobado','Aprobada','FINALIZADA')
-         OR p."estado" = 'FINALIZADA'
-       )
+       AND (${universo})
      ORDER BY p."_createdDate" DESC`
   );
 
