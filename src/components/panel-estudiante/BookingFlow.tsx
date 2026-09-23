@@ -73,10 +73,14 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
   const today = new Date()
   const localToday = toLocalISO(today)
 
-  // Fechas ofrecidas. Los TALLERES y las OLIMPIADAS se agendan mirando la semana
-  // completa (lunes a viernes de la semana en curso, con los días ya pasados en
-  // gris); el resto de agendamientos sigue con Hoy/Mañana.
-  const dates: { date: string; label: string; disabled?: boolean }[] = []
+  // Fechas ofrecidas. Los TALLERES y las OLIMPIADAS se agendan mirando DOS semanas
+  // —la en curso y la siguiente, de lunes a sábado— con los días ya pasados en
+  // gris; el resto de agendamientos sigue con Hoy/Mañana.
+  //
+  // Son dos semanas porque un taller se crea a mano y casi siempre cae más allá
+  // de la semana en curso: con una sola, el alumno no tenía cómo llegar a él.
+  type OpcionFecha = { date: string; label: string; disabled?: boolean }
+  const grupos: { titulo: string; dias: OpcionFecha[] }[] = []
   const esSemanal = initialTipo === 'CLUB' || initialTipo === 'OLIMPIADA'
 
   if (esSemanal) {
@@ -85,22 +89,31 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
     const dow = today.getDay()
     const lunes = new Date(today)
     lunes.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1))
-    const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
-    for (let i = 0; i < 5; i++) {
-      const d = new Date(lunes)
-      d.setDate(lunes.getDate() + i)
-      const iso = toLocalISO(d)
-      dates.push({
-        date: iso,
-        label: iso === localToday ? 'Hoy' : DIAS[i],
-        disabled: iso < localToday, // comparación de strings YYYY-MM-DD: segura
-      })
+    const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+    for (let semana = 0; semana < 2; semana++) {
+      const dias: OpcionFecha[] = []
+      for (let i = 0; i < DIAS.length; i++) {
+        const d = new Date(lunes)
+        d.setDate(lunes.getDate() + semana * 7 + i)
+        const iso = toLocalISO(d)
+        dias.push({
+          date: iso,
+          label: iso === localToday ? 'Hoy' : DIAS[i],
+          disabled: iso < localToday, // comparación de strings YYYY-MM-DD: segura
+        })
+      }
+      grupos.push({ titulo: semana === 0 ? 'Esta semana' : 'Próxima semana', dias })
     }
   } else {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
-    dates.push({ date: localToday, label: 'Hoy' })
-    dates.push({ date: toLocalISO(tomorrow), label: 'Mañana' })
+    grupos.push({
+      titulo: '',
+      dias: [
+        { date: localToday, label: 'Hoy' },
+        { date: toLocalISO(tomorrow), label: 'Mañana' },
+      ],
+    })
   }
 
   return (
@@ -132,8 +145,16 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
         <div className="p-4">
           {/* Step 1: Date Selection */}
           {step === 'date' && (
-            <div className="grid grid-cols-2 gap-2">
-              {dates.map(({ date, label, disabled }) => {
+            <div className="space-y-4">
+              {grupos.map(({ titulo, dias }) => (
+                <div key={titulo || 'unico'}>
+                  {titulo && (
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                      {titulo}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+              {dias.map(({ date, label, disabled }) => {
                 const d = new Date(date + 'T12:00:00')
                 const esHoy = label === 'Hoy'
                 return (
@@ -160,6 +181,9 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                   </button>
                 )
               })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

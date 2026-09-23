@@ -1,6 +1,7 @@
 import 'server-only';
 import { query } from '@/lib/postgres';
-import { horariosSeSolapan } from '@/lib/cursos-campaign';
+import { horariosSeSolapan, hoyEnChile } from '@/lib/cursos-campaign';
+import { finEfectivoCurso, vigenciasSeSolapan } from '@/lib/vigencia-curso';
 // La regla de «hay guía asignado» vive en lib/ para que la puedan usar también
 // los scripts y los tests; se reexporta para no cambiar a quien la importe de aquí.
 import { guiaAsignado } from '@/lib/guia';
@@ -17,9 +18,14 @@ export { guiaAsignado };
  *   1. Mismo guía y el otro curso `activa = true`.
  *   2. Los horarios se pisan — comparten día de la semana y sus rangos se
  *      solapan (`horariosSeSolapan`; terminar cuando el otro empieza NO choca).
- *   3. Las VIGENCIAS se solapan: dos cursos con el mismo horario pero en
- *      periodos distintos (uno termina antes de que el otro empiece) no chocan
- *      — es justo cómo se encadenan las campañas.
+ *   3. Las VIGENCIAS se solapan HACIA ADELANTE: dos cursos con el mismo horario
+ *      pero en periodos distintos (uno termina antes de que el otro empiece) no
+ *      chocan — es justo cómo se encadenan las campañas — y un curso que YA
+ *      TERMINÓ tampoco ocupa al guía, aunque en su día se pisara con el otro.
+ *
+ * El fin del curso es el de su ÚLTIMA CLASE cuando ésta cae después de
+ * `finalCurso`: las clases que caen en festivo se corren al final, así que un
+ * curso puede seguir dictándose semanas después de su fecha nominal de cierre.
  *
  * Se compara en JS y no en SQL porque el horario es un texto del catálogo
  * ("LUN-MIÉ 17:00-18:00") y los días viven dentro de esa cadena.
@@ -40,6 +46,11 @@ export interface CursoParaColision {
   salon?: string | null;
   inicioCurso?: string | null;
   finalCurso?: string | null;
+  /**
+   * Fecha de la ÚLTIMA clase realmente agendada. Manda sobre `finalCurso` cuando
+   * es posterior (clases corridas por festivos); si no se pasa, se usa `finalCurso`.
+   */
+  ultimaClase?: string | null;
   /**
    * Grupo de salón al que pertenece este curso. Dos cursos del MISMO grupo
    * comparten guía y horario **a propósito** (el guía dicta una sola sesión para
@@ -65,17 +76,20 @@ export interface ColisionGuia {
 
 const soloFecha = (v: any): string | null => (v ? String(v).slice(0, 10) : null);
 
-
 /**
- * ¿Se solapan dos periodos [aIni,aFin] y [bIni,bFin]?
- * Si a alguno le faltan fechas no se puede descartar el choque → se considera
- * que sí se solapan (conservador: preferimos avisar de más que dejar pasar un
- * cruce real), y el llamador lo marca como `vigenciaIndeterminada`.
+ * Fecha de la última clase agendada de un curso, en hora de Chile. Se calcula
+ * desde el calendario porque `finalCurso` es la ventana NOMINAL: las clases que
+ * caen en festivo se corren al final y el curso termina después.
  */
-function vigenciasSeSolapan(aIni: string | null, aFin: string | null, bIni: string | null, bFin: string | null) {
-  if (!aIni || !aFin || !bIni || !bFin) return { solapan: true, indeterminada: true };
-  return { solapan: aIni <= bFin && bIni <= aFin, indeterminada: false };
-}
+export const ULTIMA_CLASE_SQL = `(
+  SELECT MAX(ev."dia" AT TIME ZONE 'America/Santiago')::date::text
+    FROM "CALENDARIO" ev WHERE ev."cursoCampaignId" = cc."_id"
+) AS "ultimaClase"`;
+
+
+// La regla de vigencia (fin efectivo + solape de hoy en adelante) vive en lib/
+// para que la puedan cargar los tests, que no pueden importar este servicio.
+const finEfectivo = finEfectivoCurso;
 
 /**
  * ¿Chocan estos dos cursos? Regla pura, sin tocar la BD: mismo guía + horarios
@@ -87,8 +101,9 @@ function vigenciasSeSolapan(aIni: string | null, aFin: string | null, bIni: stri
  * cursos costaba 21 s.
  */
 export function chocanCursos(
-  a: Pick<CursoParaColision, 'guia' | 'horarioCurso' | 'inicioCurso' | 'finalCurso' | 'grupoHorarioId'>,
-  b: Pick<CursoParaColision, 'guia' | 'horarioCurso' | 'inicioCurso' | 'finalCurso' | 'grupoHorarioId'>
+  a: Pick<CursoParaColision, 'guia' | 'horarioCurso' | 'inicioCurso' | 'finalCurso' | 'ultimaClase' | 'grupoHorarioId'>,
+  b: Pick<CursoParaColision, 'guia' | 'horarioCurso' | 'inicioCurso' | 'finalCurso' | 'ultimaClase' | 'grupoHorarioId'>,
+  hoy: string = hoyEnChile()
 ): { choca: boolean; vigenciaIndeterminada: boolean } {
   const no = { choca: false, vigenciaIndeterminada: false };
   const guiaA = guiaAsignado(a.guia);
@@ -102,8 +117,9 @@ export function chocanCursos(
 
   if (!horariosSeSolapan(a.horarioCurso, b.horarioCurso)) return no;
   const { solapan, indeterminada } = vigenciasSeSolapan(
-    soloFecha(a.inicioCurso), soloFecha(a.finalCurso),
-    soloFecha(b.inicioCurso), soloFecha(b.finalCurso)
+    soloFecha(a.inicioCurso), finEfectivo(a.finalCurso, a.ultimaClase),
+    soloFecha(b.inicioCurso), finEfectivo(b.finalCurso, b.ultimaClase),
+    hoy
   );
   return solapan ? { choca: true, vigenciaIndeterminada: indeterminada } : no;
 }
@@ -120,6 +136,7 @@ export async function detectarColisionesGuia(curso: CursoParaColision): Promise<
   const candidatos = (await query<any>(
     `SELECT cc."_id", cc."campaign", cc."tipoCurso", cc."salon", cc."horarioCurso",
             cc."inicioCurso"::text AS "inicioCurso", cc."finalCurso"::text AS "finalCurso",
+            ${ULTIMA_CLASE_SQL},
             cc."grupoHorarioId", g."nombreCompleto" AS "guiaNombre"
        FROM "CURSOS_CAMPAIGN" cc
        JOIN "GUIAS" g ON g."_id" = cc."guia"
@@ -129,8 +146,19 @@ export async function detectarColisionesGuia(curso: CursoParaColision): Promise<
     [guia, curso.excluirId || null]
   )).rows;
 
+  const hoy = hoyEnChile();
   const iniA = soloFecha(curso.inicioCurso);
-  const finA = soloFecha(curso.finalCurso);
+  // El curso que se está editando también puede estar terminado (y entonces no
+  // choca con nada): su fin sale de su última clase igual que el de los demás.
+  let ultimaA = curso.ultimaClase ?? null;
+  if (ultimaA === null && curso.excluirId) {
+    const r = await query<any>(
+      `SELECT ${ULTIMA_CLASE_SQL} FROM "CURSOS_CAMPAIGN" cc WHERE cc."_id" = $1`,
+      [curso.excluirId]
+    );
+    ultimaA = r.rows[0]?.ultimaClase ?? null;
+  }
+  const finA = finEfectivo(curso.finalCurso, ultimaA);
 
   const grupoPropio = String(curso.grupoHorarioId || '').trim();
 
@@ -144,7 +172,11 @@ export async function detectarColisionesGuia(curso: CursoParaColision): Promise<
     // Hermanos del mismo grupo de salón: comparten guía y horario A PROPÓSITO.
     if (grupoPropio && String(c.grupoHorarioId || '').trim() === grupoPropio) continue;
     if (!horariosSeSolapan(curso.horarioCurso, c.horarioCurso)) continue;
-    const { solapan, indeterminada } = vigenciasSeSolapan(iniA, finA, soloFecha(c.inicioCurso), soloFecha(c.finalCurso));
+    const { solapan, indeterminada } = vigenciasSeSolapan(
+      iniA, finA,
+      soloFecha(c.inicioCurso), finEfectivo(c.finalCurso, c.ultimaClase),
+      hoy
+    );
     if (!solapan) continue;
     colisiones.push({
       _id: c._id,

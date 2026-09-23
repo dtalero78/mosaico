@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { query } from '@/lib/postgres';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { motivoNoAgrupable, MAX_CURSOS_GRUPO, guiaDelGrupo, etiquetaCurso } from '@/lib/grupo-horario';
-import { chocanCursos, describirColision, guiaAsignado } from '@/services/colision-guia.service';
+import { chocanCursos, describirColision, guiaAsignado, ULTIMA_CLASE_SQL } from '@/services/colision-guia.service';
 import { regenerarCursoPreservandoEstado } from '@/services/cursos-campaign-eventos.service';
 
 /**
@@ -31,6 +31,8 @@ export interface CursoGrupo {
   horarioCurso: string;
   inicioCurso: string | null;
   finalCurso: string | null;
+  /** Última clase realmente agendada; manda sobre `finalCurso` si es posterior. */
+  ultimaClase?: string | null;
   numeroUsuarios: number | null;
   grupoHorarioId: string | null;
 }
@@ -216,7 +218,8 @@ export async function colisionesDeCampania(campaign: string): Promise<{
   // `detectarColisionesGuia` por curso — una consulta cada uno — y una campaña de
   // 28 cursos tardaba 21 segundos.
   const todos = (await query<CursoGrupo>(
-    `SELECT ${CAMPOS_CURSO}, (SELECT g."nombreCompleto" FROM "GUIAS" g WHERE g."_id" = cc."guia") AS "guiaNombre"
+    `SELECT ${CAMPOS_CURSO}, ${ULTIMA_CLASE_SQL},
+            (SELECT g."nombreCompleto" FROM "GUIAS" g WHERE g."_id" = cc."guia") AS "guiaNombre"
        FROM "CURSOS_CAMPAIGN" cc
       WHERE cc."activa" = true AND EXISTS (SELECT 1 FROM "GUIAS" g2 WHERE g2."_id" = cc."guia")
       ORDER BY cc."horarioCurso", cc."tipoCurso", cc."salon"`

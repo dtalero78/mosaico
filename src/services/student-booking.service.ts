@@ -126,7 +126,8 @@ export async function getAvailableEvents(
   date: string,
   tipo?: string,
   tzOffset: number = 0,
-  curso?: string
+  curso?: string,
+  salon?: string
 ) {
   // Build a date range for the selected day in the student's local timezone
   // tzOffset is in minutes from UTC (e.g., Chile UTC-3 = 180, Colombia UTC-5 = 300)
@@ -138,13 +139,22 @@ export async function getAvailableEvents(
   const endDate = new Date(dayEnd.getTime() + offsetMs).toISOString();
 
   // Talleres (CLUB), Olimpiadas y Nivelación: se filtran por CURSO — un alumno
-  // YOJI ve TODOS los de YOJI sin importar su módulo actual.
+  // YOJI ve los de YOJI sin importar su módulo actual.
+  //
+  // Los TALLERES y las OLIMPIADAS además se acotan a SU SALÓN: se programan para
+  // un grupo concreto. El comodín 'Todos' (curso y/o salón) abre el evento al
+  // resto. La Nivelación no lleva salón: la asigna Servicio, alumno por alumno.
   const tipoUp = String(tipo || '').toUpperCase();
-  const esPorCurso = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA' || tipoUp === 'NIVELACION';
+  const esTaller = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA';
+  const esPorCurso = esTaller || tipoUp === 'NIVELACION';
 
   const events = await CalendarioRepository.findEvents(
     (esPorCurso && curso)
-      ? { startDate, endDate, curso, tipo }
+      ? {
+          startDate, endDate, tipo,
+          cursoAlumno: curso,
+          salonAlumno: esTaller ? (salon || undefined) : undefined,
+        }
       : { startDate, endDate, nivel, tipo }
   );
 

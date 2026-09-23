@@ -79,7 +79,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (leccion) { where.push(`${LECCION} = $${i++}`); params.push(leccion) }
   if (guia)    { where.push(`cc."guia" = $${i++}`); params.push(guia) }
   if (usuario) {
-    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i)
+    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i, 'p."contrato"')
     where.push(c.sql); params.push(...c.params); i += 2
   }
 

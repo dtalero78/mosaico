@@ -177,6 +177,16 @@ export default function EventModal({
     }
   }, [formData.curso])
 
+  // Sólo Taller y Olimpiada admiten varios salones. Si se cambia el tipo a otro
+  // con una lista ya marcada, se limpia: el desplegable de un solo salón no puede
+  // representar "01, 02" y el evento quedaría con un valor que nadie puede leer.
+  useEffect(() => {
+    if (!esTaller && formData.salon.includes(',')) {
+      setFormData(prev => ({ ...prev, salon: '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.evento])
+
   // Ejecutar cargarNombreStep cuando cambia tipo de evento (si ya hay nivel)
   useEffect(() => {
     if (formData.tituloONivel) {
@@ -552,6 +562,24 @@ export default function EventModal({
     Array.from(new Set(cursosCampaign
       .filter(r => (!campaign || r.campaign === campaign) && r.tipoCurso === curso)
       .map(r => r.salon).filter(Boolean))) as string[]
+  // ── Salón en Taller / Olimpiada: varios salones en UN solo evento ──
+  // A un taller se convoca a más de un salón, y es una sola clase (un guía, un
+  // Zoom, una lista de asistencia), así que no se parte en un evento por salón:
+  // la selección se guarda como lista en el mismo campo ("01, 02"). 'Todos' es
+  // el comodín y no se combina con salones sueltos.
+  const salonesElegidos = (!formData.salon || formData.salon === TODOS)
+    ? []
+    : formData.salon.split(',').map(s => s.trim()).filter(Boolean)
+  const todosLosSalones = formData.salon === TODOS
+  const toggleSalon = (s: string) => {
+    const next = salonesElegidos.includes(s)
+      ? salonesElegidos.filter(x => x !== s)
+      : [...salonesElegidos, s]
+    // Se ordenan para que el texto guardado no dependa del orden en que se marcaron.
+    next.sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+    handleInputChange('salon', next.join(', '))
+  }
+
   const modulosDeCurso = (curso: string) => modulosByCurso[curso] || []
   const leccionesDeModulo = (curso: string, modulo: string) =>
     modulosDeCurso(curso).find(m => m.code === modulo)?.steps || []
@@ -1005,26 +1033,61 @@ export default function EventModal({
                   ))}
                 </select>
               </div>
-              {/* Salón */}
+              {/* Salón — Taller y Olimpiada admiten VARIOS salones en el mismo evento */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Salón *</label>
-                <select
-                  value={formData.salon} disabled={!formData.curso || formData.curso === TODOS || formData.curso === 'WELCOME'}
-                  onChange={(e) => handleInputChange('salon', e.target.value)}
-                  className="input w-full" required
-                >
-                  {formData.curso === 'WELCOME' ? (
-                    <option value="Salon 00">Salon 00</option>
-                  ) : (
-                    <>
-                      <option value="">Seleccionar salón</option>
-                      <option value={TODOS}>Todos</option>
-                      {Array.from(new Set(cursosCampaign.filter(r => r.campaign === formData.campaign && r.tipoCurso === formData.curso).map(r => r.salon).filter(Boolean))).map(s => (
-                        <option key={s} value={s as string}>{s}</option>
+                {esTaller && formData.curso && formData.curso !== TODOS && formData.curso !== 'WELCOME' ? (
+                  <>
+                    <div className="border border-gray-300 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={todosLosSalones}
+                          onChange={(e) => handleInputChange('salon', e.target.checked ? TODOS : '')}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="font-medium">Todos</span>
+                      </label>
+                      {salonesDeCurso(formData.campaign, formData.curso).map(s => (
+                        <label key={s} className={`flex items-center gap-2 text-sm ${todosLosSalones ? 'opacity-40' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={todosLosSalones}
+                            checked={salonesElegidos.includes(s)}
+                            onChange={() => toggleSalon(s)}
+                            className="rounded border-gray-300"
+                          />
+                          <span>{s}</span>
+                        </label>
                       ))}
-                    </>
-                  )}
-                </select>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {todosLosSalones
+                        ? 'Lo verán los alumnos de cualquier salón del curso.'
+                        : salonesElegidos.length > 0
+                          ? `Salones: ${salonesElegidos.join(', ')}`
+                          : 'Marca uno o varios salones, o "Todos".'}
+                    </p>
+                  </>
+                ) : (
+                  <select
+                    value={formData.salon} disabled={!formData.curso || formData.curso === TODOS || formData.curso === 'WELCOME'}
+                    onChange={(e) => handleInputChange('salon', e.target.value)}
+                    className="input w-full" required
+                  >
+                    {formData.curso === 'WELCOME' ? (
+                      <option value="Salon 00">Salon 00</option>
+                    ) : (
+                      <>
+                        <option value="">Seleccionar salón</option>
+                        <option value={TODOS}>Todos</option>
+                        {salonesDeCurso(formData.campaign, formData.curso).map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                )}
               </div>
               {/* Módulo (Sesión/Nivelación) — o Tipo=clubs (Taller) */}
               <div>

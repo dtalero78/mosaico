@@ -89,7 +89,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (leccion) { where.push(`COALESCE(c."sesionLeccion", c."step") = $${i++}`); params.push(leccion) }
   if (guia)    { where.push(`cc."guia" = $${i++}`); params.push(guia) }
   if (usuario) {
-    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i)
+    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i, 'p."contrato"')
     where.push(c.sql); params.push(...c.params); i += 2
   }
 
@@ -114,7 +114,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             ${FECHA} AS "fechaEstado",
             a."_id" AS "academicaId",
             p."tipoCurso" AS curso,
-            TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido"), '\s+', ' ', 'g')) AS nombre,
+            TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido"), '\\s+', ' ', 'g')) AS nombre,
             p."numeroId" AS "numeroId",
             p."contrato",
             tit."_id" AS "titularId",

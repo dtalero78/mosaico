@@ -530,10 +530,10 @@ function CasosAtencionContent() {
           tab === 'vacias' ? 'xl:grid-cols-7' : 'xl:grid-cols-8'} gap-3`}>
           {tab !== 'vacias' && (
           <div>
-            <label htmlFor="ca-usuario" className="block text-xs font-medium text-gray-500 mb-1">Nombre o ID</label>
+            <label htmlFor="ca-usuario" className="block text-xs font-medium text-gray-500 mb-1">Nombre, ID o contrato</label>
             <input id="ca-usuario" type="text" value={usuario} onChange={e => setUsuario(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') aplicar() }}
-              placeholder="Nombre o documento"
+              placeholder="Nombre, documento o contrato"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
           )}

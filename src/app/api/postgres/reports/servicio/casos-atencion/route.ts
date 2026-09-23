@@ -55,7 +55,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (startDate) { where.push(`COALESCE(c."dia", b."fechaEvento") >= $${i++}::date`); params.push(startDate) }
   if (endDate)   { where.push(`COALESCE(c."dia", b."fechaEvento") < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
   if (usuario) {
-    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i)
+    const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i, 'p."contrato"')
     where.push(c.sql); params.push(...c.params); i += 2
   }
 

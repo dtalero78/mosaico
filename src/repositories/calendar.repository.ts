@@ -18,6 +18,13 @@ export interface EventFilters {
   nivel?: string;
   /** MOSAICO — tipoCurso del evento (YOJI/OKINA/…/IMPULSA, o 'WELCOME'). */
   curso?: string;
+  /**
+   * MOSAICO — panel del alumno: SU curso y SU salón, aceptando el comodín.
+   * Son filtros aparte de `curso` porque ése compara el texto exacto y lo usan
+   * las pantallas de administración, donde "Todos" es un valor más a buscar.
+   */
+  cursoAlumno?: string;
+  salonAlumno?: string;
   step?: string;
   limit?: number;
   includeBookingCounts?: boolean;
@@ -83,6 +90,25 @@ class CalendarioRepositoryClass extends BaseRepository {
     if (filters.curso) {
       conditions.push(`UPPER(c."curso") = UPPER($${idx})`);
       params.push(filters.curso);
+      idx++;
+    }
+    // Panel del alumno: el evento es suyo si coincide con su curso y su salón.
+    // 'Todos' es el comodín con el que se crea un taller abierto a todo el mundo;
+    // un evento SIN curso o SIN salón se trata igual que el comodín, porque si no
+    // no lo vería nadie.
+    if (filters.cursoAlumno) {
+      conditions.push(`(UPPER(c."curso") = UPPER($${idx}) OR UPPER(COALESCE(c."curso", '')) IN ('TODOS', ''))`);
+      params.push(filters.cursoAlumno);
+      idx++;
+    }
+    // El salón del evento puede ser una LISTA ("01, 02"): a un taller se convoca
+    // a varios salones y se crea como un solo evento.
+    if (filters.salonAlumno) {
+      conditions.push(`(
+        UPPER(COALESCE(c."salon", '')) IN ('TODOS', '')
+        OR UPPER($${idx}) = ANY(string_to_array(UPPER(REPLACE(c."salon", ' ', '')), ','))
+      )`);
+      params.push(filters.salonAlumno);
       idx++;
     }
     if (filters.step) {

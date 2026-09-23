@@ -13,20 +13,29 @@ import { normalizeNumeroId } from '@/lib/numeroid-normalize'
  * y está guardado sin puntos ni guión (24777856K), así que compararlos crudos
  * no encontraría nada.
  *
- * @param exprNombre  expresión SQL que resuelve el nombre completo
- * @param exprDoc     expresión SQL que resuelve el documento
- * @param texto       lo que tecleó el usuario
- * @param i           índice del próximo placeholder ($i, $i+1)
+ * El CONTRATO es opcional (hoy sólo lo usa Casos de Atención) y reusa el mismo
+ * parámetro normalizado que el documento: `01-M5-2341-26` queda `01M5234126`, así
+ * que lo encuentra tecleado entero, como `2341-26` o sólo `2341`.
+ *
+ * @param exprNombre    expresión SQL que resuelve el nombre completo
+ * @param exprDoc       expresión SQL que resuelve el documento
+ * @param texto         lo que tecleó el usuario
+ * @param i             índice del próximo placeholder ($i, $i+1)
+ * @param exprContrato  expresión SQL que resuelve el nº de contrato (opcional)
  */
 export function condicionUsuarioSql(
   exprNombre: string,
   exprDoc: string,
   texto: string,
-  i: number
+  i: number,
+  exprContrato?: string
 ): { sql: string; params: string[] } {
   const doc = normalizeNumeroId(texto)
+  const normalizado = (expr: string) =>
+    `REGEXP_REPLACE(UPPER(COALESCE(${expr}, '')), '[.\\s\\-_]', '', 'g') LIKE $${i + 1}`
+  const contrato = exprContrato ? ` OR ${normalizado(exprContrato)}` : ''
   return {
-    sql: `(${exprNombre} ILIKE $${i} OR REGEXP_REPLACE(UPPER(COALESCE(${exprDoc}, '')), '[.\\s\\-_]', '', 'g') LIKE $${i + 1})`,
+    sql: `(${exprNombre} ILIKE $${i} OR ${normalizado(exprDoc)}${contrato})`,
     params: [`%${texto}%`, `%${doc}%`],
   }
 }

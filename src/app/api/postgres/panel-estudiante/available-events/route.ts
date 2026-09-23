@@ -19,8 +19,11 @@ export const GET = handlerWithAuth(async (request, context, session) => {
   // Curso real del alumno (PEOPLE.tipoCurso o ACADEMICA.curso) — usado para
   // filtrar los Talleres (CLUB) por curso en vez de por módulo.
   const curso = (student as any).tipoCurso || (student as any).curso || '';
+  // Salón del alumno: los Talleres y las Olimpiadas se programan para un grupo,
+  // así que se acotan a su salón salvo que el evento lleve el comodín 'Todos'.
+  const salon = (student as any).salon || '';
 
   const bookingId = student.academicaId || student._id;
-  const events = await getAvailableEvents(bookingId, nivel, date, tipo, tzOffset, curso);
+  const events = await getAvailableEvents(bookingId, nivel, date, tipo, tzOffset, curso, salon);
   return successResponse({ events });
 });

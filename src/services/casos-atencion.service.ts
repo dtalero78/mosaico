@@ -487,7 +487,7 @@ export async function getCasoDetalle(casoId: string) {
     `SELECT c.*,
             -- Alumno
             TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre",
-                 p."primerApellido", p."segundoApellido"), '\s+', ' ', 'g')) AS "alumno",
+                 p."primerApellido", p."segundoApellido"), '\\s+', ' ', 'g')) AS "alumno",
             -- Contexto académico: del alumno, no copiado al caso
             p."tipoCurso" AS "curso", p."salon", p."horarioCurso", p."campaign",
             g."nombreCompleto" AS "guiaCurso",
