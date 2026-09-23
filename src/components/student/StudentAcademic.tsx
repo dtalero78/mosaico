@@ -11,7 +11,8 @@ import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { usePermissions } from '@/hooks/usePermissions'
-import { StudentPermission, Role } from '@/types/permissions'
+import SobrecupoModal, { esSobrecupo, type SobrecupoDetalle } from '@/components/common/SobrecupoModal'
+import { StudentPermission, AcademicoPermission, Role } from '@/types/permissions'
 
 interface StudentAcademicProps {
   student: Student
@@ -50,6 +51,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   // (en solo lectura) y el `…_EDITAR` deja escribir en ella. Antes la edición
   // estaba clavada por rol (SUPER_ADMIN/COORDINADOR_ACADEMICO), así que tocar
   // los permisos no la movía — de ahí que "cambié el permiso y no funcionó".
+  // Autorizar sobrecupo es un permiso aparte del de agendar.
+  const canAuthorizeSobrecupo = hasPermission(AcademicoPermission.SOBRECUPO_AUTORIZAR)
   const canEvaluate = hasPermission(StudentPermission.EVALUACION)
   const canAddAdvisorNotes = hasPermission(StudentPermission.ANOTACION_ADVISOR)
   const canEditAdvisorNotes = canAddAdvisorNotes && hasPermission(StudentPermission.ANOTACION_ADVISOR_EDITAR)
@@ -76,6 +79,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [availableTimes, setAvailableTimes] = useState<{label: string, value: string, disabled?: boolean}[]>([])
   const [selectedTime, setSelectedTime] = useState('')
   const [isCreatingEvent, setIsCreatingEvent] = useState(false)
+  /** Detalle del evento lleno; abre el modal de sobrecupo cuando llega. */
+  const [sobrecupo, setSobrecupo] = useState<SobrecupoDetalle | null>(null)
 
   // Step management state
   const [steps, setSteps] = useState<{_id: string, step: string, checkCompletado: boolean}[]>([])
@@ -494,7 +499,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
     }
   }
 
-  const handleSaveNewEvent = async () => {
+  const handleSaveNewEvent = async (autorizarSobrecupo = false) => {
     console.log('🔍 handleSaveNewEvent called - selectedTime:', selectedTime)
 
     if (blockSchedulingByInactive) {
@@ -574,6 +579,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
           agendadoPor: usuarioAgenda.agendadoPor || '',
           agendadoPorEmail: usuarioAgenda.agendadoPorEmail || '',
           agendadoPorRol: usuarioAgenda.agendadoPorRol || '',
+          // Sólo dice que se marcó la casilla; el permiso lo valida el servidor.
+          autorizarSobrecupo,
         })
       })
 
@@ -611,6 +618,13 @@ export default function StudentAcademic({ student, classes: initialClasses, view
         let errorDetail = `HTTP error: ${response.status}`
         try {
           const errData = await response.json()
+          // Evento lleno: en vez del alert genérico se abre el modal, que dice
+          // cuánto se pasa y deja autorizarlo a quien tenga el permiso.
+          if (esSobrecupo(errData.detail)) {
+            setSobrecupo(errData.detail)
+            setIsCreatingEvent(false)
+            return
+          }
           errorDetail = errData.details || errData.error || errorDetail
         } catch {}
         throw new Error(errorDetail)
@@ -1726,7 +1740,9 @@ export default function StudentAcademic({ student, classes: initialClasses, view
                   </button>
 
                   <button
-                    onClick={handleSaveNewEvent}
+                    // Lambda, no `onClick={handleSaveNewEvent}`: si no, el
+                    // MouseEvent entraría como el flag de sobrecupo.
+                    onClick={() => handleSaveNewEvent()}
                     disabled={!selectedTime || isCreatingEvent || blockSchedulingByInactive}
                     title={blockSchedulingByInactive ? 'Estudiante INACTIVO — solo SUPER_ADMIN puede agendar' : undefined}
                     className="inline-flex items-center justify-center px-6 py-2.5 rounded-lg border border-transparent bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 text-sm font-medium shadow-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
@@ -1753,6 +1769,17 @@ export default function StudentAcademic({ student, classes: initialClasses, view
             </div>
           </div>
         </div>
+      )}
+
+      {/* Evento lleno: se autoriza el sobrecupo o se elige otro horario */}
+      {sobrecupo && (
+        <SobrecupoModal
+          detalle={sobrecupo}
+          puedeAutorizar={canAuthorizeSobrecupo}
+          procesando={isCreatingEvent}
+          onCancel={() => setSobrecupo(null)}
+          onConfirm={() => { setSobrecupo(null); handleSaveNewEvent(true) }}
+        />
       )}
 
       {/* Modal de confirmación + motivo para override de step (auditable) */}

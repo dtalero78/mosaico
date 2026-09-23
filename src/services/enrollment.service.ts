@@ -22,9 +22,33 @@ interface EnrollInput {
    * Se usa para validar el bypass de estudiantes INACTIVOS: solo SUPER_ADMIN o ADMIN.
    */
   sessionRole?: string;
+  /**
+   * El usuario marcó "Autorizo el sobrecupo" en el modal. Sólo tiene efecto si
+   * además TIENE el permiso — eso lo comprueba el route handler, no el body.
+   */
+  autorizarSobrecupo?: boolean;
+  /** Quién autorizó (correo de la sesión), para dejarlo en el agendamiento. */
+  autorizadoPor?: string;
+  /**
+   * Agendamiento MASIVO que crea su propio evento (Recuperación al salón,
+   * Nivelaciones › Gestión de grupo): ahí el límite lo acaba de elegir quien
+   * agenda y no se le interrumpe con el modal — conserva el comportamiento de
+   * siempre para los roles que se saltaban el cupo.
+   */
+  masivo?: boolean;
 }
 
 const ROLES_SIN_LIMITE_CAPACIDAD = ['COORDINADOR_ACADEMICO', 'SERVICIO_JEFE', 'SUPER_ADMIN', 'ADMIN', 'ADMINISTRACION_JEFE'];
+
+/** Error de cupo con el detalle que el modal necesita para explicarlo. */
+export class SobrecupoError extends ConflictError {
+  constructor(limite: number, ocupados: number, agendar: number) {
+    super(
+      `El evento está lleno (${ocupados} de ${limite}). Agendar ${agendar} lo dejaría en ${ocupados + agendar}.`,
+      { tipo: 'sobrecupo', limite, ocupados, agendar, sobran: ocupados + agendar - limite }
+    );
+  }
+}
 
 /**
  * Enroll multiple students in an event.
@@ -39,14 +63,24 @@ export async function enrollStudents(input: EnrollInput) {
   const event = await CalendarioRepository.findByIdWithAdvisor(input.eventId);
   if (!event) throw new NotFoundError('Event', input.eventId);
 
-  const skipCapacity = ROLES_SIN_LIMITE_CAPACIDAD.includes(input.agendadoPorRol || '');
-  if (
-    !skipCapacity &&
-    event.limiteUsuarios &&
-    event.limiteUsuarios > 0 &&
-    event.inscritos >= event.limiteUsuarios
-  ) {
-    throw new ConflictError('Event is full');
+  // ── Cupo ──────────────────────────────────────────────────────────────────
+  // Se cuentan los AGENDAMIENTOS VIVOS, no el contador guardado del evento: el
+  // contador se desincroniza y aquí se decide si alguien entra o no.
+  //
+  // Y se mira cuántos lugares QUEDAN frente a cuántos se van a agendar. Antes la
+  // pregunta era "¿queda al menos uno?" y se hacía UNA vez para todo el grupo:
+  // con 12 de 13 ocupados, agendar 5 pasaba el control y dejaba 17.
+  const limite = Number(event.limiteUsuarios) || 0;
+  if (limite > 0) {
+    const ocupados = await CalendarioRepository.countActiveEnrollments(input.eventId);
+    if (ocupados + input.studentIds.length > limite) {
+      // Los agendamientos MASIVOS que crean su propio evento conservan el
+      // comportamiento de siempre: el límite lo acaba de elegir quien agenda.
+      const bypassMasivo = input.masivo && ROLES_SIN_LIMITE_CAPACIDAD.includes(input.agendadoPorRol || '');
+      if (!bypassMasivo && !input.autorizarSobrecupo) {
+        throw new SobrecupoError(limite, ocupados, input.studentIds.length);
+      }
+    }
   }
 
   // Fetch all students - try PEOPLE first with JOIN to ACADEMICA to get canonical ACADEMICA _id.
@@ -206,6 +240,10 @@ export async function enrollStudents(input: EnrollInput) {
         agendadoPorRol: input.agendadoPorRol || '',
         fechaAgendamiento: new Date().toISOString(),
         origen: 'POSTGRES',
+        // Queda en el agendamiento y no en el evento: un mismo evento puede
+        // tener unos dentro del cupo y otros por encima.
+        sobrecupoAutorizadoPor: input.autorizarSobrecupo ? (input.autorizadoPor || input.agendadoPorEmail || '') : null,
+        sobrecupoAutorizadoEn: input.autorizarSobrecupo ? new Date().toISOString() : null,
       };
 
       const columns = Object.keys(bookingData);

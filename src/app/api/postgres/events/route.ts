@@ -157,6 +157,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         // El rol REAL de la sesión, nunca del body: habilita el bypass de
         // capacidad e inactivos sólo a quien de verdad lo tiene.
         sessionRole: rol,
+        // Agendamiento masivo al crear el evento (Recuperación al salón): el
+        // límite lo acaba de poner quien agenda, así que no se le interrumpe
+        // con el modal de sobrecupo.
+        masivo: true,
       });
       agendados = Array.isArray(r?.bookings) ? r.bookings.length : aAgendar.length;
     } catch (err: any) {

@@ -151,6 +151,9 @@ export enum AcademicoPermission {
   ELIMINAR = 'ACADEMICO.AGENDA.ELIMINAR',
   CREAR_EVENTO = 'ACADEMICO.AGENDA.CREAR_EVENTO',
   VER_AGENDA_ACADEMICA = 'ACADEMICO.AGENDA.VER_AGENDA_ACADEMICA',
+  // Agendar por encima del cupo del evento. Es aparte de poder agendar: pasarse
+  // del límite es una excepción que alguien autoriza y queda registrada.
+  SOBRECUPO_AUTORIZAR = 'ACADEMICO.AGENDA.SOBRECUPO',
   IR_A_SESION = 'ACADEMICO.SESION.IR_A_SESION',
   // Botón "Actividad IA" de /sesion/[id]: genera la actividad del grupo y la
   // envía por WhatsApp a los apoderados de los inscritos.

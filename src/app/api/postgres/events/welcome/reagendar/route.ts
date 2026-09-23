@@ -3,6 +3,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { ServicioPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { enrollStudents } from '@/services/enrollment.service';
+import { autorizaSobrecupo } from '@/lib/sobrecupo';
 
 /**
  * POST /api/postgres/events/welcome/reagendar
@@ -37,6 +38,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     agendadoPorEmail: session?.user?.email || undefined,
     agendadoPorRol: (session?.user as any)?.role || undefined,
     sessionRole: (session?.user as any)?.role || undefined,
+    autorizarSobrecupo: body?.autorizarSobrecupo === true && await autorizaSobrecupo(session),
+    autorizadoPor: session?.user?.email || undefined,
   });
 
   return successResponse({

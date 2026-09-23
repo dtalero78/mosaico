@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions'
-import { ServicioPermission } from '@/types/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
+import SobrecupoModal, { esSobrecupo, type SobrecupoDetalle } from '@/components/common/SobrecupoModal'
+import { ServicioPermission, AcademicoPermission } from '@/types/permissions'
 import { formatDateTime } from '@/lib/utils'
 import { exportToExcel } from '@/lib/export-excel'
 
@@ -49,6 +51,9 @@ interface Grupo {
 const nombreDe = (r: Inasistente) => `${r.primerNombre} ${r.primerApellido}`.trim() || '(sin nombre)'
 
 export default function WelcomeReagendamientosTab() {
+  const { hasPermission } = usePermissions()
+  // Autorizar sobrecupo es un permiso aparte del de reagendar.
+  const puedeAutorizarSobrecupo = hasPermission(AcademicoPermission.SOBRECUPO_AUTORIZAR)
   const [rows, setRows] = useState<Inasistente[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,6 +70,8 @@ export default function WelcomeReagendamientosTab() {
   const [cargandoOpciones, setCargandoOpciones] = useState(false)
   const [elegido, setElegido] = useState('')
   const [guardando, setGuardando] = useState(false)
+  /** Detalle de la sesión llena; abre el modal de sobrecupo cuando llega. */
+  const [sobrecupo, setSobrecupo] = useState<SobrecupoDetalle | null>(null)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -139,16 +146,18 @@ export default function WelcomeReagendamientosTab() {
     }
   }
 
-  const confirmar = async () => {
+  const confirmar = async (autorizarSobrecupo = false) => {
     if (!target || !elegido) return
     setGuardando(true)
     try {
       const res = await fetch('/api/postgres/events/welcome/reagendar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventoId: elegido, studentId: target.idEstudiante }),
+        body: JSON.stringify({ eventoId: elegido, studentId: target.idEstudiante, autorizarSobrecupo }),
       })
       const data = await res.json()
+      // Sesión llena: el modal dice cuánto se pasa y lo autoriza quien pueda.
+      if (!res.ok && esSobrecupo(data?.detail)) { setSobrecupo(data.detail); return }
       if (!res.ok || !data.success) throw new Error(data?.error || `Error ${res.status}`)
       toast.success(data.message || 'Alumno reagendado')
       setTarget(null)
@@ -414,7 +423,7 @@ export default function WelcomeReagendamientosTab() {
                 Cancelar
               </button>
               <button
-                onClick={confirmar}
+                onClick={() => confirmar()}
                 disabled={!elegido || guardando}
                 className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -423,6 +432,17 @@ export default function WelcomeReagendamientosTab() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Sesión llena: se autoriza el sobrecupo o se elige otro horario */}
+      {sobrecupo && (
+        <SobrecupoModal
+          detalle={sobrecupo}
+          puedeAutorizar={puedeAutorizarSobrecupo}
+          procesando={guardando}
+          onCancel={() => setSobrecupo(null)}
+          onConfirm={() => { setSobrecupo(null); confirmar(true) }}
+        />
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { enrollStudents } from '@/services/enrollment.service';
+import { autorizaSobrecupo } from '@/lib/sobrecupo';
 import { ValidationError } from '@/lib/errors';
 
 /**
@@ -23,6 +24,10 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     // sessionRole NUNCA viene del body — solo de la sesión autenticada.
     // Se usa para validar bypass de estudiantes INACTIVOS (solo SUPER_ADMIN).
     sessionRole: (session?.user as any)?.role || undefined,
+    // El body sólo dice que se marcó la casilla; que PUEDA autorizarlo lo
+    // decide el permiso, resuelto aquí con la sesión.
+    autorizarSobrecupo: body.autorizarSobrecupo === true && await autorizaSobrecupo(session),
+    autorizadoPor: session?.user?.email || undefined,
   });
 
   return successResponse({

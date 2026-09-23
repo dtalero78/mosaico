@@ -62,6 +62,19 @@ export function requireAdmin(session: Session | null, accion = 'esta operación'
  * cuestionarios, que alimenta tanto Evaluaciones como Entrenamientos y a cuyos
  * roles se les puede dar sólo uno de los dos accesos.
  */
+/**
+ * ¿Tiene el permiso? Devuelve true/false en vez de lanzar.
+ *
+ * Para los permisos que NO gatean el endpoint sino una EXCEPCIÓN dentro de él
+ * —autorizar un sobrecupo, por ejemplo—: quien no lo tiene debe seguir pudiendo
+ * agendar, sólo que sin pasarse del cupo.
+ */
+export async function tienePermiso(session: Session | null, permission: Permission): Promise<boolean> {
+  const role = ((session?.user as any)?.role ?? '') as string;
+  if (role === Role.SUPER_ADMIN || role === Role.ADMIN || role === 'admin') return true;
+  return (await loadPermissions(role)).includes(permission);
+}
+
 export async function requireAnyPermission(session: Session | null, permissions: Permission[]): Promise<void> {
   const role = ((session?.user as any)?.role ?? '') as string;
   if (role === Role.SUPER_ADMIN || role === Role.ADMIN || role === 'admin') return;

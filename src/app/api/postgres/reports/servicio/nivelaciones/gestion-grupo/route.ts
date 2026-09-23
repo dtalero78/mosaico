@@ -83,6 +83,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         agendadoPorEmail: session?.user?.email || undefined,
         agendadoPorRol: (session?.user as any)?.role || undefined,
         sessionRole: (session?.user as any)?.role || undefined,
+        // Gestión de grupo crea la nivelación con el cupo que se acaba de
+        // elegir: agendamiento masivo, sin modal de sobrecupo.
+        masivo: true,
       })
       sumados = res.enrolled
     } catch (e: any) {
@@ -161,6 +164,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       agendadoPorEmail: session?.user?.email || undefined,
       agendadoPorRol: (session?.user as any)?.role || undefined,
       sessionRole: (session?.user as any)?.role || undefined,
+      // Igual que arriba: la nivelación se acaba de crear con su cupo.
+      masivo: true,
     })
     enrolled = res.enrolled
     await limpiarGrupoBorrador(academicaIds)

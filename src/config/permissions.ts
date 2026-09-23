@@ -644,6 +644,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/evaluaciones. Resultados de las evaluaciones y cuestionarios por curso: por estudiante, mejor nota, intentos y aprobó/no aprobó. También alimenta el botón "Revisar Evaluación" del panel del evento.',
   },
   {
+    code: AcademicoPermission.SOBRECUPO_AUTORIZAR,
+    module: Module.ACADEMICO,
+    section: 'Agenda de Sesiones',
+    name: 'Autorizar sobrecupo al agendar',
+    description: 'Cuando el evento está lleno, permite agendar igual: sale un modal con el cupo y los inscritos, se marca "Autorizo el sobrecupo" y el agendamiento guarda quién lo autorizó. Sin este permiso el evento lleno se rechaza. No aplica al alumno, que nunca puede pasarse del cupo.',
+  },
+  {
     code: AcademicoPermission.SESION_ACTIVIDAD_IA,
     module: Module.ACADEMICO,
     section: 'Sesión',
