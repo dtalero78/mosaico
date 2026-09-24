@@ -11,6 +11,7 @@ import {
 import { useAvailableEvents, useBookEvent } from '@/hooks/use-panel-estudiante'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
 
 interface BookingFlowProps {
   onClose: () => void
@@ -255,7 +256,7 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                             <div className="flex items-center gap-2">
                               <ClockIcon className="h-4 w-4 text-gray-400" />
                               <span className="text-sm font-medium text-gray-900">
-                                {format(eventDate, 'HH:mm')} - {evt.esESS ? 'ESS' : (evt.tipo || evt.evento || '-')}
+                                {format(eventDate, 'HH:mm')} - {evt.esESS ? 'ESS' : (etiquetaTipoEvento(evt.tipo || evt.evento) || '-')}
                               </span>
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
@@ -292,7 +293,7 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
             <div className="space-y-4">
               <div className="bg-primary-50 rounded-lg p-4 border border-primary-200">
                 <div className="text-sm font-semibold text-primary-900 mb-2">
-                  {selectedEvent.tipo} - {selectedEvent.nivel}
+                  {etiquetaTipoEvento(selectedEvent.tipo)} - {selectedEvent.nivel}
                 </div>
                 <div className="space-y-1 text-sm text-primary-700">
                   <div className="flex items-center gap-2">
