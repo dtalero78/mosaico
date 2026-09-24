@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { ServicioPermission } from '@/types/permissions'
 import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
+import { agendamientosDeNivelacionActual } from '@/services/nivelacion-agendada.service'
 
 /**
  * GET /api/postgres/reports/servicio/nivelaciones/pendientes?curso&leccion&guia
@@ -17,70 +18,15 @@ import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
  * bandera, para que borrar el evento o cancelar el agendamiento devuelva al
  * alumno a Agrupaciones sin que nadie tenga que acordarse de corregir un campo.
  *
+ * El agendamiento que vale es el de la SOLICITUD ACTUAL (`nivelacion-agendada.
+ * service`): el de una nivelación anterior sigue vivo como historia y, sin esa
+ * acotación, un alumno con segunda nivelación salía aquí con la fecha de la
+ * primera. Si tuviera más de uno, manda el creado más recientemente.
+ *
  * Se distingue el evento que **ya pasó** y sigue sin cerrarse: ésa es la
  * nivelación que le falta gestionar al guía, y es lo que hay que poder ver.
  */
 const MAX_ROWS = 5000
-
-interface EventoNiv {
-  eventoId: string
-  eventoDia: string | null
-  modulo: string | null
-  leccion: string | null
-  guia: string | null
-}
-
-/**
- * Para cada alumno, su nivelación agendada (la más próxima si tuviera varias).
- *
- * Se resuelve en DOS consultas cortas y se cruza en memoria, en vez de con un
- * LATERAL por alumno: partir de los ~165k agendamientos costaba segundos. Los
- * eventos de nivelación son un puñado, así que se listan primero y se pasan
- * como arreglo — con `= ANY($1)` en cada columna y un OR explícito, Postgres
- * combina los dos índices (BitmapOr), el mismo patrón que usa
- * `booking.repository`. `idEstudiante` y `studentId` se miran ambos porque el
- * enlace legacy de Wix usa el segundo.
- */
-async function nivelacionesAgendadas(): Promise<Map<string, EventoNiv>> {
-  const eventos = (await query<any>(
-    `SELECT c."_id", c."dia", c."nivel", c."step", g."nombreCompleto" AS guia
-       FROM "CALENDARIO" c
-       LEFT JOIN "GUIAS" g ON g."_id" = c."advisor"
-      WHERE UPPER(COALESCE(c."tipo", '')) = 'NIVELACION'`
-  )).rows
-  const mapa = new Map<string, EventoNiv>()
-  if (!eventos.length) return mapa
-  const porEvento = new Map<string, any>(eventos.map((e: any) => [e._id, e]))
-
-  const filas = (await query<any>(
-    `SELECT DISTINCT b."idEstudiante", b."studentId", b."eventoId", b."idEvento"
-       FROM "ACADEMICA_BOOKINGS" b
-      WHERE (b."eventoId" = ANY($1::text[]) OR b."idEvento" = ANY($1::text[]))
-        AND b."cancelo" IS NOT TRUE`,
-    [Array.from(porEvento.keys())]
-  )).rows
-
-  for (const f of filas) {
-    const ev = porEvento.get(f.eventoId) || porEvento.get(f.idEvento)
-    if (!ev) continue
-    const dato: EventoNiv = {
-      eventoId: ev._id,
-      eventoDia: ev.dia ? new Date(ev.dia).toISOString() : null,
-      modulo: ev.nivel ?? null,
-      leccion: ev.step ?? null,
-      guia: ev.guia ?? null,
-    }
-    for (const id of [f.idEstudiante, f.studentId]) {
-      if (!id) continue
-      const previo = mapa.get(id)
-      // Si el alumno tuviera más de una, manda la más próxima en el tiempo.
-      if (!previo || (dato.eventoDia && previo.eventoDia && dato.eventoDia < previo.eventoDia)) {
-        mapa.set(id, dato)
-      }
-    }
-  }
-  return mapa
-}
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.NIVELACIONES_VER)
@@ -91,7 +37,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const guia = (searchParams.get('guia') || '').trim()
   const usuario = (searchParams.get('usuario') || '').trim()
 
-  const agendadas = await nivelacionesAgendadas()
+  const agendadas = await agendamientosDeNivelacionActual()
   const ids = Array.from(agendadas.keys())
   if (!ids.length) {
     return successResponse({ rows: [], total: 0, cursos: [], lecciones: [], guias: [] })

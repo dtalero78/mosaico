@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { ServicioPermission } from '@/types/permissions'
 import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
+import { agendamientosDeNivelacionActual } from '@/services/nivelacion-agendada.service'
 
 /**
  * GET /api/postgres/reports/servicio/nivelaciones/agrupaciones?curso&leccion&guia
@@ -12,46 +13,20 @@ import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
  * agrupa por (curso, lección) para crear UNA nivelación por grupo.
  *
  * "Ya tiene evento" NO se guarda en una columna: se DERIVA de que el alumno
- * tenga un agendamiento no cancelado en un evento `tipo='NIVELACION'`. Copiarlo
- * a una bandera lo dejaría desfasado en cuanto el evento se borre o el
- * agendamiento se cancele. Los que YA tienen evento no desaparecen: pasan a la
- * pestaña **Pendientes**, hasta que se dicte y se marque asistencia.
+ * tenga un agendamiento no cancelado en un evento `tipo='NIVELACION'` **hecho
+ * después de la solicitud actual** (`nivelacion-agendada.service`, la misma
+ * regla que usan Pendientes, el cron y el panel del alumno). Copiarlo a una
+ * bandera lo dejaría desfasado en cuanto el evento se borre o el agendamiento
+ * se cancele. Y tiene que ser el de ESTA solicitud: el agendamiento de una
+ * nivelación anterior sigue vivo como historia de asistencia, así que sin esa
+ * acotación la segunda nivelación de un alumno nunca pasaba por aquí. Los que
+ * YA tienen evento no desaparecen: pasan a la pestaña **Pendientes**, hasta que
+ * se dicte y se marque asistencia.
  *
  * Se devuelven además campaña / horario / salón porque son el alcance con el
  * que se creará el evento del grupo.
  */
 const MAX_ROWS = 5000
-
-/**
- * Alumnos que YA tienen su nivelación agendada.
- *
- * Se resuelve en DOS consultas cortas en vez de en un `NOT EXISTS`
- * correlacionado: ese recorría los ~165k agendamientos por cada alumno y
- * tardaba 30 segundos. Los eventos de nivelación son un puñado, así que se
- * listan primero y se pasan como arreglo: con `= ANY($1)` en cada columna y
- * un OR explícito, Postgres combina los dos índices (BitmapOr) — el mismo
- * patrón que usa `booking.repository`. `idEstudiante` y `studentId` se miran
- * ambos porque el enlace legacy de Wix usa el segundo.
- */
-async function idsConNivelacionAgendada(): Promise<string[]> {
-  const eventos = (await query<{ _id: string }>(
-    `SELECT "_id" FROM "CALENDARIO" WHERE UPPER(COALESCE("tipo", '')) = 'NIVELACION'`
-  )).rows.map((e) => e._id)
-  if (!eventos.length) return []
-  const filas = (await query<{ idEstudiante: string | null; studentId: string | null }>(
-    `SELECT DISTINCT b."idEstudiante", b."studentId"
-       FROM "ACADEMICA_BOOKINGS" b
-      WHERE (b."eventoId" = ANY($1::text[]) OR b."idEvento" = ANY($1::text[]))
-        AND b."cancelo" IS NOT TRUE`,
-    [eventos]
-  )).rows
-  const ids = new Set<string>()
-  for (const f of filas) {
-    if (f.idEstudiante) ids.add(f.idEstudiante)
-    if (f.studentId) ids.add(f.studentId)
-  }
-  return Array.from(ids)
-}
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.NIVELACIONES_VER)
@@ -62,7 +37,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const guia = (searchParams.get('guia') || '').trim()
   const usuario = (searchParams.get('usuario') || '').trim()
 
-  const agendadas = await idsConNivelacionAgendada()
+  const agendadas = Array.from((await agendamientosDeNivelacionActual()).keys())
 
   const where: string[] = [
     `a."aprobadoNivelacion" = true`,

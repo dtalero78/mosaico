@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/postgres'
 import { recordCronRun } from '@/lib/cron-runs'
 import { debeCancelarse, corteCancelacion } from '@/lib/nivelacion-confirmacion'
+import { agendamientosDeNivelacionActual } from '@/services/nivelacion-agendada.service'
 
 const CRON_SECRET = process.env.CRON_SECRET
 
@@ -20,7 +21,10 @@ const CRON_SECRET = process.env.CRON_SECRET
  *
  * La última condición es la importante: si ya se agrupó, hay un guía y un
  * horario comprometidos y borrarla dejaría un evento con un asistente menos sin
- * que nadie se enterara. Esas se gestionan a mano.
+ * que nadie se enterara. Esas se gestionan a mano. "Tiene evento" se decide con
+ * la MISMA regla que Agrupaciones/Pendientes (`nivelacion-agendada.service`):
+ * sólo cuenta el agendamiento hecho después de la solicitud actual — el de una
+ * nivelación anterior, ya dictada, no protege a la nueva de cancelarse.
  *
  * Queda entrada en `NivelacionHistory` con resultado `CANCELADA_SIN_CONFIRMAR`:
  * sin ella la nivelación se evaporaría y nadie podría explicar por qué.
@@ -53,24 +57,9 @@ export async function GET(request: NextRequest) {
         return { processedCount: 0, successCount: 0, failedCount: 0, metadata: { candidatas: rows.length, details: [] } }
       }
 
-      // Las que YA tienen evento no se tocan: hay un guía y un horario dados.
-      const eventos = (await query<{ _id: string }>(
-        `SELECT "_id" FROM "CALENDARIO" WHERE UPPER(COALESCE("tipo", '')) = 'NIVELACION'`
-      )).rows.map(e => e._id)
-      const conEvento = new Set<string>()
-      if (eventos.length) {
-        const filas = (await query<any>(
-          `SELECT DISTINCT b."idEstudiante", b."studentId"
-             FROM "ACADEMICA_BOOKINGS" b
-            WHERE (b."eventoId" = ANY($1::text[]) OR b."idEvento" = ANY($1::text[]))
-              AND b."cancelo" IS NOT TRUE`,
-          [eventos]
-        )).rows
-        for (const f of filas) {
-          if (f.idEstudiante) conEvento.add(f.idEstudiante)
-          if (f.studentId) conEvento.add(f.studentId)
-        }
-      }
+      // Las que YA tienen evento (de ESTA solicitud) no se tocan: hay un guía y
+      // un horario dados.
+      const conEvento = await agendamientosDeNivelacionActual()
 
       const details: any[] = []
       let ok = 0, fail = 0, saltadas = 0

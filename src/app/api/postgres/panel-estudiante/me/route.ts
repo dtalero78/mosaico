@@ -4,6 +4,7 @@ import { resolveStudentFromSession } from '@/services/panel-estudiante.service';
 import { queryOne, query } from '@/lib/postgres';
 import { getPresignedVideoUrl } from '@/lib/spaces';
 import { corteConfirmacion, estadoConfirmacion } from '@/lib/nivelacion-confirmacion';
+import { agendamientoDeNivelacionActualDe } from '@/services/nivelacion-agendada.service';
 
 export const GET = handlerWithAuth(async (request, context, session) => {
   const student = await resolveStudentFromSession(session);
@@ -103,17 +104,12 @@ export const GET = handlerWithAuth(async (request, context, session) => {
     // Vale mientras la nivelación siga viva: pedida o ya aprobada sin dictarse.
     if (det?.fecha && (niv?.nivelacion === true || niv?.aprobadoNivelacion === true)) {
       // El plazo se cuenta desde el HORARIO ASIGNADO, así que hace falta el
-      // evento. Sin agendamiento la confirmación queda abierta: el alumno aún
-      // no tiene qué confirmar y el panel le oculta el botón.
-      const ev = await queryOne<{ dia: string }>(
-        `SELECT MIN(c."dia") AS dia
-           FROM "ACADEMICA_BOOKINGS" b
-           JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
-          WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
-            AND b."cancelo" IS NOT TRUE
-            AND c."tipo" = 'NIVELACION'
-            AND c."dia" > NOW()`,
-        [(student as any).academicaId]
+      // evento — el de ESTA solicitud (misma regla que Agrupaciones/Pendientes:
+      // el agendamiento de una nivelación anterior no es su horario). Sin
+      // agendamiento la confirmación queda abierta: el alumno aún no tiene qué
+      // confirmar y el panel le oculta el botón.
+      const ag = await agendamientoDeNivelacionActualDe(
+        (student as any).academicaId, det.fecha, { soloFuturos: true }
       ).catch(() => null);
       nivelacionSolicitud = {
         fecha: det.fecha,
@@ -122,7 +118,7 @@ export const GET = handlerWithAuth(async (request, context, session) => {
         confirmadoEn: det.confirmadoEn ?? null,
         confirmadoPor: det.confirmadoPor ?? null,
         corte: corteConfirmacion(det.fecha),
-        estado: estadoConfirmacion(det, new Date(), ev?.dia ?? null),
+        estado: estadoConfirmacion(det, new Date(), ag?.eventoDia ?? null),
       };
     }
   }

@@ -5,6 +5,7 @@ import { resolveStudentFromSession } from '@/services/panel-estudiante.service';
 import { query, queryOne } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { puedeConfirmarAlumno, corteConfirmacion, MENSAJE_CONFIRMACION_VENCIDA } from '@/lib/nivelacion-confirmacion';
+import { agendamientoDeNivelacionActualDe } from '@/services/nivelacion-agendada.service';
 
 /**
  * POST /api/postgres/panel-estudiante/nivelacion/confirmar
@@ -35,19 +36,13 @@ export const POST = handlerWithAuth(async (_request, _ctx, session) => {
   if (det.confirmadoEn) {
     return successResponse({ confirmadoEn: det.confirmadoEn, confirmadoPor: det.confirmadoPor ?? null, yaEstaba: true });
   }
-  // El plazo se cuenta desde el HORARIO ASIGNADO. Se resuelve aquí y no se
-  // acepta del cliente: quien confirma no debe poder decidir su propio plazo.
-  const ev = await queryOne<{ dia: string }>(
-    `SELECT MIN(c."dia") AS dia
-       FROM "ACADEMICA_BOOKINGS" b
-       JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
-      WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
-        AND b."cancelo" IS NOT TRUE
-        AND c."tipo" = 'NIVELACION'
-        AND c."dia" > NOW()`,
-    [student.academicaId]
+  // El plazo se cuenta desde el HORARIO ASIGNADO — el de ESTA solicitud, con la
+  // misma regla que Agrupaciones/Pendientes. Se resuelve aquí y no se acepta
+  // del cliente: quien confirma no debe poder decidir su propio plazo.
+  const ag = await agendamientoDeNivelacionActualDe(
+    student.academicaId, det.fecha, { soloFuturos: true }
   ).catch(() => null);
-  if (!puedeConfirmarAlumno(det, new Date(), ev?.dia ?? null)) {
+  if (!puedeConfirmarAlumno(det, new Date(), ag?.eventoDia ?? null)) {
     throw new ValidationError(MENSAJE_CONFIRMACION_VENCIDA);
   }
 
