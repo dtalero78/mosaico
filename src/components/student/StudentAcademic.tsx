@@ -321,21 +321,32 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       .catch(() => setLeccionesCurso([]))
   }, [studentCourse])
 
-  // Query de alcance para /events/filtered según el tipo de evento elegido:
+  // Salón del alumno: los Talleres y las Olimpiadas se convocan por salón (o con
+  // el comodín 'Todos'), así que el alcance lo lleva igual que el panel del alumno.
+  const studentSalon = String((student as any).salon || '').trim()
+
+  // Query de alcance para /events/filtered según el tipo de evento elegido. Es
+  // el MISMO alcance con el que el alumno ve sus eventos en su panel
+  // (student-booking.service → alcanceDelAlumno): lo que el admin le puede
+  // agendar desde aquí es exactamente lo que el alumno vería.
   //  - WELCOME    → eventos WELCOME (curso WELCOME); módulo según el grupo del curso:
   //                 IMPULSA→IMPULSA, YOJI/OKINA/KODOMO→MOSKIDS, DANSHI/SENPAI→MOSADULTOS.
-  //  - NIVELACION → sólo nivelaciones del MISMO curso del alumno (ej. YOJI).
-  //  - SESSION/CLUB → comportamiento existente (por módulo/nivel del alumno).
+  //  - CLUB (Taller) / OLIMPIADA → por CURSO y SALÓN del alumno, tolerando el
+  //                 comodín 'Todos' (cursoAlumno/salonAlumno). Antes el Taller iba
+  //                 por módulo, como una sesión, y un taller creado para "Todos"
+  //                 los cursos —que no tiene módulo— no aparecía nunca.
+  //  - NIVELACION → por CURSO del alumno, también con comodín.
+  //  - SESSION    → por módulo (nivel) del alumno, como siempre.
   const buildEventScopeQuery = (): string => {
     if (selectedEventType === 'WELCOME') {
       return `tipoEvento=WELCOME&nivel=${encodeURIComponent(welcomeModuloForCurso(studentCourse))}`
     }
     if (selectedEventType === 'NIVELACION') {
-      return `tipoEvento=NIVELACION&curso=${encodeURIComponent(studentCourse)}`
+      return `tipoEvento=NIVELACION&cursoAlumno=${encodeURIComponent(studentCourse)}`
     }
-    if (selectedEventType === 'OLIMPIADA') {
-      // Olimpiadas: por CURSO del alumno (igual que Nivelación/Taller).
-      return `tipoEvento=OLIMPIADA&curso=${encodeURIComponent(studentCourse)}`
+    if (selectedEventType === 'CLUB' || selectedEventType === 'OLIMPIADA') {
+      const salon = studentSalon ? `&salonAlumno=${encodeURIComponent(studentSalon)}` : ''
+      return `tipoEvento=${selectedEventType}&cursoAlumno=${encodeURIComponent(studentCourse)}${salon}`
     }
     return `nivel=${encodeURIComponent(student.nivel || '')}&tipoEvento=${selectedEventType}`
   }
@@ -345,11 +356,11 @@ export default function StudentAcademic({ student, classes: initialClasses, view
       console.warn('Missing eventType')
       return
     }
-    if ((selectedEventType === 'SESSION' || selectedEventType === 'CLUB') && !student.nivel) {
+    if (selectedEventType === 'SESSION' && !student.nivel) {
       console.warn('Missing student level')
       return
     }
-    if ((selectedEventType === 'WELCOME' || selectedEventType === 'NIVELACION' || selectedEventType === 'OLIMPIADA') && !studentCourse) {
+    if ((selectedEventType === 'WELCOME' || selectedEventType === 'NIVELACION' || selectedEventType === 'CLUB' || selectedEventType === 'OLIMPIADA') && !studentCourse) {
       console.warn('Missing student course')
       return
     }

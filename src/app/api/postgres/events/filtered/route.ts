@@ -11,6 +11,13 @@ export const GET = handlerWithAuth(async (request) => {
 
   const nivel = searchParams.get('nivel');
   const curso = searchParams.get('curso');
+  // Alcance "del alumno": curso y salón con el comodín 'Todos' (ver
+  // calendar.repository). Es lo que usa el wizard de /student para Talleres,
+  // Olimpiadas y Nivelación: un taller creado para "Todos" los cursos no tiene
+  // curso ni módulo que coincidan con los del alumno, y con `nivel`/`curso`
+  // exactos no aparecía.
+  const cursoAlumno = searchParams.get('cursoAlumno');
+  const salonAlumno = searchParams.get('salonAlumno');
   const step = searchParams.get('step');
   const tipo = searchParams.get('tipo') || searchParams.get('tipoEvento');
   const advisor = searchParams.get('advisor');
@@ -21,6 +28,8 @@ export const GET = handlerWithAuth(async (request) => {
   const events = await getEvents({
     nivel: nivel || undefined,
     curso: curso || undefined,
+    cursoAlumno: cursoAlumno || undefined,
+    salonAlumno: salonAlumno || undefined,
     step: step || undefined,
     tipo: tipo || undefined,
     advisor: advisor || undefined,
