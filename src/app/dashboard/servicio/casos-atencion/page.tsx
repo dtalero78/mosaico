@@ -109,9 +109,21 @@ const DESTINOS: { area: string | null; label: string; detalle: string; clase: st
 
 /**
  * Nivelaciones lleva una columna DETALLE además del Estado: el comentario con
- * el que se asignó el caso, que ahí es el encargo concreto para el área.
+ * el que se asignó el caso, que ahí es el encargo concreto para el área. El
+ * Histórico lleva la misma columna con otro nombre —CONCLUSIÓN—: el último
+ * movimiento de un caso cerrado es su cierre, y su comentario es la conclusión
+ * con la que se cerró (desde la bandeja, desde un área o desde la ficha).
  */
-const MUESTRA_DETALLE = (t: Tab) => t === 'nivelaciones'
+const MUESTRA_DETALLE = (t: Tab) => t === 'nivelaciones' || t === 'historico'
+const DETALLE_HEADER = (t: Tab) => (t === 'historico' ? 'Conclusión' : 'Detalle')
+
+/**
+ * Las cuatro bandejas de ÁREA pueden cerrar el caso desde la fila: el área ya
+ * hizo su gestión y sólo falta dejar la conclusión. El Histórico no, porque ahí
+ * ya está cerrado; Casos tiene su propio botón (Asignar, que también cierra).
+ */
+const PUEDE_CERRAR = (t: Tab) =>
+  t === 'academicos' || t === 'nivelaciones' || t === 'coordinador' || t === 'financieros'
 
 /**
  * TODO destino exige texto. La razón cambia según cuál —al CERRAR hay que
@@ -198,6 +210,8 @@ interface Row {
   // Sólo en las pestañas de gestión
   casoId?: string
   acuerdo?: string | null
+  /** Fecha de compromiso del acuerdo (YYYY-MM-DD). R5 la exige para cerrar. */
+  fechaCompromiso?: string | null
   cerradoPor?: string | null
   detalle?: string | null
   fechaEstado?: string | null
@@ -264,6 +278,15 @@ function CasosAtencionContent() {
   // `undefined` = todavía no eligió; `null` = eligió Cerrar (que no tiene área).
   const [destino, setDestino] = useState<string | null | undefined>(undefined)
   const [saving, setSaving] = useState(false)
+
+  // Modal "Cerrar caso" (bandejas de área). La conclusión es el comentario del
+  // cierre; acuerdo y fecha sólo se piden si el caso no los tiene (R5).
+  const [cerrar, setCerrar] = useState<Row | null>(null)
+  const [conclusion, setConclusion] = useState('')
+  const [cierreAcuerdo, setCierreAcuerdo] = useState('')
+  const [cierreFecha, setCierreFecha] = useState('')
+  const [cierreConfirmado, setCierreConfirmado] = useState(false)
+  const [cerrando, setCerrando] = useState(false)
 
   // Confirmación del WhatsApp (pestaña Asistencia)
   const [recordar, setRecordar] = useState<Row | null>(null)
@@ -359,7 +382,7 @@ function CasosAtencionContent() {
         { header: 'Tipo', accessor: (r: Row) => tipoCasoLabel(r.tipoCaso) },
         { header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fechaEstado || null) },
         ...(MUESTRA_DETALLE(tab)
-          ? [{ header: 'Detalle', accessor: (r: Row) => r.detalle || '' }]
+          ? [{ header: DETALLE_HEADER(tab), accessor: (r: Row) => r.detalle || '' }]
           : []),
         { header: 'Estado', accessor: (r: Row) => estadoLabel(r.estado) },
         { header: 'Caso', accessor: (r: Row) => r.codigoCaso || '' },
@@ -426,6 +449,55 @@ function CasosAtencionContent() {
     }
   }
 
+  /** El caso no tiene acuerdo o fecha de compromiso: el modal los pide (R5). */
+  const cierreNecesitaAcuerdo = (r: Row | null) =>
+    !!r && (!String(r.acuerdo || '').trim() || !r.fechaCompromiso)
+
+  const abrirCierre = (r: Row) => {
+    setCerrar(r)
+    setConclusion('')
+    setCierreAcuerdo(r.acuerdo || '')
+    setCierreFecha(r.fechaCompromiso ? String(r.fechaCompromiso).slice(0, 10) : '')
+    setCierreConfirmado(false)
+  }
+
+  const confirmarCierre = async () => {
+    if (!cerrar?.casoId) return
+    if (!conclusion.trim()) { toast.error('La conclusión del caso es obligatoria'); return }
+    const pideAcuerdo = cierreNecesitaAcuerdo(cerrar)
+    if (pideAcuerdo && (!cierreAcuerdo.trim() || !cierreFecha)) {
+      toast.error('Para cerrar hacen falta el acuerdo con el apoderado y la fecha de compromiso'); return
+    }
+    if (!cierreConfirmado) { toast.error('Marca la confirmación del cierre'); return }
+    setCerrando(true)
+    try {
+      // El mismo PATCH que usa la ficha del alumno para cambiar el estado: así el
+      // cierre pasa por `cambiarEstado` (R5 + historial) y no por otro camino.
+      const res = await fetch(`/api/postgres/casos-atencion/${encodeURIComponent(cerrar.casoId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estado: 'RESUELTO',
+          motivo: conclusion.trim(),
+          ...(pideAcuerdo ? { acuerdo: cierreAcuerdo.trim(), fechaCompromiso: cierreFecha } : {}),
+        }),
+      }).then(x => x.json())
+      if (res.error) throw new Error(res.error)
+      toast.success('Caso cerrado — pasa al Histórico')
+      const estadoPrevio = cerrar.estado || ''
+      setRows(prev => prev.filter(x => x.casoId !== cerrar.casoId))
+      setTotal(t => Math.max(0, t - 1))
+      setPorEstado(prev => prev
+        .map(e => e.estado === estadoPrevio ? { ...e, n: e.n - 1 } : e)
+        .filter(e => e.n > 0))
+      setCerrar(null); setConclusion(''); setCierreConfirmado(false)
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo cerrar el caso')
+    } finally {
+      setCerrando(false)
+    }
+  }
+
   const marcarContactado = async (r: Row, valor: boolean) => {
     setMarcando(r.bookingId)
     // Optimista: la casilla responde al instante y se revierte si falla.
@@ -468,7 +540,7 @@ function CasosAtencionContent() {
   const hayDatos = tab === 'vacias' ? grupos.length > 0 : rows.length > 0
   const columnas = ES_GESTION(tab)
     ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha',
-       ...(MUESTRA_DETALLE(tab) ? ['Detalle'] : []), 'Estado']
+       ...(MUESTRA_DETALLE(tab) ? [DETALLE_HEADER(tab)] : []), 'Estado']
     : tab === 'casos'
     ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
     : tab === 'asistencia'
@@ -661,8 +733,9 @@ function CasosAtencionContent() {
                   </Fragment>
                 ))
               ) : ES_GESTION(tab) ? rows.map((r) => (
-                /* Histórico · Académicos · Financieros: mismas columnas que Casos,
-                   sin botón de cerrar — estos ya están cerrados. */
+                /* Histórico y las cuatro bandejas de área: mismas columnas que
+                   Casos. Las de área llevan además "Cerrar caso"; el Histórico
+                   no, porque ahí ya está cerrado. */
                 <tr key={r.casoId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
                   <td className="px-3 py-2 font-medium whitespace-nowrap">
@@ -710,6 +783,14 @@ function CasosAtencionContent() {
                         .filter(Boolean).join(' · ') || undefined}>
                       {estadoLabel(r.estado)}
                     </span>
+                    {PUEDE_CERRAR(tab) && (
+                      <button type="button" title="Cerrar el caso con su conclusión: pasa al Histórico"
+                        onClick={() => abrirCierre(r)}
+                        disabled={!canGestion || !r.casoId}
+                        className="ml-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <CheckCircleIcon className="h-4 w-4" /> Cerrar caso
+                      </button>
+                    )}
                     {r.acuerdo && (
                       <span className="block max-w-[220px] truncate text-xs text-gray-500 mt-1" title={r.acuerdo}>
                         {r.acuerdo}
@@ -908,6 +989,101 @@ function CasosAtencionContent() {
           </div>
         </div>
       )}
+
+      {/* Modal Cerrar caso (bandejas de área) */}
+      {cerrar && (() => {
+        const pideAcuerdo = cierreNecesitaAcuerdo(cerrar)
+        const listo = !!conclusion.trim() && cierreConfirmado
+          && (!pideAcuerdo || (!!cierreAcuerdo.trim() && !!cierreFecha))
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !cerrando && setCerrar(null)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Cerrar caso</h3>
+              <p className="text-sm text-gray-500 mb-1">
+                {cerrar.nombre} — {cerrar.curso || '—'}{cerrar.codigoCaso ? ` · Caso ${cerrar.codigoCaso}` : ''}
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                Estado actual:{' '}
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${estadoColor(cerrar.estado)}`}>
+                  {estadoLabel(cerrar.estado)}
+                </span>
+              </p>
+              {cerrar.detalle && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm text-gray-700">
+                  <p className="text-xs font-semibold text-gray-500 mb-1">Último movimiento del caso:</p>
+                  <p className="whitespace-pre-wrap break-words">{cerrar.detalle}</p>
+                </div>
+              )}
+
+              <label htmlFor="cc-conclusion" className="block text-sm font-medium text-gray-700 mb-1">
+                Conclusión del caso <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="cc-conclusion"
+                value={conclusion}
+                onChange={e => setConclusion(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="Cómo se resolvió el caso y con qué resultado…"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              />
+
+              {/* R5: sin acuerdo con el apoderado y fecha de compromiso el caso no
+                  se puede cerrar. Sólo se piden cuando el caso no los tiene, para
+                  no volver a preguntar lo que ya se registró en la ficha. */}
+              {pideAcuerdo && (
+                <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs text-amber-800 mb-2">
+                    Este caso no tiene registrado el acuerdo con el apoderado o la fecha de compromiso. Hacen falta para cerrarlo.
+                  </p>
+                  <label htmlFor="cc-acuerdo" className="block text-xs font-medium text-gray-700 mb-1">
+                    Acuerdo con el apoderado <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    id="cc-acuerdo"
+                    value={cierreAcuerdo}
+                    onChange={e => setCierreAcuerdo(e.target.value)}
+                    rows={2}
+                    maxLength={2000}
+                    placeholder="Qué se acordó con el apoderado…"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  />
+                  <label htmlFor="cc-fecha" className="block text-xs font-medium text-gray-700 mb-1 mt-2">
+                    Fecha de compromiso <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="cc-fecha"
+                    type="date"
+                    value={cierreFecha}
+                    onChange={e => setCierreFecha(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+              )}
+
+              <label className="flex items-start gap-2 mt-4 cursor-pointer">
+                <input type="checkbox" checked={cierreConfirmado} onChange={e => setCierreConfirmado(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-primary-600" />
+                <span className="text-sm text-gray-700">
+                  Confirmo el cierre: el caso pasa al <b>Histórico</b> y queda de solo lectura.
+                </span>
+              </label>
+              <p className="text-xs text-gray-400 mt-2">
+                La conclusión queda en la bitácora del caso y en la columna Conclusión del Histórico.
+              </p>
+
+              <div className="flex justify-end gap-2 mt-5">
+                <button type="button" onClick={() => setCerrar(null)} disabled={cerrando}
+                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+                <button type="button" onClick={confirmarCierre} disabled={cerrando || !listo}
+                  className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
+                  {cerrando ? 'Cerrando…' : 'Cerrar caso'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Confirmación del recordatorio por WhatsApp */}
       {recordar && (

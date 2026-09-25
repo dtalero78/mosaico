@@ -441,7 +441,11 @@ export async function guardarGestion(
 ) {
   const caso = await queryOne<{ estado: string }>(`SELECT "estado" FROM "CASOS_ATENCION" WHERE "_id" = $1`, [casoId]);
   if (!caso) throw new NotFoundError('Caso de atención', casoId);
-  if (caso.estado !== ESTADO_ABIERTO) throw new ValidationError('El caso está cerrado: es de solo lectura.');
+  // Misma regla que `cambiarEstado`: el caso se puede tocar mientras no haya
+  // CERRADO. Antes se comparaba contra EN_GESTION, y desde que el área vive en
+  // su propia columna un caso asignado (REMITIDO_A_FINANZAS, PROCESO_DE_CIERRE…)
+  // sigue vivo con otro estado: guardarle el acuerdo salía "solo lectura".
+  if (cierraElCaso(caso.estado)) throw new ValidationError('El caso está cerrado: es de solo lectura.');
 
   // Sólo se tocan los campos enviados: guardar el acuerdo no debe borrar finanzas.
   const sets: string[] = [];

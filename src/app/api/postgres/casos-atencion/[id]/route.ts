@@ -74,6 +74,14 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   }
 
   if (body?.estado) {
+    // Cerrar desde la bandeja de área puede traer el acuerdo y la fecha de
+    // compromiso en la MISMA llamada: R5 los exige para cerrar y el caso puede
+    // no tenerlos todavía. Se guardan antes del cambio de estado, en el mismo
+    // orden en que lo haría la ficha del alumno (primero el acuerdo, luego el
+    // cierre); si el cierre fallara, el acuerdo queda guardado y no se pierde.
+    if (body?.acuerdo !== undefined || body?.fechaCompromiso !== undefined) {
+      await guardarGestion(id, { acuerdo: body?.acuerdo, fechaCompromiso: body?.fechaCompromiso });
+    }
     const r = await cambiarEstado(id, String(body.estado) as EstadoCaso, actor, body.motivo);
     return successResponse({
       ...r,

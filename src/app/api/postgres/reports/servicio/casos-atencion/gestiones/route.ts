@@ -110,6 +110,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             ca."tema"::text AS "tipoCaso",
             ca."estado"::text AS estado,
             ca."acuerdo",
+            -- La fecha de compromiso viaja con el acuerdo: el botón "Cerrar caso"
+            -- de las bandejas de área pide ambos si faltan (R5).
+            ca."fechaCompromiso"::text AS "fechaCompromiso",
             ca."cerradoPor",
             ${FECHA} AS "fechaEstado",
             a."_id" AS "academicaId",
