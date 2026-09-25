@@ -112,12 +112,80 @@ function eventDiaToUTC(dia: any): Date {
   return new Date(dia);
 }
 
+/** Eventos con más de esto en el pasado ya no se ofrecen (claramente pasaron). */
+const PASADO_MAX_MIN = 60;
+
+/**
+ * Alcance de lo que el alumno puede ver, común a "eventos del día" y a "días
+ * con evento" — con dos copias el selector de fecha marcaría un día que luego
+ * la lista no muestra.
+ *
+ * Talleres (CLUB), Olimpiadas y Nivelación se filtran por CURSO — un alumno
+ * YOJI ve los de YOJI sin importar su módulo actual. Los TALLERES y las
+ * OLIMPIADAS además se acotan a SU SALÓN: se programan para un grupo concreto.
+ * El comodín 'Todos' (curso y/o salón) abre el evento al resto. La Nivelación
+ * no lleva salón: la asigna Servicio, alumno por alumno. El resto va por módulo.
+ */
+function alcanceDelAlumno(nivel: string, tipo?: string, curso?: string, salon?: string) {
+  const tipoUp = String(tipo || '').toUpperCase();
+  const esTaller = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA';
+  const esPorCurso = esTaller || tipoUp === 'NIVELACION';
+  return (esPorCurso && curso)
+    ? { tipo, cursoAlumno: curso, salonAlumno: esTaller ? (salon || undefined) : undefined }
+    : { nivel, tipo };
+}
+
+/**
+ * Ventana UTC que cubre los días LOCALES `desde..hasta` (YYYY-MM-DD) del alumno.
+ * `tzOffset` son los minutos desde UTC como los da el navegador
+ * (`getTimezoneOffset()`: Chile UTC-3 = 180, Colombia UTC-5 = 300).
+ */
+function ventanaUTC(desde: string, hasta: string, tzOffset: number) {
+  const offsetMs = tzOffset * 60 * 1000;
+  // medianoche local + offset = su equivalente en UTC
+  return {
+    startDate: new Date(new Date(`${desde}T00:00:00`).getTime() + offsetMs).toISOString(),
+    endDate: new Date(new Date(`${hasta}T23:59:59`).getTime() + offsetMs).toISOString(),
+  };
+}
+
+/**
+ * Días LOCALES del alumno (YYYY-MM-DD) que tienen al menos un evento del tipo
+ * pedido dentro de `desde..hasta`. Alimenta el selector de fecha de los
+ * Talleres, que pinta el miércoles y el viernes con taller programado; por eso
+ * usa exactamente el mismo alcance que la lista del día y descarta lo que esa
+ * lista tampoco ofrecería (más de PASADO_MAX_MIN en el pasado).
+ */
+export async function getDiasConEventos(
+  nivel: string,
+  desde: string,
+  hasta: string,
+  tipo?: string,
+  tzOffset: number = 0,
+  curso?: string,
+  salon?: string
+): Promise<string[]> {
+  const events = await CalendarioRepository.findEvents({
+    ...ventanaUTC(desde, hasta, tzOffset),
+    ...alcanceDelAlumno(nivel, tipo, curso, salon),
+  });
+  const offsetMs = tzOffset * 60 * 1000;
+  const now = Date.now();
+  const dias = new Set<string>();
+  for (const e of events as any[]) {
+    const t = eventDiaToUTC(e.dia).getTime();
+    if ((t - now) / 60_000 < -PASADO_MAX_MIN) continue;
+    // Día LOCAL del alumno: el inverso de ventanaUTC (UTC − offset).
+    dias.add(new Date(t - offsetMs).toISOString().slice(0, 10));
+  }
+  return Array.from(dias).sort();
+}
+
 /**
  * Eventos disponibles para agendar desde el panel del alumno.
  *
- * Filtro MOSAICO: Talleres (CLUB), Olimpiadas y Nivelación van por CURSO
- * (YOJI/OKINA/…); el resto por módulo (nivel). SIN filtro Step/Jump ni ramas
- * ESS (motor LGS retirado — ver cabecera del archivo). Anota cupo, inscripción
+ * Filtro MOSAICO: ver `alcanceDelAlumno`. SIN filtro Step/Jump ni ramas ESS
+ * (motor LGS retirado — ver cabecera del archivo). Anota cupo, inscripción
  * previa y "Próximamente" (menos de 30 min).
  */
 export async function getAvailableEvents(
@@ -129,34 +197,13 @@ export async function getAvailableEvents(
   curso?: string,
   salon?: string
 ) {
-  // Build a date range for the selected day in the student's local timezone
-  // tzOffset is in minutes from UTC (e.g., Chile UTC-3 = 180, Colombia UTC-5 = 300)
-  const offsetMs = tzOffset * 60 * 1000;
-  const dayStart = new Date(`${date}T00:00:00`);
-  const dayEnd = new Date(`${date}T23:59:59`);
-  // Shift to UTC: local midnight + offset = UTC equivalent
-  const startDate = new Date(dayStart.getTime() + offsetMs).toISOString();
-  const endDate = new Date(dayEnd.getTime() + offsetMs).toISOString();
+  // Ventana del día elegido en la zona horaria LOCAL del alumno.
+  const { startDate, endDate } = ventanaUTC(date, date, tzOffset);
 
-  // Talleres (CLUB), Olimpiadas y Nivelación: se filtran por CURSO — un alumno
-  // YOJI ve los de YOJI sin importar su módulo actual.
-  //
-  // Los TALLERES y las OLIMPIADAS además se acotan a SU SALÓN: se programan para
-  // un grupo concreto. El comodín 'Todos' (curso y/o salón) abre el evento al
-  // resto. La Nivelación no lleva salón: la asigna Servicio, alumno por alumno.
-  const tipoUp = String(tipo || '').toUpperCase();
-  const esTaller = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA';
-  const esPorCurso = esTaller || tipoUp === 'NIVELACION';
-
-  const events = await CalendarioRepository.findEvents(
-    (esPorCurso && curso)
-      ? {
-          startDate, endDate, tipo,
-          cursoAlumno: curso,
-          salonAlumno: esTaller ? (salon || undefined) : undefined,
-        }
-      : { startDate, endDate, nivel, tipo }
-  );
+  const events = await CalendarioRepository.findEvents({
+    startDate, endDate,
+    ...alcanceDelAlumno(nivel, tipo, curso, salon),
+  });
 
   // Get student's upcoming bookings to check for duplicates
   const upcoming = await BookingRepository.findUpcomingByStudentId(studentId, 100);
@@ -185,7 +232,7 @@ export async function getAvailableEvents(
     const minutesUntil = (evtDate.getTime() - now.getTime()) / (1000 * 60);
 
     // Hard-filter: events more than 60 min in the past (claramente ya pasaron)
-    if (minutesUntil < -60) {
+    if (minutesUntil < -PASADO_MAX_MIN) {
       return null;
     }
 

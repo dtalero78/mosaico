@@ -8,7 +8,7 @@ import {
   ArrowLeftIcon,
   UserIcon,
 } from '@heroicons/react/24/outline'
-import { useAvailableEvents, useBookEvent } from '@/hooks/use-panel-estudiante'
+import { useAvailableEvents, useBookEvent, useDiasConEventos } from '@/hooks/use-panel-estudiante'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
@@ -83,6 +83,9 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
   type OpcionFecha = { date: string; label: string; disabled?: boolean }
   const grupos: { titulo: string; dias: OpcionFecha[] }[] = []
   const esSemanal = initialTipo === 'CLUB' || initialTipo === 'OLIMPIADA'
+  // Sólo los TALLERES llevan la leyenda de las dos clases de taller y los días
+  // pintados: el modal se ensancha para que quepa el texto sin apretar la grilla.
+  const esTaller = initialTipo === 'CLUB'
 
   if (esSemanal) {
     // Lunes de ESTA semana: getDay() es 0=domingo, así que el domingo cuenta como
@@ -117,9 +120,34 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
     })
   }
 
+  // Días con TALLER programado en las dos semanas mostradas. Se consulta UNA vez
+  // para todo el rango (no día por día) y sólo en Talleres: los demás tipos no
+  // pintan nada. El servidor aplica el mismo alcance que la lista del día (curso
+  // y salón del alumno), así que un día pintado siempre tiene algo que agendar.
+  const rangoDesde = esTaller && grupos.length ? grupos[0].dias[0].date : ''
+  const rangoHasta = esTaller && grupos.length ? grupos[grupos.length - 1].dias.slice(-1)[0].date : ''
+  const { data: diasData } = useDiasConEventos(rangoDesde, rangoHasta, 'CLUB')
+  const diasConTaller = new Set<string>(diasData?.dias || [])
+
+  /**
+   * Cómo se pinta un día con taller. La regla es por DÍA DE LA SEMANA, que es
+   * como se distinguen las dos clases de taller: el de APODERADOS cae en
+   * miércoles (naranja) y el de ESTUDIANTES en viernes (azul). Un taller en
+   * otro día se marca en verde, el color del Taller en el resto del panel, para
+   * no esconderlo.
+   */
+  type EstiloTaller = { caja: string; icono: string; texto: string; etiqueta: string }
+  const estiloTaller = (date: string): EstiloTaller | null => {
+    if (!esTaller || !diasConTaller.has(date)) return null
+    const dow = new Date(date + 'T12:00:00').getDay()   // 3 = miércoles, 5 = viernes
+    if (dow === 3) return { caja: 'bg-orange-100 border-orange-400 ring-1 ring-orange-300 hover:bg-orange-200 hover:border-orange-500', icono: 'text-orange-600', texto: 'text-orange-700', etiqueta: 'Taller apoderados' }
+    if (dow === 5) return { caja: 'bg-blue-100 border-blue-400 ring-1 ring-blue-300 hover:bg-blue-200 hover:border-blue-500', icono: 'text-blue-600', texto: 'text-blue-700', etiqueta: 'Taller estudiantes' }
+    return { caja: 'bg-green-50 border-green-400 ring-1 ring-green-200 hover:bg-green-100 hover:border-green-500', icono: 'text-green-600', texto: 'text-green-700', etiqueta: 'Taller programado' }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto">
+      <div className={`bg-white rounded-t-2xl sm:rounded-2xl w-full ${esTaller ? 'sm:max-w-2xl' : 'sm:max-w-lg'} max-h-[85vh] overflow-y-auto`}>
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center gap-3 rounded-t-2xl">
           {step !== 'date' && (
@@ -147,6 +175,29 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
           {/* Step 1: Date Selection */}
           {step === 'date' && (
             <div className="space-y-4">
+              {/* Leyenda de los Talleres: qué dos clases hay y con qué color se
+                  marca el día en el que se programó alguno. */}
+              {esTaller && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                  <p className="font-semibold text-gray-900 mb-2">Recuerde que hay dos clases de Talleres:</p>
+                  <ul className="space-y-1.5">
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-3 w-3 shrink-0 rounded-sm bg-orange-400 ring-1 ring-orange-500" aria-hidden="true" />
+                      <span>
+                        <span className="font-semibold text-orange-800">APODERADOS</span>: se realizan una vez al mes y generalmente son los miércoles.
+                        En el calendario el día se marca en <span className="font-semibold text-orange-800">color naranja</span> si se ha programado alguno.
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-3 w-3 shrink-0 rounded-sm bg-blue-400 ring-1 ring-blue-500" aria-hidden="true" />
+                      <span>
+                        <span className="font-semibold text-blue-800">ESTUDIANTES</span>: se programan usualmente los viernes.
+                        En el calendario el día se marca en <span className="font-semibold text-blue-800">color azul</span> si se ha programado alguno.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              )}
               {grupos.map(({ titulo, dias }) => (
                 <div key={titulo || 'unico'}>
                   {titulo && (
@@ -154,30 +205,40 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                       {titulo}
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* En Talleres el modal es más ancho: la semana cabe en tres
+                      columnas (lun·mar·mié / jue·vie·sáb). */}
+                  <div className={`grid grid-cols-2 gap-2 ${esTaller ? 'sm:grid-cols-3' : ''}`}>
               {dias.map(({ date, label, disabled }) => {
                 const d = new Date(date + 'T12:00:00')
                 const esHoy = label === 'Hoy'
+                // El color del taller manda sobre el resalte de "Hoy": es la
+                // información que el alumno vino a buscar.
+                const taller = disabled ? null : estiloTaller(date)
                 return (
                   <button
                     key={date}
                     onClick={() => !disabled && handleDateSelect(date)}
                     disabled={disabled}
-                    title={disabled ? 'Este día ya pasó' : undefined}
+                    title={disabled ? 'Este día ya pasó' : taller ? `${taller.etiqueta} programado` : undefined}
                     className={
                       disabled
                         ? 'flex items-center gap-2 p-4 bg-gray-50 rounded-lg border border-gray-200 text-left opacity-40 cursor-not-allowed'
-                        : `flex items-center gap-2 p-4 rounded-lg hover:bg-primary-50 hover:border-primary-300 border transition-colors text-left ${
-                            esHoy ? 'bg-primary-50 border-primary-300' : 'bg-gray-50 border-gray-200'
+                        : `flex items-center gap-2 p-4 rounded-lg border transition-colors text-left ${
+                            taller ? taller.caja
+                            : esHoy ? 'bg-primary-50 border-primary-300 hover:bg-primary-100 hover:border-primary-400'
+                            : 'bg-gray-50 border-gray-200 hover:bg-primary-50 hover:border-primary-300'
                           }`
                     }
                   >
-                    <CalendarDaysIcon className={`h-5 w-5 ${disabled ? 'text-gray-300' : esHoy ? 'text-primary-600' : 'text-gray-400'}`} />
+                    <CalendarDaysIcon className={`h-5 w-5 ${disabled ? 'text-gray-300' : taller ? taller.icono : esHoy ? 'text-primary-600' : 'text-gray-400'}`} />
                     <div>
                       <div className={`text-sm font-bold ${disabled ? 'text-gray-400' : 'text-gray-900'}`}>{label}</div>
                       <div className="text-xs text-gray-500">
                         {format(d, "EEEE d 'de' MMMM", { locale: es })}
                       </div>
+                      {taller && (
+                        <div className={`text-[11px] font-semibold ${taller.texto}`}>{taller.etiqueta}</div>
+                      )}
                     </div>
                   </button>
                 )

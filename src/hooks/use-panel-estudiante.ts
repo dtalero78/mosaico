@@ -18,6 +18,8 @@ const keys = {
   comments: ['panel-estudiante', 'comments'] as const,
   availableEvents: (date: string, tipo?: string) =>
     ['panel-estudiante', 'available-events', date, tipo] as const,
+  diasConEventos: (desde: string, hasta: string, tipo?: string) =>
+    ['panel-estudiante', 'available-events', 'dias', desde, hasta, tipo] as const,
 }
 
 // ─── Queries ───
@@ -55,6 +57,22 @@ export function useAvailableEvents(date: string, tipo?: string) {
     keys.availableEvents(date, tipo),
     () => api.get(`${BASE}/available-events?${params}`),
     { enabled: !!date }
+  )
+}
+
+/**
+ * Días del rango (YYYY-MM-DD locales) con al menos un evento del tipo. El
+ * selector de fecha de los Talleres pinta con él los días con taller. Con
+ * `desde`/`hasta` vacíos no consulta (los demás tipos no lo necesitan).
+ */
+export function useDiasConEventos(desde: string, hasta: string, tipo?: string) {
+  const params = new URLSearchParams({ desde, hasta })
+  if (tipo) params.set('tipo', tipo)
+  params.set('tzOffset', String(new Date().getTimezoneOffset()))
+  return useQuery<{ dias: string[] }>(
+    keys.diasConEventos(desde, hasta, tipo),
+    () => api.get(`${BASE}/available-events/dias?${params}`),
+    { enabled: !!desde && !!hasta, staleTime: 60 * 1000 }
   )
 }
 
