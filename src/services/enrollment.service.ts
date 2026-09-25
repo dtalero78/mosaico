@@ -10,6 +10,7 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { eventEndDate } from '@/lib/event-duration';
+import { registrarSolicitudPorAgendamientoDirecto } from '@/services/nivelacion.service';
 
 interface EnrollInput {
   eventId: string;
@@ -264,6 +265,20 @@ export async function enrollStudents(input: EnrollInput) {
         `UPDATE "CALENDARIO" SET "inscritos" = "inscritos" + $1, "_updatedDate" = NOW() WHERE "_id" = $2`,
         [bookings.length, input.eventId]
       );
+
+      // NIVELACIÓN: el módulo se mueve por la SOLICITUD de ACADEMICA, no por el
+      // agendamiento. Agendar directo (calendario, ficha) sin solicitud dejaba al
+      // alumno fuera de Pendientes y sin poder confirmar. Aquí se aprueba la que
+      // esté pedida o se crea si no hay — en la misma transacción. Para los que
+      // llegan por Gestión de grupo (ya aprobados) no hace nada.
+      if (String(event.tipo || event.evento || '').toUpperCase() === 'NIVELACION') {
+        await registrarSolicitudPorAgendamientoDirecto(client, {
+          eventoId: input.eventId,
+          academicaIds: bookings.map((b) => b.idEstudiante || b.studentId).filter(Boolean),
+          agendadoPor: input.agendadoPor || null,
+          agendadoPorEmail: input.agendadoPorEmail || null,
+        });
+      }
     }
   });
 
