@@ -5,7 +5,7 @@ import { AcademicaRepository } from '@/repositories/academica.repository'
 import { NotFoundError, ValidationError } from '@/lib/errors'
 import { requirePermission } from '@/lib/api-permissions'
 import { ServicioPermission } from '@/types/permissions'
-import { esHoraNivelacionValida } from '@/lib/nivelacion-confirmacion'
+import { esHoraNivelacionValida, esDuracionNivelacionValida } from '@/lib/nivelacion-confirmacion'
 
 /**
  * GET /api/postgres/students/[id]/nivelacion
@@ -40,9 +40,11 @@ export const GET = handlerWithAuth(async (_req, { params }, _session) => {
 
 /**
  * PATCH /api/postgres/students/[id]/nivelacion
- * Body: { nivelacion: boolean, leccion?: string, modulo?: string }
- * Marca ACADEMICA.nivelacion y guarda la lección seleccionada en
- * ACADEMICA.detalleNivelacion (jsonb: { leccion, modulo, fecha, marcadoPor }).
+ * Body: { nivelacion: boolean, leccion, modulo?, hora, duracionMin, motivo }
+ * Marca ACADEMICA.nivelacion y guarda la solicitud en
+ * ACADEMICA.detalleNivelacion (jsonb: { leccion, modulo, hora, duracionMin,
+ * motivo, fecha, marcadoPor }). `hora` y `duracionMin` son SUGERIDAS por el
+ * guía: la duración real la fija el Área de Nivelación al crear el evento.
  * Al desmarcar (nivelacion=false) se limpia detalleNivelacion.
  */
 export const PATCH = handlerWithAuth(async (request, { params }, session) => {
@@ -108,19 +110,25 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
   const leccion = (body?.leccion || '').trim() || null
   const modulo = (body?.modulo || '').trim() || null
   const hora = (body?.hora || '').trim() || null
+  // Llega como número desde el panel; se tolera el texto por si algún cliente lo
+  // manda así. Vacío/nulo queda en null y lo rechaza la validación de abajo.
+  const duracionMin = body?.duracionMin == null || body?.duracionMin === '' ? null : Number(body.duracionMin)
   const motivo = (body?.motivo || '').trim() || null
 
-  // Pedir una nivelación exige decir SOBRE QUÉ, A QUÉ HORA y POR QUÉ: sin la hora
-  // Servicio no puede armar los grupos, y sin el motivo la solicitud llega sin
-  // contexto a quien la gestiona. Se valida aquí y no sólo en el panel.
+  // Pedir una nivelación exige decir SOBRE QUÉ, A QUÉ HORA, CUÁNTO TIEMPO y POR
+  // QUÉ: sin hora y duración Servicio no puede armar los grupos, y sin el motivo
+  // la solicitud llega sin contexto a quien la gestiona. Hora y duración son
+  // sugeridas (el Área de Nivelación decide), pero igual se exigen. Se valida
+  // aquí y no sólo en el panel.
   if (nivelacion) {
     if (!leccion) throw new ValidationError('Elige la lección de la nivelación')
-    if (!esHoraNivelacionValida(hora)) throw new ValidationError('Elige una hora válida para la nivelación')
+    if (!esHoraNivelacionValida(hora)) throw new ValidationError('Elige una hora sugerida válida para la nivelación')
+    if (!esDuracionNivelacionValida(duracionMin)) throw new ValidationError('Elige la duración sugerida de la nivelación (entre 30 minutos y 1 hora)')
     if (!motivo) throw new ValidationError('Escribe el motivo de la nivelación')
   }
 
   const detalle = nivelacion && leccion
-    ? { leccion, modulo, hora, motivo, fecha: new Date().toISOString(), marcadoPor: session.user?.email || null }
+    ? { leccion, modulo, hora, duracionMin, motivo, fecha: new Date().toISOString(), marcadoPor: session.user?.email || null }
     : null
 
   // Conteo: +1 al pasar de false→true, -1 al pasar de true→false

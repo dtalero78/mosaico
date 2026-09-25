@@ -64,12 +64,49 @@ export function esHoraNivelacionValida(h: unknown): h is string {
   return typeof h === 'string' && HORAS_NIVELACION.includes(h);
 }
 
+/**
+ * Duración SUGERIDA de la nivelación: de 30 minutos a 1 hora.
+ *
+ * Es lo que el guía estima que necesita el alumno, no la duración del evento:
+ * la hora y la duración de la solicitud son SUGERENCIAS, y es el Área de
+ * Nivelación quien decide cómo se realiza al agrupar (`CALENDARIO.duracionMin`,
+ * que hoy es 30 ó 60 según la casilla "Ampliar a 1 hora"). Por eso la lista es
+ * cerrada, como la de horas, y vive aquí para que el panel del guía, el alta
+ * desde Servicio y la validación del servidor usen los MISMOS valores.
+ */
+export const DURACION_NIVELACION_MIN = 30;
+export const DURACION_NIVELACION_MAX = 60;
+export const DURACIONES_NIVELACION: number[] = [30, 45, 60];
+
+export function esDuracionNivelacionValida(d: unknown): d is number {
+  return typeof d === 'number' && Number.isInteger(d) && DURACIONES_NIVELACION.includes(d);
+}
+
+/** `30 → "30 min"`, `60 → "1 hora"` — como se muestra en pantalla y en los CSV. */
+export function etiquetaDuracionNivelacion(min: number | null | undefined): string {
+  if (!min) return '';
+  return min === 60 ? '1 hora' : `${min} min`;
+}
+
+/**
+ * Aviso que acompaña a la solicitud en TODOS los sitios donde se pide o se
+ * lee: la hora y la duración no comprometen a nadie.
+ */
+export const NOTA_NIVELACION_SUGERIDA =
+  'La hora y la duración son sugeridas: el Área de Nivelación determinará cómo se realizará la nivelación.';
+
 export type QuienConfirma = 'ESTUDIANTE' | 'SERVICIO';
 
 /** Lo que guarda `ACADEMICA.detalleNivelacion`. */
 export interface DetalleNivelacion {
   leccion?: string | null;
   modulo?: string | null;
+  /** Hora SUGERIDA por el guía (catálogo `HORAS_NIVELACION`). */
+  hora?: string | null;
+  /** Duración SUGERIDA en minutos (catálogo `DURACIONES_NIVELACION`). Las
+   *  solicitudes anteriores a sep-2026 no la traen. */
+  duracionMin?: number | null;
+  motivo?: string | null;
   /** Instante en que el guía la pidió (ISO). */
   fecha?: string | null;
   marcadoPor?: string | null;

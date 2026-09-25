@@ -64,6 +64,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             p."horarioCurso",
             (a."detalleNivelacion"->>'modulo') AS modulo,
             (a."detalleNivelacion"->>'hora') AS hora,
+            -- Duración sugerida por el guía (min); NULL en solicitudes viejas.
+            CASE WHEN (a."detalleNivelacion"->>'duracionMin') ~ '^[0-9]+$'
+                 THEN (a."detalleNivelacion"->>'duracionMin')::int END AS "duracionMin",
             (a."detalleNivelacion"->>'motivo') AS motivo,
             (a."detalleNivelacion"->>'confirmadoEn') AS "confirmadoEn",
             (a."detalleNivelacion"->>'confirmadoPor') AS "confirmadoPor",

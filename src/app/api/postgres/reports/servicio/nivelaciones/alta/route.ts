@@ -4,11 +4,13 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query, queryOne } from '@/lib/postgres'
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
-import { esHoraNivelacionValida } from '@/lib/nivelacion-confirmacion'
+import { esHoraNivelacionValida, esDuracionNivelacionValida } from '@/lib/nivelacion-confirmacion'
 
 /**
  * POST /api/postgres/reports/servicio/nivelaciones/alta
- * Body: { academicaId, guiaId, modulo, leccion }
+ * Body: { academicaId, guiaId, modulo, leccion, hora, duracionMin, motivo }
+ * (`hora` y `duracionMin` son SUGERIDAS: la duración real la fija el Área de
+ * Nivelación al crear el evento.)
  *
  * Adiciona una nivelación desde Servicio, sin pasar por el panel del guía.
  * Es el gemelo del alta de Casos de Atención y comparte su cascada de opciones
@@ -33,12 +35,14 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const modulo = String(body?.modulo || '').trim()
   const leccion = String(body?.leccion || '').trim()
   const hora = String(body?.hora || '').trim()
+  const duracionMin = body?.duracionMin == null || body?.duracionMin === '' ? null : Number(body.duracionMin)
   const motivo = String(body?.motivo || '').trim()
 
   if (!academicaId) throw new ValidationError('Falta el usuario')
   if (!guiaId) throw new ValidationError('Falta el guía')
   if (!leccion) throw new ValidationError('Falta la lección')
-  if (!esHoraNivelacionValida(hora)) throw new ValidationError('Elige una hora válida para la nivelación')
+  if (!esHoraNivelacionValida(hora)) throw new ValidationError('Elige una hora sugerida válida para la nivelación')
+  if (!esDuracionNivelacionValida(duracionMin)) throw new ValidationError('Elige la duración sugerida de la nivelación (entre 30 minutos y 1 hora)')
   if (!motivo) throw new ValidationError('Escribe el motivo de la nivelación')
 
   const alumno = await queryOne<any>(
@@ -76,6 +80,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     leccion,
     modulo: modulo || null,
     hora,
+    duracionMin,
     motivo,
     fecha: new Date().toISOString(),
     marcadoPor: guia.email || null,

@@ -56,6 +56,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             COALESCE(a."NivelacionCount", 0)::int AS conteo,
             (a."detalleNivelacion"->>'fecha') AS fecha,
             (a."detalleNivelacion"->>'hora') AS hora,
+            -- Duración sugerida por el guía (min). NULL en las solicitudes
+            -- anteriores a sep-2026; el CASE evita el cast de un texto raro.
+            CASE WHEN (a."detalleNivelacion"->>'duracionMin') ~ '^[0-9]+$'
+                 THEN (a."detalleNivelacion"->>'duracionMin')::int END AS "duracionMin",
             (a."detalleNivelacion"->>'motivo') AS motivo,
             (a."detalleNivelacion"->>'confirmadoEn') AS "confirmadoEn",
             (a."detalleNivelacion"->>'confirmadoPor') AS "confirmadoPor"

@@ -3,6 +3,8 @@ import {
   corteConfirmacion, corteCancelacion, estadoConfirmacion,
   puedeConfirmarAlumno, debeCancelarse,
   HORAS_NIVELACION, esHoraNivelacionValida,
+  DURACIONES_NIVELACION, DURACION_NIVELACION_MIN, DURACION_NIVELACION_MAX,
+  esDuracionNivelacionValida, etiquetaDuracionNivelacion,
 } from '../../src/lib/nivelacion-confirmacion'
 
 /**
@@ -129,4 +131,40 @@ test('solo se admiten horas del catalogo', () => {
   expect(esHoraNivelacionValida('5 pm')).toBe(false)
   expect(esHoraNivelacionValida('')).toBe(false)
   expect(esHoraNivelacionValida(null)).toBe(false)
+})
+
+test('la duracion sugerida va de 30 minutos a 1 hora', () => {
+  expect(DURACION_NIVELACION_MIN).toBe(30)
+  expect(DURACION_NIVELACION_MAX).toBe(60)
+  expect(DURACIONES_NIVELACION[0]).toBe(DURACION_NIVELACION_MIN)
+  expect(DURACIONES_NIVELACION[DURACIONES_NIVELACION.length - 1]).toBe(DURACION_NIVELACION_MAX)
+  // Todo el catálogo cae dentro del rango.
+  for (const d of DURACIONES_NIVELACION) {
+    expect(d).toBeGreaterThanOrEqual(DURACION_NIVELACION_MIN)
+    expect(d).toBeLessThanOrEqual(DURACION_NIVELACION_MAX)
+  }
+})
+
+test('solo se admiten duraciones del catalogo', () => {
+  expect(esDuracionNivelacionValida(30)).toBe(true)
+  expect(esDuracionNivelacionValida(45)).toBe(true)
+  expect(esDuracionNivelacionValida(60)).toBe(true)
+  // Fuera del rango o fuera del catálogo: no se admiten.
+  expect(esDuracionNivelacionValida(15)).toBe(false)
+  expect(esDuracionNivelacionValida(90)).toBe(false)
+  expect(esDuracionNivelacionValida(40)).toBe(false)
+  // El endpoint convierte a número ANTES de validar: el texto crudo no pasa.
+  expect(esDuracionNivelacionValida('45')).toBe(false)
+  expect(esDuracionNivelacionValida(NaN)).toBe(false)
+  expect(esDuracionNivelacionValida(null)).toBe(false)
+  expect(esDuracionNivelacionValida(undefined)).toBe(false)
+})
+
+test('la etiqueta de la duracion dice "1 hora" en el tope y minutos en el resto', () => {
+  expect(etiquetaDuracionNivelacion(30)).toBe('30 min')
+  expect(etiquetaDuracionNivelacion(45)).toBe('45 min')
+  expect(etiquetaDuracionNivelacion(60)).toBe('1 hora')
+  // Las solicitudes anteriores a sep-2026 no traen duración: cadena vacía, no "0 min".
+  expect(etiquetaDuracionNivelacion(null)).toBe('')
+  expect(etiquetaDuracionNivelacion(undefined)).toBe('')
 })

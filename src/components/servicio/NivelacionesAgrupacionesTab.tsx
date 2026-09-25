@@ -6,6 +6,7 @@ import { UserGroupIcon } from '@heroicons/react/24/outline'
 import { ServicioPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
+import { etiquetaDuracionNivelacion } from '@/lib/nivelacion-confirmacion'
 
 interface Row {
   academicaId: string
@@ -21,7 +22,9 @@ interface Row {
   guiaId: string | null
   guia: string | null
   fechaSolicitud: string | null
+  /** Hora y duración SUGERIDAS por el guía (la duración falta en solicitudes viejas). */
   hora: string | null
+  duracionMin: number | null
   motivo: string | null
   confirmadoEn: string | null
   confirmadoPor: string | null
@@ -408,7 +411,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
                   <table className="w-full text-sm">
                     <thead className="bg-white border-b border-gray-100">
                       <tr>
-                        {['', 'Fecha solicitud', 'Nombre', 'ID', 'Salón', 'Hora', 'Guía', 'Conteo', 'Confirmación'].map((h, idx) => (
+                        {['', 'Fecha solicitud', 'Nombre', 'ID', 'Salón', 'Hora sugerida', 'Guía', 'Conteo', 'Confirmación'].map((h, idx) => (
                           <th key={idx} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -438,7 +441,10 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
                           </td>
                           <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.numeroId || '—'}</td>
                           <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
-                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap" title={r.motivo || ''}>{r.hora || '—'}</td>
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap" title={r.motivo || ''}>
+                            {r.hora || '—'}
+                            {r.duracionMin ? <span className="block text-xs text-gray-400">{etiquetaDuracionNivelacion(r.duracionMin)}</span> : null}
+                          </td>
                           <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{r.guia || '—'}</td>
                           <td className="px-3 py-2">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">{r.conteo}</span>
@@ -520,7 +526,14 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
   const [linkZoom, setLinkZoom] = useState(primero?.guiaZoom || '')
   const [limite, setLimite] = useState(String(Math.max(grupo.rows.length, 10)))
   // La nivelación dura 30 min por defecto; la casilla la amplía a una hora.
-  const [unaHora, setUnaHora] = useState(false)
+  // Se PROPONE marcada si algún guía del grupo sugirió 1 hora, pero la decisión
+  // es de quien agrupa (la duración de la solicitud es sólo una sugerencia).
+  const sugeridas = useMemo(() => {
+    const m = new Map<number, number>()
+    for (const r of grupo.rows) if (r.duracionMin) m.set(r.duracionMin, (m.get(r.duracionMin) || 0) + 1)
+    return Array.from(m.entries()).sort((a, b) => a[0] - b[0])
+  }, [grupo.rows])
+  const [unaHora, setUnaHora] = useState(() => grupo.rows.some(r => r.duracionMin === 60))
   const [modulo, setModulo] = useState(grupo.modulo || '')
   const [leccion, setLeccion] = useState(grupo.leccion || '')
   const [saving, setSaving] = useState(false)
@@ -630,6 +643,11 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
                 <span className="text-sm text-gray-700">
                   Ampliar a <b>1 hora</b>
                   <span className="block text-xs text-gray-500">Sin marcar, la nivelación dura 30 minutos.</span>
+                  {sugeridas.length > 0 && (
+                    <span className="block text-xs text-gray-500">
+                      Duración sugerida por el guía: {sugeridas.map(([d, n]) => `${etiquetaDuracionNivelacion(d)} (${n})`).join(' · ')} — la decisión es del Área de Nivelación.
+                    </span>
+                  )}
                 </span>
               </label>
             </div>
