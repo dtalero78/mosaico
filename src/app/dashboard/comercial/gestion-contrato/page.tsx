@@ -7,6 +7,8 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ComercialPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import SinCupoModal, { type SinCupoDetalle } from '@/components/comercial/SinCupoModal'
+import EnGestionTab from '@/components/comercial/EnGestionTab'
+import { HORAS_EN_GESTION } from '@/lib/contrato-en-gestion'
 
 /** Un contrato aprobado ya salió de la gestión comercial. */
 const esAprobadoRow = (r: any) => ['aprobado', 'aprobada'].includes(String(r?.aprobacion || '').trim().toLowerCase())
@@ -49,6 +51,10 @@ export default function GestionContratoPage() {
   const [bajaResultado, setBajaResultado] = useState<any>(null)
   // Deshacer listo: suelta los asientos, el alumno CONSERVA su curso.
   const [deshacer, setDeshacer] = useState<any>(null)
+  // Pestañas. "En Gestión" queda montada aunque no esté a la vista, para que su
+  // total se vea en la pestaña sin tener que abrirla.
+  const [tab, setTab] = useState<'firmados' | 'gestion'>('firmados')
+  const [enGestionTotal, setEnGestionTotal] = useState<number | null>(null)
   const puedeSobrecupo = hasPermission(ComercialPermission.GESTION_CONTRATO_SOBRECUPO)
   const puedeDarBaja = hasPermission(ComercialPermission.GESTION_CONTRATO_DAR_BAJA)
 
@@ -163,8 +169,39 @@ export default function GestionContratoPage() {
       <PermissionGuard permission={ComercialPermission.GESTION_CONTRATO} showDefaultMessage>
         <div className="p-6 max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Gestión Contrato</h1>
-          <p className="text-gray-500 mb-4 text-sm">Contratos <strong>firmados sin aprobar</strong>. Adjunta la documentación y marca <strong>Dejar listo</strong> cuando el contrato esté completo para aprobación. Los ya gestionados siguen aquí, marcados <strong>✓ Gestionado</strong>, hasta que Aprobación los apruebe.</p>
+          {tab === 'firmados' ? (
+            <p className="text-gray-500 mb-4 text-sm">Contratos <strong>firmados sin aprobar</strong>. Adjunta la documentación y marca <strong>Dejar listo</strong> cuando el contrato esté completo para aprobación. Los ya gestionados siguen aquí, marcados <strong>✓ Gestionado</strong>, hasta que Aprobación los apruebe.</p>
+          ) : (
+            <p className="text-gray-500 mb-4 text-sm">Contratos <strong>recién creados</strong> que todavía no están listos ni aprobados. Usa <strong>Editar contrato</strong> para volver a solicitar la firma, enviar el PDF, imprimir o corregir datos. Cada contrato sale de esta lista a las <strong>{HORAS_EN_GESTION} horas</strong> de haberse creado.</p>
+          )}
 
+          <div className="flex gap-1 border-b border-gray-200 mb-4" role="tablist">
+            {([
+              { id: 'firmados', label: 'Firmados sin aprobar', n: null as number | null },
+              { id: 'gestion', label: 'En Gestión', n: enGestionTotal },
+            ] as const).map(t => (
+              <button key={t.id} type="button" role="tab" aria-selected={tab === t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-4 py-2 -mb-px text-sm font-medium border-b-2 transition-colors ${
+                  tab === t.id
+                    ? 'border-purple-700 text-purple-800'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}>
+                {t.label}
+                {t.n !== null && (
+                  <span className={`ml-2 inline-flex items-center justify-center min-w-[1.5rem] px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+                    t.n > 0 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-500'
+                  }`}>{t.n}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className={tab === 'gestion' ? '' : 'hidden'}>
+            <EnGestionTab activo={tab === 'gestion'} onTotal={setEnGestionTotal} />
+          </div>
+
+          <div className={tab === 'firmados' ? '' : 'hidden'}>
           <div className="flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Asesor</label>
@@ -319,6 +356,7 @@ export default function GestionContratoPage() {
                 </tbody>
               </table>
             </div>
+          </div>
           </div>
 
           {confirmar && (

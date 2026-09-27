@@ -158,3 +158,18 @@ export async function getUserComercialScope(email?: string | null): Promise<Come
   scopeCache.set(e, { v: scope, exp: now + 5 * 60 * 1000 });
   return scope;
 }
+
+/**
+ * Alcance del usuario LOGUEADO: SUPER_ADMIN y ADMIN ven todo sin consultar el
+ * CRM; el resto se resuelve por su rango en la escalera.
+ *
+ * Existe para que la regla del bypass no se siga copiando endpoint por endpoint
+ * (ya está escrita a mano en cuatro rutas de Gestión Contrato).
+ */
+export async function getSessionComercialScope(session: any): Promise<ComercialScope> {
+  const role = session?.user?.role;
+  if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
+    return { seeAll: true, liderCorreo: null, position: null };
+  }
+  return getUserComercialScope(session?.user?.email || '');
+}
