@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions'
 import { AprobacionPermission } from '@/types/permissions'
 import { Download, Filter, ChevronLeft, ChevronRight, User, AlertCircle, CheckCircle } from 'lucide-react'
 import { exportToExcel } from '@/lib/export-excel'
+import type { EstadoCurso } from '@/lib/cursos-campaign'
 
 interface Contrato {
   _id: string
@@ -15,6 +16,8 @@ interface Contrato {
   numeroId: string
   contrato: string
   campaign?: string
+  /** Campaña de la que salió el alumno al soltar el cupo (sólo si hoy no tiene). */
+  campaignAnterior?: string
   celular: string
   email: string
   plataforma: string
@@ -67,8 +70,32 @@ const ESTADOS = [
   { value: SIN_APROBAR, label: 'Sin aprobar (firmados)' },
 ]
 
+/** Valor del desplegable para los contratos que no tienen campaña. */
+const SIN_CAMPANA = '__SIN_CAMPANA__'
+
+type Tab = 'recientes' | 'global'
+
+interface Campana { campaign: string; estado: EstadoCurso; inicio: string }
+
+/** El estado dicho de una campaña (el de `ESTADO_CURSO_META` está en masculino: es de un curso). */
+const ESTADO_CAMPANA: Record<EstadoCurso, string> = {
+  matricula: 'en matrícula',
+  activo: 'activa',
+  cerrado: 'cerrada',
+}
+
+/** La campaña con la que se busca el contrato: la de hoy o, si soltó el cupo, la anterior. */
+const campanaDe = (c: Contrato) => c.campaign || c.campaignAnterior || ''
+
 export default function AprobadosPage() {
+  // Las dos pestañas son la MISMA pantalla con los mismos filtros; sólo cambia
+  // el alcance. Recientes: la campaña en matrícula y la activa más reciente.
+  // Global: todas las campañas, y los contratos que no tienen ninguna.
+  const [tab, setTab] = useState<Tab>('recientes')
+  const esGlobal = tab === 'global'
   const [all, setAll] = useState<Contrato[]>([])
+  const [campanias, setCampanias] = useState<Campana[]>([])
+  const [recientes, setRecientes] = useState<string[]>([])
   const [rows, setRows] = useState<Contrato[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -82,18 +109,48 @@ export default function AprobadosPage() {
   // nadie aprobó), así que al elegirlo se vuelve a pedir la lista al servidor.
   const verSinAprobar = estado === SIN_APROBAR
 
+  // Sólo se pinta la última consulta pedida: una respuesta vieja que llegue
+  // después pisaría los datos de la nueva.
+  const reqRef = useRef(0)
   const load = async (sinAprobar = verSinAprobar) => {
+    const req = ++reqRef.current
     setLoading(true)
     try {
       const url = `/api/postgres/approvals/aprobados${sinAprobar ? '?vista=sin-aprobar' : ''}`
       const r = await fetch(url, { cache: 'no-store' }).then(x => x.json())
+      if (req !== reqRef.current) return
       setAll(r.success && r.approvals ? r.approvals : [])
-    } catch { setAll([]) } finally { setLoading(false) }
+      setCampanias(Array.isArray(r.campanias) ? r.campanias : [])
+      setRecientes(Array.isArray(r.recientes) ? r.recientes : [])
+    } catch { if (req === reqRef.current) setAll([]) } finally { if (req === reqRef.current) setLoading(false) }
   }
   useEffect(() => { load(verSinAprobar) }, [verSinAprobar])
 
+  // Campañas que ofrece el desplegable de cada pestaña. Recientes: sus dos
+  // campañas. Global: el catálogo completo (la más reciente primero) y, al
+  // final, las que aparezcan en los contratos y ya no estén en el catálogo.
+  const enCatalogo = campanias.map(c => c.campaign)
+  const campaignOptions = esGlobal
+    ? [
+        ...enCatalogo,
+        ...(Array.from(new Set(all.map(campanaDe).filter(c => c && !enCatalogo.includes(c)))).sort()),
+      ]
+    : recientes
+  const estadoCampana = (nombre: string) => campanias.find(c => c.campaign === nombre)?.estado
+
+  // Los filtros se conservan al cambiar de pestaña; sólo se suelta la campaña
+  // elegida cuando la otra pestaña no la ofrece.
+  const cambiarTab = (t: Tab) => {
+    if (t === tab) return
+    if (t === 'recientes' && campaign && !recientes.includes(campaign)) setCampaign('')
+    setTab(t)
+  }
+
   const filtered = (): Contrato[] => {
     let d = [...all]
+    // Alcance de la pestaña. Sin campañas recientes resueltas no se esconde
+    // nada: el vacío es "todavía no sé", no "no hay ninguna".
+    if (!esGlobal && recientes.length) d = d.filter(c => recientes.includes(campanaDe(c)))
     if (search.trim()) {
       const s = search.toLowerCase().trim()
       d = d.filter(c => `${c.primerApellido || ''} ${c.segundoApellido || ''} ${c.primerNombre || ''}`.toLowerCase().includes(s)
@@ -101,7 +158,8 @@ export default function AprobadosPage() {
     }
     // En "Sin aprobar" el corte ya lo hizo el servidor: no hay nada que filtrar.
     if (estado && !verSinAprobar) d = d.filter(c => estadoDe(c).key === estado)
-    if (campaign) d = d.filter(c => (c.campaign || '') === campaign)
+    if (campaign === SIN_CAMPANA) d = d.filter(c => !campanaDe(c))
+    else if (campaign) d = d.filter(c => campanaDe(c) === campaign)
     if (fechaInicio) d = d.filter(c => new Date(c._createdDate) >= fechaInicio)
     if (fechaFin) { const f = new Date(fechaFin); f.setHours(23, 59, 59, 999); d = d.filter(c => new Date(c._createdDate) <= f) }
     return d
@@ -111,9 +169,14 @@ export default function AprobadosPage() {
     const d = filtered()
     setPage(1)
     setRows(d.slice(0, RECORDS_PER_PAGE))
-  }, [all, search, estado, campaign, fechaInicio, fechaFin])
+  }, [all, recientes, search, estado, campaign, fechaInicio, fechaFin, tab])
 
-  const campaignOptions = Array.from(new Set(all.map(c => c.campaign).filter(Boolean))).sort() as string[]
+  const sinCampanaTotal = esGlobal ? all.filter(c => !campanaDe(c)).length : 0
+
+  const estadoFila = (c: Contrato) => (verSinAprobar ? estadoSinAprobar(c) : estadoDe(c))
+  /** Campaña que se muestra y se exporta. */
+  const campanaTexto = (c: Contrato) =>
+    !c.campaign && c.campaignAnterior ? `${c.campaignAnterior} (anterior)` : (c.campaign || '')
 
   const data = filtered()
   const totalPages = Math.ceil(data.length / RECORDS_PER_PAGE)
@@ -136,6 +199,19 @@ export default function AprobadosPage() {
                   ? 'Contratos firmados que aún nadie ha aprobado, en cualquier estado'
                   : 'Contratos aprobados, inactivos y finalizados'}
               </p>
+              <p className="mt-1 text-sm text-gray-500">
+                {esGlobal
+                  ? 'Todas las campañas.'
+                  : recientes.length
+                  ? <>Campañas actuales: {recientes.map((c, i) => (
+                      <span key={c}>
+                        {i > 0 && ' y '}
+                        <strong className="text-gray-700">{c}</strong>
+                        {estadoCampana(c) && ` (${ESTADO_CAMPANA[estadoCampana(c)!]})`}
+                      </span>
+                    ))}.</>
+                  : 'Campañas actuales.'}
+              </p>
             </div>
             <div className="flex gap-3">
               <button
@@ -143,13 +219,13 @@ export default function AprobadosPage() {
                   { header: 'Nombre', accessor: (c) => `${c.primerNombre} ${c.primerApellido}`.trim() },
                   { header: 'Documento', accessor: (c) => c.numeroId },
                   { header: 'Contrato', accessor: (c) => c.contrato },
-                  { header: 'Campaña', accessor: (c) => c.campaign || '' },
+                  { header: 'Campaña', accessor: (c) => campanaTexto(c) },
                   { header: 'Plataforma', accessor: (c) => c.plataforma },
                   { header: 'Celular', accessor: (c) => c.celular },
                   { header: 'Email', accessor: (c) => c.email },
-                  { header: 'Estado', accessor: (c) => (verSinAprobar ? estadoSinAprobar(c).text : estadoDe(c).text) },
+                  { header: 'Estado', accessor: (c) => estadoFila(c).text },
                   { header: 'Fecha', accessor: (c) => new Date(c._createdDate).toLocaleDateString() },
-                ], `${verSinAprobar ? 'sin-aprobar' : 'aprobados'}-${new Date().toISOString().split('T')[0]}`)}
+                ], `${verSinAprobar ? 'sin-aprobar' : 'aprobados'}-${esGlobal ? 'global' : 'recientes'}-${new Date().toISOString().split('T')[0]}`)}
                 disabled={data.length === 0}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
@@ -161,6 +237,23 @@ export default function AprobadosPage() {
                 <Filter className="w-4 h-4" /> Actualizar
               </button>
             </div>
+          </div>
+
+          <div className="flex gap-1 border-b border-gray-200" role="tablist">
+            {([
+              { id: 'recientes', label: 'Recientes' },
+              { id: 'global', label: 'Global' },
+            ] as const).map(t => (
+              <button key={t.id} type="button" role="tab" aria-selected={tab === t.id}
+                onClick={() => cambiarTab(t.id)}
+                className={`px-4 py-2 -mb-px text-sm font-medium border-b-2 transition-colors ${
+                  tab === t.id
+                    ? 'border-purple-700 text-purple-800'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}>
+                {t.label}
+              </button>
+            ))}
           </div>
 
           {/* Filtros */}
@@ -185,6 +278,7 @@ export default function AprobadosPage() {
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                   <option value="">Todas</option>
                   {campaignOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                  {esGlobal && <option value={SIN_CAMPANA}>(Sin campaña){sinCampanaTotal ? ` · ${sinCampanaTotal}` : ''}</option>}
                 </select>
               </div>
               <div className="lg:col-span-4">
@@ -244,7 +338,8 @@ export default function AprobadosPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {rows.map(c => {
-                      const est = verSinAprobar ? estadoSinAprobar(c) : estadoDe(c)
+                      const est = estadoFila(c)
+                      const anterior = !c.campaign && !!c.campaignAnterior
                       return (
                         <tr key={c._id} className="hover:bg-gray-50 cursor-pointer"
                           onClick={() => window.open(`/person/${c._id}`, '_blank')}>
@@ -264,7 +359,14 @@ export default function AprobadosPage() {
                             <div className="text-sm text-gray-500">{c.plataforma}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{c.campaign || '—'}</div>
+                            {anterior ? (
+                              <div title="Campaña de la que salió al soltar el cupo: hoy no tiene curso asignado">
+                                <div className="text-sm text-gray-500">{c.campaignAnterior}</div>
+                                <div className="text-xs text-gray-400">anterior</div>
+                              </div>
+                            ) : (
+                              <div className="text-sm text-gray-900">{c.campaign || '—'}</div>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{c.celular}</div>
