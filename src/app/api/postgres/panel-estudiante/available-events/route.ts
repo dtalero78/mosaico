@@ -25,5 +25,9 @@ export const GET = handlerWithAuth(async (request, context, session) => {
 
   const bookingId = student.academicaId || student._id;
   const events = await getAvailableEvents(bookingId, nivel, date, tipo, tzOffset, curso, salon);
-  return successResponse({ events });
+  // Nombre del alumno: el aviso de cruce de horario lo nombra ("coincide con la
+  // sesión de …"), porque quien agenda el taller suele ser el apoderado.
+  const alumno = [(student as any).primerNombre, (student as any).primerApellido]
+    .map((s) => String(s || '').trim()).filter(Boolean).join(' ');
+  return successResponse({ events, alumno });
 });

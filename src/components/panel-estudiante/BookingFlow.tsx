@@ -7,6 +7,7 @@ import {
   CheckIcon,
   ArrowLeftIcon,
   UserIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { useAvailableEvents, useBookEvent, useDiasConEventos } from '@/hooks/use-panel-estudiante'
 import { format } from 'date-fns'
@@ -31,8 +32,33 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
 
   const events = data?.events || []
 
+  // Eventos del día en los que el alumno YA está inscrito. Se le avisa con un
+  // modal: la lista sola lo dejaba frente a una fila en gris, sin saber que su
+  // inscripción ya estaba hecha. El aviso se cierra por día, así vuelve a salir
+  // si entra de nuevo a esa fecha.
+  const yaInscritos = events.filter((e: any) => e.yaInscrito)
+  const [avisoCerradoPara, setAvisoCerradoPara] = useState('')
+  const mostrarAvisoInscrito =
+    step === 'events' && !isLoading && yaInscritos.length > 0 && avisoCerradoPara !== selectedDate
+  const nombreTipo =
+    initialTipo === 'CLUB' ? 'este taller' : initialTipo === 'OLIMPIADA' ? 'esta olimpiada' : 'este evento'
+
+  // Eventos del día que se cruzan con una clase del alumno. No se pueden agendar
+  // (la regla de cruce no cambia): se avisa con quién coincide y a quién acudir.
+  // Si el mismo día trae los dos avisos, éste sale después del de inscripción.
+  const cruces = events.filter((e: any) => e.cruceHorario && !e.yaInscrito)
+  const [avisoCruceCerradoPara, setAvisoCruceCerradoPara] = useState('')
+  const mostrarAvisoCruce =
+    step === 'events' && !isLoading && cruces.length > 0 && !mostrarAvisoInscrito &&
+    avisoCruceCerradoPara !== selectedDate
+  const alumno: string = data?.alumno || ''
+  const elTipo =
+    initialTipo === 'CLUB' ? 'El taller' : initialTipo === 'OLIMPIADA' ? 'La olimpiada' : 'El evento'
+
   const handleDateSelect = (date: string) => {
     setSelectedDate(date)
+    setAvisoCerradoPara('')
+    setAvisoCruceCerradoPara('')
     // Skip type step when tipo was pre-selected
     if (initialTipo) {
       setStep('events')
@@ -291,7 +317,7 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                 <div className="space-y-2">
                   {events.map((evt: any) => {
                     const eventDate = new Date(evt.dia)
-                    const isDisabled = evt.cupoLleno || evt.yaInscrito || evt.tiempoInsuficiente
+                    const isDisabled = evt.cupoLleno || evt.yaInscrito || evt.tiempoInsuficiente || evt.cruceHorario
                     const tipoColor = evt.esESS
                       ? 'border-l-orange-400'
                       : evt.tipo === 'SESSION'
@@ -334,6 +360,8 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                           <div className="text-right">
                             {evt.yaInscrito ? (
                               <span className="text-xs font-medium text-blue-600">Ya inscrito</span>
+                            ) : evt.cruceHorario ? (
+                              <span className="text-xs font-medium text-amber-700">Coincide con la sesión</span>
                             ) : evt.cupoLleno ? (
                               <span className="text-xs font-medium text-red-600">Lleno</span>
                             ) : evt.tiempoInsuficiente ? (
@@ -389,6 +417,94 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
           )}
         </div>
       </div>
+
+      {/* Aviso: ya está inscrito en el evento del día elegido */}
+      {mostrarAvisoInscrito && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="aviso-inscrito-titulo"
+        >
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-xl">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+              <CheckIcon className="h-6 w-6 text-green-600" />
+            </div>
+            <h3 id="aviso-inscrito-titulo" className="text-lg font-semibold text-gray-900">
+              Ya estás inscrito en {nombreTipo}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              No necesitas agendarlo de nuevo. Lo encuentras en tu Agenda Semanal de Eventos.
+            </p>
+            <div className="mt-4 space-y-2 text-left">
+              {yaInscritos.map((evt: any) => (
+                <div key={evt._id} className="rounded-lg border border-green-200 bg-green-50 p-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-green-900">
+                    <CalendarDaysIcon className="h-4 w-4 shrink-0" />
+                    {format(new Date(evt.dia), "EEEE d 'de' MMMM, HH:mm", { locale: es })}
+                  </div>
+                  {evt.advisorNombreCompleto && (
+                    <div className="mt-1 flex items-center gap-2 text-xs text-green-800">
+                      <UserIcon className="h-4 w-4 shrink-0" />
+                      {evt.advisorNombreCompleto}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setAvisoCerradoPara(selectedDate)}
+              className="mt-5 w-full px-4 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso: el evento del día se cruza con una clase del alumno */}
+      {mostrarAvisoCruce && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="aviso-cruce-titulo"
+        >
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-xl">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+              <ExclamationTriangleIcon className="h-6 w-6 text-amber-600" />
+            </div>
+            <h3 id="aviso-cruce-titulo" className="text-lg font-semibold text-gray-900">
+              {elTipo} coincide con la sesión de {alumno || 'el usuario'}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">Consulte con el Área Académica.</p>
+            <div className="mt-4 space-y-2 text-left">
+              {cruces.map((evt: any) => (
+                <div key={evt._id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <CalendarDaysIcon className="h-4 w-4 shrink-0" />
+                    {format(new Date(evt.dia), "EEEE d 'de' MMMM, HH:mm", { locale: es })}
+                  </div>
+                  {evt.cruceCon?.dia && (
+                    <div className="mt-1 flex items-center gap-2 text-xs text-amber-800">
+                      <ClockIcon className="h-4 w-4 shrink-0" />
+                      Sesión a las {format(new Date(evt.cruceCon.dia), 'HH:mm')}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setAvisoCruceCerradoPara(selectedDate)}
+              className="mt-5 w-full px-4 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

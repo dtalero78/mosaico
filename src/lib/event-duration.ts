@@ -64,6 +64,29 @@ export function eventEndDate(
 }
 
 /**
+ * ¿Un agendamiento que el alumno YA tiene se cruza con el evento `inicio..fin`?
+ *
+ * Es la misma cuenta del SQL que rechaza el agendamiento (`findScheduleConflict`
+ * y la inscripción desde el panel admin): el agendamiento ocupa 30 minutos si es
+ * una nivelación y 60 en cualquier otro caso. Vive aquí para que la lista que ve
+ * el alumno marque como cruce exactamente lo que después se le rechazaría.
+ *
+ * Terminar justo cuando el otro empieza NO es cruce.
+ */
+export function agendamientoSeCruza(
+  inicio: Date,
+  fin: Date,
+  agendamientoInicio: Date,
+  agendamientoTipo?: string | null,
+): boolean {
+  const ocupaMin = String(agendamientoTipo || '').toUpperCase() === 'NIVELACION'
+    ? NIVELACION_DURATION_MIN
+    : DEFAULT_EVENT_DURATION_MIN;
+  const agendamientoFin = agendamientoInicio.getTime() + ocupaMin * 60_000;
+  return agendamientoInicio.getTime() < fin.getTime() && agendamientoFin > inicio.getTime();
+}
+
+/**
  * Rango "HH:mm – HH:mm" (inicio – fin) en la hora LOCAL del navegador.
  * `fmt` permite otro patrón de date-fns (default 'HH:mm', 24h).
  */

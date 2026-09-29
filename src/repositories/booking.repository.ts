@@ -759,14 +759,22 @@ class BookingRepositoryClass extends BaseRepository {
    * time-of-day, which made past bookings at 00:00 block future events at
    * 00:00 (different day). Comparing full timestamps eliminates that
    * ambiguity.
+   *
+   * Each row carries the event it belongs to: the student's own booking of an
+   * event has, by definition, the same timestamp as that event, so the caller
+   * needs the id to tell "already enrolled here" apart from "busy with
+   * something else at that time". `tipo` and `nombreEvento` let the caller
+   * measure the overlap and say what the event clashes with.
    */
-  async findBookedTimestampsInRange(
+  async findBookedInRange(
     studentId: string,
     startISO: string,
     endISO: string
-  ): Promise<string[]> {
-    const rows = await queryMany<{ ts: string }>(
-      `SELECT "fechaEvento"::text AS ts FROM "ACADEMICA_BOOKINGS"
+  ): Promise<{ ts: string; eventoId: string | null; tipo: string | null; nombreEvento: string | null }[]> {
+    const rows = await queryMany<{ ts: string; eventoId: string | null; tipo: string | null; nombreEvento: string | null }>(
+      `SELECT "fechaEvento"::text AS ts, COALESCE("eventoId", "idEvento") AS "eventoId",
+              COALESCE("tipo", "tipoEvento") AS tipo, "nombreEvento"
+       FROM "ACADEMICA_BOOKINGS"
        WHERE ("idEstudiante" = $1 OR "studentId" = $1)
          AND "fechaEvento" >= $2::timestamptz
          AND "fechaEvento" <= $3::timestamptz
@@ -775,7 +783,7 @@ class BookingRepositoryClass extends BaseRepository {
     );
     // Normalize via Date so we can compare with `.toISOString()` of the
     // candidate event in JS.
-    return rows.map((r) => new Date(r.ts).toISOString());
+    return rows.map((r) => ({ ...r, ts: new Date(r.ts).toISOString() }));
   }
 
   async cancelBooking(bookingId: string) {

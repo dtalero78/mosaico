@@ -27,7 +27,7 @@ import { StepOverridesRepository } from '@/repositories/niveles.repository';
 import { ValidationError, ConflictError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { queryMany, queryOne } from '@/lib/postgres';
-import { eventEndDate } from '@/lib/event-duration';
+import { eventEndDate, agendamientoSeCruza } from '@/lib/event-duration';
 import { extractStepNumber, isExitosa as isExitosaBooking, aproboElJump as aproboElJumpBooking, getClassType as getClassTypeBooking, esTrainingClub } from '@/lib/motor-academico';
 
 // --- Helpers (mirrors progress.service.ts logic) ---
@@ -215,10 +215,22 @@ export async function getAvailableEvents(
   // as the events being shown. We compare by full ISO timestamp (not just the
   // hora field) so that a past booking at 00:00 doesn't shadow a future
   // event also at 00:00 on a different day.
-  const bookedTimestamps = await BookingRepository.findBookedTimestampsInRange(
-    studentId, startDate, endDate
+  // Se consulta desde una hora antes del día: la clase que empezó justo antes
+  // de medianoche todavía puede cruzarse con un evento de la primera hora.
+  const desdeCruce = new Date(new Date(startDate).getTime() - 60 * 60 * 1000).toISOString();
+  const booked = await BookingRepository.findBookedInRange(
+    studentId, desdeCruce, endDate
   );
-  const bookedTimestampsSet = new Set(bookedTimestamps);
+  const bookedTimestampsSet = new Set(booked.map((b) => b.ts));
+  // Talleres y Olimpiadas MUESTRAN el evento que se cruza con una clase, con su
+  // motivo, en vez de esconderlo: el selector pinta el día y el alumno tiene que
+  // poder ver por qué no lo puede agendar. Los demás tipos siguen como siempre.
+  const tipoUp = String(tipo || '').toUpperCase();
+  const avisaCruce = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA';
+  // Los agendamientos del día también dicen en qué eventos YA está inscrito: no
+  // se depende sólo de `upcoming`, que corta en 100 y el alumno de un curso
+  // trae todas sus clases precargadas.
+  for (const b of booked) if (b.eventoId) enrolledEventIds.add(b.eventoId);
 
   const now = new Date();
 
@@ -236,15 +248,28 @@ export async function getAvailableEvents(
       return null;
     }
 
+    const yaInscrito = enrolledEventIds.has(evt._id);
+
     // Same-moment exclusion: skip events at the exact same UTC timestamp as
     // an existing booking (prevents double-booking the same hour and day).
-    if (bookedTimestampsSet.has(evtDate.toISOString())) {
+    //
+    // El evento en el que el alumno YA está inscrito no entra en la regla: su
+    // propio agendamiento tiene la misma hora que el evento, así que se escondía
+    // en vez de salir marcado "Ya inscrito" y la lista quedaba vacía con el día
+    // pintado en el selector.
+    if (!avisaCruce && !yaInscrito && bookedTimestampsSet.has(evtDate.toISOString())) {
       return null;
     }
 
+    // Choque de horario con OTRA clase del alumno, medido igual que en
+    // `bookEvent`: lo que aquí se marca es exactamente lo que allá se rechaza.
+    const evtFin = eventEndDate(evtDate, evt.tipo || evt.evento || '');
+    const cruce = avisaCruce && !yaInscrito
+      ? booked.find((b) => b.eventoId !== evt._id && agendamientoSeCruza(evtDate, evtFin, new Date(b.ts), b.tipo))
+      : undefined;
+
     const activeCount = enrollmentCounts.get(evt._id) ?? 0;
     const cupoLleno = evt.limiteUsuarios > 0 && activeCount >= evt.limiteUsuarios;
-    const yaInscrito = enrolledEventIds.has(evt._id);
 
     // Event needs > 30 min advance to book; if closer, show as disabled so the student
     // can see the session existed today (important for students in different timezones)
@@ -256,6 +281,8 @@ export async function getAvailableEvents(
       cupoLleno,
       yaInscrito,
       tiempoInsuficiente,
+      cruceHorario: !!cruce,
+      cruceCon: cruce ? { dia: cruce.ts, tipo: cruce.tipo, nombreEvento: cruce.nombreEvento } : null,
     };
   });
 
