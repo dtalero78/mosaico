@@ -6,6 +6,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
+import { metaResultadoNivelacion } from '@/lib/nivelacion-resultados'
 
 interface Row {
   academicaId: string
@@ -29,21 +30,6 @@ interface Row {
   marcadoPor: string | null
 }
 interface Guia { id: string; nombre: string }
-
-const ESTADO_META: Record<string, { label: string; cls: string }> = {
-  PENDIENTE:  { label: 'Pendiente',  cls: 'bg-amber-100 text-amber-700' },
-  APROBADA:   { label: 'Aprobada',   cls: 'bg-blue-100 text-blue-700' },
-  REALIZADA:  { label: 'Realizada',  cls: 'bg-green-100 text-green-700' },
-  NO_ASISTIO: { label: 'No asistió', cls: 'bg-red-100 text-red-700' },
-  // La canceló el sistema el jueves 22:00 porque nadie confirmó. Se distingue
-  // de "No asistió": aquí la clase nunca llegó a programarse.
-  CANCELADA_SIN_CONFIRMAR: { label: 'Cancelada (sin confirmar)', cls: 'bg-gray-200 text-gray-700' },
-  // Cierres que aplica Servicio desde Pendientes. Se distinguen del "No asistió"
-  // del guía porque no son el mismo caso para quien hace seguimiento: uno avisó
-  // y el otro nunca respondió.
-  NO_ASISTIO_JUSTIFICO:    { label: 'No asistió — justificó',   cls: 'bg-blue-100 text-blue-700' },
-  NO_ASISTIO_NO_CONTESTO:  { label: 'No asistió — no contestó', cls: 'bg-red-100 text-red-700' },
-}
 
 const fmtDia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es-CL') : '—'
 
@@ -112,9 +98,11 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
       { header: 'Lección', accessor: r => r.leccion || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
       { header: 'Confirmación', accessor: r => (r.confirmadoEn ? (r.confirmadoPor === 'SERVICIO' ? 'Confirmada (Servicio)' : 'Confirmada') : 'Sin confirmar') },
-      { header: 'Estado', accessor: r => ESTADO_META[r.estado || '']?.label || r.estado || '' },
+      { header: 'Estado', accessor: r => (r.estado ? metaResultadoNivelacion(r.estado).label : '') },
       { header: 'Fecha asignada', accessor: r => (r.fechaEvento ? new Date(r.fechaEvento).toLocaleDateString('es-CL') : '') },
       { header: 'Comentario', accessor: r => r.comentario || '' },
+      { header: 'Registrado por', accessor: r => r.marcadoPor || '' },
+      { header: 'Fecha de cierre', accessor: r => (r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '') },
     ], 'nivelaciones-historial')
   }
 
@@ -190,7 +178,10 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
                   </thead>
                   <tbody>
                     {filas.map((r, idx) => {
-                      const meta = ESTADO_META[r.estado || ''] || { label: r.estado || '—', cls: 'bg-gray-100 text-gray-600' }
+                      const meta = metaResultadoNivelacion(r.estado)
+                      // Quién la cerró y cuándo: en una removida es lo que se
+                      // pidió dejar a la vista, y sirve igual para los demás cierres.
+                      const cierre = [r.marcadoPor, r.fecha ? fmtDia(r.fecha) : null].filter(Boolean).join(' · ')
                       return (
                         <tr key={`${r.academicaId}-${r.fecha}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
@@ -223,7 +214,11 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${meta.cls}`}>{meta.label}</span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${meta.cls}`}
+                              title={cierre ? `Registrado por ${cierre}` : undefined}>{meta.label}</span>
+                            {r.estado === 'REMOVIDA' && cierre && (
+                              <span className="block text-xs text-gray-400 mt-0.5 whitespace-nowrap">{cierre}</span>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-gray-500 max-w-xs truncate" title={r.comentario || ''}>{r.comentario || '—'}</td>
                           <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{fmtDia(r.fechaEvento)}</td>

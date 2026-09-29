@@ -60,7 +60,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (guia)  { extra.push(`"guiaId" = $${i++}`); params.push(guia) }
   if (curso) { extra.push(`curso = $${i++}`); params.push(curso) }
   if (startDate) { extra.push(`fecha >= $${i++}::date`); params.push(startDate) }
-  if (endDate)   { extra.push(`fecha < (${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
+  if (endDate)   { extra.push(`fecha < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
   if (usuario) {
     // Sobre la CTE, donde el nombre ya es una columna.
     const c = condicionUsuarioSql('nombre', '"numeroId"', usuario, i)

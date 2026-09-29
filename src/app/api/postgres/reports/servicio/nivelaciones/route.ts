@@ -62,7 +62,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
                  THEN (a."detalleNivelacion"->>'duracionMin')::int END AS "duracionMin",
             (a."detalleNivelacion"->>'motivo') AS motivo,
             (a."detalleNivelacion"->>'confirmadoEn') AS "confirmadoEn",
-            (a."detalleNivelacion"->>'confirmadoPor') AS "confirmadoPor"
+            (a."detalleNivelacion"->>'confirmadoPor') AS "confirmadoPor",
+            -- Devuelta desde Agrupaciones (ver nivelaciones/retirar): sin esto la
+            -- solicitud reaparecería aquí, con su fecha vieja, sin explicación.
+            (a."detalleNivelacion"->>'devueltaEn') AS "devueltaEn",
+            (a."detalleNivelacion"->>'devueltaPor') AS "devueltaPor"
        FROM "ACADEMICA" a
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
        LEFT JOIN "CURSOS_CAMPAIGN" cc

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Student } from '@/types'
+import { metaResultadoNivelacion } from '@/lib/nivelacion-resultados'
 
 interface Entry {
   fecha?: string
@@ -91,13 +92,11 @@ export default function StudentNivelacionHistorial({ student }: Props) {
                       if (esFuturo) {
                         return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">Pendiente</span>
                       }
-                      if (r.resultado === 'REALIZADA') {
-                        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Realizada</span>
-                      }
-                      if (r.resultado === 'NO_ASISTIO') {
-                        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">No asistió</span>
-                      }
-                      return <span className="text-gray-500">{r.resultado || '—'}</span>
+                      if (!r.resultado) return <span className="text-gray-500">—</span>
+                      // Misma lista que el Histórico de Servicio: aquí sólo se
+                      // conocían dos resultados y el resto salía con el código crudo.
+                      const meta = metaResultadoNivelacion(r.resultado)
+                      return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${meta.cls}`}>{meta.label}</span>
                     })()}
                   </td>
                   <td className="px-3 py-2 text-gray-600">{r.comentario || '—'}</td>

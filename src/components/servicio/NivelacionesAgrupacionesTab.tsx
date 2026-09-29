@@ -7,6 +7,7 @@ import { ServicioPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
 import { etiquetaDuracionNivelacion } from '@/lib/nivelacion-confirmacion'
+import type { AccionRetiro } from '@/lib/nivelacion-retiro'
 
 interface Row {
   academicaId: string
@@ -89,6 +90,8 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [modalGrupo, setModalGrupo] = useState<Grupo | null>(null)
+  /** Devolver a Solicitudes o Remover: se confirma en un modal con la lista. */
+  const [retiro, setRetiro] = useState<{ accion: AccionRetiro; rows: Row[] } | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [sesionesAbiertas, setSesionesAbiertas] = useState<SesionAbierta[]>([])
 
@@ -236,6 +239,13 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
     return n
   })
 
+  /** Abre la confirmación de Devolver / Remover con lo que está marcado. */
+  const abrirRetiro = (accion: AccionRetiro) => {
+    const seleccionados = rows.filter(r => sel.has(r.academicaId))
+    if (!seleccionados.length) { toast.error('Marca al menos un usuario'); return }
+    setRetiro({ accion, rows: seleccionados })
+  }
+
   const abrirGestion = (g: Grupo) => {
     const seleccionados = g.rows.filter(r => sel.has(r.academicaId))
     if (!seleccionados.length) { toast.error('Marca al menos un estudiante del grupo'); return }
@@ -337,6 +347,19 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
               Quitar del grupo
             </button>
           )}
+          {/* Las dos salidas de Agrupaciones que NO agendan. Van separadas de las
+              de armar grupo: una deshace la aprobación y la otra cancela. */}
+          <span className="hidden sm:block w-px h-6 bg-primary-200" aria-hidden="true" />
+          <button type="button" onClick={() => abrirRetiro('devolver')} disabled={guardando}
+            title="Deshace la aprobación: vuelve a la pestaña Solicitudes tal como la pidió el guía"
+            className="px-3 py-1.5 text-sm border border-amber-300 rounded-lg bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-50 font-medium">
+            ↩ Devolver a Solicitudes
+          </button>
+          <button type="button" onClick={() => abrirRetiro('remover')} disabled={guardando}
+            title="Cancela la nivelación: queda en el Histórico como Removida"
+            className="px-3 py-1.5 text-sm border border-red-300 rounded-lg bg-white text-red-700 hover:bg-red-50 disabled:opacity-50 font-medium">
+            Remover
+          </button>
           <button type="button" onClick={() => setSel(new Set())}
             className="ml-auto px-2 py-1.5 text-sm text-gray-500 hover:text-gray-700">
             Desmarcar
@@ -452,7 +475,11 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
                           <td className="px-3 py-2">
                             <ConfirmacionCell
                               academicaId={r.academicaId}
-                              fechaSolicitud={r.fechaSolicitud ?? null}
+                              // El endpoint la devuelve como `fecha`. Se leía de
+                              // `fechaSolicitud`, que aquí no existe, y la celda
+                              // quedaba siempre en «—»: ni mostraba la confirmación
+                              // del usuario ni dejaba confirmar a mano.
+                              fechaSolicitud={r.fecha ?? r.fechaSolicitud ?? null}
                               confirmadoEn={r.confirmadoEn ?? null}
                               confirmadoPor={r.confirmadoPor ?? null}
                               puedeGestionar={canGestion}
@@ -478,6 +505,141 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
           onDone={() => { setModalGrupo(null); fetchData({ curso, leccion, guia }); onMoved?.() }}
         />
       )}
+
+      {retiro && (
+        <RetirarNivelacionModal
+          accion={retiro.accion}
+          rows={retiro.rows}
+          onClose={() => setRetiro(null)}
+          onDone={() => { setRetiro(null); fetchData({ curso, leccion, guia, usuario }); onMoved?.() }}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Confirmación de las dos salidas de Agrupaciones que no agendan. Es un modal y
+ * no un clic directo porque las dos sacan la nivelación de esta pestaña, y
+ * Remover además no se deshace: hay que ver a quiénes aplica antes de aceptar.
+ */
+function RetirarNivelacionModal({ accion, rows, onClose, onDone }: {
+  accion: AccionRetiro
+  rows: Row[]
+  onClose: () => void
+  onDone: () => void
+}) {
+  const esRemover = accion === 'remover'
+  const [motivo, setMotivo] = useState('')
+  const [saving, setSaving] = useState(false)
+  const enGrupo = rows.filter(r => r.grupoId).length
+
+  const confirmar = async () => {
+    if (esRemover && !motivo.trim()) { toast.error('Escribe el motivo'); return }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/postgres/reports/servicio/nivelaciones/retirar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accion,
+          academicaIds: rows.map(r => r.academicaId),
+          motivo: esRemover ? motivo.trim() : undefined,
+        }),
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error(j?.error || 'No se pudo completar')
+      toast.success(esRemover
+        ? `${j.afectados} nivelación(es) removida(s) — quedan en el Histórico`
+        : `${j.afectados} nivelación(es) devuelta(s) a Solicitudes`)
+      onDone()
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo completar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog" aria-modal="true" aria-labelledby="retiro-titulo">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-3">
+          <div>
+            <h3 id="retiro-titulo" className="text-lg font-semibold text-gray-900">
+              {esRemover ? 'Remover nivelación' : 'Devolver a Solicitudes'}
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5">{rows.length} usuario(s) seleccionado(s)</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} title="Cerrar"
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {esRemover ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 space-y-1">
+              <p className="font-semibold">La nivelación se cancela y no se puede deshacer.</p>
+              <p>Queda en el Histórico como <b>Removida</b>, con el motivo, su nombre y la fecha. El conteo del usuario baja 1.</p>
+              <p>Si más adelante la necesita, el guía tendrá que pedirla de nuevo.</p>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 space-y-1">
+              <p className="font-semibold">La aprobación se deshace.</p>
+              <p>La nivelación vuelve a la pestaña <b>Solicitudes</b> tal como la pidió el guía: lección, hora y motivo. Se conservan la confirmación del usuario y el conteo.</p>
+              <p>Desde Solicitudes se puede aprobar otra vez o cancelar.</p>
+            </div>
+          )}
+
+          {enGrupo > 0 && (
+            <p className="text-sm text-gray-600">
+              {enGrupo === rows.length ? 'Están' : `${enGrupo} está(n)`} en un grupo armado: {esRemover ? 'salen' : 'saldrán'} de él.
+              Los demás integrantes del grupo no cambian.
+            </p>
+          )}
+
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              {esRemover ? 'Se removerán' : 'Se devolverán'}
+            </p>
+            <ul className="text-sm text-gray-700 space-y-1 max-h-44 overflow-y-auto">
+              {rows.map(r => (
+                <li key={r.academicaId} className="flex justify-between gap-3">
+                  <span>{r.nombre}</span>
+                  <span className="text-gray-400 whitespace-nowrap">
+                    {r.curso || '—'} · {r.leccion || 'sin lección'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {esRemover && (
+            <div>
+              <label htmlFor="retiro-motivo" className="block text-xs font-medium text-gray-500 mb-1">
+                Motivo *
+              </label>
+              <textarea id="retiro-motivo" value={motivo} onChange={e => setMotivo(e.target.value)}
+                rows={3} maxLength={500}
+                placeholder="Por qué se remueve la nivelación"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              <p className="text-xs text-gray-400 mt-1">Queda escrito en el Histórico y en la ficha del usuario.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
+          <button type="button" onClick={onClose} disabled={saving}
+            className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">Cancelar</button>
+          <button type="button" onClick={confirmar} disabled={saving || (esRemover && !motivo.trim())}
+            className={`px-4 py-2 text-sm text-white rounded-lg disabled:opacity-50 font-medium ${
+              esRemover ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'
+            }`}>
+            {saving
+              ? 'Aplicando…'
+              : esRemover ? `Remover (${rows.length})` : `Devolver a Solicitudes (${rows.length})`}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

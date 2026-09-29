@@ -31,6 +31,9 @@ interface Row {
   motivo: string | null
   confirmadoEn: string | null
   confirmadoPor: string | null
+  /** Devuelta desde Agrupaciones: ya estuvo aprobada y se deshizo. */
+  devueltaEn: string | null
+  devueltaPor: string | null
 }
 interface Guia { id: string; nombre: string }
 
@@ -42,10 +45,12 @@ type Tab = 'solicitudes' | 'agrupaciones' | 'pendientes' | 'historial'
  * Agrupaciones, donde se juntan por curso y lección para dictar UNA nivelación
  * a varios alumnos en vez de una por cabeza.
  */
-function SolicitudesTab({ onCount, onMoved }: {
+function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
   onCount?: (n: number) => void
   /** Aprobar o cancelar saca la solicitud de aquí y la mete en otra pestaña. */
   onMoved?: () => void
+  /** Cambia cuando otra pestaña mueve una nivelación (p. ej. la devuelve aquí). */
+  refreshKey?: number
 }) {
   const { hasPermission } = usePermissions()
   const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION as any)
@@ -86,6 +91,16 @@ function SolicitudesTab({ onCount, onMoved }: {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // Esta pestaña era la única que no recargaba con las demás: no hacía falta,
+  // porque nada volvía a ella. Desde que Agrupaciones puede DEVOLVER una
+  // nivelación, sin esto no aparecería hasta recargar la página. Con los filtros
+  // vigentes, como las otras.
+  useEffect(() => {
+    if (!refreshKey) return
+    fetchData({ curso, salon, leccion, guia, usuario, startDate, endDate })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
   const aplicar = () => fetchData({ curso, salon, leccion, guia, usuario, startDate, endDate })
   const borrar = () => {
     setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setUsuario(''); setStartDate(''); setEndDate('')
@@ -105,6 +120,7 @@ function SolicitudesTab({ onCount, onMoved }: {
       { header: 'Motivo', accessor: r => r.motivo || '' },
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
       { header: 'Confirmación', accessor: r => (r.confirmadoEn ? (r.confirmadoPor === 'SERVICIO' ? 'Confirmada (Servicio)' : 'Confirmada') : 'Sin confirmar') },
+      { header: 'Devuelta de Agrupaciones', accessor: r => (r.devueltaEn ? `${new Date(r.devueltaEn).toLocaleDateString('es-CL')}${r.devueltaPor ? ` · ${r.devueltaPor}` : ''}` : '') },
     ], 'nivelaciones')
   }
 
@@ -217,13 +233,19 @@ function SolicitudesTab({ onCount, onMoved }: {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
+                <tr><td colSpan={11} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones pendientes</td></tr>
+                <tr><td colSpan={11} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones pendientes</td></tr>
               ) : rows.map((r) => (
                 <tr key={r.academicaId} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
                     {r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '—'}
+                    {r.devueltaEn && (
+                      <span className="block mt-0.5 text-amber-700 font-medium"
+                        title={`Devuelta desde Agrupaciones${r.devueltaPor ? ` por ${r.devueltaPor}` : ''} el ${new Date(r.devueltaEn).toLocaleDateString('es-CL')}`}>
+                        ↩ Devuelta
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
                   <td className="px-3 py-2 font-medium whitespace-nowrap">
@@ -333,7 +355,7 @@ function NivelacionesContent() {
       {/* Las pestañas se mantienen montadas (ocultas con `hidden`) para no perder
           filtros ni selección al conmutar entre ellas. */}
       <div className={tab === 'solicitudes' ? '' : 'hidden'}>
-        <SolicitudesTab onCount={setSolCount} onMoved={() => setRefreshKey(k => k + 1)} />
+        <SolicitudesTab onCount={setSolCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
       </div>
       <div className={tab === 'agrupaciones' ? '' : 'hidden'}>
         <NivelacionesAgrupacionesTab onCount={setAgrCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
