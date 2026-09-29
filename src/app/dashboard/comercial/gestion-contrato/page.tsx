@@ -25,7 +25,9 @@ function colorEstado(v: any): string {
   return 'bg-gray-100 text-gray-600'
 }
 
-const fmtFecha = (v: any) => { if (!v) return '—'; try { return new Date(v).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) } catch { return String(v).slice(0, 10) } }
+// La fecha del contrato es una fecha PURA (sin hora): se lee en UTC. En la hora
+// local de quien mira, en Chile o Colombia saldría el día anterior.
+const fmtFecha = (v: any) => { if (!v) return '—'; try { return new Date(v).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) } catch { return String(v).slice(0, 10) } }
 
 export default function GestionContratoPage() {
   const emptyF = { asesor: '', lider: '', contrato: '', numeroId: '', estado: '', startDate: '', endDate: '' }
@@ -97,6 +99,7 @@ export default function GestionContratoPage() {
 
       toast.success(res.message || `Contrato ${r.contrato || ''} marcado como listo`)
       setRows(prev => prev.filter(x => x._id !== r._id))
+      setPendientes(n => Math.max(0, n - 1))
       setConfirmar(null); setSinCupo(null)
     } catch (e: any) { toast.error(e?.message || 'Error') } finally { setSaving(false) }
   }
@@ -170,14 +173,15 @@ export default function GestionContratoPage() {
         <div className="p-6 max-w-6xl mx-auto">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Gestión Contrato</h1>
           {tab === 'firmados' ? (
-            <p className="text-gray-500 mb-4 text-sm">Contratos <strong>firmados sin aprobar</strong>. Adjunta la documentación y marca <strong>Dejar listo</strong> cuando el contrato esté completo para aprobación. Los ya gestionados siguen aquí, marcados <strong>✓ Gestionado</strong>, hasta que Aprobación los apruebe.</p>
+            <p className="text-gray-500 mb-4 text-sm">Contratos <strong>firmados sin aprobar</strong>. Adjunta la documentación y marca <strong>Dejar listo</strong> cuando el contrato esté completo para aprobación. Arriba van los que <strong>faltan por gestionar</strong>; los ya gestionados siguen debajo, marcados <strong>✓ Gestionado</strong>, hasta que Aprobación los apruebe.</p>
           ) : (
-            <p className="text-gray-500 mb-4 text-sm">Contratos <strong>recién creados</strong> que todavía no están listos ni aprobados. Usa <strong>Editar contrato</strong> para volver a solicitar la firma, enviar el PDF, imprimir o corregir datos. Cada contrato sale de esta lista a las <strong>{HORAS_EN_GESTION} horas</strong> de haberse creado.</p>
+            <p className="text-gray-500 mb-4 text-sm">Contratos <strong>recién creados que todavía no se han firmado</strong>. Usa <strong>Editar contrato</strong> para volver a solicitar la firma, imprimir o corregir datos. Al firmarse, el contrato pasa a <strong>Firmados sin aprobar</strong>; si no se firma, sale de esta lista a las <strong>{HORAS_EN_GESTION} horas</strong> de haberse creado.</p>
           )}
 
           <div className="flex gap-1 border-b border-gray-200 mb-4" role="tablist">
             {([
-              { id: 'firmados', label: 'Firmados sin aprobar', n: null as number | null },
+              // El número es lo que FALTA por gestionar, no el total de la bandeja.
+              { id: 'firmados', label: 'Firmados sin aprobar', n: (loading ? null : pendientes) as number | null },
               { id: 'gestion', label: 'En Gestión', n: enGestionTotal },
             ] as const).map(t => (
               <button key={t.id} type="button" role="tab" aria-selected={tab === t.id}
@@ -335,6 +339,14 @@ export default function GestionContratoPage() {
                           <a href={`/person/${r._id}?soloGeneral=1`} target="_blank" rel="noopener noreferrer"
                             title="Adicionar documentos"
                             className="px-2.5 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-xs font-medium hover:bg-purple-50 whitespace-nowrap">📎 Documentos</a>
+                          {/* El camino al detalle del contrato (enviar el PDF,
+                              imprimir, corregir): al firmarse sale de En Gestión,
+                              así que tiene que poder abrirse desde aquí. */}
+                          {!esAprobadoRow(r) && (
+                            <a href={`/dashboard/comercial/contrato/${r._id}`} target="_blank" rel="noopener noreferrer"
+                              title="Abrir el contrato: enviar el PDF, imprimir o corregir datos"
+                              className="px-2.5 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-xs font-medium hover:bg-purple-50 whitespace-nowrap">✎ Editar</a>
+                          )}
                           {/* Sólo donde falta gestión: sobre uno ya gestionado o
                               ya aprobado, "Dejar listo" no hace nada útil. */}
                           {!r.gestionListo && !esAprobadoRow(r) && (

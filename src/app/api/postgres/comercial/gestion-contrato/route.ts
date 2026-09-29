@@ -10,8 +10,9 @@ import { esAprobadoSql, esAprobado } from '@/lib/estados';
 
 /**
  * GET /api/postgres/comercial/gestion-contrato
- *   Titulares con contrato FIRMADO (consentimiento) y SIN APROBAR, pendientes de
- *   gestión (no marcados "listo"). Columnas: nombre, contrato, fecha, estado.
+ *   Titulares con contrato FIRMADO (consentimiento) y SIN APROBAR. Primero los
+ *   que faltan por gestionar; después los ya marcados "listo", que siguen en la
+ *   bandeja hasta que Aprobación los apruebe.
  *
  * POST … { id }  → "Dejar listo": marca el contrato como gestionado (sale de la lista).
  * Gateado por COMERCIAL.GESTION_CONTRATO.VER.
@@ -104,6 +105,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   const { sql: whereSql, params } = construir(universo, true);
 
+  // Primero lo que FALTA por gestionar: la bandeja es una lista de trabajo, y con
+  // la carga de las campañas anteriores (que nacen ya gestionadas) lo pendiente
+  // quedaba repartido entre decenas de filas ya cerradas. La fecha del contrato
+  // no tiene hora, así que dentro del mismo día desempata la de creación.
   const rows = (await query<any>(
     `SELECT p."_id", p."numeroId", p."contrato", p."plataforma", p."asesor",
             TRIM(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido")) AS nombre,
@@ -116,7 +121,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             p."gestionContratoListoDate" AS "gestionListoDate"
        FROM "PEOPLE" p
       WHERE ${whereSql}
-      ORDER BY COALESCE(p."fechaContrato", p."inicioContrato") DESC NULLS LAST
+      ORDER BY COALESCE(p."gestionContratoListo", false) ASC,
+               COALESCE(p."fechaContrato", p."inicioContrato") DESC NULLS LAST,
+               p."_createdDate" DESC
       LIMIT 1000`,
     params
   )).rows;

@@ -11,7 +11,8 @@ import {
 
 /**
  * Pestaña "En Gestión" de Gestión Contrato: los contratos recién creados que
- * todavía no están listos ni aprobados, con el enlace para volver a editarlos.
+ * todavía no se han FIRMADO, con el enlace para volver a editarlos. Al firmarse
+ * pasan a la pestaña "Firmados sin aprobar".
  *
  * Queda montada aunque la pestaña no esté a la vista: el total se calcula al
  * entrar a la pantalla, porque ese número es el aviso — detrás de un clic nadie
@@ -98,7 +99,7 @@ export default function EnGestionTab({ activo, onTotal }: { activo: boolean; onT
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <span className="text-sm text-gray-500">
-          {loading ? 'Cargando…' : `${enLista} contrato(s) en gestión · creados en las últimas ${HORAS_EN_GESTION} horas`}
+          {loading ? 'Cargando…' : `${enLista} contrato(s) sin firmar · creados en las últimas ${HORAS_EN_GESTION} horas`}
         </span>
         <div className="flex items-center gap-4">
           {(quitados > 0 || verQuitados) && (
@@ -132,7 +133,7 @@ export default function EnGestionTab({ activo, onTotal }: { activo: boolean; onT
                 <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-10">Cargando…</td></tr>
               ) : visibles.length === 0 ? (
                 <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-10">
-                  No hay contratos creados en las últimas {HORAS_EN_GESTION} horas pendientes de dejar listos.
+                  No hay contratos sin firmar creados en las últimas {HORAS_EN_GESTION} horas.
                 </td></tr>
               ) : visibles.map(r => {
                 const quitado = !!r.quitadoEn

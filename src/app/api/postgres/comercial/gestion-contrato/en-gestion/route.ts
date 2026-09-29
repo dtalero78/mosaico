@@ -13,8 +13,9 @@ import { HORAS_EN_GESTION } from '@/lib/contrato-en-gestion';
  *
  * GET  …/en-gestion[?quitados=1]
  *   Contratos creados en las últimas `HORAS_EN_GESTION` horas que todavía NO
- *   están marcados listos ni aprobados. Es el camino de vuelta al detalle del
- *   contrato, que no está en ningún menú.
+ *   están firmados, ni marcados listos, ni aprobados. Es el camino de vuelta al
+ *   detalle del contrato mientras se consigue la firma; al firmarse pasa a la
+ *   pestaña "Firmados sin aprobar".
  *
  * POST …/en-gestion { id, accion: 'quitar' | 'restaurar' }
  *   Quita el contrato de la lista, o lo devuelve. NO borra ni cambia el contrato.
@@ -35,6 +36,7 @@ import { HORAS_EN_GESTION } from '@/lib/contrato-en-gestion';
  */
 const EN_GESTION = `p."tipoUsuario" = 'TITULAR'
   AND p."_createdDate" >= NOW() - INTERVAL '${HORAS_EN_GESTION} hours'
+  AND (p."hashConsentimiento" IS NULL OR p."hashConsentimiento" = '')
   AND COALESCE(p."gestionContratoListo", false) = false
   AND (p."aprobacion" IS NULL OR NOT ${esAprobadoSql('p."aprobacion"')})`;
 

@@ -9,9 +9,13 @@
  *
  * Entra a la lista el contrato que:
  *   - se creó hace menos de `HORAS_EN_GESTION` horas,
+ *   - NO está firmado,
  *   - NO está marcado listo (el "Dejar listo" de esta misma pantalla), y
  *   - NO está aprobado.
  * Y sale además si alguien lo quitó a mano.
+ *
+ * En cuanto el titular FIRMA, el contrato pasa a la pestaña "Firmados sin
+ * aprobar", que es donde se deja listo: las dos pestañas no se pisan.
  *
  * La regla vive aquí —cliente y servidor— porque la usan DOS sitios: la consulta
  * del endpoint y la tabla, que descarta sola la fila cuyo plazo se cumple
@@ -21,7 +25,7 @@
 import { esAprobado } from './estados'
 
 /** Horas que un contrato recién creado permanece en la lista. */
-export const HORAS_EN_GESTION = 8
+export const HORAS_EN_GESTION = 5
 
 const MS_HORA = 60 * 60 * 1000
 
@@ -50,6 +54,7 @@ export function msRestantesEnGestion(creado: Instante, ahora: Date = new Date())
 
 export interface FilaEnGestion {
   creado: Instante
+  firmado?: boolean | null
   gestionListo?: boolean | null
   aprobacion?: string | null
   quitadoEn?: Instante
@@ -58,13 +63,14 @@ export interface FilaEnGestion {
 /**
  * ¿El contrato pertenece a la lista? Espejo exacto del WHERE del endpoint.
  * `incluirQuitados` es la casilla "Ver los quitados": levanta SÓLO esa condición,
- * nunca el plazo ni las otras dos.
+ * nunca el plazo ni las otras tres.
  */
 export function entraEnGestion(
   fila: FilaEnGestion,
   ahora: Date = new Date(),
   incluirQuitados = false,
 ): boolean {
+  if (fila.firmado === true) return false
   if (fila.gestionListo === true) return false
   if (esAprobado(fila.aprobacion)) return false
   if (!incluirQuitados && fila.quitadoEn) return false
