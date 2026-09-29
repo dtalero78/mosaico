@@ -7,6 +7,8 @@ import { ServicioPermission } from '@/types/permissions'
 import { formatDateTime } from '@/lib/utils'
 import { exportToExcel } from '@/lib/export-excel'
 import { campanasActuales, estadosDeCampanas, ESTADO_CURSO_META } from '@/lib/cursos-campaign'
+import { estadoWelcome, pasaFiltroAsistencia, ESTADO_WELCOME_META, type FiltroAsistenciaWelcome } from '@/lib/welcome-asistencia'
+import { coincidePersona } from '@/lib/busqueda-persona'
 import WelcomeReagendamientosTab from '@/components/servicio/WelcomeReagendamientosTab'
 
 interface WelcomeEvent {
@@ -17,8 +19,12 @@ interface WelcomeEvent {
   segundoApellido?: string
   celular: string
   fechaEvento: string
+  /** Asistió a ESTA sesión. */
   asistencia?: boolean
+  /** El alumno asistió a alguna bienvenida (ésta u otra). */
+  asistioAlguna?: boolean
   numeroId: string
+  contrato?: string
   idEstudiante: string
   nivel?: string
   advisor?: string
@@ -34,6 +40,8 @@ type Tab = 'eventos' | 'reagendamientos'
 const CAMPANA_ACTUALES = '__actuales__'
 const CAMPANA_TODAS = '__todas__'
 
+const nombreCompleto = (e: WelcomeEvent) => `${e.primerNombre} ${e.primerApellido}`.trim()
+
 export default function WelcomeSessionPage() {
   const [tab, setTab] = useState<Tab>('eventos')
   const [welcomeEvents, setWelcomeEvents] = useState<WelcomeEvent[]>([])
@@ -43,8 +51,9 @@ export default function WelcomeSessionPage() {
   // Estados para filtros
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [attendanceFilter, setAttendanceFilter] = useState<'all' | 'attended' | 'not-attended'>('all')
-  const [searchApellido, setSearchApellido] = useState('')
+  // La bandeja abre en «No asistió»: es la lista que se viene a gestionar.
+  const [attendanceFilter, setAttendanceFilter] = useState<FiltroAsistenciaWelcome>('not-attended')
+  const [buscar, setBuscar] = useState('')
   const [campanaFiltro, setCampanaFiltro] = useState<string>(CAMPANA_ACTUALES)
 
   // Catálogo de cursos de campaña: de aquí sale el ESTADO de cada campaña
@@ -148,27 +157,14 @@ export default function WelcomeSessionPage() {
         }
       }
 
-      // Filtro por apellido
-      if (searchApellido.trim()) {
-        const apellidoCompleto = `${event.primerApellido || ''} ${event.segundoApellido || ''}`.toLowerCase()
-        if (!apellidoCompleto.includes(searchApellido.toLowerCase().trim())) {
-          return false
-        }
-      }
-
-      // Filtro por asistencia
-      if (attendanceFilter === 'attended' && event.asistencia !== true) {
+      // Nombre, ID o contrato
+      if (!coincidePersona({ nombre: nombreCompleto(event), numeroId: event.numeroId, contrato: event.contrato }, buscar)) {
         return false
       }
-      if (attendanceFilter === 'not-attended') {
-        // No asistió = asistencia false OR (asistencia undefined Y fecha ya pasó)
-        const eventHasPassed = new Date(event.fechaEvento) <= new Date()
-        if (!(event.asistencia === false || (event.asistencia === undefined && eventHasPassed))) {
-          return false
-        }
-      }
 
-      return true
+      // Asistencia, medida por ALUMNO: quien ya asistió a una bienvenida no
+      // cuenta como inasistente aunque haya faltado a otra.
+      return pasaFiltroAsistencia(estadoWelcome(event), attendanceFilter)
     })
     .sort((a, b) => {
       // Ordenar por hora del evento: más temprano primero (ascendente)
@@ -182,10 +178,10 @@ export default function WelcomeSessionPage() {
   const clearFilters = () => {
     setStartDate('')
     setEndDate('')
-    setAttendanceFilter('all')
-    setSearchApellido('')
+    setBuscar('')
     // "Limpiar" devuelve al DEFAULT de la pantalla, no a "todas": el default es
     // una decisión de la vista, no un filtro que el usuario puso.
+    setAttendanceFilter('not-attended')
     setCampanaFiltro(CAMPANA_ACTUALES)
   }
 
@@ -227,18 +223,22 @@ export default function WelcomeSessionPage() {
           </nav>
         </div>
 
-        {tab === 'reagendamientos' ? <WelcomeReagendamientosTab /> : (
+        {tab === 'reagendamientos' ? (
+          <WelcomeReagendamientosTab estadosCampana={estadosCampana} actuales={actuales} />
+        ) : (
         <div className="card">
           <div className="card-header pb-6">
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => exportToExcel(filteredEvents, [
-                  { header: 'Nombre', accessor: (e) => `${e.primerNombre} ${e.primerApellido}`.trim() },
+                  { header: 'Nombre', accessor: (e) => nombreCompleto(e) },
+                  { header: 'ID', accessor: (e) => e.numeroId || '' },
+                  { header: 'Contrato', accessor: (e) => e.contrato || '' },
                   { header: 'Campaña', accessor: (e) => e.campaign || '' },
                   { header: 'Celular', accessor: (e) => e.celular || '' },
                   { header: 'Fecha Evento', accessor: (e) => formatDateTime(e.fechaEvento) },
                   { header: 'Sesiones', accessor: (e) => e.totalSesionesWelcome || 0 },
-                  { header: 'Asistencia', accessor: (e) => e.asistencia === true ? 'Asistió' : e.asistencia === false ? 'No asistió' : new Date(e.fechaEvento) > new Date() ? 'Pendiente' : 'No asistió' },
+                  { header: 'Asistencia', accessor: (e) => ESTADO_WELCOME_META[estadoWelcome(e)].label },
                 ], `welcome-events-${new Date().toISOString().split('T')[0]}`)}
                 disabled={filteredEvents.length === 0}
                 className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -303,15 +303,15 @@ export default function WelcomeSessionPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="searchApellido" className="block text-sm font-medium text-gray-700 mb-1">
-                    Buscar por apellido
+                  <label htmlFor="welBuscar" className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre, ID o contrato
                   </label>
                   <input
                     type="text"
-                    id="searchApellido"
-                    value={searchApellido}
-                    onChange={(e) => setSearchApellido(e.target.value)}
-                    placeholder="Apellido..."
+                    id="welBuscar"
+                    value={buscar}
+                    onChange={(e) => setBuscar(e.target.value)}
+                    placeholder="Nombre, documento o contrato..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
                   />
                 </div>
@@ -349,12 +349,13 @@ export default function WelcomeSessionPage() {
                   <select
                     id="attendanceFilter"
                     value={attendanceFilter}
-                    onChange={(e) => setAttendanceFilter(e.target.value as 'all' | 'attended' | 'not-attended')}
+                    onChange={(e) => setAttendanceFilter(e.target.value as FiltroAsistenciaWelcome)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
                   >
-                    <option value="all">Todos</option>
-                    <option value="attended">Asistió</option>
                     <option value="not-attended">No asistió</option>
+                    <option value="attended">Asistió</option>
+                    <option value="pending">Pendiente</option>
+                    <option value="all">Todos</option>
                   </select>
                 </div>
 
@@ -404,7 +405,9 @@ export default function WelcomeSessionPage() {
                   </thead>
                   <tbody className="table-body">
                     {filteredEvents.length > 0 ? (
-                      filteredEvents.map((event) => (
+                      filteredEvents.map((event) => {
+                        const est = ESTADO_WELCOME_META[estadoWelcome(event)]
+                        return (
                         <tr
                           key={event._id}
                           onClick={() => handleRowClick(event)}
@@ -412,7 +415,10 @@ export default function WelcomeSessionPage() {
                         >
                           <td className="table-cell">
                             <div className="text-sm font-medium text-gray-900">
-                              {`${event.primerNombre} ${event.primerApellido}`.trim()}
+                              {nombreCompleto(event)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {[event.numeroId, event.contrato].filter(Boolean).join(' · ')}
                             </div>
                           </td>
                           <td className="table-cell">
@@ -436,18 +442,11 @@ export default function WelcomeSessionPage() {
                             </div>
                           </td>
                           <td className="table-cell">
-                            <span className={`badge ${
-                              event.asistencia === true ? 'badge-success' :
-                              event.asistencia === false ? 'badge-danger' :
-                              new Date(event.fechaEvento) > new Date() ? 'badge-warning' : 'badge-danger'
-                            }`}>
-                              {event.asistencia === true ? 'Asistió' :
-                               event.asistencia === false ? 'No asistió' :
-                               new Date(event.fechaEvento) > new Date() ? 'Pendiente' : 'No asistió'}
-                            </span>
+                            <span className={`badge ${est.badge}`}>{est.label}</span>
                           </td>
                         </tr>
-                      ))
+                        )
+                      })
                     ) : !loading ? (
                       <tr>
                         <td colSpan={6} className="table-cell text-center py-8">

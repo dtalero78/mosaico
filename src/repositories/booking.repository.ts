@@ -33,6 +33,27 @@ function esWelcomeSql(ab: string, c: string): string {
   )`;
 }
 
+/**
+ * ¿El alumno de este agendamiento YA asistió a alguna bienvenida?
+ *
+ * La asistencia a Welcome se mide por ALUMNO: quien faltó a una sesión y asistió
+ * a otra ya no es un inasistente. Se busca en TODAS sus bienvenidas, sin el
+ * filtro de fechas de la pantalla — la sesión a la que asistió puede caer fuera
+ * del rango consultado. La usan la bandeja de Welcome y la de reagendamientos.
+ */
+function asistioAlgunaWelcomeSql(ab: string): string {
+  const alumno = `COALESCE(${ab}."studentId", ${ab}."idEstudiante")`;
+  return `EXISTS (
+    SELECT 1
+      FROM "ACADEMICA_BOOKINGS" bw
+      LEFT JOIN "CALENDARIO" cw ON (cw."_id" = bw."eventoId" OR cw."_id" = bw."idEvento")
+     WHERE (bw."studentId" = ${alumno} OR bw."idEstudiante" = ${alumno})
+       AND (bw."cancelo" IS NULL OR bw."cancelo" = false)
+       AND (bw."asistio" IS TRUE OR bw."asistencia" IS TRUE)
+       AND ${esWelcomeSql('bw', 'cw')}
+  )`;
+}
+
 class BookingRepositoryClass extends BaseRepository {
   constructor() {
     super('ACADEMICA_BOOKINGS');
@@ -435,8 +456,10 @@ class BookingRepositoryClass extends BaseRepository {
          COALESCE(p."segundoApellido", a."segundoApellido", '') as "segundoApellido",
          COALESCE(p."celular", a."celular", '') as "celular",
          COALESCE(c."dia", ab."fechaEvento") as "fechaEvento",
-         ab."asistio" as "asistencia",
+         (ab."asistio" IS TRUE OR ab."asistencia" IS TRUE) as "asistencia",
+         ${asistioAlgunaWelcomeSql('ab')} as "asistioAlguna",
          COALESCE(p."numeroId", a."numeroId", '') as "numeroId",
+         COALESCE(p."contrato", a."contrato", '') as "contrato",
          COALESCE(ab."studentId", ab."idEstudiante") as "idEstudiante",
          ab."nivel",
          ab."advisor",
@@ -467,6 +490,9 @@ class BookingRepositoryClass extends BaseRepository {
    * futura**, que se DERIVA aquí con un LATERAL en vez de guardarse en una
    * bandera — una bandera quedaría desfasada en cuanto se borrara ese evento o
    * se cancelara el agendamiento (mismo patrón que Nivelaciones).
+   *
+   * Quien faltó a una bienvenida pero ASISTIÓ a otra no entra: ya tuvo su
+   * bienvenida, no hay nada que reagendarle.
    */
   async findWelcomeInasistentes(startDate?: string, endDate?: string) {
     const conditions = [
@@ -475,6 +501,7 @@ class BookingRepositoryClass extends BaseRepository {
       `COALESCE(c."dia", ab."fechaEvento") < NOW()`,
       `ab."asistio" IS NOT TRUE`,
       `ab."asistencia" IS NOT TRUE`,
+      `NOT ${asistioAlgunaWelcomeSql('ab')}`,
     ];
     const params: any[] = [];
     let i = 1;
@@ -489,6 +516,7 @@ class BookingRepositoryClass extends BaseRepository {
          COALESCE(ab."primerApellido", a."primerApellido", p."primerApellido", '') AS "primerApellido",
          COALESCE(p."celular", a."celular", '') AS "celular",
          COALESCE(p."numeroId", a."numeroId", '') AS "numeroId",
+         COALESCE(p."contrato", a."contrato", '') AS "contrato",
          COALESCE(p."campaign", '') AS "campaign",
          COALESCE(p."tipoCurso", '') AS "tipoCurso",
          COALESCE(p."plataforma", a."plataforma", '') AS "plataforma",

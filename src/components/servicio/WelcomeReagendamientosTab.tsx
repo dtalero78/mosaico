@@ -8,6 +8,19 @@ import SobrecupoModal, { esSobrecupo, type SobrecupoDetalle } from '@/components
 import { ServicioPermission, AcademicoPermission } from '@/types/permissions'
 import { formatDateTime } from '@/lib/utils'
 import { exportToExcel } from '@/lib/export-excel'
+import { ESTADO_CURSO_META, type CampanaEstado } from '@/lib/cursos-campaign'
+import { coincidePersona } from '@/lib/busqueda-persona'
+
+/** Valor del desplegable de campaña: el conjunto "actuales" o una campaña concreta. */
+const CAMPANA_ACTUALES = '__actuales__'
+const CAMPANA_TODAS = '__todas__'
+
+interface Props {
+  /** Estado de cada campaña, para etiquetar las opciones del desplegable. */
+  estadosCampana: CampanaEstado[]
+  /** Las campañas por defecto: la que está en matrícula y la activa más reciente. */
+  actuales: string[]
+}
 
 /** Un alumno que no asistió a su sesión de bienvenida. */
 interface Inasistente {
@@ -17,6 +30,7 @@ interface Inasistente {
   primerApellido: string
   celular: string
   numeroId: string
+  contrato?: string
   campaign: string
   tipoCurso: string
   plataforma: string
@@ -50,7 +64,7 @@ interface Grupo {
 
 const nombreDe = (r: Inasistente) => `${r.primerNombre} ${r.primerApellido}`.trim() || '(sin nombre)'
 
-export default function WelcomeReagendamientosTab() {
+export default function WelcomeReagendamientosTab({ estadosCampana, actuales }: Props) {
   const { hasPermission } = usePermissions()
   // Autorizar sobrecupo es un permiso aparte del de reagendar.
   const puedeAutorizarSobrecupo = hasPermission(AcademicoPermission.SOBRECUPO_AUTORIZAR)
@@ -62,6 +76,8 @@ export default function WelcomeReagendamientosTab() {
   const [endDate, setEndDate] = useState('')
   const [buscar, setBuscar] = useState('')
   const [soloPendientes, setSoloPendientes] = useState(true)
+  // Mismo default que la pestaña de eventos: las campañas actuales.
+  const [campanaFiltro, setCampanaFiltro] = useState<string>(CAMPANA_ACTUALES)
 
   // Modal de reagendamiento
   const [target, setTarget] = useState<Inasistente | null>(null)
@@ -95,17 +111,27 @@ export default function WelcomeReagendamientosTab() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  const filtradas = useMemo(() => {
-    const q = buscar.trim().toLowerCase()
-    return rows.filter((r) => {
-      if (soloPendientes && r.reagendadoA) return false
-      if (!q) return true
-      return (
-        nombreDe(r).toLowerCase().includes(q) ||
-        (r.numeroId || '').toLowerCase().includes(q)
-      )
-    })
-  }, [rows, buscar, soloPendientes])
+  /** Campañas presentes en los datos, la más reciente primero. */
+  const campanasEnDatos = useMemo(() => {
+    const set = new Set(rows.map((r) => (r.campaign || '').trim()).filter(Boolean))
+    const orden = new Map(estadosCampana.map((c) => [c.campaign, c.inicio || '']))
+    return Array.from(set).sort((a, b) => String(orden.get(b) || '').localeCompare(String(orden.get(a) || '')))
+  }, [rows, estadosCampana])
+
+  /** La campaña sale del ALUMNO: el evento WELCOME es comodín. */
+  const enCampana = useCallback((r: Inasistente) => {
+    if (campanaFiltro === CAMPANA_TODAS) return true
+    const c = (r.campaign || '').trim()
+    // Mientras el catálogo no haya cargado no se esconde nada.
+    if (campanaFiltro === CAMPANA_ACTUALES) return actuales.length === 0 || actuales.includes(c)
+    return c === campanaFiltro
+  }, [campanaFiltro, actuales])
+
+  const filtradas = useMemo(() => rows.filter((r) => {
+    if (soloPendientes && r.reagendadoA) return false
+    if (!enCampana(r)) return false
+    return coincidePersona({ nombre: nombreDe(r), numeroId: r.numeroId, contrato: r.contrato }, buscar)
+  }), [rows, buscar, soloPendientes, enCampana])
 
   /** Agrupado POR SESIÓN: quien gestiona trabaja una bienvenida a la vez. */
   const grupos = useMemo<Grupo[]>(() => {
@@ -125,7 +151,9 @@ export default function WelcomeReagendamientosTab() {
     return Array.from(mapa.values())
   }, [filtradas])
 
-  const pendientes = useMemo(() => rows.filter((r) => !r.reagendadoA).length, [rows])
+  // El contador sigue a la campaña elegida: es el total de lo que se está mirando.
+  const enAlcance = useMemo(() => rows.filter(enCampana), [rows, enCampana])
+  const pendientes = useMemo(() => enAlcance.filter((r) => !r.reagendadoA).length, [enAlcance])
 
   const abrirModal = async (r: Inasistente) => {
     setTarget(r)
@@ -174,17 +202,41 @@ export default function WelcomeReagendamientosTab() {
       <div className="card-content">
         {/* Filtros */}
         <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+            <div>
+              <label htmlFor="reaCampana" className="block text-sm font-medium text-gray-700 mb-1">
+                Campaña
+              </label>
+              <select
+                id="reaCampana"
+                value={campanaFiltro}
+                onChange={(e) => setCampanaFiltro(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+              >
+                <option value={CAMPANA_ACTUALES}>
+                  Actuales{actuales.length ? ` (${actuales.join(' + ')})` : ''}
+                </option>
+                <option value={CAMPANA_TODAS}>Todas</option>
+                {campanasEnDatos.map((c) => {
+                  const est = estadosCampana.find((e) => e.campaign === c)
+                  return (
+                    <option key={c} value={c}>
+                      {c}{est ? ` — ${ESTADO_CURSO_META[est.estado].label}` : ''}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
             <div>
               <label htmlFor="reaBuscar" className="block text-sm font-medium text-gray-700 mb-1">
-                Nombre o ID
+                Nombre, ID o contrato
               </label>
               <input
                 type="text"
                 id="reaBuscar"
                 value={buscar}
                 onChange={(e) => setBuscar(e.target.value)}
-                placeholder="Nombre o documento..."
+                placeholder="Nombre, documento o contrato..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
               />
             </div>
@@ -225,7 +277,7 @@ export default function WelcomeReagendamientosTab() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => { setStartDate(''); setEndDate(''); setBuscar(''); setSoloPendientes(true) }}
+                onClick={() => { setStartDate(''); setEndDate(''); setBuscar(''); setSoloPendientes(true); setCampanaFiltro(CAMPANA_ACTUALES) }}
                 className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
               >
                 Limpiar
@@ -234,6 +286,7 @@ export default function WelcomeReagendamientosTab() {
                 onClick={() => exportToExcel(filtradas, [
                   { header: 'Nombre', accessor: (r) => nombreDe(r) },
                   { header: 'ID', accessor: (r) => r.numeroId || '' },
+                  { header: 'Contrato', accessor: (r) => r.contrato || '' },
                   { header: 'Celular', accessor: (r) => r.celular || '' },
                   { header: 'Campaña', accessor: (r) => r.campaign || '' },
                   { header: 'Curso', accessor: (r) => r.tipoCurso || '' },
@@ -252,7 +305,7 @@ export default function WelcomeReagendamientosTab() {
           <div className="mt-3 text-sm text-gray-600">
             {loading
               ? 'Cargando…'
-              : `Mostrando ${filtradas.length} de ${rows.length} inasistente(s) · ${pendientes} sin reagendar · ${grupos.length} sesión(es)`}
+              : `Mostrando ${filtradas.length} de ${enAlcance.length} inasistente(s) · ${pendientes} sin reagendar · ${grupos.length} sesión(es)`}
           </div>
         </div>
 
@@ -264,9 +317,9 @@ export default function WelcomeReagendamientosTab() {
           <div className="text-center py-10 text-gray-500">
             <h3 className="text-sm font-medium text-gray-900">No hay inasistencias</h3>
             <p className="mt-1 text-sm">
-              {rows.length > 0
-                ? 'Todos los inasistentes del rango ya tienen una nueva sesión de bienvenida.'
-                : 'No se registran inasistencias a sesiones WELCOME en el rango seleccionado.'}
+              {enAlcance.length > 0
+                ? 'No hay inasistentes sin reagendar con esos filtros.'
+                : 'No se registran inasistencias a sesiones WELCOME con esos filtros.'}
             </p>
           </div>
         ) : (
@@ -315,7 +368,10 @@ export default function WelcomeReagendamientosTab() {
                                 <span className="text-sm font-medium text-gray-900">{nombreDe(r)}</span>
                               )}
                             </td>
-                            <td className="table-cell text-sm text-gray-500">{r.numeroId || '—'}</td>
+                            <td className="table-cell text-sm text-gray-500">
+                              <div>{r.numeroId || '—'}</div>
+                              {r.contrato ? <div className="text-xs text-gray-400">{r.contrato}</div> : null}
+                            </td>
                             <td className="table-cell text-sm text-gray-500">{r.celular || '—'}</td>
                             <td className="table-cell text-sm text-gray-500">{r.campaign || '—'}</td>
                             <td className="table-cell text-sm text-gray-500">{r.tipoCurso || '—'}</td>
