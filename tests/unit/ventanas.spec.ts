@@ -12,6 +12,7 @@ import {
 import { bookingConRegistroSql } from '../../src/lib/booking-registro';
 import {
   guiaEnVentana, diaSemanaChile, DIAS_GESTION_GUIA,
+  lunesDeSemanaChile, esSemanaPasada, guiaPuedeGestionar,
 } from '../../src/lib/reporte-academico-ventana';
 
 const INICIO = new Date('2026-08-17T20:00:00.000Z');
@@ -263,6 +264,34 @@ test.describe('Ventana del Guía en el Reporte Académico', () => {
     const martesNocheChile = new Date('2026-08-26T03:00:00.000Z');
     expect(diaSemanaChile(martesNocheChile)).toBe(2);    // martes
     expect(guiaEnVentana(martesNocheChile)).toBe(false);
+  });
+
+  test('una semana YA terminada se gestiona cualquier día; la en curso conserva miércoles–domingo', () => {
+    // Martes 29-sep-2026 al mediodía de Chile (15:00Z): la semana en curso es la
+    // del lunes 28; la del 21 quedó pendiente (es la que se ve en Procesos sin
+    // gestión). Un martes la en curso está cerrada, la pasada no.
+    const martes = new Date('2026-09-29T15:00:00.000Z');
+    expect(lunesDeSemanaChile(martes)).toBe('2026-09-28');
+    expect(esSemanaPasada('2026-09-21', martes)).toBe(true);
+    expect(esSemanaPasada('2026-09-28', martes)).toBe(false);
+    expect(esSemanaPasada('2026-10-05', martes)).toBe(false); // futura tampoco es "pasada"
+    expect(guiaPuedeGestionar('2026-09-21', martes)).toBe(true);   // pendiente: cualquier día
+    expect(guiaPuedeGestionar('2026-09-28', martes)).toBe(false);  // en curso: martes, no
+    expect(guiaPuedeGestionar(undefined, martes)).toBe(false);     // sin semana = regla de la en curso
+    // El mismo miércoles la en curso ya se puede.
+    expect(guiaPuedeGestionar('2026-09-28', new Date('2026-09-30T15:00:00.000Z'))).toBe(true);
+    // Y una semana mal escrita no abre nada por la puerta de "pasada".
+    expect(esSemanaPasada('ayer', martes)).toBe(false);
+  });
+
+  test('el lunes de la semana se resuelve en CHILE: el domingo por la noche todavía no cambia', () => {
+    // Domingo 27-sep 21:00 de Chile = lunes 28 a la 01:00 UTC. En UTC la semana del
+    // 21 ya sería "pasada" y el guía podría cerrarla por la puerta nueva antes de
+    // que termine su domingo; en Chile sigue siendo la semana en curso.
+    const domingoNoche = new Date('2026-09-28T01:00:00.000Z');
+    expect(lunesDeSemanaChile(domingoNoche)).toBe('2026-09-21');
+    expect(esSemanaPasada('2026-09-21', domingoNoche)).toBe(false);
+    expect(guiaPuedeGestionar('2026-09-21', domingoNoche)).toBe(true); // domingo: ventana normal
   });
 
   test('la ventana es la acordada', () => {

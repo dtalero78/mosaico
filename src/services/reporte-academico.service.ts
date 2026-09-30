@@ -2,7 +2,7 @@ import 'server-only';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { query, queryOne } from '@/lib/postgres';
 import { ForbiddenError } from '@/lib/errors';
-import { guiaEnVentana, hoyEnChile, MENSAJE_FUERA_DE_VENTANA } from '@/lib/reporte-academico-ventana';
+import { guiaPuedeGestionar, esSemanaPasada, hoyEnChile, MENSAJE_FUERA_DE_VENTANA } from '@/lib/reporte-academico-ventana';
 import { esRolGuia, guiaIdDeSesion } from '@/services/guia-sesion.service';
 
 // ¿La sesión es del rol GUIA? Los demás roles no tienen ni ventana ni semana
@@ -17,9 +17,11 @@ export { esRolGuia };
  * eso no detiene a quien llame la API directo. No aplica a Coordinación ni a los
  * admins — ellos corrigen cuando haga falta.
  */
-export function assertVentanaGuia(session: any) {
+export function assertVentanaGuia(session: any, semanaInicio?: string | null) {
   if (!esRolGuia(session)) return;
-  if (!guiaEnVentana()) throw new ForbiddenError(MENSAJE_FUERA_DE_VENTANA);
+  // Una semana ya terminada (la pendiente que ve en Procesos sin gestión) se
+  // gestiona cualquier día; la ventana sólo aplica a la semana en curso.
+  if (!guiaPuedeGestionar(semanaInicio)) throw new ForbiddenError(MENSAJE_FUERA_DE_VENTANA);
 }
 
 /**
@@ -213,25 +215,35 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
 
   // Semana (default: actual). endDate se usa para ubicar la semana.
   //
-  // Al GUÍA se le ignoran las fechas: siempre trabaja la semana en curso, y sus
-  // filtros están deshabilitados en pantalla. Se descarta AQUÍ y no allá porque
-  // ocultar el control no impide mandar `?startDate=` a mano.
+  // Al GUÍA sólo se le acepta la fecha si cae en una semana YA TERMINADA: es la
+  // puerta por la que Procesos sin gestión lo trae a su informe pendiente. La
+  // semana en curso o una futura se descartan y se le da la en curso, como
+  // siempre (sus filtros de fecha ni se muestran). Se decide AQUÍ y no en la
+  // pantalla porque ocultar el control no impide mandar `?startDate=` a mano.
   //
   // "Hoy" se toma en hora de CHILE, no del servidor: éste corre en UTC, donde el
   // domingo termina a las 20:00 de Chile — al guía se le adelantaría la semana y
   // perdería la última tarde de su ventana.
   const hoy = new Date(hoyEnChile() + 'T12:00:00Z');
-  const conFechas = !esRolGuia(session);
-  const base = (conFechas && filtros.endDate) ? new Date(filtros.endDate + 'T12:00:00Z')
-    : (conFechas && filtros.startDate) ? new Date(filtros.startDate + 'T12:00:00Z')
-      : hoy;
+  const pedida = filtros.endDate || filtros.startDate;
+  const basePedida = pedida ? new Date(pedida + 'T12:00:00Z') : null;
+  const conFechas = !esRolGuia(session)
+    || (!!basePedida && !isNaN(basePedida.getTime()) && esSemanaPasada(semanaDe(basePedida).inicio));
+  const base = (conFechas && basePedida && !isNaN(basePedida.getTime())) ? basePedida : hoy;
   const { inicio, finExcl } = semanaDe(base);
+  // Para que la pantalla sepa qué dejar en solo lectura sin recalcular el día por
+  // su cuenta (el reloj que manda es el de Chile) y si está en una semana pasada.
+  const ventana = {
+    esGuia: esRolGuia(session),
+    enVentanaGuia: guiaPuedeGestionar(inicio),
+    semanaPasada: esSemanaPasada(inicio),
+  };
 
   if (!curso || !salon || !campaign) {
     return {
       available: true, rows: [], guias, cursos, salones, campaigns: campaignsDisponibles,
       curso, salon, campaign, guiaNombre, semanaInicio: inicio, semanaFin: finExcl, sinCurso: true,
-      esGuia: esRolGuia(session), enVentanaGuia: guiaEnVentana(),
+      esGuia: ventana.esGuia, enVentanaGuia: ventana.enVentanaGuia, semanaPasada: ventana.semanaPasada,
     };
   }
 
@@ -335,9 +347,7 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
   return {
     available: true, rows: out, guias, cursos, salones, campaigns: campaignsDisponibles,
     curso, salon, campaign, guiaNombre, cierre,
-    // Para que la pantalla sepa qué dejar en solo lectura sin recalcular el día
-    // por su cuenta: el reloj que manda es el de Chile, no el del navegador.
-    esGuia: esRolGuia(session), enVentanaGuia: guiaEnVentana(),
+    esGuia: ventana.esGuia, enVentanaGuia: ventana.enVentanaGuia, semanaPasada: ventana.semanaPasada,
     semanaInicio: inicio, semanaFin: finExcl,
     resumen: {
       estudiantes: out.length,

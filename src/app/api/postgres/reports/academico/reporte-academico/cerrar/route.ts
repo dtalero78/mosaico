@@ -37,9 +37,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     throw new ValidationError('Acción no válida.');
   }
 
-  // Cerrar es gestionar: al Guía le aplica la misma ventana de miércoles a
-  // domingo que al guardado. Sin esto podría cerrar un lunes lo que no puede editar.
-  assertVentanaGuia(session);
+  // Cerrar es gestionar: al Guía le aplica la misma ventana que al guardado
+  // (miércoles a domingo en la semana en curso; cualquier día en una ya
+  // terminada). Sin esto podría cerrar un lunes lo que no puede editar.
+  assertVentanaGuia(session, semanaInicio);
 
   const email = (session as any)?.user?.email || 'desconocido';
   const rol = String((session as any)?.user?.role || '');

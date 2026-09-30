@@ -56,13 +56,6 @@ function semanaPasada(): { desde: string; hasta: string } {
   return { desde: ymdLocal(lunes), hasta: ymdLocal(domingo) }
 }
 
-/** Lunes de la semana EN CURSO (la llave `semanaInicio` del informe). */
-function lunesDeEstaSemana(): string {
-  const hoy = new Date()
-  const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7))
-  return ymdLocal(lunes)
-}
-
 const fmtSemana = (iso: string) => {
   try {
     const l = new Date(iso + 'T12:00:00Z')
@@ -86,7 +79,6 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
   soloPropios?: boolean
 }) {
   const inicial = useMemo(() => semanaPasada(), [])
-  const semanaEnCurso = useMemo(() => lunesDeEstaSemana(), [])
   const columnas = soloPropios
     ? ['Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Ir']
     : ['Guía', 'Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Ir']
@@ -311,20 +303,14 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
                       {dias === 0 ? 'recién' : `${dias} día${dias === 1 ? '' : 's'}`}
                     </td>
                     <td className="px-4 py-3">
-                      {/* Al guía el Reporte Académico le abre SIEMPRE la semana en
-                          curso (no elige semana), así que el enlace sólo tiene
-                          sentido para esa: el de una semana anterior lo llevaría
-                          a otro informe. Esas las cierra Coordinación. */}
-                      {soloPropios && r.semanaInicio !== semanaEnCurso ? (
-                        <span className="text-xs text-gray-400" title="La semana ya pasó: el informe lo cierra Coordinación">
-                          Coordinación
-                        </span>
-                      ) : (
-                        <button type="button" onClick={() => irAlInforme(r)} title="Abrir el informe de este salón"
-                          className="text-indigo-600 hover:text-indigo-800">
-                          <ArrowTopRightOnSquareIcon className="h-5 w-5" />
-                        </button>
-                      )}
+                      {/* También para el guía: el Reporte Académico le abre la semana
+                          pendiente (una semana ya terminada la gestiona cualquier
+                          día) y desde ahí la valora y la cierra. */}
+                      <button type="button" onClick={() => irAlInforme(r)}
+                        title={soloPropios ? 'Abrir y gestionar el informe de este salón' : 'Abrir el informe de este salón'}
+                        className="text-indigo-600 hover:text-indigo-800">
+                        <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                      </button>
                     </td>
                   </tr>
                 )

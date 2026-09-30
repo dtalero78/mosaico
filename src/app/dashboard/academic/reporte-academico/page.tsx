@@ -344,8 +344,9 @@ export default function ReporteAcademicoPage() {
                 {(data?.campaigns || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            {/* El Guía no elige semana: siempre trabaja la actual. Los controles
-                se ocultan, y el servidor además ignora las fechas si llegaran. */}
+            {/* El Guía no elige semana: trabaja la actual, o la pendiente a la que
+                lo trae Procesos sin gestión (por URL). Los controles se ocultan, y
+                el servidor sólo acepta la fecha si cae en una semana ya terminada. */}
             {!esGuia && (
               <>
                 <div className="flex flex-col gap-1">
@@ -365,7 +366,27 @@ export default function ReporteAcademicoPage() {
             )}
           </div>
 
-          {/* Lunes y martes: el informe se ve pero no se toca. */}
+          {/* El Guía llegó a una semana YA TERMINADA (desde Procesos sin gestión):
+              la puede valorar y cerrar cualquier día. Se le dice dónde está para
+              que no la confunda con la semana en curso, y se le da la vuelta. */}
+          {esGuia && data?.semanaPasada && (
+            <div className="no-print mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-indigo-900">
+                  Informe pendiente de una semana anterior · {data?.semanaInicio ? fmtFecha(data.semanaInicio) : ''} – {data?.semanaFin ? fmtFecha(new Date(new Date(data.semanaFin + 'T12:00:00Z').getTime() - 86400000).toISOString().slice(0, 10)) : ''}
+                </p>
+                <p className="text-sm text-indigo-800 mt-0.5">
+                  Esta semana ya terminó: puedes valorar y cerrar el informe cualquier día. Al cerrarlo sale de Procesos sin gestión.
+                </p>
+              </div>
+              <button type="button" onClick={semanaActual}
+                className="px-3 py-1.5 rounded-lg border border-indigo-300 bg-white text-indigo-700 text-sm font-medium hover:bg-indigo-100">
+                Ir a la semana en curso
+              </button>
+            </div>
+          )}
+
+          {/* Lunes y martes: el informe de la semana en curso se ve pero no se toca. */}
           {fueraDeVentana && (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-sm font-semibold text-amber-800">Informe en solo lectura</p>

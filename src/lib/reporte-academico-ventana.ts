@@ -38,5 +38,36 @@ export function guiaEnVentana(now: Date = new Date()): boolean {
   return DIAS_GESTION_GUIA.includes(diaSemanaChile(now));
 }
 
+/** Lunes de la semana EN CURSO en Chile, `YYYY-MM-DD` (la llave `semanaInicio`). */
+export function lunesDeSemanaChile(now: Date = new Date()): string {
+  const [y, m, d] = hoyEnChile(now).split('-').map(Number);
+  const hoy = new Date(Date.UTC(y, m - 1, d));
+  hoy.setUTCDate(hoy.getUTCDate() - ((hoy.getUTCDay() + 6) % 7));
+  return hoy.toISOString().slice(0, 10);
+}
+
+/** ¿Esa semana (por su lunes) ya terminó? Anterior a la semana en curso, en Chile. */
+export function esSemanaPasada(semanaInicio: string | null | undefined, now: Date = new Date()): boolean {
+  const s = String(semanaInicio || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  return s < lunesDeSemanaChile(now);
+}
+
+/**
+ * ¿Puede el Guía gestionar el informe de esa semana AHORA?
+ *
+ * - **Semana en curso**: sólo de miércoles a domingo (hasta el miércoles no se han
+ *   dictado sus clases; nada que valorar).
+ * - **Semana ya terminada** (la que le quedó pendiente y ve en Procesos sin
+ *   gestión): cualquier día. La ventana existe por las clases de la semana, y
+ *   en una semana cerrada ya se dictaron todas — decisión del usuario (sep-2026).
+ *
+ * Sin semana (llamadas viejas) se conserva la regla de la semana en curso.
+ */
+export function guiaPuedeGestionar(semanaInicio?: string | null, now: Date = new Date()): boolean {
+  if (esSemanaPasada(semanaInicio, now)) return true;
+  return guiaEnVentana(now);
+}
+
 export const MENSAJE_FUERA_DE_VENTANA =
-  'El informe se gestiona de miércoles a domingo. Lunes y martes queda en solo lectura.';
+  'El informe de la semana en curso se gestiona de miércoles a domingo. Lunes y martes queda en solo lectura.';
