@@ -618,16 +618,16 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   {
     code: AcademicoPermission.SESIONES_SIN_GESTION_VER,
     module: Module.ACADEMICO,
-    section: 'Sesiones sin gestión',
-    name: 'Página "Sesiones sin gestión"',
-    description: 'Acceso a /dashboard/academic/sesiones-sin-gestion. Lista de eventos pasados sin registrar (sesionCerrada=false) con filtros por fecha y advisor. Muestra inscritos/asistencia marcada para detectar si el advisor empezó pero no cerró, y un acceso directo al panel del evento para que el coordinador gestione el cierre.',
+    section: 'Procesos sin gestión',
+    name: 'Página "Procesos sin gestión" (sesiones y eventos)',
+    description: 'Acceso a /dashboard/academic/sesiones-sin-gestion (menú Académico › Guías › Procesos sin gestión). Pestañas "Sesiones académicas" y "Eventos administrativos": eventos pasados sin registrar, con filtros por fecha y guía. Muestra inscritos/asistencia marcada para detectar si el guía empezó pero no cerró, y un acceso directo al panel del evento. El rol GUIA ve SÓLO sus propias sesiones y eventos; los demás roles ven los de todos los guías.',
   },
   {
     code: AcademicoPermission.RPT_ACADEMICO_SIN_GESTION_VER,
     module: Module.ACADEMICO,
-    section: 'Reporte Académico sin gestión',
-    name: 'Pestaña "Reporte Académico" en Sesiones sin gestión',
-    description: 'Muestra la pestaña "Reporte Académico" dentro de /dashboard/academic/sesiones-sin-gestion: salones que tuvieron clase pero NO cerraron su Reporte Académico de esa semana, con filtros propios por fecha, guía, campaña y curso. Distingue "sin empezar" (el guía no entró) de "borrador" (guardó valoraciones pero no cerró), y enlaza al informe del salón para gestionarlo. Por defecto muestra la semana pasada.',
+    section: 'Procesos sin gestión',
+    name: 'Pestaña "Reporte Académico" en Procesos sin gestión',
+    description: 'Muestra la pestaña "Reporte Académico" dentro de /dashboard/academic/sesiones-sin-gestion: salones que tuvieron clase pero NO cerraron su Reporte Académico de esa semana, con filtros propios por fecha, guía, campaña y curso. Distingue "sin empezar" (el guía no entró) de "borrador" (guardó valoraciones pero no cerró), y enlaza al informe del salón para gestionarlo. Por defecto muestra la semana pasada. El rol GUIA ve SÓLO sus propios salones.',
   },
   {
     code: AcademicoPermission.CASOS_USUARIOS_VER,

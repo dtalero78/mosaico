@@ -7,6 +7,9 @@
  *
  * Permiso: ACADEMICO.SESIONES_SIN_GESTION.VER (mismo que sesiones académicas).
  * Default cliente: ayer (excluye hoy — aún en ventana operativa).
+ *
+ * ⚠ El rol GUIA ve SÓLO sus eventos: el guía sale del correo de la sesión y el
+ * `advisorId` que llegue se ignora.
  */
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
@@ -14,6 +17,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { queryMany } from '@/lib/postgres';
+import { alcancePorGuia } from '@/services/guia-sesion.service';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TZ_REGEX = /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+(\/[A-Za-z_+\-0-9]+)?$/;
@@ -24,7 +28,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get('startDate');
   const endDate   = searchParams.get('endDate');
-  const advisorId = searchParams.get('advisorId');
+  const { soloPropios, guiaId: advisorId } = await alcancePorGuia(session, searchParams.get('advisorId'));
   const tipo      = searchParams.get('tipo');
   const tzRaw     = searchParams.get('tz');
   const tz = tzRaw && TZ_REGEX.test(tzRaw) ? tzRaw : 'America/Bogota';
@@ -32,6 +36,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (!startDate || !endDate) throw new ValidationError('startDate y endDate son requeridos');
   if (!DATE_REGEX.test(startDate) || !DATE_REGEX.test(endDate)) {
     throw new ValidationError('Fechas en formato YYYY-MM-DD');
+  }
+  const rangoFiltro = { startDate, endDate, advisorId: advisorId || null, tipo: tipo || null };
+  // Guía cuyo correo no está en GUIAS: lista vacía, nunca la de todos.
+  if (soloPropios && !advisorId) {
+    return successResponse({ items: [], total: 0, soloPropios, rangoFiltro });
   }
 
   const conds: string[] = [
@@ -65,9 +74,5 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     params,
   );
 
-  return successResponse({
-    items: rows,
-    total: rows.length,
-    rangoFiltro: { startDate, endDate, advisorId: advisorId || null, tipo: tipo || null },
-  });
+  return successResponse({ items: rows, total: rows.length, soloPropios, rangoFiltro });
 });

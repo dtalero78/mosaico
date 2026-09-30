@@ -24,6 +24,9 @@
  *   - `REPORTE_ACADEMICO_NOTAS` tiene la mitad de las filas con `campaign` NULL
  *     (datos viejos) → se acepta la que coincida O la nula, que es lo mejor
  *     disponible para esas filas.
+ *
+ * ⚠ El rol GUIA ve SÓLO sus salones (`CURSOS_CAMPAIGN.guia`): el guía sale del
+ * correo de la sesión y el `advisorId` que llegue se ignora.
  */
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
@@ -31,6 +34,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { queryMany } from '@/lib/postgres';
+import { alcancePorGuia } from '@/services/guia-sesion.service';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_ROWS = 3000;
@@ -41,13 +45,20 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const sp = new URL(request.url).searchParams;
   const startDate = sp.get('startDate');
   const endDate = sp.get('endDate');
-  const advisorId = (sp.get('advisorId') || '').trim();
+  const { soloPropios, guiaId: advisorId } = await alcancePorGuia(session, sp.get('advisorId'));
   const campaign = (sp.get('campaign') || '').trim();
   const curso = (sp.get('curso') || '').trim();
 
   if (!startDate || !endDate) throw new ValidationError('startDate y endDate son requeridos');
   if (!DATE_REGEX.test(startDate) || !DATE_REGEX.test(endDate)) {
     throw new ValidationError('Fechas en formato YYYY-MM-DD');
+  }
+  // Guía cuyo correo no está en GUIAS: lista vacía, nunca la de todos.
+  if (soloPropios && !advisorId) {
+    return successResponse({
+      rows: [], total: 0, sinEmpezar: 0, guiasInvolucrados: 0,
+      guias: [], campaigns: [], cursos: [], truncado: false, soloPropios,
+    });
   }
 
   const cond: string[] = [];
@@ -130,5 +141,6 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     campaigns: Array.from(new Set(out.map(r => r.campaign).filter(Boolean))).sort(),
     cursos: Array.from(new Set(out.map(r => r.curso).filter(Boolean))).sort(),
     truncado: out.length >= MAX_ROWS,
+    soloPropios,
   });
 });

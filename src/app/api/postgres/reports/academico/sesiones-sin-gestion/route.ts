@@ -19,6 +19,10 @@
  *
  * Permiso: ACADEMICO.SESIONES_SIN_GESTION.VER (SUPER_ADMIN/ADMIN bypass).
  *
+ * ⚠ El rol GUIA ve SÓLO sus sesiones. El guía se resuelve en el SERVIDOR con el
+ * correo de la sesión y el `advisorId` que llegue se ignora: si dependiera del
+ * parámetro, cualquiera podría pedir las de otro guía.
+ *
  * Performance: LEFT JOIN LATERAL agrupa inscritos + asistencia marcada por
  * evento en una sola query (mismo patrón que advisor-event-log.service para
  * usar índices idx_bookings_evento e idx_bookings_idevento sin COALESCE que
@@ -30,6 +34,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { queryMany } from '@/lib/postgres';
+import { alcancePorGuia } from '@/services/guia-sesion.service';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TZ_REGEX = /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+(\/[A-Za-z_+\-0-9]+)?$/;
@@ -40,7 +45,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const { searchParams } = new URL(request.url);
   const startDate = searchParams.get('startDate');
   const endDate   = searchParams.get('endDate');
-  const advisorId = searchParams.get('advisorId');
+  const { soloPropios, guiaId: advisorId } = await alcancePorGuia(session, searchParams.get('advisorId'));
   const tipo      = searchParams.get('tipo');
   const tzRaw     = searchParams.get('tz');
   const tz = tzRaw && TZ_REGEX.test(tzRaw) ? tzRaw : 'America/Bogota';
@@ -51,6 +56,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   }
   if (tipo && !['SESSION', 'CLUB'].includes(tipo)) {
     throw new ValidationError('tipo debe ser SESSION o CLUB');
+  }
+  const rangoFiltro = { startDate, endDate, advisorId: advisorId || null, tipo: tipo || null };
+  // Guía cuyo correo no está en GUIAS: lista vacía, nunca la de todos.
+  if (soloPropios && !advisorId) {
+    return successResponse({ items: [], total: 0, soloPropios, rangoFiltro });
   }
 
   const conds: string[] = [
@@ -116,9 +126,5 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     asistioMarcados: Number(r.asistioMarcados ?? 0),
   }));
 
-  return successResponse({
-    items,
-    total: items.length,
-    rangoFiltro: { startDate, endDate, advisorId: advisorId || null, tipo: tipo || null },
-  });
+  return successResponse({ items, total: items.length, soloPropios, rangoFiltro });
 });

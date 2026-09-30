@@ -52,9 +52,10 @@ const getNavigation = (userEmail: string, userRole: string) => [
             : '/panel-advisor' },
           // "Control Horas" se movió a una pestaña dentro del Panel Guía.
           // La página standalone /dashboard/academic/control-horas sigue accesible por URL.
-          // "Sesiones sin gestión" lleva dentro la pestaña del Reporte Académico
-          // sin gestión: es el mismo seguimiento del coordinador.
-          { name: 'Sesiones sin gestión', href: '/dashboard/academic/sesiones-sin-gestion', newTab: true },
+          // "Procesos sin gestión" (antes "Sesiones sin gestión"; la ruta no cambia)
+          // lleva dentro la pestaña del Reporte Académico sin gestión: es el mismo
+          // seguimiento. El rol GUIA ve sólo lo suyo (se acota en el servidor).
+          { name: 'Procesos sin gestión', href: '/dashboard/academic/sesiones-sin-gestion', newTab: true },
           { name: 'Performance Evaluation', href: '/dashboard/academic/performance-evaluation', newTab: true },
           { name: 'Lista de Usuarios', href: '/dashboard/academic/lista-usuarios', newTab: true },
           { name: 'Reporte Académico', href: '/dashboard/academic/reporte-academico', newTab: true },

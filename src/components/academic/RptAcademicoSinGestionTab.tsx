@@ -10,8 +10,11 @@ import toast from 'react-hot-toast'
 import { exportToExcel } from '@/lib/export-excel'
 
 /**
- * Pestaña "Reporte Académico" de la pantalla Sesiones sin gestión: salones que
+ * Pestaña "Reporte Académico" de la pantalla Procesos sin gestión: salones que
  * tuvieron clase pero NO cerraron su informe semanal.
+ *
+ * Con `soloPropios` (rol GUIA) el servidor devuelve sólo sus salones; aquí se
+ * quitan el filtro, la columna y el contador de guías, que para él no dicen nada.
  *
  * Vive como pestaña porque es la misma tarea del coordinador —revisar qué quedó
  * sin gestionar—, pero **trae sus propios filtros** en vez de compartir los de
@@ -53,6 +56,13 @@ function semanaPasada(): { desde: string; hasta: string } {
   return { desde: ymdLocal(lunes), hasta: ymdLocal(domingo) }
 }
 
+/** Lunes de la semana EN CURSO (la llave `semanaInicio` del informe). */
+function lunesDeEstaSemana(): string {
+  const hoy = new Date()
+  const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7))
+  return ymdLocal(lunes)
+}
+
 const fmtSemana = (iso: string) => {
   try {
     const l = new Date(iso + 'T12:00:00Z')
@@ -70,8 +80,16 @@ function diasDesdeCierreSemana(semanaInicio: string): number {
   } catch { return 0 }
 }
 
-export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: number) => void }) {
+export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false }: {
+  onCount?: (n: number) => void
+  /** Rol GUIA: sólo sus salones, sin filtro ni columna de guía. */
+  soloPropios?: boolean
+}) {
   const inicial = useMemo(() => semanaPasada(), [])
+  const semanaEnCurso = useMemo(() => lunesDeEstaSemana(), [])
+  const columnas = soloPropios
+    ? ['Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Ir']
+    : ['Guía', 'Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Ir']
   const [startDate, setStartDate] = useState(inicial.desde)
   const [endDate, setEndDate] = useState(inicial.hasta)
   const [advisorId, setAdvisorId] = useState('')
@@ -165,6 +183,7 @@ export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: n
             <input id="rpt-hasta" type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
           </div>
+          {!soloPropios && (
           <div className="flex flex-col gap-1">
             <label htmlFor="rpt-guia" className="text-xs font-medium text-gray-500">Guía</label>
             <select id="rpt-guia" value={advisorId} onChange={e => setAdvisorId(e.target.value)}
@@ -173,6 +192,7 @@ export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: n
               {opts.guias.map((g: any) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
             </select>
           </div>
+          )}
           <div className="flex flex-col gap-1">
             <label htmlFor="rpt-campania" className="text-xs font-medium text-gray-500">Campaña</label>
             <select id="rpt-campania" value={campaign} onChange={e => setCampaign(e.target.value)}
@@ -207,7 +227,7 @@ export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: n
       </div>
 
       {/* KPIs — mismo tamaño que los de la pestaña de sesiones */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className={`grid grid-cols-2 ${soloPropios ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-3`}>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Total sin gestionar</p>
           <p className="text-xl font-bold text-amber-900">{resumen.total.toLocaleString()}</p>
@@ -216,12 +236,14 @@ export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: n
         <div className="rounded-xl border border-red-200 bg-red-50 p-3">
           <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Sin empezar</p>
           <p className="text-xl font-bold text-red-900">{resumen.sinEmpezar.toLocaleString()}</p>
-          <p className="text-[10px] text-gray-500">el guía no entró</p>
+          <p className="text-[10px] text-gray-500">{soloPropios ? 'sin ninguna valoración guardada' : 'el guía no entró'}</p>
         </div>
+        {!soloPropios && (
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
           <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Guías involucrados</p>
           <p className="text-xl font-bold text-indigo-900">{resumen.guiasInvolucrados.toLocaleString()}</p>
         </div>
+        )}
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
           <p className="text-[10px] uppercase tracking-wide text-gray-500 font-semibold">Rango</p>
           <p className="text-xl font-bold text-gray-900 truncate" title={`${startDate} → ${endDate}`}>{fmtSemana(startDate)}</p>
@@ -235,17 +257,17 @@ export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: n
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Guía', 'Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Ir'].map(h => (
+                {columnas.map(h => (
                   <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading && (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Cargando…</td></tr>
+                <tr><td colSpan={columnas.length} className="px-4 py-10 text-center text-gray-400">Cargando…</td></tr>
               )}
               {!loading && !items.length && (
-                <tr><td colSpan={8} className="px-4 py-10 text-center">
+                <tr><td colSpan={columnas.length} className="px-4 py-10 text-center">
                   <span className="inline-block rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-green-800 text-sm font-medium">
                     Todos los informes de ese rango están cerrados.
                   </span>
@@ -256,6 +278,7 @@ export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: n
                 return (
                   <tr key={`${r.cursoCampaignId}-${r.semanaInicio}`}
                     className={r.estado === 'SIN_EMPEZAR' ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-gray-50'}>
+                    {!soloPropios && (
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <UserCircleIcon className="h-7 w-7 text-gray-300 shrink-0" />
@@ -264,6 +287,7 @@ export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: n
                         </span>
                       </div>
                     </td>
+                    )}
                     <td className="px-4 py-3">
                       <div className="text-gray-900">{r.campaign || '—'} · {r.curso || '—'} · Salón {r.salon || '—'}</div>
                     </td>
@@ -287,10 +311,20 @@ export default function RptAcademicoSinGestionTab({ onCount }: { onCount?: (n: n
                       {dias === 0 ? 'recién' : `${dias} día${dias === 1 ? '' : 's'}`}
                     </td>
                     <td className="px-4 py-3">
-                      <button type="button" onClick={() => irAlInforme(r)} title="Abrir el informe de este salón"
-                        className="text-indigo-600 hover:text-indigo-800">
-                        <ArrowTopRightOnSquareIcon className="h-5 w-5" />
-                      </button>
+                      {/* Al guía el Reporte Académico le abre SIEMPRE la semana en
+                          curso (no elige semana), así que el enlace sólo tiene
+                          sentido para esa: el de una semana anterior lo llevaría
+                          a otro informe. Esas las cierra Coordinación. */}
+                      {soloPropios && r.semanaInicio !== semanaEnCurso ? (
+                        <span className="text-xs text-gray-400" title="La semana ya pasó: el informe lo cierra Coordinación">
+                          Coordinación
+                        </span>
+                      ) : (
+                        <button type="button" onClick={() => irAlInforme(r)} title="Abrir el informe de este salón"
+                          className="text-indigo-600 hover:text-indigo-800">
+                          <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

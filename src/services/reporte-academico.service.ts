@@ -2,12 +2,13 @@ import 'server-only';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { query, queryOne } from '@/lib/postgres';
 import { ForbiddenError } from '@/lib/errors';
-import { Role } from '@/types/permissions';
 import { guiaEnVentana, hoyEnChile, MENSAJE_FUERA_DE_VENTANA } from '@/lib/reporte-academico-ventana';
+import { esRolGuia, guiaIdDeSesion } from '@/services/guia-sesion.service';
 
-/** ¿La sesión es del rol GUIA? Los demás roles no tienen ni ventana ni semana fija. */
-export const esRolGuia = (session: any) =>
-  String((session as any)?.user?.role || '') === Role.ADVISOR;   // Role.ADVISOR = 'GUIA'
+// ¿La sesión es del rol GUIA? Los demás roles no tienen ni ventana ni semana
+// fija. La definición vive en `guia-sesion.service`; se re-exporta para no tocar
+// a quienes ya la importan de aquí.
+export { esRolGuia };
 
 /**
  * El Guía sólo gestiona el informe de **miércoles a domingo** (hora de Chile).
@@ -135,14 +136,8 @@ export async function getCierre(
   };
 }
 
-async function resolverGuiaDeSesion(session: any): Promise<string | null> {
-  const email = session?.user?.email;
-  if (!email) return null;
-  const g = await queryOne<{ _id: string }>(
-    `SELECT "_id" FROM "GUIAS" WHERE LOWER(TRIM("email")) = LOWER(TRIM($1)) LIMIT 1`, [email]
-  );
-  return g?._id || null;
-}
+const resolverGuiaDeSesion = (session: any): Promise<string | null> =>
+  guiaIdDeSesion(session?.user?.email);
 
 export async function getReporteAcademico(filtros: ReporteFiltros, session: any) {
   const rol = session?.user?.role || '';

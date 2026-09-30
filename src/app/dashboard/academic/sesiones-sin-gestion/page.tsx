@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { usePermissions } from '@/hooks/usePermissions'
-import { AcademicoPermission } from '@/types/permissions'
+import { AcademicoPermission, Role } from '@/types/permissions'
 import RptAcademicoSinGestionTab from '@/components/academic/RptAcademicoSinGestionTab'
 import {
   ExclamationTriangleIcon,
@@ -15,10 +15,14 @@ import {
 import toast from 'react-hot-toast'
 
 /**
- * "Sesiones sin gestión" — backlog de eventos pasados (sin contar hoy) que
- * el advisor no registró dentro de su ventana de +120 min. Default: ayer +
- * todos los advisors. El coordinador entra desde la columna "Ir a evento"
- * y gestiona el cierre con bypass de ventana.
+ * "Procesos sin gestión" (antes "Sesiones sin gestión"; la ruta no cambió) —
+ * backlog de eventos pasados (sin contar hoy) que el guía no registró dentro de
+ * su ventana. Default: ayer + todos los guías. El coordinador entra desde la
+ * columna "Ir" y gestiona el cierre con bypass de ventana.
+ *
+ * El rol GUIA ve SÓLO lo suyo. El alcance lo aplica el SERVIDOR con el correo de
+ * la sesión; aquí sólo se quita lo que para él no tiene sentido (el filtro y la
+ * columna de Guía, el contador de guías involucrados).
  */
 
 interface AdvisorOption {
@@ -117,14 +121,17 @@ export default function SesionesSinGestionPage() {
 
   // La pestaña del Reporte Académico se gobierna sola (rango semanal propio);
   // aquí sólo se recibe su total para poder mostrarlo en la solapa.
-  const { hasPermission, isLoading: permisosCargando } = usePermissions()
+  const { hasPermission, isLoading: permisosCargando, isRole } = usePermissions()
   const verSesiones = hasPermission(AcademicoPermission.SESIONES_SIN_GESTION_VER)
   const verReporte = hasPermission(AcademicoPermission.RPT_ACADEMICO_SIN_GESTION_VER)
+  const esGuia = isRole(Role.ADVISOR) // Role.ADVISOR = 'GUIA'
   const [rptCount, setRptCount] = useState<number | null>(null)
   const arranco = useRef(false)
 
-  // Cargar advisors activos para el dropdown
+  // Cargar guías activos para el dropdown. El guía no elige guía: ve lo suyo.
   useEffect(() => {
+    if (permisosCargando) return
+    if (esGuia) { setAdvisorsLoading(false); return }
     fetch('/api/postgres/guias')
       .then(r => r.json())
       .then(j => {
@@ -138,7 +145,7 @@ export default function SesionesSinGestionPage() {
       })
       .catch(() => setAdvisors([]))
       .finally(() => setAdvisorsLoading(false))
-  }, [])
+  }, [permisosCargando, esGuia])
 
   const load = async () => {
     if (!startDate || !endDate) { toast.error('Selecciona un rango válido'); return }
@@ -226,11 +233,15 @@ export default function SesionesSinGestionPage() {
                 <ExclamationTriangleIcon className="h-7 w-7 text-amber-600" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Sesiones sin gestión</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Procesos sin gestión</h1>
                 <p className="text-sm text-gray-500 mt-0.5">
-                  {tab === 'reporte'
-                    ? 'Salones que tuvieron clase y NO cerraron su informe semanal — el coordinador puede entrar a cada uno y gestionarlo. Default: semana pasada · todos los guías. IMPULSA no aplica.'
-                    : 'Eventos pasados sin registrar — el coordinador puede entrar a cada uno y gestionar el cierre. Default: ayer · todos los advisors. Hoy se excluye (aún en ventana operativa).'}
+                  {esGuia
+                    ? (tab === 'reporte'
+                      ? 'Tus salones que tuvieron clase y NO cerraron su informe semanal. Default: semana pasada. IMPULSA no aplica.'
+                      : 'Tus sesiones y eventos pasados que quedaron sin registrar. Si el plazo ya venció, el cierre lo gestiona Coordinación. Default: ayer. Hoy se excluye (aún en ventana operativa).')
+                    : (tab === 'reporte'
+                      ? 'Salones que tuvieron clase y NO cerraron su informe semanal — el coordinador puede entrar a cada uno y gestionarlo. Default: semana pasada · todos los guías. IMPULSA no aplica.'
+                      : 'Eventos pasados sin registrar — el coordinador puede entrar a cada uno y gestionar el cierre. Default: ayer · todos los guías. Hoy se excluye (aún en ventana operativa).')}
                 </p>
               </div>
             </div>
@@ -263,7 +274,7 @@ export default function SesionesSinGestionPage() {
           <>
           {/* Filtros */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${esGuia ? 'xl:grid-cols-5' : 'xl:grid-cols-6'} gap-3 items-end`}>
               <div>
                 <label htmlFor="start-date" className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
                 <input
@@ -280,6 +291,7 @@ export default function SesionesSinGestionPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
+              {!esGuia && (
               <div>
                 <label htmlFor="advisor-select" className="block text-xs font-medium text-gray-600 mb-1">Guía</label>
                 <select
@@ -293,6 +305,7 @@ export default function SesionesSinGestionPage() {
                   {advisors.map(a => <option key={a._id} value={a._id}>{a.nombre}</option>)}
                 </select>
               </div>
+              )}
               <div>
                 <label htmlFor="campaign-select" className="block text-xs font-medium text-gray-600 mb-1">Campaña</label>
                 <select
@@ -330,7 +343,7 @@ export default function SesionesSinGestionPage() {
                 <button
                   type="button" onClick={resetToDefault}
                   className="px-3 py-2 text-xs text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  title="Volver al default (ayer · todos)"
+                  title={esGuia ? 'Volver al default (ayer)' : 'Volver al default (ayer · todos)'}
                 >
                   ⟲
                 </button>
@@ -339,10 +352,10 @@ export default function SesionesSinGestionPage() {
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-2 ${esGuia ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-3`}>
             <Kpi label="Total sin gestionar" value={stats.total.toLocaleString()} color="amber" />
-            <Kpi label="Sin asistencia marcada" value={stats.sinAsistencia.toLocaleString()} sub="advisor no entró o no marcó" color="red" />
-            <Kpi label="Guías involucrados" value={stats.advisorsDistintos.toLocaleString()} color="indigo" />
+            <Kpi label="Sin asistencia marcada" value={stats.sinAsistencia.toLocaleString()} sub={esGuia ? 'no se marcó asistencia' : 'el guía no entró o no marcó'} color="red" />
+            {!esGuia && <Kpi label="Guías involucrados" value={stats.advisorsDistintos.toLocaleString()} color="indigo" />}
             <Kpi label="Rango" value={startDate === endDate ? fechaCorta(startDate + 'T12:00') : `${fechaCorta(startDate + 'T12:00')} → ${fechaCorta(endDate + 'T12:00')}`} color="gray" />
           </div>
 
@@ -357,7 +370,7 @@ export default function SesionesSinGestionPage() {
               total aparezca en la solapa sin tener que entrar a la pestaña. */}
           {verReporte && (
             <div className={tab === 'reporte' ? '' : 'hidden'}>
-              <RptAcademicoSinGestionTab onCount={setRptCount} />
+              <RptAcademicoSinGestionTab onCount={setRptCount} soloPropios={esGuia} />
             </div>
           )}
 
@@ -378,7 +391,7 @@ export default function SesionesSinGestionPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr className="text-xs text-gray-500 uppercase">
-                      <th className="text-left font-medium px-3 py-2">Guía</th>
+                      {!esGuia && <th className="text-left font-medium px-3 py-2">Guía</th>}
                       <th className="text-left font-medium px-3 py-2 w-32">Tipo</th>
                       <th className="text-left font-medium px-3 py-2">Título</th>
                       <th className="text-left font-medium px-3 py-2 w-40">Fecha · Hora</th>
@@ -389,6 +402,7 @@ export default function SesionesSinGestionPage() {
                   <tbody>
                     {adminItems.map(it => (
                       <tr key={it.eventoId} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                        {!esGuia && (
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             <div className="flex-shrink-0 h-7 w-7 rounded-full bg-gray-100 flex items-center justify-center">
@@ -397,6 +411,7 @@ export default function SesionesSinGestionPage() {
                             <span className="text-sm font-medium text-gray-900">{it.advisorNombre || '(sin nombre)'}</span>
                           </div>
                         </td>
+                        )}
                         <td className="px-3 py-2">
                           <span className="inline-flex items-center text-xs bg-violet-100 text-violet-700 border border-violet-300 px-2 py-0.5 rounded-full font-medium">
                             {it.tipo}
@@ -409,11 +424,11 @@ export default function SesionesSinGestionPage() {
                         </td>
                         <td className="px-3 py-2 text-center text-sm font-semibold text-gray-700">{it.horas}h</td>
                         <td className="px-3 py-2 text-right">
-                          {/* Ir al panel-advisor del advisor — desde ahí coord puede registrar */}
+                          {/* Ir al panel del guía — desde ahí se registra el evento */}
                           {it.advisorEmail && (
                             <a href={`/panel-advisor?email=${encodeURIComponent(it.advisorEmail)}`}
                               target="_blank" rel="noopener noreferrer"
-                              title="Ir al panel-advisor del advisor"
+                              title={esGuia ? 'Ir a mi panel' : 'Ir al panel del guía'}
                               className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-violet-50 text-violet-600 hover:text-violet-700">
                               <ArrowTopRightOnSquareIcon className="h-5 w-5" />
                             </a>
@@ -444,7 +459,7 @@ export default function SesionesSinGestionPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr className="text-xs text-gray-500 uppercase">
-                    <th className="text-left font-medium px-3 py-2">Guía</th>
+                    {!esGuia && <th className="text-left font-medium px-3 py-2">Guía</th>}
                     <th className="text-left font-medium px-3 py-2 w-24">Tipo</th>
                     <th className="text-left font-medium px-3 py-2">Campaña · Curso · Salón</th>
                     <th className="text-left font-medium px-3 py-2 w-32">Fecha · Hora</th>
@@ -459,6 +474,7 @@ export default function SesionesSinGestionPage() {
                     const sinAsistencia = it.asistioMarcados === 0
                     return (
                       <tr key={it.eventoId} className={`border-b border-gray-50 last:border-0 hover:bg-gray-50 ${sinAsistencia ? 'bg-red-50/30' : ''}`}>
+                        {!esGuia && (
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             <div className="flex-shrink-0 h-7 w-7 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
@@ -467,6 +483,7 @@ export default function SesionesSinGestionPage() {
                             <span className="text-sm font-medium text-gray-900">{it.advisorNombre}</span>
                           </div>
                         </td>
+                        )}
                         <td className="px-3 py-2">
                           {it.tipo === 'SESSION' ? (
                             <span className="inline-flex items-center text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">SESSION</span>
@@ -508,7 +525,7 @@ export default function SesionesSinGestionPage() {
                           <a
                             href={`/sesion/${it.eventoId}`}
                             target="_blank" rel="noopener noreferrer"
-                            title="Ir al panel de la sesión (gestionar cierre)"
+                            title={esGuia ? 'Ir al panel de la sesión' : 'Ir al panel de la sesión (gestionar cierre)'}
                             className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700"
                           >
                             <ArrowTopRightOnSquareIcon className="h-5 w-5" />
