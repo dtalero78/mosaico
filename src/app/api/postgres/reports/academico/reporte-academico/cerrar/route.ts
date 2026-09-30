@@ -6,6 +6,8 @@ import { ValidationError, ForbiddenError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 import { getCierre, assertVentanaGuia } from '@/services/reporte-academico.service';
+import { marcarAutorizacionUsada } from '@/services/autorizacion-gestion.service';
+import { refReporte } from '@/lib/autorizacion-gestion';
 
 /**
  * POST /api/postgres/reports/academico/reporte-academico/cerrar
@@ -37,10 +39,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     throw new ValidationError('Acción no válida.');
   }
 
-  // Cerrar es gestionar: al Guía le aplica la misma ventana que al guardado
-  // (miércoles a domingo en la semana en curso; cualquier día en una ya
-  // terminada). Sin esto podría cerrar un lunes lo que no puede editar.
-  assertVentanaGuia(session, semanaInicio);
+  // Cerrar es gestionar: al Guía le aplica la misma regla que al guardado
+  // (miércoles a domingo en la semana en curso; una ya terminada, sólo con la
+  // autorización de Coordinación). Sin esto podría cerrar un lunes lo que no
+  // puede editar. Devuelve la autorización usada, si la hubo.
+  const autorizacion = await assertVentanaGuia(session, { curso, salon, campaign, semanaInicio });
 
   const email = (session as any)?.user?.email || 'desconocido';
   const rol = String((session as any)?.user?.role || '');
@@ -71,7 +74,18 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
          "_updatedDate"   = NOW()`,
       [generateId('rac'), curso, salon, campaign, semanaInicio, email]
     );
-    return successResponse({ ok: true, estado: 'CERRADO_GUIA' });
+    // Cierre fuera de plazo con autorización: es del Guía, pero queda marcado con
+    // quién lo autorizó. Va en sentencia aparte y best-effort: el informe ya está
+    // cerrado, y si la columna aún no existiera no debe deshacerse el cierre.
+    if (autorizacion) {
+      await query(
+        `UPDATE "REPORTE_ACADEMICO_CIERRE" SET "autorizadoPor" = $5
+          WHERE "curso"=$1 AND "salon"=$2 AND "campaign"=$3 AND "semanaInicio"=$4`,
+        [curso, salon, campaign, semanaInicio, autorizacion.autorizadoPor]
+      ).catch(err => console.warn('[reporte-academico/cerrar] no se anotó la autorización:', err?.message));
+      await marcarAutorizacionUsada('REPORTE', refReporte({ campaign, curso, salon, semanaInicio }), email);
+    }
+    return successResponse({ ok: true, estado: 'CERRADO_GUIA', conAutorizacion: !!autorizacion });
   }
 
   // DEFINITIVO — sólo quien revisa (requirePermission deja pasar a SUPER_ADMIN/ADMIN).

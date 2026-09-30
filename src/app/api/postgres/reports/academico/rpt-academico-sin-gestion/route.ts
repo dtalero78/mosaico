@@ -35,6 +35,8 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { queryMany } from '@/lib/postgres';
 import { alcancePorGuia } from '@/services/guia-sesion.service';
+import { autorizacionesDe, puedeAutorizarGestion } from '@/services/autorizacion-gestion.service';
+import { refReporte, reporteVencido } from '@/lib/autorizacion-gestion';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_ROWS = 3000;
@@ -57,7 +59,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (soloPropios && !advisorId) {
     return successResponse({
       rows: [], total: 0, sinEmpezar: 0, guiasInvolucrados: 0,
-      guias: [], campaigns: [], cursos: [], truncado: false, soloPropios,
+      guias: [], campaigns: [], cursos: [], truncado: false, soloPropios, puedeAutorizar: false,
     });
   }
 
@@ -122,11 +124,27 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     params
   );
 
-  const out = rows.map((r: any) => ({
-    ...r,
-    semanaInicio: String(r.semanaInicio).slice(0, 10),
-    estado: Number(r.notasGuardadas) > 0 ? 'BORRADOR' : 'SIN_EMPEZAR',
-  }));
+  // Columna "Autoriza": un informe está vencido cuando su semana ya terminó; sólo
+  // ésos necesitan que Coordinación los autorice para que el guía los gestione.
+  const llave = (r: any) => refReporte({
+    campaign: r.campaign, curso: r.curso, salon: r.salon, semanaInicio: String(r.semanaInicio).slice(0, 10),
+  });
+  const autorizadas = await autorizacionesDe('REPORTE', rows.map(llave));
+  const ahora = new Date();
+
+  const out = rows.map((r: any) => {
+    const semanaInicio = String(r.semanaInicio).slice(0, 10);
+    const aut = autorizadas.get(llave(r));
+    return {
+      ...r,
+      semanaInicio,
+      estado: Number(r.notasGuardadas) > 0 ? 'BORRADOR' : 'SIN_EMPEZAR',
+      vencido: reporteVencido(semanaInicio, ahora),
+      autorizado: !!aut,
+      autorizadoPor: aut?.autorizadoPorNombre || aut?.autorizadoPor || null,
+      autorizadoEn: aut?.autorizadoEn || null,
+    };
+  });
 
   const guias = Array.from(
     new Map(out.filter(r => r.guia).map(r => [r.guia, { id: r.guia, nombre: r.guiaNombre }])).values()
@@ -142,5 +160,6 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     cursos: Array.from(new Set(out.map(r => r.curso).filter(Boolean))).sort(),
     truncado: out.length >= MAX_ROWS,
     soloPropios,
+    puedeAutorizar: await puedeAutorizarGestion(session),
   });
 });

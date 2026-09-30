@@ -17,7 +17,7 @@ import SessionGeneralTab from '@/components/session/SessionGeneralTab'
 import SessionStudentsTab from '@/components/session/SessionStudentsTab'
 import SessionMaterialTab from '@/components/session/SessionMaterialTab'
 import SessionAdvisorMaterialTab from '@/components/session/SessionAdvisorMaterialTab'
-import { getSessionWindow, EXPIRED_MESSAGE, ATTENDANCE_WINDOW_MIN } from '@/lib/session-window'
+import { getSessionWindow, EXPIRED_MESSAGE, AUTORIZADO_MESSAGE, ATTENDANCE_WINDOW_MIN } from '@/lib/session-window'
 import { esSesionEvaluacion, esModuloEvaluacion } from '@/lib/evaluacion'
 
 interface CalendarioEvent {
@@ -45,7 +45,9 @@ interface CalendarioEvent {
   notasadvisor?: string | null
   sesionCerrada?: boolean
   fechaCierreSesion?: string | null
-  motivoCierre?: 'NORMAL' | 'SIN_ASISTENTES' | 'GESTION_COORDINADOR' | null
+  motivoCierre?: 'NORMAL' | 'SIN_ASISTENTES' | 'GESTION_COORDINADOR' | 'AUTORIZADO' | null
+  /** Coordinación autorizó al guía a registrarla fuera de plazo (Procesos sin gestión). */
+  autorizadoGestion?: boolean
 }
 
 interface Student {
@@ -125,8 +127,10 @@ export default function SesionPage() {
   // todo (canMark/canRegister=true, isExpired=false). Si aún no carga el evento,
   // todo cae a defaults seguros (no se renderizan acciones hasta tener fecha).
   const windowState = useMemo(
-    () => getSessionWindow(evento?.dia ?? null, role, now),
-    [evento?.dia, role, now],
+    // `autorizadoGestion` reabre los controles cuando el plazo ya venció; el
+    // servidor lo vuelve a comprobar en cada guardado.
+    () => getSessionWindow(evento?.dia ?? null, role, now, evento?.autorizadoGestion === true),
+    [evento?.dia, role, now, evento?.autorizadoGestion],
   )
 
   useEffect(() => {
@@ -283,6 +287,8 @@ export default function SesionPage() {
     && windowState.minutesElapsed >= 0
     && windowState.minutesElapsed <= ATTENDANCE_WINDOW_MIN
   const showExpiredAdvisorBanner = !sesionCerrada && windowState.isExpired
+  // Plazo vencido, pero Coordinación la autorizó: el guía puede gestionarla.
+  const showAutorizadoBanner = !sesionCerrada && windowState.porAutorizacion
   const showCoordinatorBanner = !sesionCerrada && windowState.isCoordinator && windowState.minutesElapsed > ATTENDANCE_WINDOW_MIN
 
   // Info del grupo compartido. El siguiente hermano para el flujo guiado
@@ -325,6 +331,16 @@ export default function SesionPage() {
               <div>
                 <p className="text-sm font-semibold text-amber-900">Período de registro vencido</p>
                 <p className="text-sm text-amber-800 mt-0.5">{EXPIRED_MESSAGE}</p>
+              </div>
+            </div>
+          )}
+          {/* Banner: vencida pero autorizada por Coordinación */}
+          {showAutorizadoBanner && (
+            <div className="bg-emerald-50 border-l-4 border-emerald-500 rounded-r-lg p-4 flex items-start gap-3">
+              <ShieldCheckIcon className="h-6 w-6 text-emerald-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-900">Registro autorizado por Coordinación</p>
+                <p className="text-sm text-emerald-800 mt-0.5">{AUTORIZADO_MESSAGE}</p>
               </div>
             </div>
           )}
@@ -629,18 +645,25 @@ function RegistrarSesionButton({
   // para que el advisor sepa que no fue él quien la cerró.
   if (evento.sesionCerrada) {
     const cerradaPorCoord = evento.motivoCierre === 'GESTION_COORDINADOR'
+    // La registró el propio guía, pero fuera de plazo y con autorización de
+    // Coordinación: es cierre suyo, distinguible de uno hecho a tiempo.
+    const conAutorizacion = evento.motivoCierre === 'AUTORIZADO'
     return (
       <span
         className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap ${
           cerradaPorCoord
             ? 'text-white bg-red-600'
-            : 'text-gray-600 bg-gray-100'
+            : conAutorizacion
+              ? 'text-amber-800 bg-amber-100 border border-amber-300'
+              : 'text-gray-600 bg-gray-100'
         }`}
         title={cerradaPorCoord
           ? 'El Coordinador Académico registró esta sesión porque venció la ventana del advisor.'
-          : 'Sesión registrada por el advisor.'}
+          : conAutorizacion
+            ? 'El guía la registró fuera de plazo, con autorización de Coordinación.'
+            : 'Sesión registrada por el advisor.'}
       >
-        ✓ Sesión registrada{cerradaPorCoord ? ' por Coordinación' : ''}
+        ✓ Sesión registrada{cerradaPorCoord ? ' por Coordinación' : conAutorizacion ? ' con autorización' : ''}
       </span>
     )
   }

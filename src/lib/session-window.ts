@@ -46,6 +46,11 @@ export interface SessionWindowState {
   minutesUntilRegister: number | null;
   /** Min hasta que expire la ventana. Null si ya expiró o coordinador. */
   minutesUntilExpire: number | null;
+  /**
+   * El plazo del guía ya venció, pero Coordinación AUTORIZÓ esta sesión (columna
+   * "Autoriza" de Procesos sin gestión): puede marcar asistencia y registrarla.
+   */
+  porAutorizacion: boolean;
 }
 
 /**
@@ -54,11 +59,16 @@ export interface SessionWindowState {
  * @param fechaEvento — `CALENDARIO.dia` (inicio del evento)
  * @param now        — hora actual (default: Date.now)
  * @param role       — rol del usuario actual (de la sesión NextAuth)
+ * @param autorizado — Coordinación autorizó al guía a gestionar ESTA sesión fuera
+ *                     de plazo. Sólo cambia algo cuando la ventana ya venció: dentro
+ *                     del plazo el guía no necesita autorización, y antes de que el
+ *                     evento empiece no hay nada que autorizar.
  */
 export function getSessionWindow(
   fechaEvento: Date | string | null | undefined,
   role: string | null | undefined,
   now: Date = new Date(),
+  autorizado: boolean = false,
 ): SessionWindowState {
   const isCoordinator = BYPASS_ROLES.has(String(role || '').toUpperCase());
 
@@ -72,6 +82,7 @@ export function getSessionWindow(
       minutesElapsed: 0,
       minutesUntilRegister: null,
       minutesUntilExpire: null,
+      porAutorizacion: false,
     };
   }
 
@@ -85,6 +96,7 @@ export function getSessionWindow(
       minutesElapsed: 0,
       minutesUntilRegister: null,
       minutesUntilExpire: null,
+      porAutorizacion: false,
     };
   }
 
@@ -102,16 +114,25 @@ export function getSessionWindow(
     ? ATTENDANCE_WINDOW_MIN - minutesElapsed
     : null;
 
+  // La autorización sólo reabre lo VENCIDO. Al coordinador no le aplica (ya pasa
+  // por encima de todo), y así su cierre sigue contando como gestión suya.
+  const porAutorizacion = !isCoordinator && expired && autorizado === true;
+
   return {
     isCoordinator,
-    canMarkAttendance: isCoordinator || inAttendanceWindow,
-    canRegister:       isCoordinator || inRegisterWindow,
-    isExpired:         !isCoordinator && expired,
+    canMarkAttendance: isCoordinator || inAttendanceWindow || porAutorizacion,
+    canRegister:       isCoordinator || inRegisterWindow   || porAutorizacion,
+    isExpired:         !isCoordinator && expired && !porAutorizacion,
     minutesElapsed,
     minutesUntilRegister,
     minutesUntilExpire,
+    porAutorizacion,
   };
 }
+
+/** Aviso para el guía cuando gestiona una sesión vencida gracias a la autorización. */
+export const AUTORIZADO_MESSAGE =
+  'Coordinación autorizó el registro de esta sesión fuera de plazo: puedes marcar asistencia y registrarla.';
 
 /** Mensaje unificado cuando expiró la ventana (mostrar al advisor). */
 export const EXPIRED_MESSAGE =

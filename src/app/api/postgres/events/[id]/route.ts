@@ -2,13 +2,18 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { getEventById, updateEvent, deleteEvent } from '@/services/calendar.service';
+import { estaAutorizado } from '@/services/autorizacion-gestion.service';
 
 /**
  * GET /api/postgres/events/[id]
  */
 export const GET = handlerWithAuth(async (request, { params }) => {
-  const event = await getEventById(params.id);
-  return successResponse({ event });
+  const event: any = await getEventById(params.id);
+  // ¿Coordinación autorizó al guía a registrar esta sesión fuera de plazo? El
+  // panel de la sesión lo usa para reabrir los controles; el servidor lo vuelve
+  // a comprobar al guardar. Sólo se consulta mientras siga sin registrar.
+  const autorizadoGestion = event?.sesionCerrada === true ? false : await estaAutorizado('SESION', params.id);
+  return successResponse({ event: { ...event, autorizadoGestion } });
 });
 
 /**

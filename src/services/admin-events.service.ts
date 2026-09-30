@@ -23,6 +23,7 @@ import {
   horaLocal,
   minutosDelDia,
 } from '@/lib/admin-event-window';
+import { estaAutorizado, autorizacionesDe, marcarAutorizacionUsada } from '@/services/autorizacion-gestion.service';
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_HORAS = 12;
@@ -174,7 +175,13 @@ export async function registrarAdminEvent(input: {
 
   // Ventana proporcional a las horas del evento (ej. horas=3 → registro abre
   // a las 3 horas después del inicio, cierra 90 min después).
-  const ws = getAdminEventWindow(ev.fechaInicio, input.sessionRole, new Date(), ev.horas);
+  let ws = getAdminEventWindow(ev.fechaInicio, input.sessionRole, new Date(), ev.horas);
+  // Plazo vencido para el guía: sólo sigue si Coordinación autorizó ESTE evento
+  // (columna "Autoriza" de Procesos sin gestión). Que el evento sea suyo se exige
+  // igual, más abajo.
+  if (!ws.isCoordinator && ws.isExpired && await estaAutorizado('EVENTO_ADMIN', input.id)) {
+    ws = getAdminEventWindow(ev.fechaInicio, input.sessionRole, new Date(), ev.horas, true);
+  }
 
   // Nadie confirma un evento que aún no ha empezado — ni el coordinador. Sin esta
   // guarda, "Confirmar los pendientes" daba por cumplida una reunión de la semana
@@ -229,8 +236,10 @@ export async function registrarAdminEvent(input: {
   // dentro del plazo del guía: antes sólo se marcaba pasada la ventana, y el
   // registro salía como "confirmado por el guía" cuando en realidad no lo había
   // tocado — que es lo que hacía indistinguible un caso del otro en el detalle.
-  const motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR' =
-    ws.isCoordinator ? 'GESTION_COORDINADOR' : 'NORMAL';
+  // `AUTORIZADO` = lo registró el propio guía fuera de plazo, con la autorización
+  // de Coordinación: es registro suyo, pero distinguible de uno hecho a tiempo.
+  const motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR' | 'AUTORIZADO' =
+    ws.isCoordinator ? 'GESTION_COORDINADOR' : ws.porAutorizacion ? 'AUTORIZADO' : 'NORMAL';
 
   const notasFinal = (input.notas?.trim() || 'no hubo novedades');
 
@@ -241,6 +250,7 @@ export async function registrarAdminEvent(input: {
     motivoCierre,
   });
   if (!updated) throw new ConflictError('Este evento ya está registrado (concurrencia)');
+  if (ws.porAutorizacion) await marcarAutorizacionUsada('EVENTO_ADMIN', input.id, input.sessionEmail);
   return updated;
 }
 
@@ -310,8 +320,13 @@ export async function listAdminEvents(opts: {
 /** Para integración con UI del advisor (panel + ctrl-horas). */
 export async function listAdminEventsForAdvisorMonth(
   advisorId: string, year: number, month: number,
-): Promise<AdminEventRow[]> {
-  return AdminEventsRepository.listForAdvisorMonth(advisorId, year, month);
+): Promise<Array<AdminEventRow & { autorizadoGestion: boolean }>> {
+  const rows = await AdminEventsRepository.listForAdvisorMonth(advisorId, year, month);
+  // Cuáles autorizó Coordinación para registrar fuera de plazo: el modal del guía
+  // lo necesita para habilitar el registro (el servidor lo vuelve a comprobar).
+  const pendientes = rows.filter(r => !r.registrado).map(r => r._id);
+  const autorizados = await autorizacionesDe('EVENTO_ADMIN', pendientes);
+  return rows.map(r => ({ ...r, autorizadoGestion: autorizados.has(r._id) }));
 }
 
 export async function getAdminEventHoursAggregate(

@@ -2,8 +2,13 @@ import 'server-only';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { query, queryOne } from '@/lib/postgres';
 import { ForbiddenError } from '@/lib/errors';
-import { guiaPuedeGestionar, esSemanaPasada, hoyEnChile, MENSAJE_FUERA_DE_VENTANA } from '@/lib/reporte-academico-ventana';
+import {
+  guiaPuedeGestionar, esSemanaPasada, hoyEnChile,
+  MENSAJE_FUERA_DE_VENTANA, MENSAJE_SEMANA_SIN_AUTORIZAR,
+} from '@/lib/reporte-academico-ventana';
 import { esRolGuia, guiaIdDeSesion } from '@/services/guia-sesion.service';
+import { refReporte } from '@/lib/autorizacion-gestion';
+import { autorizacionDe, type AutorizacionInfo } from '@/services/autorizacion-gestion.service';
 
 // ¿La sesión es del rol GUIA? Los demás roles no tienen ni ventana ni semana
 // fija. La definición vive en `guia-sesion.service`; se re-exporta para no tocar
@@ -11,17 +16,35 @@ import { esRolGuia, guiaIdDeSesion } from '@/services/guia-sesion.service';
 export { esRolGuia };
 
 /**
- * El Guía sólo gestiona el informe de **miércoles a domingo** (hora de Chile).
+ * ¿Puede el Guía escribir en el informe de ese salón y esa semana?
+ *
+ *   - Semana en curso: de **miércoles a domingo** (hora de Chile).
+ *   - Semana ya terminada: sólo si Coordinación la AUTORIZÓ en Procesos sin
+ *     gestión (columna "Autoriza"). Sin salón/campaña no hay autorización que
+ *     consultar, así que se rechaza.
  *
  * Es la validación REAL: la pantalla sólo deja los controles en solo lectura, y
  * eso no detiene a quien llame la API directo. No aplica a Coordinación ni a los
  * admins — ellos corrigen cuando haga falta.
+ *
+ * Devuelve la autorización usada (o null) para que el cierre la deje anotada.
  */
-export function assertVentanaGuia(session: any, semanaInicio?: string | null) {
-  if (!esRolGuia(session)) return;
-  // Una semana ya terminada (la pendiente que ve en Procesos sin gestión) se
-  // gestiona cualquier día; la ventana sólo aplica a la semana en curso.
-  if (!guiaPuedeGestionar(semanaInicio)) throw new ForbiddenError(MENSAJE_FUERA_DE_VENTANA);
+export async function assertVentanaGuia(
+  session: any,
+  informe: { curso?: string | null; salon?: string | null; campaign?: string | null; semanaInicio?: string | null },
+): Promise<AutorizacionInfo | null> {
+  if (!esRolGuia(session)) return null;
+  const semanaInicio = String(informe.semanaInicio || '').slice(0, 10);
+  if (!esSemanaPasada(semanaInicio)) {
+    if (!guiaPuedeGestionar(semanaInicio)) throw new ForbiddenError(MENSAJE_FUERA_DE_VENTANA);
+    return null;
+  }
+  const { curso, salon, campaign } = informe;
+  const autorizacion = (curso && salon && campaign)
+    ? await autorizacionDe('REPORTE', refReporte({ campaign, curso, salon, semanaInicio }))
+    : null;
+  if (!autorizacion) throw new ForbiddenError(MENSAJE_SEMANA_SIN_AUTORIZAR);
+  return autorizacion;
 }
 
 /**
@@ -119,13 +142,21 @@ export interface CierreInfo {
   cerradoGuiaEn?: string | null;
   cerradoAdminPor?: string | null;
   cerradoAdminEn?: string | null;
+  /**
+   * Quién autorizó al Guía a cerrarlo FUERA de plazo (la semana ya había
+   * terminado). Con valor, el cierre es del Guía pero "con autorización".
+   */
+  autorizadoPor?: string | null;
 }
 
 export async function getCierre(
   curso: string, salon: string, campaign: string, semanaInicio: string
 ): Promise<CierreInfo> {
+  // `SELECT *` a propósito: nombrar `autorizadoPor` haría fallar la consulta si
+  // la columna aún no existe, y el `catch` de abajo leería ese fallo como
+  // "BORRADOR" — un informe cerrado volvería a ser editable.
   const row = await queryOne<any>(
-    `SELECT "estado","cerradoGuiaPor","cerradoGuiaEn","cerradoAdminPor","cerradoAdminEn"
+    `SELECT *
        FROM "REPORTE_ACADEMICO_CIERRE"
       WHERE "curso"=$1 AND "salon"=$2 AND "campaign"=$3 AND "semanaInicio"=$4`,
     [curso, salon, campaign, semanaInicio]
@@ -135,6 +166,7 @@ export async function getCierre(
     estado: (row.estado as EstadoCierre) || 'BORRADOR',
     cerradoGuiaPor: row.cerradoGuiaPor, cerradoGuiaEn: row.cerradoGuiaEn,
     cerradoAdminPor: row.cerradoAdminPor, cerradoAdminEn: row.cerradoAdminEn,
+    autorizadoPor: row.autorizadoPor ?? null,
   };
 }
 
@@ -215,11 +247,12 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
 
   // Semana (default: actual). endDate se usa para ubicar la semana.
   //
-  // Al GUÍA sólo se le acepta la fecha si cae en una semana YA TERMINADA: es la
-  // puerta por la que Procesos sin gestión lo trae a su informe pendiente. La
-  // semana en curso o una futura se descartan y se le da la en curso, como
-  // siempre (sus filtros de fecha ni se muestran). Se decide AQUÍ y no en la
-  // pantalla porque ocultar el control no impide mandar `?startDate=` a mano.
+  // Al GUÍA sólo se le acepta la fecha si cae en una semana YA TERMINADA **y
+  // Coordinación autorizó ese informe** (columna "Autoriza" de Procesos sin
+  // gestión): es la puerta por la que llega a su informe pendiente. Sin
+  // autorización, o con la semana en curso o una futura, se le da la en curso,
+  // como siempre (sus filtros de fecha ni se muestran). Se decide AQUÍ y no en
+  // la pantalla porque ocultar el control no impide mandar `?startDate=` a mano.
   //
   // "Hoy" se toma en hora de CHILE, no del servidor: éste corre en UTC, donde el
   // domingo termina a las 20:00 de Chile — al guía se le adelantaría la semana y
@@ -227,16 +260,23 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
   const hoy = new Date(hoyEnChile() + 'T12:00:00Z');
   const pedida = filtros.endDate || filtros.startDate;
   const basePedida = pedida ? new Date(pedida + 'T12:00:00Z') : null;
-  const conFechas = !esRolGuia(session)
-    || (!!basePedida && !isNaN(basePedida.getTime()) && esSemanaPasada(semanaDe(basePedida).inicio));
-  const base = (conFechas && basePedida && !isNaN(basePedida.getTime())) ? basePedida : hoy;
+  const fechaValida = !!basePedida && !isNaN(basePedida.getTime());
+  const semanaPedida = fechaValida ? semanaDe(basePedida!).inicio : '';
+  // Autorización del informe pedido (sólo tiene sentido en una semana terminada).
+  const autorizacion = (fechaValida && esSemanaPasada(semanaPedida) && curso && salon && campaign)
+    ? await autorizacionDe('REPORTE', refReporte({ campaign, curso, salon, semanaInicio: semanaPedida }))
+    : null;
+  const conFechas = !esRolGuia(session) || !!autorizacion;
+  const base = (conFechas && fechaValida) ? basePedida! : hoy;
   const { inicio, finExcl } = semanaDe(base);
   // Para que la pantalla sepa qué dejar en solo lectura sin recalcular el día por
   // su cuenta (el reloj que manda es el de Chile) y si está en una semana pasada.
   const ventana = {
     esGuia: esRolGuia(session),
-    enVentanaGuia: guiaPuedeGestionar(inicio),
+    enVentanaGuia: guiaPuedeGestionar(inicio, new Date(), !!autorizacion),
     semanaPasada: esSemanaPasada(inicio),
+    // Quién autorizó gestionar esta semana ya terminada (null si no aplica).
+    autorizacionGestion: esSemanaPasada(inicio) ? autorizacion : null,
   };
 
   if (!curso || !salon || !campaign) {
@@ -244,6 +284,7 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
       available: true, rows: [], guias, cursos, salones, campaigns: campaignsDisponibles,
       curso, salon, campaign, guiaNombre, semanaInicio: inicio, semanaFin: finExcl, sinCurso: true,
       esGuia: ventana.esGuia, enVentanaGuia: ventana.enVentanaGuia, semanaPasada: ventana.semanaPasada,
+      autorizacionGestion: ventana.autorizacionGestion,
     };
   }
 
@@ -348,6 +389,7 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
     available: true, rows: out, guias, cursos, salones, campaigns: campaignsDisponibles,
     curso, salon, campaign, guiaNombre, cierre,
     esGuia: ventana.esGuia, enVentanaGuia: ventana.enVentanaGuia, semanaPasada: ventana.semanaPasada,
+    autorizacionGestion: ventana.autorizacionGestion,
     semanaInicio: inicio, semanaFin: finExcl,
     resumen: {
       estudiantes: out.length,

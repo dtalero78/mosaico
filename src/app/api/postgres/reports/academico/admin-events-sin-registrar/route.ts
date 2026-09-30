@@ -18,6 +18,8 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { queryMany } from '@/lib/postgres';
 import { alcancePorGuia } from '@/services/guia-sesion.service';
+import { autorizacionesDe, puedeAutorizarGestion } from '@/services/autorizacion-gestion.service';
+import { eventoAdminVencido } from '@/lib/autorizacion-gestion';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TZ_REGEX = /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+(\/[A-Za-z_+\-0-9]+)?$/;
@@ -40,7 +42,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const rangoFiltro = { startDate, endDate, advisorId: advisorId || null, tipo: tipo || null };
   // Guía cuyo correo no está en GUIAS: lista vacía, nunca la de todos.
   if (soloPropios && !advisorId) {
-    return successResponse({ items: [], total: 0, soloPropios, rangoFiltro });
+    return successResponse({ items: [], total: 0, soloPropios, puedeAutorizar: false, rangoFiltro });
   }
 
   const conds: string[] = [
@@ -74,5 +76,20 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     params,
   );
 
-  return successResponse({ items: rows, total: rows.length, soloPropios, rangoFiltro });
+  // Columna "Autoriza": cuáles ya vencieron para el guía y cuáles autorizó Coordinación.
+  const autorizadas = await autorizacionesDe('EVENTO_ADMIN', rows.map(r => r.eventoId));
+  const ahora = new Date();
+  const items = rows.map(r => ({
+    ...r,
+    vencido: eventoAdminVencido(r.fechaInicio, Number(r.horas), ahora),
+    autorizado: autorizadas.has(r.eventoId),
+    autorizadoPor: autorizadas.get(r.eventoId)?.autorizadoPorNombre || autorizadas.get(r.eventoId)?.autorizadoPor || null,
+    autorizadoEn: autorizadas.get(r.eventoId)?.autorizadoEn || null,
+  }));
+
+  return successResponse({
+    items, total: items.length, soloPropios,
+    puedeAutorizar: await puedeAutorizarGestion(session),
+    rangoFiltro,
+  });
 });

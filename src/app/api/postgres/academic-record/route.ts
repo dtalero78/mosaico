@@ -5,6 +5,8 @@ import { autoAdvanceStep } from '@/services/student.service';
 import { autoAvanceModuloMosaico } from '@/services/modulo-avance.service';
 import { query, queryOne } from '@/lib/postgres';
 import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window';
+import { estaAutorizado } from '@/services/autorizacion-gestion.service';
+import { guiaIdDeSesion } from '@/services/guia-sesion.service';
 
 // Criterios de evaluación de la sesión (además de asistencia/participacion, que se
 // reusan como HE_ASISTENCIA / DA_PARTICIPACION).
@@ -49,12 +51,21 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // verificar que estamos dentro de [0..+300min] o que el rol es coordinador.
   // Si el evento no está en CALENDARIO (datos legacy de Wix sin link), no
   // bloqueamos — comportamiento previo.
-  const evt = await queryOne<{ dia: Date | null; tipo: string | null }>(
-    `SELECT "dia", "tipo" FROM "CALENDARIO" WHERE "_id" = $1`,
+  const evt = await queryOne<{ dia: Date | null; tipo: string | null; advisor: string | null }>(
+    `SELECT "dia", "tipo", "advisor" FROM "CALENDARIO" WHERE "_id" = $1`,
     [idEvento],
   );
   if (evt?.dia) {
-    const ws = getSessionWindow(evt.dia, sessionRole, new Date());
+    let ws = getSessionWindow(evt.dia, sessionRole, new Date());
+    // Plazo vencido: sólo pasa si Coordinación autorizó ESTA sesión (columna
+    // "Autoriza" de Procesos sin gestión) y quien marca es el guía del evento —
+    // la autorización es para él, no para cualquiera que abra la sesión.
+    if (!ws.canMarkAttendance && ws.isExpired && await estaAutorizado('SESION', idEvento)) {
+      const guiaId = await guiaIdDeSesion((session?.user as any)?.email);
+      if (guiaId && guiaId === evt.advisor) {
+        ws = getSessionWindow(evt.dia, sessionRole, new Date(), true);
+      }
+    }
     if (!ws.canMarkAttendance) {
       if (ws.isExpired) throw new ValidationError(EXPIRED_MESSAGE);
       throw new ValidationError(

@@ -733,10 +733,13 @@ export default function EventosAdministrativosPage() {
                         <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 border ${
                           g.motivoCierre === 'GESTION_COORDINADOR'
                             ? 'bg-red-50 text-red-700 border-red-200'
-                            : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
+                            : 'bg-amber-100 text-amber-800 border-amber-300'}`}
+                          title={g.motivoCierre === 'AUTORIZADO' ? 'El guía lo confirmó fuera de plazo, con autorización de Coordinación.' : undefined}>
                           {g.motivoCierre === 'GESTION_COORDINADOR'
                             ? '✓ Cerrado por Coordinación'
-                            : '✓ Confirmado por el guía'}
+                            : g.motivoCierre === 'AUTORIZADO'
+                              ? '✓ Confirmado por el guía (con autorización)'
+                              : '✓ Confirmado por el guía'}
                         </span>
                       ) : (
                         <button type="button" onClick={() => confirmarGuia(g)} disabled={registrando !== null}

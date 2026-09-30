@@ -60,13 +60,20 @@ export interface AdminEventWindowState {
   minutesUntilExpire: number | null;
   /** Minuto del fin nominal del evento (`horas*60`). Útil para mensajes UI. */
   finNominalMin: number;
+  /** Plazo vencido, pero Coordinación autorizó al guía a registrarlo (columna "Autoriza"). */
+  porAutorizacion: boolean;
 }
 
+/**
+ * @param autorizado — Coordinación autorizó al guía a registrar ESTE evento fuera de
+ *                     plazo. Igual que en las sesiones: sólo reabre lo ya vencido.
+ */
 export function getAdminEventWindow(
   fechaInicio: Date | string | null | undefined,
   role: string | null | undefined,
   now: Date = new Date(),
   horas?: number | null,
+  autorizado: boolean = false,
 ): AdminEventWindowState {
   const isCoordinator = BYPASS_ROLES.has(String(role || '').toUpperCase());
   const horasNum = typeof horas === 'number' && horas > 0 ? Math.floor(horas) : 1;
@@ -81,6 +88,7 @@ export function getAdminEventWindow(
       minutesUntilRegister: null,
       minutesUntilExpire: null,
       finNominalMin,
+      porAutorizacion: false,
     };
   }
 
@@ -94,6 +102,7 @@ export function getAdminEventWindow(
       minutesUntilRegister: null,
       minutesUntilExpire: null,
       finNominalMin,
+      porAutorizacion: false,
     };
   }
 
@@ -120,16 +129,22 @@ export function getAdminEventWindow(
     ? closeMin - minutesElapsed
     : null;
 
+  const porAutorizacion = !isCoordinator && expired && autorizado === true;
+
   return {
     isCoordinator,
-    canRegister: isCoordinator || inRegisterWindow,
-    isExpired:   !isCoordinator && expired,
+    canRegister: isCoordinator || inRegisterWindow || porAutorizacion,
+    isExpired:   !isCoordinator && expired && !porAutorizacion,
     minutesElapsed,
     minutesUntilRegister,
     minutesUntilExpire,
     finNominalMin,
+    porAutorizacion,
   };
 }
+
+export const ADMIN_EVENT_AUTORIZADO_MESSAGE =
+  'Coordinación autorizó el registro de este evento fuera de plazo: puedes registrarlo.';
 
 /**
  * Zona horaria IANA válida. Acepta las tres formas que reporta un navegador:

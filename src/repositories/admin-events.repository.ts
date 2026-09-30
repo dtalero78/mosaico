@@ -27,7 +27,8 @@ export interface AdminEventRow {
   fechaRegistro: string | null;
   timeout: string | null;
   notas: string | null;
-  motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR' | null;
+  /** `AUTORIZADO` = lo registró el guía fuera de plazo con autorización de Coordinación. */
+  motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR' | 'AUTORIZADO' | null;
   /** Guía que pone la sala; el enlace se resuelve de su ficha al leer. */
   anfitrionId?: string | null;
   createdBy: string | null;
@@ -212,7 +213,7 @@ export const AdminEventsRepository = {
     id: string;
     timeout: string;
     notas: string;
-    motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR';
+    motivoCierre: 'NORMAL' | 'GESTION_COORDINADOR' | 'AUTORIZADO';
   }): Promise<AdminEventRow | null> {
     return queryOne<AdminEventRow>(
       `UPDATE "ADMIN_EVENTS"

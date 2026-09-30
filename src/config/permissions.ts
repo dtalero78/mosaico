@@ -630,6 +630,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Muestra la pestaña "Reporte Académico" dentro de /dashboard/academic/sesiones-sin-gestion: salones que tuvieron clase pero NO cerraron su Reporte Académico de esa semana, con filtros propios por fecha, guía, campaña y curso. Distingue "sin empezar" (el guía no entró) de "borrador" (guardó valoraciones pero no cerró), y enlaza al informe del salón para gestionarlo. Por defecto muestra la semana pasada. El rol GUIA ve SÓLO sus propios salones.',
   },
   {
+    code: AcademicoPermission.PROCESOS_SIN_GESTION_AUTORIZAR,
+    module: Module.ACADEMICO,
+    section: 'Procesos sin gestión',
+    name: '↳ Columna "Autoriza" (reabrir al guía lo vencido)',
+    description: 'Permite marcar y desmarcar la casilla "Autoriza" en las tres pestañas de Procesos sin gestión (Sesiones académicas, Eventos administrativos y Reporte Académico), de a una o en bloque con la casilla del encabezado. Una fila autorizada le reabre al guía ESE proceso aunque su plazo haya vencido (24 h en sesiones y eventos; el domingo de la semana en el informe): puede entrar con «Ir», gestionarlo y cerrarlo, y el cierre queda a su nombre marcado "con autorización". Sin la marca, el guía ve el proceso vencido pero no puede gestionarlo. Dentro de su plazo normal el guía no necesita autorización. El rol GUIA no puede autorizar aunque tenga este permiso. Requiere además el permiso de ver la pestaña.',
+  },
+  {
     code: AcademicoPermission.CASOS_USUARIOS_VER,
     module: Module.ACADEMICO,
     section: 'Casos Usuarios',

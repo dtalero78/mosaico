@@ -57,17 +57,28 @@ export function esSemanaPasada(semanaInicio: string | null | undefined, now: Dat
  * ¿Puede el Guía gestionar el informe de esa semana AHORA?
  *
  * - **Semana en curso**: sólo de miércoles a domingo (hasta el miércoles no se han
- *   dictado sus clases; nada que valorar).
+ *   dictado sus clases; nada que valorar). No necesita autorización.
  * - **Semana ya terminada** (la que le quedó pendiente y ve en Procesos sin
- *   gestión): cualquier día. La ventana existe por las clases de la semana, y
- *   en una semana cerrada ya se dictaron todas — decisión del usuario (sep-2026).
+ *   gestión): **sólo si Coordinación la autorizó** (columna "Autoriza"). Su plazo
+ *   era esa semana, de miércoles a domingo; pasado el domingo el informe está
+ *   vencido, igual que una sesión a las 24 h.
+ *
+ * ⚠ Reemplaza la regla del 29-sep ("una semana terminada se gestiona cualquier
+ * día"): desde el 30-sep lo vencido pasa por la autorización — decisión del usuario.
  *
  * Sin semana (llamadas viejas) se conserva la regla de la semana en curso.
  */
-export function guiaPuedeGestionar(semanaInicio?: string | null, now: Date = new Date()): boolean {
-  if (esSemanaPasada(semanaInicio, now)) return true;
+export function guiaPuedeGestionar(
+  semanaInicio?: string | null,
+  now: Date = new Date(),
+  autorizado: boolean = false,
+): boolean {
+  if (esSemanaPasada(semanaInicio, now)) return autorizado === true;
   return guiaEnVentana(now);
 }
 
 export const MENSAJE_FUERA_DE_VENTANA =
   'El informe de la semana en curso se gestiona de miércoles a domingo. Lunes y martes queda en solo lectura.';
+
+export const MENSAJE_SEMANA_SIN_AUTORIZAR =
+  'El informe de una semana ya terminada está fuera de plazo. Pide a Coordinación que lo autorice en Procesos sin gestión.';

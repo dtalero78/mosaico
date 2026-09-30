@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -72,7 +72,20 @@ function PanelAdvisorContent() {
   const [loading, setLoading] = useState(true)
   const [eventsLoading, setEventsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [currentMonth, setCurrentMonth] = useState(new Date())
+  // `?mes=YYYY-MM` abre el calendario en ese mes: es como Procesos sin gestión
+  // trae al guía hasta un evento administrativo de semanas atrás.
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const mes = searchParams.get('mes') || ''
+    const m = /^(d{4})-(d{2})$/.exec(mes)
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, 1)
+      if (!isNaN(d.getTime())) return d
+    }
+    return new Date()
+  })
+  // `?adminEvent=<id>` abre directo el modal de ESE evento en cuanto carga el mes,
+  // en vez de dejar al guía buscándolo en el calendario. Una sola vez.
+  const adminEventPendiente = useRef<string | null>(searchParams.get('adminEvent'))
   // Pestaña activa del panel: calendario | cursos asignados | control de horas
   const [activeTab, setActiveTab] = useState<'calendario' | 'cursos' | 'horas'>('calendario')
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -318,6 +331,13 @@ function PanelAdvisorContent() {
       return isSameDay(eventDate, date)
     })
   }
+
+  useEffect(() => {
+    const id = adminEventPendiente.current
+    if (!id || !adminEvents.length) return
+    const ev = adminEvents.find(ae => ae._id === id)
+    if (ev) { setSelectedAdminEvent(ev); adminEventPendiente.current = null }
+  }, [adminEvents])
 
   const getAdminEventsForDay = (date: Date) => {
     return adminEvents.filter(ae => isSameDay(new Date(ae.fechaInicio), date))

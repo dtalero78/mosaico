@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -9,10 +10,14 @@ import RptAcademicoSinGestionTab from '@/components/academic/RptAcademicoSinGest
 import {
   ExclamationTriangleIcon,
   ArrowPathIcon,
-  ArrowTopRightOnSquareIcon,
   UserCircleIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
+import {
+  AutorizaCelda, AutorizaEncabezado, ConfirmarAutorizacionMasiva, IrEnlace,
+  enviarAutorizacion, avisarResultado, irBloqueadoParaGuia, useLoteAutorizacion,
+  type FilaAutorizable,
+} from '@/components/academic/AutorizaGestion'
 
 /**
  * "Procesos sin gestión" (antes "Sesiones sin gestión"; la ruta no cambió) —
@@ -23,6 +28,12 @@ import toast from 'react-hot-toast'
  * El rol GUIA ve SÓLO lo suyo. El alcance lo aplica el SERVIDOR con el correo de
  * la sesión; aquí sólo se quita lo que para él no tiene sentido (el filtro y la
  * columna de Guía, el contador de guías involucrados).
+ *
+ * Columna "Autoriza" (entre Hace e Ir, en las tres pestañas): Coordinación marca
+ * qué procesos YA VENCIDOS puede gestionar el guía igualmente. Sin la marca, el
+ * «Ir» del guía sale apagado; dentro del plazo no hace falta. La casilla del
+ * encabezado marca todas las filas visibles. Las piezas viven en
+ * `components/academic/AutorizaGestion`, y la regla real en el servidor.
  */
 
 interface AdvisorOption {
@@ -30,7 +41,7 @@ interface AdvisorOption {
   nombre: string
 }
 
-interface Item {
+interface Item extends FilaAutorizable {
   eventoId: string
   fechaEvento: string | null
   tipo: 'SESSION' | 'CLUB' | string
@@ -48,7 +59,7 @@ interface Item {
   asistioMarcados: number
 }
 
-interface AdminItem {
+interface AdminItem extends FilaAutorizable {
   eventoId: string
   eventGroupId: string
   fechaInicio: string
@@ -125,6 +136,11 @@ export default function SesionesSinGestionPage() {
   const verSesiones = hasPermission(AcademicoPermission.SESIONES_SIN_GESTION_VER)
   const verReporte = hasPermission(AcademicoPermission.RPT_ACADEMICO_SIN_GESTION_VER)
   const esGuia = isRole(Role.ADVISOR) // Role.ADVISOR = 'GUIA'
+  // Lo dice el servidor con cada lista: permiso propio y no ser guía.
+  const [puedeAutorizar, setPuedeAutorizar] = useState(false)
+  const { data: sesion } = useSession()
+  const nombreSesion = (sesion?.user as any)?.name || (sesion?.user as any)?.email || null
+  const lote = useLoteAutorizacion()
   const [rptCount, setRptCount] = useState<number | null>(null)
   const arranco = useRef(false)
 
@@ -169,6 +185,7 @@ export default function SesionesSinGestionPage() {
       const [jAc, jAd] = await Promise.all([rAc.json(), rAd.json()])
       if (!rAc.ok || !jAc.success) throw new Error(jAc?.error || `Error ${rAc.status}`)
       setItems(jAc.items as Item[])
+      setPuedeAutorizar(jAc.puedeAutorizar === true)
       if (rAd.ok && jAd.success) setAdminItems(jAd.items as AdminItem[])
       else setAdminItems([])
     } catch (e: any) {
@@ -208,8 +225,57 @@ export default function SesionesSinGestionPage() {
     const sinAsistencia = itemsFiltrados.filter(i => i.asistioMarcados === 0).length
     const conAsistenciaParcial = itemsFiltrados.filter(i => i.asistioMarcados > 0 && !i.inscritos).length
     const advisorsDistintos = new Set(itemsFiltrados.map(i => i.advisorId || '__')).size
-    return { total, sinAsistencia, conAsistenciaParcial, advisorsDistintos }
+    const vencidas = itemsFiltrados.filter(i => i.vencido).length
+    const autorizadas = itemsFiltrados.filter(i => i.vencido && i.autorizado).length
+    return { total, sinAsistencia, conAsistenciaParcial, advisorsDistintos, vencidas, autorizadas }
   }, [itemsFiltrados])
+
+  // ── Columna "Autoriza" ──────────────────────────────────────────────────────
+  // Se escribe en el servidor y se refleja en la lista sin recargarla; lo que el
+  // servidor omite (ya gestionado, aún en plazo) se queda como estaba.
+  const aplicarSesiones = async (ids: string[], autorizar: boolean) => {
+    const r = await enviarAutorizacion({ tipo: 'SESION', autorizar, refIds: ids })
+    const omit = new Set(r.omitidos.map(o => o.refId))
+    const ahora = new Date().toISOString()
+    setItems(prev => prev.map(it => (ids.includes(it.eventoId) && !omit.has(it.eventoId))
+      ? { ...it, autorizado: autorizar, autorizadoPor: autorizar ? nombreSesion : null, autorizadoEn: autorizar ? ahora : null }
+      : it))
+    avisarResultado(r, autorizar)
+  }
+  const aplicarEventosAdmin = async (ids: string[], autorizar: boolean) => {
+    const r = await enviarAutorizacion({ tipo: 'EVENTO_ADMIN', autorizar, refIds: ids })
+    const omit = new Set(r.omitidos.map(o => o.refId))
+    const ahora = new Date().toISOString()
+    setAdminItems(prev => prev.map(it => (ids.includes(it.eventoId) && !omit.has(it.eventoId))
+      ? { ...it, autorizado: autorizar, autorizadoPor: autorizar ? nombreSesion : null, autorizadoEn: autorizar ? ahora : null }
+      : it))
+    avisarResultado(r, autorizar)
+  }
+  const toggleUna = async (fn: (ids: string[], a: boolean) => Promise<void>, id: string, autorizar: boolean) => {
+    lote.setOcupado(true)
+    try { await fn([id], autorizar) }
+    catch (e: any) { toast.error(e?.message || 'No se pudo guardar') }
+    finally { lote.setOcupado(false) }
+  }
+  // La casilla del encabezado: todas las VISIBLES (con los filtros) y vencidas.
+  const toggleTodasSesiones = (autorizar: boolean) => {
+    const ids = itemsFiltrados.filter(i => i.vencido && i.autorizado !== autorizar).map(i => i.eventoId)
+    if (!ids.length) return
+    lote.setPendiente({ autorizar, total: ids.length, queSon: 'sesiones', ejecutar: () => aplicarSesiones(ids, autorizar) })
+  }
+  const toggleTodosEventosAdmin = (autorizar: boolean) => {
+    const ids = adminItems.filter(i => i.vencido && i.autorizado !== autorizar).map(i => i.eventoId)
+    if (!ids.length) return
+    lote.setPendiente({ autorizar, total: ids.length, queSon: 'eventos administrativos', ejecutar: () => aplicarEventosAdmin(ids, autorizar) })
+  }
+  /** «Ir» de un evento administrativo: el panel del guía en ese mes, con el modal del evento abierto. */
+  const hrefEventoAdmin = (it: AdminItem) => {
+    const d = new Date(it.fechaInicio)
+    const mes = isNaN(d.getTime()) ? '' : `${d.getFullYear()}-${PAD(d.getMonth() + 1)}`
+    const qs = new URLSearchParams({ email: it.advisorEmail || '', adminEvent: it.eventoId })
+    if (mes) qs.set('mes', mes)
+    return `/panel-advisor?${qs}`
+  }
 
   const resetToDefault = () => {
     setStartDate(yesterdayLocal())
@@ -238,10 +304,10 @@ export default function SesionesSinGestionPage() {
                   {esGuia
                     ? (tab === 'reporte'
                       ? 'Tus salones que tuvieron clase y NO cerraron su informe semanal. Default: semana pasada. IMPULSA no aplica.'
-                      : 'Tus sesiones y eventos pasados que quedaron sin registrar. Si el plazo ya venció, el cierre lo gestiona Coordinación. Default: ayer. Hoy se excluye (aún en ventana operativa).')
+                      : 'Tus sesiones y eventos pasados que quedaron sin registrar. Si el plazo ya venció, sólo puedes gestionarlos cuando Coordinación los autorice (columna Autoriza). Default: ayer. Hoy se excluye (aún en ventana operativa).')
                     : (tab === 'reporte'
                       ? 'Salones que tuvieron clase y NO cerraron su informe semanal — el coordinador puede entrar a cada uno y gestionarlo. Default: semana pasada · todos los guías. IMPULSA no aplica.'
-                      : 'Eventos pasados sin registrar — el coordinador puede entrar a cada uno y gestionar el cierre. Default: ayer · todos los guías. Hoy se excluye (aún en ventana operativa).')}
+                      : 'Eventos pasados sin registrar — el coordinador puede entrar a cada uno y gestionar el cierre, o marcar "Autoriza" para que lo gestione el propio guía aunque su plazo venció. Default: ayer · todos los guías. Hoy se excluye (aún en ventana operativa).')}
                 </p>
               </div>
             </div>
@@ -352,10 +418,11 @@ export default function SesionesSinGestionPage() {
           </div>
 
           {/* KPIs */}
-          <div className={`grid grid-cols-2 ${esGuia ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-3`}>
+          <div className={`grid grid-cols-2 ${esGuia ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-3`}>
             <Kpi label="Total sin gestionar" value={stats.total.toLocaleString()} color="amber" />
             <Kpi label="Sin asistencia marcada" value={stats.sinAsistencia.toLocaleString()} sub={esGuia ? 'no se marcó asistencia' : 'el guía no entró o no marcó'} color="red" />
             {!esGuia && <Kpi label="Guías involucrados" value={stats.advisorsDistintos.toLocaleString()} color="indigo" />}
+            <Kpi label="Autorizadas" value={`${stats.autorizadas} / ${stats.vencidas}`} sub={esGuia ? 'vencidas que puedes gestionar' : 'de las vencidas (columna Autoriza)'} color="emerald" />
             <Kpi label="Rango" value={startDate === endDate ? fechaCorta(startDate + 'T12:00') : `${fechaCorta(startDate + 'T12:00')} → ${fechaCorta(endDate + 'T12:00')}`} color="gray" />
           </div>
 
@@ -396,6 +463,9 @@ export default function SesionesSinGestionPage() {
                       <th className="text-left font-medium px-3 py-2">Título</th>
                       <th className="text-left font-medium px-3 py-2 w-40">Fecha · Hora</th>
                       <th className="text-center font-medium px-3 py-2 w-16">Horas</th>
+                      <th className="text-center font-medium px-3 py-2 w-28">
+                        <AutorizaEncabezado filas={adminItems} puedeAutorizar={puedeAutorizar} ocupado={lote.ocupado} onToggleTodas={toggleTodosEventosAdmin} />
+                      </th>
                       <th className="text-right font-medium px-3 py-2 w-24">Ir</th>
                     </tr>
                   </thead>
@@ -423,15 +493,17 @@ export default function SesionesSinGestionPage() {
                           <div className="text-xs font-mono text-gray-600">{horaLocal(it.fechaInicio)}</div>
                         </td>
                         <td className="px-3 py-2 text-center text-sm font-semibold text-gray-700">{it.horas}h</td>
+                        <td className="px-3 py-2 text-center">
+                          <AutorizaCelda fila={it} puedeAutorizar={puedeAutorizar} ocupado={lote.ocupado}
+                            onToggle={() => toggleUna(aplicarEventosAdmin, it.eventoId, !it.autorizado)} />
+                        </td>
                         <td className="px-3 py-2 text-right">
-                          {/* Ir al panel del guía — desde ahí se registra el evento */}
+                          {/* Ir al panel del guía, en el mes del evento y con su modal abierto */}
                           {it.advisorEmail && (
-                            <a href={`/panel-advisor?email=${encodeURIComponent(it.advisorEmail)}`}
-                              target="_blank" rel="noopener noreferrer"
-                              title={esGuia ? 'Ir a mi panel' : 'Ir al panel del guía'}
-                              className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-violet-50 text-violet-600 hover:text-violet-700">
-                              <ArrowTopRightOnSquareIcon className="h-5 w-5" />
-                            </a>
+                            <IrEnlace href={hrefEventoAdmin(it)}
+                              bloqueado={irBloqueadoParaGuia(esGuia, it)}
+                              title={esGuia ? 'Ir a mi panel y registrar este evento' : 'Ir al panel del guía (registrar este evento)'}
+                              className="hover:bg-violet-50 text-violet-600 hover:text-violet-700" />
                           )}
                         </td>
                       </tr>
@@ -465,6 +537,9 @@ export default function SesionesSinGestionPage() {
                     <th className="text-left font-medium px-3 py-2 w-32">Fecha · Hora</th>
                     <th className="text-center font-medium px-3 py-2 w-36">Inscritos / Asistencia</th>
                     <th className="text-left font-medium px-3 py-2 w-28">Hace</th>
+                    <th className="text-center font-medium px-3 py-2 w-28">
+                      <AutorizaEncabezado filas={itemsFiltrados} puedeAutorizar={puedeAutorizar} ocupado={lote.ocupado} onToggleTodas={toggleTodasSesiones} />
+                    </th>
                     <th className="text-right font-medium px-3 py-2 w-20">Ir</th>
                   </tr>
                 </thead>
@@ -521,15 +596,14 @@ export default function SesionesSinGestionPage() {
                             {dias === 0 ? '< 1 día' : dias === 1 ? '1 día' : `${dias} días`}
                           </span>
                         </td>
+                        <td className="px-3 py-2 text-center">
+                          <AutorizaCelda fila={it} puedeAutorizar={puedeAutorizar} ocupado={lote.ocupado}
+                            onToggle={() => toggleUna(aplicarSesiones, it.eventoId, !it.autorizado)} />
+                        </td>
                         <td className="px-3 py-2 text-right">
-                          <a
-                            href={`/sesion/${it.eventoId}`}
-                            target="_blank" rel="noopener noreferrer"
-                            title={esGuia ? 'Ir al panel de la sesión' : 'Ir al panel de la sesión (gestionar cierre)'}
-                            className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700"
-                          >
-                            <ArrowTopRightOnSquareIcon className="h-5 w-5" />
-                          </a>
+                          <IrEnlace href={`/sesion/${it.eventoId}`}
+                            bloqueado={irBloqueadoParaGuia(esGuia, it)}
+                            title={esGuia ? 'Ir al panel de la sesión' : 'Ir al panel de la sesión (gestionar cierre)'} />
                         </td>
                       </tr>
                     )
@@ -539,20 +613,28 @@ export default function SesionesSinGestionPage() {
             )}
           </div>
           )}
+
+          {lote.pendiente && (
+            <ConfirmarAutorizacionMasiva autorizar={lote.pendiente.autorizar} total={lote.pendiente.total}
+              queSon={lote.pendiente.queSon} ocupado={lote.ocupado}
+              onConfirm={lote.confirmar} onCancel={() => lote.setPendiente(null)} />
+          )}
         </div>
       </PermissionGuard>
     </DashboardLayout>
   )
 }
 
-function Kpi({ label, value, sub, color }: { label: string; value: string; sub?: string; color: 'amber' | 'red' | 'indigo' | 'gray' }) {
+function Kpi({ label, value, sub, color }: { label: string; value: string; sub?: string; color: 'amber' | 'red' | 'indigo' | 'emerald' | 'gray' }) {
   const bg = color === 'amber' ? 'bg-amber-50 border-amber-200'
     : color === 'red' ? 'bg-red-50 border-red-200'
     : color === 'indigo' ? 'bg-indigo-50 border-indigo-200'
+    : color === 'emerald' ? 'bg-emerald-50 border-emerald-200'
     : 'bg-gray-50 border-gray-200'
   const txt = color === 'amber' ? 'text-amber-900'
     : color === 'red' ? 'text-red-900'
     : color === 'indigo' ? 'text-indigo-900'
+    : color === 'emerald' ? 'text-emerald-900'
     : 'text-gray-900'
   return (
     <div className={`${bg} border rounded-xl p-3`}>

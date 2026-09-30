@@ -22,6 +22,7 @@ import {
   getAdminEventWindow,
   ADMIN_EVENT_TIPO_META,
   ADMIN_EVENT_EXPIRED_MESSAGE,
+  ADMIN_EVENT_AUTORIZADO_MESSAGE,
   type AdminEventTipo,
 } from '@/lib/admin-event-window'
 import { REGISTER_CLOSE_MIN } from '@/lib/session-window'
@@ -41,6 +42,8 @@ interface AdminEventDetail {
   timeout: string | null
   notas: string | null
   motivoCierre: string | null
+  /** Coordinación autorizó al guía a registrarlo fuera de plazo (Procesos sin gestión). */
+  autorizadoGestion?: boolean
 }
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -60,7 +63,9 @@ export default function AdminEventRegistrarModal({
     const t = setInterval(() => setNow(new Date()), 30_000)
     return () => clearInterval(t)
   }, [])
-  const ws = getAdminEventWindow(event.fechaInicio, role, now, event.horas)
+  // `autorizadoGestion` reabre el registro cuando el plazo ya venció; el servidor
+  // lo vuelve a comprobar al registrar.
+  const ws = getAdminEventWindow(event.fechaInicio, role, now, event.horas, event.autorizadoGestion === true)
 
   // Hora de fin nominal en formato HH:MM local (sirve para auto-llenado
   // del timeout y para mostrar mensajes "termina a las HH:MM").
@@ -137,6 +142,11 @@ export default function AdminEventRegistrarModal({
                     <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
                       ✓ Por Coordinación
                     </span>
+                  ) : event.motivoCierre === 'AUTORIZADO' ? (
+                    <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium"
+                      title="El guía lo registró fuera de plazo, con autorización de Coordinación.">
+                      ✓ Con autorización
+                    </span>
                   ) : (
                     <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
                       ✓ Registrado
@@ -183,6 +193,10 @@ export default function AdminEventRegistrarModal({
                 <strong>Gestionando como Coordinador</strong>: la ventana del advisor venció (
                 {ws.minutesElapsed} min desde el inicio). Quedará con motivo
                 <code className="mx-1 bg-blue-100 px-1 rounded">GESTION_COORDINADOR</code>.
+              </div>
+            ) : ws.porAutorizacion ? (
+              <div className="bg-emerald-50 border-l-4 border-emerald-500 rounded-r-lg p-3 mb-4 text-sm text-emerald-900">
+                <strong>Registro autorizado por Coordinación</strong>: {ADMIN_EVENT_AUTORIZADO_MESSAGE}
               </div>
             ) : ws.isExpired ? (
               <div className="bg-amber-50 border-l-4 border-amber-500 rounded-r-lg p-3 mb-4 text-sm text-amber-900">

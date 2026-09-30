@@ -367,16 +367,17 @@ export default function ReporteAcademicoPage() {
           </div>
 
           {/* El Guía llegó a una semana YA TERMINADA (desde Procesos sin gestión):
-              la puede valorar y cerrar cualquier día. Se le dice dónde está para
-              que no la confunda con la semana en curso, y se le da la vuelta. */}
+              el servidor sólo se la abre si Coordinación la AUTORIZÓ ahí, así que
+              verla aquí ya significa que puede valorarla y cerrarla. Se le dice
+              dónde está para que no la confunda con la semana en curso. */}
           {esGuia && data?.semanaPasada && (
-            <div className="no-print mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="no-print mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-indigo-900">
+                <p className="text-sm font-semibold text-emerald-900">
                   Informe pendiente de una semana anterior · {data?.semanaInicio ? fmtFecha(data.semanaInicio) : ''} – {data?.semanaFin ? fmtFecha(new Date(new Date(data.semanaFin + 'T12:00:00Z').getTime() - 86400000).toISOString().slice(0, 10)) : ''}
                 </p>
-                <p className="text-sm text-indigo-800 mt-0.5">
-                  Esta semana ya terminó: puedes valorar y cerrar el informe cualquier día. Al cerrarlo sale de Procesos sin gestión.
+                <p className="text-sm text-emerald-800 mt-0.5">
+                  Coordinación autorizó gestionarlo fuera de plazo{data?.autorizacionGestion?.autorizadoPorNombre || data?.autorizacionGestion?.autorizadoPor ? ` (${data.autorizacionGestion.autorizadoPorNombre || data.autorizacionGestion.autorizadoPor})` : ''}: puedes valorar y cerrar el informe. Al cerrarlo sale de Procesos sin gestión y queda a tu nombre, marcado "con autorización".
                 </p>
               </div>
               <button type="button" onClick={semanaActual}
@@ -410,8 +411,8 @@ export default function ReporteAcademicoPage() {
                 {/* Estado del informe de la semana */}
                 {estadoCierre === 'CERRADO_GUIA' && (
                   <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-amber-100 text-amber-700"
-                    title={data?.cierre?.cerradoGuiaPor ? `Cerrado por ${data.cierre.cerradoGuiaPor}` : ''}>
-                    🔒 Cerrado por el Guía — en revisión
+                    title={`${data?.cierre?.cerradoGuiaPor ? `Cerrado por ${data.cierre.cerradoGuiaPor}` : ''}${data?.cierre?.autorizadoPor ? ` · fuera de plazo, autorizado por ${data.cierre.autorizadoPor}` : ''}`}>
+                    🔒 Cerrado por el Guía{data?.cierre?.autorizadoPor ? ' con autorización' : ''} — en revisión
                   </span>
                 )}
                 {/* Si nadie lo cerró como Guía, lo cerró la Coordinación en su
@@ -427,8 +428,8 @@ export default function ReporteAcademicoPage() {
                 )}
                 {estadoCierre === 'DEFINITIVO' && data?.cierre?.cerradoGuiaPor && (
                   <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-gray-200 text-gray-700"
-                    title={data?.cierre?.cerradoAdminPor ? `Cierre definitivo por ${data.cierre.cerradoAdminPor}` : ''}>
-                    ✅ Cierre definitivo
+                    title={`${data?.cierre?.cerradoAdminPor ? `Cierre definitivo por ${data.cierre.cerradoAdminPor}` : ''}${data?.cierre?.autorizadoPor ? ` · el Guía lo cerró fuera de plazo, autorizado por ${data.cierre.autorizadoPor}` : ''}`}>
+                    ✅ Cierre definitivo{data?.cierre?.autorizadoPor ? ' (guía con autorización)' : ''}
                   </span>
                 )}
                 {estadoCierre === 'BORRADOR' && (

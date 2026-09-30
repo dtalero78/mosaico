@@ -35,6 +35,8 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { queryMany } from '@/lib/postgres';
 import { alcancePorGuia } from '@/services/guia-sesion.service';
+import { autorizacionesDe, puedeAutorizarGestion } from '@/services/autorizacion-gestion.service';
+import { sesionVencida } from '@/lib/autorizacion-gestion';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TZ_REGEX = /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+(\/[A-Za-z_+\-0-9]+)?$/;
@@ -60,7 +62,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const rangoFiltro = { startDate, endDate, advisorId: advisorId || null, tipo: tipo || null };
   // Guía cuyo correo no está en GUIAS: lista vacía, nunca la de todos.
   if (soloPropios && !advisorId) {
-    return successResponse({ items: [], total: 0, soloPropios, rangoFiltro });
+    return successResponse({ items: [], total: 0, soloPropios, puedeAutorizar: false, rangoFiltro });
   }
 
   const conds: string[] = [
@@ -108,7 +110,16 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     params,
   );
 
+  // Columna "Autoriza": qué sesiones ya se le vencieron al guía (las únicas que
+  // necesitan autorización) y cuáles autorizó Coordinación.
+  const autorizadas = await autorizacionesDe('SESION', rows.map(r => r.eventoId));
+  const ahora = new Date();
+
   const items = rows.map(r => ({
+    vencido: sesionVencida(r.fechaEvento, ahora),
+    autorizado: autorizadas.has(r.eventoId),
+    autorizadoPor: autorizadas.get(r.eventoId)?.autorizadoPorNombre || autorizadas.get(r.eventoId)?.autorizadoPor || null,
+    autorizadoEn: autorizadas.get(r.eventoId)?.autorizadoEn || null,
     eventoId: r.eventoId,
     fechaEvento: r.fechaEvento ? new Date(r.fechaEvento).toISOString() : null,
     tipo: r.tipo,
@@ -126,5 +137,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     asistioMarcados: Number(r.asistioMarcados ?? 0),
   }));
 
-  return successResponse({ items, total: items.length, soloPropios, rangoFiltro });
+  return successResponse({
+    items, total: items.length, soloPropios,
+    puedeAutorizar: await puedeAutorizarGestion(session),
+    rangoFiltro,
+  });
 });

@@ -196,6 +196,9 @@ export enum AcademicoPermission {
   // Reporte Académico sin gestión — salones que no cerraron su informe semanal
   RPT_ACADEMICO_SIN_GESTION_VER = 'ACADEMICO.RPT_ACADEMICO_SIN_GESTION.VER',
 
+  // Procesos sin gestión — columna "Autoriza": deja que el guía gestione lo vencido
+  PROCESOS_SIN_GESTION_AUTORIZAR = 'ACADEMICO.PROCESOS_SIN_GESTION.AUTORIZAR',
+
   // Admin Events — eventos administrativos del advisor (Training/Support/...)
   ADMIN_EVENTS_GESTIONAR  = 'ACADEMICO.ADMIN_EVENTS.GESTIONAR',  // crear/editar/eliminar
   ADMIN_EVENTS_REGISTRAR  = 'ACADEMICO.ADMIN_EVENTS.REGISTRAR',  // advisor registra timeout+notas

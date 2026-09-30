@@ -26,13 +26,31 @@ import { ValidationError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { AdvisorEventLogRepository, AdvisorEventLogRow } from '@/repositories/advisor-event-log.repository';
 import { AdvisorNotesAuditRepository } from '@/repositories/advisor-notes-audit.repository';
 import { getSessionWindow, REGISTER_CLOSE_MIN } from '@/lib/session-window';
+import { estaAutorizado, marcarAutorizacionUsada } from '@/services/autorizacion-gestion.service';
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const EDIT_WINDOW_MIN_MINUTES = 30;
 const TZ_REGEX = /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+(\/[A-Za-z_+\-0-9]+)?$/;
 
-/** Valores válidos para CALENDARIO.motivoCierre. */
-export type MotivoCierre = 'NORMAL' | 'SIN_ASISTENTES' | 'GESTION_COORDINADOR';
+/**
+ * Valores válidos para CALENDARIO.motivoCierre.
+ * `AUTORIZADO` = la cerró el propio guía FUERA de plazo, con la autorización de
+ * Coordinación (columna "Autoriza" de Procesos sin gestión). Es un cierre del
+ * guía —no suma a "Gestión Coordinación"— pero se distingue de uno hecho a tiempo.
+ */
+export type MotivoCierre = 'NORMAL' | 'SIN_ASISTENTES' | 'GESTION_COORDINADOR' | 'AUTORIZADO';
+
+/**
+ * Ventana del evento para quien actúa. Si al guía ya se le venció, se consulta si
+ * Coordinación autorizó ESA sesión; la consulta sólo se hace en ese caso, así el
+ * camino normal (dentro de plazo, o coordinador) no paga una lectura de más.
+ */
+async function ventanaConAutorizacion(eventoId: string, dia: Date, sessionRole?: string) {
+  const ws = getSessionWindow(dia, sessionRole, new Date());
+  if (ws.isCoordinator || !ws.isExpired) return ws;
+  if (!(await estaAutorizado('SESION', eventoId))) return ws;
+  return getSessionWindow(dia, sessionRole, new Date(), true);
+}
 
 // ────────────────────────────── tipos ──────────────────────────────
 
@@ -298,8 +316,9 @@ export async function updateAdvisorNotes(
   // ownership + ventana + sesionCerrada. Advisor propio sigue las reglas:
   //   - Es dueño del evento
   //   - No está cerrada
-  //   - Está dentro de la ventana de registro [+30 .. +120 min]
-  const ws = getSessionWindow(new Date(evt.dia), patch.sessionRole, new Date());
+  //   - Está dentro de la ventana de registro, o Coordinación le autorizó esta
+  //     sesión ya vencida (la propiedad del evento se exige igual, más abajo).
+  const ws = await ventanaConAutorizacion(eventoId, new Date(evt.dia), patch.sessionRole);
 
   if (ws.isCoordinator) {
     // Si la sesión ya está cerrada y un coordinador la edita, exigir motivo
@@ -457,7 +476,7 @@ export async function closeSession(
     throw new ValidationError('Debes registrar la hora de fin (Time Out) antes de cerrar la sesión');
   }
 
-  const ws = getSessionWindow(new Date(evt.dia), opts.sessionRole, new Date());
+  const ws = await ventanaConAutorizacion(eventoId, new Date(evt.dia), opts.sessionRole);
 
   if (!ws.isCoordinator) {
     if (evt.advisor !== advisorId) {
@@ -502,6 +521,9 @@ export async function closeSession(
   let motivoCierre: MotivoCierre = 'NORMAL';
   if (opts.sinAsistentes === true) {
     motivoCierre = 'SIN_ASISTENTES';
+  } else if (ws.porAutorizacion) {
+    // El guía cerrando fuera de plazo con la autorización de Coordinación.
+    motivoCierre = 'AUTORIZADO';
   } else if (ws.isCoordinator && ws.isExpired) {
     // Esto sólo se evalúa para non-coordinator real (porque para coordinator
     // isExpired es false). Lo dejamos como protección — si en el futuro se
@@ -529,6 +551,10 @@ export async function closeSession(
      RETURNING "fechaCierreSesion", "notasadvisor"`,
     [eventoId, notas, motivoCierre],
   );
+
+  // Constancia de que la autorización se usó — también si cerró "sin asistentes",
+  // donde el motivo del cierre es ése y no `AUTORIZADO`.
+  if (ws.porAutorizacion) await marcarAutorizacionUsada('SESION', eventoId, sessionEmail);
 
   return {
     ok: true,

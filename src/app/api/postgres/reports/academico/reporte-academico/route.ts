@@ -75,9 +75,10 @@ async function guardarFila(item: any, salon: string, semanaInicio: string, email
 async function assertPuedeEscribir(session: any, curso: string, salon: string, campaign: string, semanaInicio: string) {
   // El Guía sólo gestiona la semana en curso de miércoles a domingo (hora de
   // Chile); una semana ya terminada —la pendiente que abre desde Procesos sin
-  // gestión— la gestiona cualquier día. Va ANTES del estado del informe. No
-  // aplica a quien revisa —Coordinación corrige cuando haga falta—, sólo a GUIA.
-  assertVentanaGuia(session, semanaInicio);
+  // gestión— sólo si Coordinación la autorizó ahí. Va ANTES del estado del
+  // informe. No aplica a quien revisa —Coordinación corrige cuando haga falta—,
+  // sólo a GUIA.
+  await assertVentanaGuia(session, { curso, salon, campaign, semanaInicio });
 
   if (!curso || !campaign) return; // sin curso/campaña no hay cierre que consultar
   const { estado } = await getCierre(curso, salon, campaign, semanaInicio);

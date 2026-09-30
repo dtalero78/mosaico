@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import {
   ArrowPathIcon,
   ArrowTopRightOnSquareIcon,
@@ -8,6 +9,12 @@ import {
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { exportToExcel } from '@/lib/export-excel'
+import { refReporte, MENSAJE_PIDE_AUTORIZACION } from '@/lib/autorizacion-gestion'
+import {
+  AutorizaCelda, AutorizaEncabezado, ConfirmarAutorizacionMasiva,
+  enviarAutorizacion, avisarResultado, irBloqueadoParaGuia, useLoteAutorizacion,
+  type FilaAutorizable,
+} from '@/components/academic/AutorizaGestion'
 
 /**
  * Pestaña "Reporte Académico" de la pantalla Procesos sin gestión: salones que
@@ -25,9 +32,13 @@ import { exportToExcel } from '@/lib/export-excel'
  *
  * Se distingue "sin empezar" de "borrador" porque no son el mismo problema: en
  * uno el guía no entró, en el otro entró y dejó el cierre a medias.
+ *
+ * Columna "Autoriza" (entre Hace e Ir): un informe de una semana YA TERMINADA
+ * está vencido para el guía; sólo lo gestiona si Coordinación lo marca aquí.
+ * El de la semana en curso sigue con su ventana de miércoles a domingo.
  */
 
-interface Item {
+interface Item extends FilaAutorizable {
   cursoCampaignId: string
   guia: string | null
   guiaNombre: string | null
@@ -80,8 +91,8 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
 }) {
   const inicial = useMemo(() => semanaPasada(), [])
   const columnas = soloPropios
-    ? ['Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Ir']
-    : ['Guía', 'Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Ir']
+    ? ['Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Autoriza', 'Ir']
+    : ['Guía', 'Campaña · Curso · Salón', 'Semana', 'Sesiones', 'Alumnos', 'Estado', 'Hace', 'Autoriza', 'Ir']
   const [startDate, setStartDate] = useState(inicial.desde)
   const [endDate, setEndDate] = useState(inicial.hasta)
   const [advisorId, setAdvisorId] = useState('')
@@ -94,6 +105,36 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
   )
   const [loading, setLoading] = useState(false)
   const [resumen, setResumen] = useState({ total: 0, sinEmpezar: 0, guiasInvolucrados: 0 })
+  // Columna "Autoriza": lo dice el servidor con cada lista (permiso y no ser guía).
+  const [puedeAutorizar, setPuedeAutorizar] = useState(false)
+  const { data: sesion } = useSession()
+  const nombreSesion = (sesion?.user as any)?.name || (sesion?.user as any)?.email || null
+  const lote = useLoteAutorizacion()
+  const refDe = (r: Item) => refReporte({ campaign: r.campaign || '', curso: r.curso || '', salon: r.salon || '', semanaInicio: r.semanaInicio })
+  const aplicar = async (filas: Item[], autorizar: boolean) => {
+    const r = await enviarAutorizacion({
+      tipo: 'REPORTE', autorizar,
+      items: filas.map(x => ({ campaign: x.campaign || '', curso: x.curso || '', salon: x.salon || '', semanaInicio: x.semanaInicio })),
+    })
+    const omit = new Set(r.omitidos.map(o => o.refId))
+    const tocadas = new Set(filas.map(refDe))
+    const ahora = new Date().toISOString()
+    setItems(prev => prev.map(it => (tocadas.has(refDe(it)) && !omit.has(refDe(it)))
+      ? { ...it, autorizado: autorizar, autorizadoPor: autorizar ? nombreSesion : null, autorizadoEn: autorizar ? ahora : null }
+      : it))
+    avisarResultado(r, autorizar)
+  }
+  const toggleUna = async (fila: Item) => {
+    lote.setOcupado(true)
+    try { await aplicar([fila], !fila.autorizado) }
+    catch (e: any) { toast.error(e?.message || 'No se pudo guardar') }
+    finally { lote.setOcupado(false) }
+  }
+  const toggleTodas = (autorizar: boolean) => {
+    const filas = items.filter(i => i.vencido && i.autorizado !== autorizar)
+    if (!filas.length) return
+    lote.setPendiente({ autorizar, total: filas.length, queSon: 'informes', ejecutar: () => aplicar(filas, autorizar) })
+  }
 
   const buscar = async () => {
     setLoading(true)
@@ -106,6 +147,7 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
         { cache: 'no-store' }).then(r => r.json())
       if (!j?.success) throw new Error(j?.error || 'Error al cargar')
       setItems(j.rows || [])
+      setPuedeAutorizar(j.puedeAutorizar === true)
       setResumen({ total: j.total || 0, sinEmpezar: j.sinEmpezar || 0, guiasInvolucrados: j.guiasInvolucrados || 0 })
       onCount?.(j.total || 0)
       // Los desplegables se arman con lo que HAY en el resultado, así no se
@@ -143,6 +185,7 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
       { header: 'Alumnos', accessor: r => r.alumnos },
       { header: 'Estado', accessor: r => (r.estado === 'SIN_EMPEZAR' ? 'Sin empezar' : 'Borrador') },
       { header: 'Valoraciones guardadas', accessor: r => r.notasGuardadas },
+      { header: 'Autorizado', accessor: r => (!r.vencido ? 'En plazo' : r.autorizado ? `Sí${r.autorizadoPor ? ' · ' + r.autorizadoPor : ''}` : 'No') },
       { header: 'Días desde el cierre de la semana', accessor: r => diasDesdeCierreSemana(r.semanaInicio) },
     ],
     'rpt-academico-sin-gestion'
@@ -250,7 +293,11 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 {columnas.map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                    {h === 'Autoriza'
+                      ? <AutorizaEncabezado filas={items} puedeAutorizar={puedeAutorizar} ocupado={lote.ocupado} onToggleTodas={toggleTodas} />
+                      : h}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -302,15 +349,24 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
                     <td className={`px-4 py-3 whitespace-nowrap text-xs ${dias > 7 ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
                       {dias === 0 ? 'recién' : `${dias} día${dias === 1 ? '' : 's'}`}
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      <AutorizaCelda fila={r} puedeAutorizar={puedeAutorizar} ocupado={lote.ocupado} onToggle={() => toggleUna(r)} />
+                    </td>
                     <td className="px-4 py-3">
-                      {/* También para el guía: el Reporte Académico le abre la semana
-                          pendiente (una semana ya terminada la gestiona cualquier
-                          día) y desde ahí la valora y la cierra. */}
-                      <button type="button" onClick={() => irAlInforme(r)}
-                        title={soloPropios ? 'Abrir y gestionar el informe de este salón' : 'Abrir el informe de este salón'}
-                        className="text-indigo-600 hover:text-indigo-800">
-                        <ArrowTopRightOnSquareIcon className="h-5 w-5" />
-                      </button>
+                      {/* Para el guía: el Reporte Académico le abre la semana pendiente
+                          sólo si Coordinación la autorizó (una semana ya terminada
+                          está vencida); sin la marca, el botón sale apagado. */}
+                      {irBloqueadoParaGuia(soloPropios, r) ? (
+                        <span className="inline-block text-gray-300 cursor-not-allowed" title={MENSAJE_PIDE_AUTORIZACION} aria-disabled>
+                          <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                        </span>
+                      ) : (
+                        <button type="button" onClick={() => irAlInforme(r)}
+                          title={soloPropios ? 'Abrir y gestionar el informe de este salón' : 'Abrir el informe de este salón'}
+                          className="text-indigo-600 hover:text-indigo-800">
+                          <ArrowTopRightOnSquareIcon className="h-5 w-5" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )
@@ -319,6 +375,12 @@ export default function RptAcademicoSinGestionTab({ onCount, soloPropios = false
           </table>
         </div>
       </div>
+
+      {lote.pendiente && (
+        <ConfirmarAutorizacionMasiva autorizar={lote.pendiente.autorizar} total={lote.pendiente.total}
+          queSon={lote.pendiente.queSon} ocupado={lote.ocupado}
+          onConfirm={lote.confirmar} onCancel={() => lote.setPendiente(null)} />
+      )}
     </div>
   )
 }
