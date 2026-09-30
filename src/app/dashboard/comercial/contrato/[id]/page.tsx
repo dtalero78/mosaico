@@ -28,6 +28,8 @@ import {
 import { fillContractTemplate, type ConsentDisplay } from '@/lib/contract-template-filler'
 import { templatePlataformaFor } from '@/lib/contract-template'
 import ReservaCupoBanner from '@/components/comercial/ReservaCupoBanner'
+import SinCupoModal, { type SinCupoDetalle } from '@/components/comercial/SinCupoModal'
+import { usePermissions } from '@/hooks/usePermissions'
 import { isContratoPrueba } from '@/components/common/ContratoPruebaBadge'
 import { marcaPruebaCss, marcaPruebaHtml } from '@/lib/contrato-prueba'
 import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
@@ -250,11 +252,16 @@ export default function ContratoDetailPage() {
   const [printedContract, setPrintedContract] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
 
-  // "Contrato Para Aprobación" — marca el contrato como LISTO para el Centro
-  // de Aprobación (filtro por defecto de esa consulta).
+  // "Contrato Para Aprobación" — deja el contrato LISTO de verdad: toma el cupo
+  // de cada beneficiario y pone la marca de gestión que exige la aprobación (lo
+  // mismo que «Dejar listo» en Gestión Contrato), además del aviso al Centro.
   const [showListoModal, setShowListoModal] = useState(false)
   const [markingListo, setMarkingListo] = useState(false)
   const [listoLocal, setListoLocal] = useState<string | null>(null)
+  // 409 sin cupo → el mismo modal de Gestión Contrato (cambiar horario / sobrecupo)
+  const [sinCupo, setSinCupo] = useState<SinCupoDetalle | null>(null)
+  const { hasPermission } = usePermissions()
+  const puedeSobrecupo = hasPermission(ComercialPermission.GESTION_CONTRATO_SOBRECUPO)
 
   // Documentación
   const [showDocsModal, setShowDocsModal] = useState(false)
@@ -442,14 +449,33 @@ export default function ContratoDetailPage() {
     api.post(`/api/contracts/${titularId}/marcar-envio`, { tipo }).catch(() => {})
   }
 
-  const yaListo = !!(listoLocal || (titular as any)?.listoAprobacion)
-  const confirmarListoAprobacion = async () => {
+  // «Listo» es la marca de GESTIÓN (`gestionContratoListo`), la que exige la
+  // aprobación. `listoAprobacion` es sólo el aviso del comercial: si está puesto
+  // sin la gestión (contratos de antes de sep-2026), el botón vuelve a salir para
+  // que se tome el cupo desde aquí mismo.
+  const yaListo = !!(listoLocal || (titular as any)?.gestionContratoListo === true)
+  const avisadoEn = (titular as any)?.listoAprobacion as string | null | undefined
+  const contratoFirmado = !!consentStatus?.hasConsent
+  const confirmarListoAprobacion = async (extra: { cambios?: any[]; sobrecupo?: boolean } = {}) => {
     try {
       setMarkingListo(true)
-      await api.post(`/api/postgres/people/${titularId}/listo-aprobacion`, {})
-      toast.success('Contrato marcado como LISTO para aprobación')
+      // fetch directo (no `api`): hace falta leer `detail` del rechazo por cupo.
+      const res = await fetch(`/api/postgres/people/${titularId}/listo-aprobacion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(extra),
+      }).then(r => r.json().catch(() => ({})))
+      if (res?.detail?.tipo === 'sin_cupo') {
+        setSinCupo(res.detail as SinCupoDetalle)
+        return
+      }
+      if (res?.error) throw new Error(res.details || res.error)
+      toast.success(res.message || 'Contrato listo para aprobación')
       setListoLocal(new Date().toISOString())
+      setSinCupo(null)
       setShowListoModal(false)
+      // Refresca cupos confirmados y, si hubo cambio de horario, el curso nuevo.
+      loadData()
     } catch (err) {
       handleApiError(err, 'Error marcando el contrato como listo')
     } finally {
@@ -748,10 +774,12 @@ export default function ContratoDetailPage() {
                 <button
                   type="button"
                   onClick={() => { setShowListoModal(true); loadDocs() }}
+                  title={avisadoEn ? `Avisado el ${fechaCorta(avisadoEn)} — falta confirmar el cupo del salón` : undefined}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-400 text-gray-900 rounded-md hover:bg-yellow-500 text-sm font-medium"
                 >
                   <CheckIcon className="h-4 w-4" />
                   Contrato Para Aprobación
+                  {avisadoEn && <span className="text-[11px] font-normal text-yellow-900/80">· falta el cupo</span>}
                 </button>
               )}
               {!consentStatus?.hasConsent && !isContratoPrueba(titular?.contrato) && (
@@ -1325,14 +1353,29 @@ export default function ContratoDetailPage() {
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowListoModal(false)} />
           <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">Contrato Para Aprobación</h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-gray-600 mb-3">
               ¿El contrato <strong>{titular?.contrato}</strong> ya está <strong>listo para ser aprobado</strong>?
-              Al confirmar quedará en estado <span className="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 font-semibold">LISTO</span> y
-              aparecerá en el Centro de Aprobación (su consulta por defecto).
+              Al confirmar <strong>se toma el cupo del salón</strong> de cada beneficiario y el contrato queda
+              en estado <span className="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 font-semibold">LISTO</span> —
+              el mismo «Dejar listo» de Gestión Contrato, y lo que la aprobación exige.
+              Si algún salón ya no tiene lugar, podrás cambiar de horario.
             </p>
-            <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-5 text-sm">
+            {beneficiarios.length > 0 && (
+              <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-3 text-sm">
+                {beneficiarios.map((b: any) => (
+                  <div key={b._id} className="flex items-center justify-between gap-3 px-4 py-2">
+                    <span className="text-gray-800 truncate">{[b.primerNombre, b.primerApellido].filter(Boolean).join(' ')}</span>
+                    <span className="text-xs text-gray-500 whitespace-nowrap">
+                      {b.tipoCurso ? `${b.tipoCurso} ${b.horarioCurso || ''}${b.salon ? ` · Salón ${b.salon}` : ''}` : 'Sin curso'}
+                      {b.cupoConfirmado ? <span className="ml-2 text-green-600 font-medium">cupo tomado</span> : null}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-3 text-sm">
               {[
-                { label: 'Consentimiento firmado', ok: !!consentStatus?.hasConsent },
+                { label: 'Consentimiento firmado', ok: contratoFirmado },
                 { label: 'Enviado al titular (firma o PDF)', ok: okFirmaSolicitada || okPdfEnviado },
                 { label: 'Contrato impreso', ok: okImpreso },
                 { label: `Documentos adjuntos (${docs.length})`, ok: docs.length > 0 },
@@ -1347,18 +1390,39 @@ export default function ContratoDetailPage() {
                 </div>
               ))}
             </div>
+            {!contratoFirmado && (
+              <p className="mb-4 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                El contrato <strong>todavía no está firmado</strong>: no se puede dejar listo hasta que el titular
+                firme el consentimiento (o se registre la Acción Administrativa). Es la misma regla de Gestión Contrato.
+              </p>
+            )}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setShowListoModal(false)} disabled={markingListo}
                 className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
                 Cancelar
               </button>
-              <button type="button" onClick={confirmarListoAprobacion} disabled={markingListo}
-                className="px-4 py-2 text-sm rounded-md bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold disabled:opacity-50">
-                {markingListo ? 'Marcando…' : 'Sí, marcar como LISTO'}
+              <button type="button" onClick={() => confirmarListoAprobacion()} disabled={markingListo || !contratoFirmado}
+                title={!contratoFirmado ? 'El contrato debe estar firmado' : undefined}
+                className="px-4 py-2 text-sm rounded-md bg-yellow-400 text-gray-900 hover:bg-yellow-500 font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+                {markingListo ? 'Tomando el cupo…' : 'Sí, dejar listo'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Sin cupo al dejar listo: cambiar de horario o autorizar sobrecupo ── */}
+      {sinCupo && (
+        <SinCupoModal
+          detalle={sinCupo}
+          contrato={titular?.contrato}
+          titular={[titular?.primerNombre, titular?.primerApellido].filter(Boolean).join(' ')}
+          saving={markingListo}
+          puedeSobrecupo={puedeSobrecupo}
+          onCancel={() => setSinCupo(null)}
+          onCambiarHorario={cambios => confirmarListoAprobacion({ cambios })}
+          onSobrecupo={() => confirmarListoAprobacion({ sobrecupo: true })}
+        />
       )}
 
       {/* ── Acción Administrativa (ex Auto-Aprobar Consentimiento) — Modal de advertencia ── */}

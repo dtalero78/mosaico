@@ -2,47 +2,39 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { ComercialPermission } from '@/types/permissions';
-import { queryOne } from '@/lib/postgres';
-import { NotFoundError, ValidationError } from '@/lib/errors';
-import { esAprobado } from '@/lib/estados';
+import { dejarContratoListo } from '@/services/dejar-listo.service';
 
 /**
  * POST /api/postgres/people/[id]/listo-aprobacion
  *
- * Botón amarillo "Contrato Para Aprobación" del detalle del contrato: marca el
- * contrato del TITULAR como LISTO para el Centro de Aprobación (que filtra por
- * este estado por defecto). Guarda cuándo y quién lo marcó. Idempotente: si ya
- * estaba en LISTO, conserva la marca original.
+ * Botón amarillo "Contrato Para Aprobación" del detalle del contrato.
+ *
+ * Deja el contrato LISTO de verdad: toma el cupo de cada beneficiario y pone la
+ * marca de gestión (`gestionContratoListo`), que es la que exige la aprobación —
+ * exactamente lo mismo que «Dejar listo» en Comercial › Gestión Contrato
+ * (`dejarContratoListo` es la única definición). Además registra el aviso del
+ * comercial (`listoAprobacion`), la marca «avisado» del Centro de Aprobación.
+ *
+ * Hasta sep-2026 sólo escribía el aviso: el comercial veía «✓ Listo para
+ * aprobación» y la aprobación se lo rechazaba con "Comercial debe marcarlo en
+ * Gestión Contrato".
+ *
+ * Body (los mismos del modal de sin cupo):
+ *   {}                                   → confirmar tal cual
+ *   { cambios: [{personId, campaign, tipoCurso, horarioCurso}] } → mover y confirmar
+ *   { sobrecupo: true }                  → autorizar pasarse del cupo (permiso aparte)
+ *
+ * Si falta lugar responde con `detail.tipo='sin_cupo'` SIN escribir nada, para
+ * que la pantalla ofrezca cambiar de horario o autorizar el sobrecupo.
  */
-export const POST = handlerWithAuth(async (_request, { params }, session) => {
+export const POST = handlerWithAuth(async (request, { params }, session) => {
   await requirePermission(session, ComercialPermission.CONTRATO_LISTO_APROBACION);
-  const titular = await queryOne<{ _id: string; tipoUsuario: string; aprobacion: string | null; listoAprobacion: string | null; contrato: string | null }>(
-    `SELECT "_id", "tipoUsuario", "aprobacion", "listoAprobacion"::text, "contrato" FROM "PEOPLE" WHERE "_id" = $1`,
-    [params.id]
-  );
-  if (!titular) throw new NotFoundError('Titular', params.id);
-  if (titular.tipoUsuario !== 'TITULAR') {
-    throw new ValidationError('Solo el TITULAR del contrato puede marcarse como listo para aprobación');
-  }
-  if (esAprobado(titular.aprobacion)) {
-    throw new ValidationError('El contrato ya está aprobado');
-  }
-
-  if (!titular.listoAprobacion) {
-    await queryOne(
-      `UPDATE "PEOPLE"
-          SET "listoAprobacion" = NOW(),
-              "listoAprobacionPor" = $2,
-              "_updatedDate" = NOW()
-        WHERE "_id" = $1
-        RETURNING "_id"`,
-      [params.id, session?.user?.email || 'desconocido']
-    );
-  }
-
-  return successResponse({
-    message: 'Contrato marcado como LISTO para aprobación',
-    contrato: titular.contrato,
-    yaEstabaListo: !!titular.listoAprobacion,
+  const b = await request.json().catch(() => ({}));
+  const r = await dejarContratoListo(session, {
+    titularId: params.id,
+    cambios: b?.cambios,
+    sobrecupo: b?.sobrecupo,
+    marcarAviso: true,
   });
+  return successResponse(r);
 });

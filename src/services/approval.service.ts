@@ -72,8 +72,9 @@ export async function assertContratoListo(person: {
     return; // sin contrato no hay gestión comercial que esperar
   }
   throw new ValidationError(
-    'El contrato aún no está listo. Comercial debe marcarlo en Gestión Contrato ' +
-    '(ahí se confirma el cupo del salón) antes de aprobarlo.'
+    'El contrato aún no está listo. Comercial debe dejarlo listo antes de aprobarlo — ' +
+    'con «Dejar listo» en Gestión Contrato o con «Contrato Para Aprobación» en el detalle ' +
+    'del contrato (ahí se confirma el cupo del salón).'
   );
 }
 

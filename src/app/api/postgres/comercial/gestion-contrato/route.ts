@@ -2,11 +2,10 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { ComercialPermission } from '@/types/permissions';
-import { ValidationError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
 import { getUserComercialScope } from '@/lib/crm';
-import { marcarListoConCupo } from '@/services/gestion-cupo.service';
-import { esAprobadoSql, esAprobado } from '@/lib/estados';
+import { dejarContratoListo } from '@/services/dejar-listo.service';
+import { esAprobadoSql } from '@/lib/estados';
 
 /**
  * GET /api/postgres/comercial/gestion-contrato
@@ -177,57 +176,13 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ComercialPermission.GESTION_CONTRATO);
   const b = await request.json().catch(() => ({}));
-  const id = String(b?.id || '').trim();
-  if (!id) throw new ValidationError('Falta el titular.');
-
-  const role = (session as any)?.user?.role;
-  const email = (session as any)?.user?.email || 'desconocido';
-  const scope = (role === 'SUPER_ADMIN' || role === 'ADMIN')
-    ? { seeAll: true, liderCorreo: null as string | null }
-    : await getUserComercialScope(email);
-
-  // El scope de líder se verifica ANTES de tocar cupos: un comercial no puede
-  // cerrar el contrato de otro equipo ni siquiera para reservarle un asiento.
-  const params: any[] = [id];
-  let scopeSql = '';
-  if (!scope.seeAll) { params.push(scope.liderCorreo); scopeSql = ` AND LOWER("liderComercialCorreo") = LOWER($${params.length})`; }
-  const dueño = await query<{ _id: string; hashConsentimiento: string | null; aprobacion: string | null }>(
-    `SELECT "_id","hashConsentimiento","aprobacion" FROM "PEOPLE"
-      WHERE "_id"=$1 AND "tipoUsuario"='TITULAR'${scopeSql}`, params
-  );
-  if (!dueño.rowCount) throw new ValidationError('No se encontró el titular (o está fuera de tu equipo).');
-
-  // Las mismas dos condiciones con las que el listado decide qué mostrar, pero
-  // validadas en el SERVIDOR: que no salga en pantalla no impide un POST directo.
-  const t = dueño.rows[0];
-  if (!String(t.hashConsentimiento || '').trim()) {
-    throw new ValidationError('El contrato aún no está firmado: no se puede marcar como listo.');
-  }
-  if (esAprobado(t.aprobacion)) {
-    throw new ValidationError('El contrato ya está aprobado: marcarlo listo no aplica.');
-  }
-
-  const sobrecupo = b?.sobrecupo === true;
-  // Autorizar un sobrecupo es ampliar el salón de hecho, así que va por su
-  // propio permiso: el comercial ve el modal pero sólo puede cambiar el horario.
-  if (sobrecupo) await requirePermission(session, ComercialPermission.GESTION_CONTRATO_SOBRECUPO);
-
-  const cambios = Array.isArray(b?.cambios)
-    ? b.cambios
-        .filter((c: any) => c?.personId && c?.campaign && c?.tipoCurso && c?.horarioCurso)
-        .map((c: any) => ({
-          personId: String(c.personId),
-          campaign: String(c.campaign),
-          tipoCurso: String(c.tipoCurso),
-          horarioCurso: String(c.horarioCurso),
-        }))
-    : [];
-
-  const r = await marcarListoConCupo({ titularId: id, actor: email, cambios, sobrecupo });
-
-  const partes = [`${r.confirmados} beneficiario(s) con el cupo tomado`];
-  if (r.movidos.length) partes.push(`${r.movidos.length} cambiado(s) de horario`);
-  if (r.sobrecupos) partes.push(`${r.sobrecupos} con sobrecupo autorizado`);
-
-  return successResponse({ ok: true, ...r, message: `Contrato listo — ${partes.join(' · ')}.` });
+  // Alcance por líder, contrato firmado, no aprobado y el permiso del sobrecupo
+  // se validan en `dejarContratoListo`: es la MISMA regla que aplica el botón
+  // «Contrato Para Aprobación» del detalle del contrato (people/[id]/listo-aprobacion).
+  const r = await dejarContratoListo(session, {
+    titularId: String(b?.id || '').trim(),
+    cambios: b?.cambios,
+    sobrecupo: b?.sobrecupo,
+  });
+  return successResponse(r);
 });
