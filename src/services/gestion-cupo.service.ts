@@ -2,6 +2,7 @@ import 'server-only';
 import { query, transaction } from '@/lib/postgres';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { cupoOcupadoSql } from '@/lib/cupo';
+import { compararHorarios } from '@/lib/cursos-campaign';
 import { lockSalon } from '@/services/cupo-guard.service';
 import { entradaCupoHistory, type CursoDelAlumno } from '@/services/cupo-liberacion.service';
 
@@ -119,13 +120,15 @@ export async function alternativasConCupo(
        FROM "CURSOS_CAMPAIGN" cc
       WHERE cc."activa" = true AND cc."campaign" = $1 AND cc."tipoCurso" = $2
         AND ($3::text IS NULL OR cc."horarioCurso" <> $3)
-      ORDER BY cc."horarioCurso", cc."salon"`,
+      ORDER BY cc."salon"`,
     [campaign, tipoCurso, excluirHorario]
   );
   return rows
     .map(r => ({ ...r, cupos: Number(r.cupos), ocupados: Number(r.ocupados), libres: Number(r.cupos) - Number(r.ocupados) }))
     // `cupos = 0` significa "sin límite definido", así que también sirve.
-    .filter(r => r.cupos === 0 || r.libres > 0);
+    .filter(r => r.cupos === 0 || r.libres > 0)
+    // Por día de la semana y hora (lunes primero), como todo desplegable de horarios.
+    .sort((a, b) => compararHorarios(a.horarioCurso, b.horarioCurso) || String(a.salon || '').localeCompare(String(b.salon || '')));
 }
 
 /** Beneficiarios del contrato que aún no tienen el cupo tomado. */

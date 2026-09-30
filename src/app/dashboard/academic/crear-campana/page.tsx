@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission } from '@/types/permissions'
-import { TIPOS_CURSO, horariosFor, esMenores, addMonths, campaignNameToDate, estadoCurso, ESTADO_CURSO_META, hoyEnChile } from '@/lib/cursos-campaign'
+import { TIPOS_CURSO, horariosFor, esMenores, addMonths, campaignNameToDate, estadoCurso, ESTADO_CURSO_META, hoyEnChile, compararHorarios } from '@/lib/cursos-campaign'
 import { useTiposCurso } from '@/hooks/use-tipos-curso'
 import { exportToExcel } from '@/lib/export-excel'
 import { PlusIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
@@ -436,7 +436,9 @@ function CrearCampanaContent() {
 
   // El catálogo vive en HORARIOS_CURSO (Académico › Horarios). `horariosFor`
   // queda como respaldo si el fetch falla, para no dejar el alta sin opciones.
-  const horariosDe = (tipo: string) => (tipo ? (catalogoHorarios[tipo] ?? horariosFor(tipo)) : [])
+  // El servidor ya los manda por día de la semana; se reordena igual por si el
+  // respaldo entra en juego (misma regla `compararHorarios` en todos los desplegables).
+  const horariosDe = (tipo: string) => (tipo ? [...(catalogoHorarios[tipo] ?? horariosFor(tipo))].sort(compararHorarios) : [])
   const horariosOpts = horariosDe(form.tipoCurso)
   const editing = editIndex !== null
 

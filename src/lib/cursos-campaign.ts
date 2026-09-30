@@ -118,6 +118,45 @@ export function parseHorarioRango(horario: string): { dias: number[]; inicioMin:
   return { dias, inicioMin, finMin };
 }
 
+/**
+ * Orden de PRESENTACIÓN de los horarios: por el día de la semana con que
+ * empiezan —lunes primero, domingo al final—, luego por la hora de inicio y,
+ * a igualdad, por el texto.
+ *
+ * Es la regla ÚNICA para toda lista de horarios que ve una persona (catálogo
+ * de Académico › Horarios, desplegables de Crear Campaña / Crear Contrato /
+ * Cambio Académico / reactivar OnHold, alternativas del modal sin cupo). Antes
+ * cada sitio ordenaba a su manera —el catálogo por el `orden` del seed y luego
+ * alfabético, los cursos por número de salón— y cualquier horario agregado
+ * después caía al final: en DANSHI los LUN-MIÉ y MAR-JUE nuevos salían detrás
+ * de los sábados. Alfabético tampoco sirve como regla: JUE y DOM irían antes
+ * que LUN, y VIE después de SÁB.
+ *
+ * Un horario que no se puede interpretar va al final, en orden de texto: no se
+ * esconde, pero tampoco se mezcla con los válidos.
+ */
+export function compararHorarios(a: string, b: string): number {
+  const ka = claveOrdenHorario(a);
+  const kb = claveOrdenHorario(b);
+  if (ka.dia !== kb.dia) return ka.dia - kb.dia;
+  if (ka.inicioMin !== kb.inicioMin) return ka.inicioMin - kb.inicioMin;
+  return String(a || '').localeCompare(String(b || ''), 'es', { sensitivity: 'base', numeric: true });
+}
+
+/** Clave de orden: día lunes-primero (LUN=0 … SÁB=5, DOM=6) e inicio en minutos. */
+function claveOrdenHorario(h: string): { dia: number; inicioMin: number } {
+  const r = parseHorarioRango(h);
+  if (!r) return { dia: 99, inicioMin: 0 };
+  // JS cuenta DOM=0; la semana se lee de lunes a domingo.
+  const dia = Math.min(...r.dias.map(d => (d + 6) % 7));
+  return { dia, inicioMin: r.inicioMin };
+}
+
+/** Copia ordenada con `compararHorarios`; no muta la lista que recibe. */
+export function ordenarHorarios<T>(items: T[], horarioDe: (t: T) => string): T[] {
+  return [...items].sort((x, y) => compararHorarios(horarioDe(x), horarioDe(y)));
+}
+
 /** ¿Dos horarios del catálogo se pisan? Comparten día Y se solapan en el tiempo. */
 export function horariosSeSolapan(a: string, b: string): boolean {
   const ra = parseHorarioRango(a);

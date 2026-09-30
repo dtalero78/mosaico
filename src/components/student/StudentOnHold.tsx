@@ -5,6 +5,7 @@ import { OnHoldHistoryEntry } from '@/types'
 import { api, ApiError } from '@/hooks/use-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission } from '@/types/permissions'
+import { compararHorarios } from '@/lib/cursos-campaign'
 import UploadDocButton from './UploadDocButton'
 
 interface CursoRow {
@@ -81,9 +82,10 @@ export default function StudentOnHold({
 
   const rcCampanias = useMemo(() => Array.from(new Set(cursoRows.map(r => r.campaign))).sort().reverse(), [cursoRows])
   const rcTipos = useMemo(() => Array.from(new Set(cursoRows.filter(r => r.campaign === rcCampaign).map(r => r.tipoCurso))), [cursoRows, rcCampaign])
+  // Por día de la semana y hora del horario (lunes primero); el salón desempata.
   const rcSalones = useMemo(
     () => cursoRows.filter(r => r.campaign === rcCampaign && r.tipoCurso === rcTipoCurso)
-                   .sort((a, b) => String(a.salon).localeCompare(String(b.salon))),
+                   .sort((a, b) => compararHorarios(a.horarioCurso, b.horarioCurso) || String(a.salon).localeCompare(String(b.salon))),
     [cursoRows, rcCampaign, rcTipoCurso])
   const rcSelected = useMemo(
     () => rcSalones.find(r => `${r.horarioCurso}||${r.salon || ''}` === rcRowKey) || null,

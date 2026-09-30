@@ -1,6 +1,6 @@
 'use client'
 
-
+import { compararHorarios } from '@/lib/cursos-campaign';
 
 /**
  * Cascada Campaña → Curso → Horario (+ Salón / Final del curso / userLogin) sobre
@@ -36,7 +36,12 @@ export default function CursoCampaignFields({
   const cursos = Array.from(new Set(
     rows.filter(r => r.campaign === campaign && (esImpulsa ? r.tipoCurso === 'IMPULSA' : r.tipoCurso !== 'IMPULSA')).map(r => r.tipoCurso)
   ));
-  const horarioRows = rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso);
+  // Por día de la semana y hora (lunes primero); el salón desempata. Antes iban
+  // en el orden en que llegaban (por número de salón), y un salón agregado
+  // después caía al final aunque fuera de lunes.
+  const horarioRows = rows
+    .filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso)
+    .sort((a, b) => compararHorarios(a.horarioCurso, b.horarioCurso) || String(a.salon || '').localeCompare(String(b.salon || '')));
   const selectedRow = horarioRows.find(r => r.horarioCurso === horarioCurso);
   // ¿Algún salón de este curso está sin cupo? Se avisa debajo del dropdown para
   // que se entienda qué significa el "SIN CUPO (provisional)" de las opciones.

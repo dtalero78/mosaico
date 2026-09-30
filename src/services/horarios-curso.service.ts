@@ -1,7 +1,7 @@
 import 'server-only';
 import { query, queryOne } from '@/lib/postgres';
 import { ValidationError, ConflictError, NotFoundError } from '@/lib/errors';
-import { TIPOS_CURSO, parseHorarioRango, horariosFor } from '@/lib/cursos-campaign';
+import { TIPOS_CURSO, parseHorarioRango, horariosFor, compararHorarios } from '@/lib/cursos-campaign';
 import { esTipoCursoValido, nombresTiposCurso } from '@/services/tipos-curso.service';
 import { ids } from '@/lib/id-generator';
 
@@ -51,9 +51,12 @@ export async function catalogoHorarios(): Promise<Record<string, string[]>> {
   try {
     const { rows } = await query<any>(
       `SELECT "tipoCurso", "horario" FROM "HORARIOS_CURSO"
-        WHERE "activo" = true ORDER BY "tipoCurso", "orden", "horario"`
+        WHERE "activo" = true ORDER BY "tipoCurso"`
     );
     for (const r of rows) (out[r.tipoCurso] = out[r.tipoCurso] || []).push(r.horario);
+    // Por día de la semana (lunes primero) y hora, no por el `orden` del seed:
+    // un horario agregado después nace con orden 999 y caía detrás de los sábados.
+    for (const t of Object.keys(out)) out[t].sort(compararHorarios);
   } catch {
     for (const t of TIPOS_CURSO) out[t] = horariosFor(t);
     return out; // sin cachear: que reintente en la próxima
@@ -79,9 +82,11 @@ export async function listarHorarios(): Promise<HorarioCurso[]> {
               WHERE pe."tipoUsuario" = 'BENEFICIARIO'
                 AND pe."tipoCurso" = h."tipoCurso" AND pe."horarioCurso" = h."horario") AS alumnos
        FROM "HORARIOS_CURSO" h
-      ORDER BY h."tipoCurso", h."orden", h."horario"`
+      ORDER BY h."tipoCurso"`
   );
-  return rows.map(r => ({ ...r, orden: Number(r.orden), cursos: Number(r.cursos), alumnos: Number(r.alumnos) }));
+  const lista: HorarioCurso[] = rows.map(r => ({ ...r, orden: Number(r.orden), cursos: Number(r.cursos), alumnos: Number(r.alumnos) }));
+  // Dentro de cada curso, por día de la semana y hora (ver `compararHorarios`).
+  return lista.sort((a, b) => a.tipoCurso.localeCompare(b.tipoCurso) || compararHorarios(a.horario, b.horario));
 }
 
 /**

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
-import { TIPOS_CURSO } from '@/lib/cursos-campaign'
+import { TIPOS_CURSO, compararHorarios } from '@/lib/cursos-campaign'
 
 interface CursoRow {
   campaign: string
@@ -49,9 +49,10 @@ export default function StudentCambioAcademico({ studentId, studentName, current
     const s = new Set(rows.filter(r => r.campaign === campaign).map(r => r.tipoCurso))
     return Array.from(s).sort((a, b) => ordenTipo(a) - ordenTipo(b))
   }, [rows, campaign])
+  // Por día de la semana y hora del horario (lunes primero); el salón desempata.
   const salones = useMemo(
     () => rows.filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso)
-              .sort((a, b) => String(a.salon).localeCompare(String(b.salon))),
+              .sort((a, b) => compararHorarios(a.horarioCurso, b.horarioCurso) || String(a.salon).localeCompare(String(b.salon))),
     [rows, campaign, tipoCurso])
 
   const selectedRow = useMemo(
