@@ -912,6 +912,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Botón "Reagendar"',
     description: 'Mover a otra sesión de bienvenida a un alumno que faltó a la suya. La sesión a la que faltó NO se borra: queda como su historia, y lo que lo saca de la bandeja es tener la nueva.',
   },
+  {
+    code: ServicioPermission.WELCOME_VIDEO_VER,
+    module: Module.SERVICIO,
+    section: 'Welcome Session',
+    name: 'Pestaña "Video Welcome" (ver y enviar)',
+    description: 'Muestra la pestaña Video Welcome: alumnos que faltaron a su segunda sesión de bienvenida sin asistir a ninguna (el tope es 2). Permite enviarles por WhatsApp el enlace al video de bienvenida, de a uno o en bloque; al enviarlo el alumno pasa de WELCOME a su curso real y queda marcado "Enviado". Va al apoderado en cursos de menores.',
+  },
+  {
+    code: ServicioPermission.WELCOME_VIDEO_REEMPLAZAR,
+    module: Module.SERVICIO,
+    section: 'Welcome Session',
+    name: '↳ Reemplazar el video de bienvenida',
+    description: 'Permite subir un video nuevo (MP4) en la pestaña Video Welcome. El enlace que se envía no cambia: desde ese momento muestra el video nuevo, también a quienes ya lo recibieron.',
+  },
 
   // -- Página: Lista Sesiones (/dashboard/servicio/lista-sesiones) --
   {

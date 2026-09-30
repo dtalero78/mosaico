@@ -384,6 +384,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/servicio/welcome-session': [
       ServicioPermission.WELCOME_CARGAR_EVENTOS,
       ServicioPermission.WELCOME_EXPORTAR_CSV,
+      ServicioPermission.WELCOME_VIDEO_VER,
     ],
     '/dashboard/servicio/lista-sesiones': [
       ServicioPermission.SESIONES_CARGAR_EVENTOS,

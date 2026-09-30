@@ -54,9 +54,96 @@ function asistioAlgunaWelcomeSql(ab: string): string {
   )`;
 }
 
+/**
+ * Alumnos que ya van para "Video Welcome" (sus ACADEMICA._id): faltaron a DOS
+ * bienvenidas o más sin asistir a ninguna, y no tienen otra agendada a futuro.
+ * Con el tope de 2 ya no se les puede reagendar: se les envía el video.
+ *
+ * Se calcula en UNA pasada agrupando por alumno (y no con subconsultas por fila,
+ * que dejaban la bandeja de reagendamientos colgada). La usan la pestaña Video
+ * Welcome (para listar) y la de reagendamientos (para NO listarlos): con una
+ * copia en cada una, un alumno podría quedar en las dos o en ninguna.
+ */
+function idsEnVideoWelcomeSql(): string {
+  return `SELECT COALESCE(vb."studentId", vb."idEstudiante") AS id
+      FROM "ACADEMICA_BOOKINGS" vb
+      LEFT JOIN "CALENDARIO" vc ON (vc."_id" = vb."eventoId" OR vc."_id" = vb."idEvento")
+     WHERE ${esWelcomeSql('vb', 'vc')}
+       AND (vb."cancelo" IS NULL OR vb."cancelo" = false)
+       AND COALESCE(vb."studentId", vb."idEstudiante") IS NOT NULL
+     GROUP BY 1
+    HAVING NOT bool_or(vb."asistio" IS TRUE OR vb."asistencia" IS TRUE)
+       AND COUNT(*) FILTER (WHERE COALESCE(vc."dia", vb."fechaEvento") < NOW()) >= 2
+       AND COUNT(*) FILTER (WHERE COALESCE(vc."dia", vb."fechaEvento") >= NOW()) = 0`;
+}
+
 class BookingRepositoryClass extends BaseRepository {
   constructor() {
     super('ACADEMICA_BOOKINGS');
+  }
+
+  /**
+   * Cuántas bienvenidas tiene agendadas el alumno (ACADEMICA._id), SIN contar las
+   * canceladas. Es lo que se compara contra el tope de 2. Acepta el cliente de una
+   * transacción para contar dentro de la misma que va a insertar.
+   */
+  async contarWelcomeAgendados(studentId: string, client?: { query: (sql: string, p?: any[]) => Promise<any> }): Promise<number> {
+    const sql = `SELECT COUNT(*)::int AS n
+       FROM "ACADEMICA_BOOKINGS" ab
+       LEFT JOIN "CALENDARIO" c ON (c."_id" = ab."eventoId" OR c."_id" = ab."idEvento")
+      WHERE (ab."studentId" = $1 OR ab."idEstudiante" = $1)
+        AND (ab."cancelo" IS NULL OR ab."cancelo" = false)
+        AND ${esWelcomeSql('ab', 'c')}`;
+    const r = client ? (await client.query(sql, [studentId])).rows[0] : await queryOne<{ n: number }>(sql, [studentId]);
+    return Number(r?.n || 0);
+  }
+
+  /**
+   * Alumnos de la pestaña "Video Welcome": faltaron a su segunda bienvenida sin
+   * asistir a ninguna. Una fila por alumno, con su ÚLTIMA sesión perdida (la
+   * pestaña agrupa por ella, como la de reagendamientos) y cuántas perdió.
+   */
+  async findWelcomeVideoCandidatos() {
+    return queryMany(
+      `WITH alumnos AS (${idsEnVideoWelcomeSql()})
+       SELECT al.id AS "academicaId",
+              COALESCE(a."primerNombre", p."primerNombre", '') AS "primerNombre",
+              COALESCE(a."primerApellido", p."primerApellido", '') AS "primerApellido",
+              COALESCE(p."numeroId", a."numeroId", '') AS "numeroId",
+              COALESCE(p."contrato", a."contrato", '') AS "contrato",
+              COALESCE(p."celular", a."celular", '') AS "celular",
+              COALESCE(p."campaign", '') AS "campaign",
+              COALESCE(p."tipoCurso", '') AS "tipoCurso",
+              COALESCE(a."curso", '') AS "cursoAcademica",
+              COALESCE(p."apoderado", '') AS "apoderado",
+              COALESCE(p."apoderadoTelefono", '') AS "apoderadoTelefono",
+              ult."fechaEvento", ult."eventoId", ult."modulo", ult."advisorNombre", ult.faltas
+         FROM alumnos al
+         JOIN "ACADEMICA" a ON a."_id" = al.id
+         LEFT JOIN LATERAL (
+           SELECT p2.* FROM "PEOPLE" p2
+            WHERE p2."numeroId" = a."numeroId"
+            ORDER BY CASE WHEN p2."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA') THEN 0 ELSE 1 END
+            LIMIT 1
+         ) p ON TRUE
+         JOIN LATERAL (
+           SELECT COALESCE(c."dia", b."fechaEvento") AS "fechaEvento",
+                  COALESCE(c."_id", b."eventoId", b."idEvento") AS "eventoId",
+                  COALESCE(c."nivel", b."nivel", '') AS "modulo",
+                  COALESCE(g."nombreCompleto", c."advisor", b."advisor", '') AS "advisorNombre",
+                  COUNT(*) OVER ()::int AS faltas
+             FROM "ACADEMICA_BOOKINGS" b
+             LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
+             LEFT JOIN "GUIAS" g ON g."_id" = c."advisor"
+            WHERE (b."studentId" = al.id OR b."idEstudiante" = al.id)
+              AND (b."cancelo" IS NULL OR b."cancelo" = false)
+              AND COALESCE(c."dia", b."fechaEvento") < NOW()
+              AND ${esWelcomeSql('b', 'c')}
+            ORDER BY COALESCE(c."dia", b."fechaEvento") DESC
+            LIMIT 1
+         ) ult ON TRUE
+        ORDER BY ult."fechaEvento" DESC, 3, 2`
+    );
   }
 
   /**
@@ -502,6 +589,9 @@ class BookingRepositoryClass extends BaseRepository {
       `ab."asistio" IS NOT TRUE`,
       `ab."asistencia" IS NOT TRUE`,
       `NOT ${asistioAlgunaWelcomeSql('ab')}`,
+      // Quien ya faltó a dos va a "Video Welcome": con el tope de 2 no se le puede
+      // reagendar, así que aquí sólo haría ruido.
+      `COALESCE(ab."studentId", ab."idEstudiante", '') NOT IN (${idsEnVideoWelcomeSql()})`,
     ];
     const params: any[] = [];
     let i = 1;

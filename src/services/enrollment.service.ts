@@ -11,6 +11,7 @@ import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { eventEndDate } from '@/lib/event-duration';
 import { registrarSolicitudPorAgendamientoDirecto } from '@/services/nivelacion.service';
+import { esEventoWelcome, puedeAgendarOtroWelcome, mensajeTopeWelcome } from '@/lib/welcome-intentos';
 
 interface EnrollInput {
   eventId: string;
@@ -184,6 +185,16 @@ export async function enrollStudents(input: EnrollInput) {
       );
       if (dupCheck.rows.length > 0) {
         throw new ConflictError(`El estudiante ya está inscrito en este evento`);
+      }
+
+      // Tope de bienvenidas: máximo 2 agendamientos WELCOME (sin cancelados), para
+      // todos los roles. Quien faltó a la segunda recibe el video (Servicio ›
+      // Welcome Session › Video Welcome). Se cuenta DENTRO de la transacción.
+      if (esEventoWelcome(event as any)) {
+        const agendados = await BookingRepository.contarWelcomeAgendados(student._id, client);
+        if (!puedeAgendarOtroWelcome(agendados)) {
+          throw new ValidationError(mensajeTopeWelcome(`${student.primerNombre || ''} ${student.primerApellido || ''}`));
+        }
       }
 
       // REGLA MOSAICO (prevalece, sin bypass): el alumno no puede quedar en dos

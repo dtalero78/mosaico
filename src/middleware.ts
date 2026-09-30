@@ -25,6 +25,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/contrato') ||
     pathname.startsWith('/bienvenida') ||
+    // Video de bienvenida: el enlace que se envía por WhatsApp a quien faltó a sus 2 WELCOME.
+    pathname.startsWith('/video-welcome') ||
     pathname.startsWith('/nuevo-usuario') ||
     pathname.startsWith('/nuevo-guia') ||
     pathname.includes('.')

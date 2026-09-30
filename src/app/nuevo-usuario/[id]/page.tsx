@@ -56,6 +56,8 @@ export default function NuevoUsuarioPage() {
   const [student, setStudent] = useState<StudentData | null>(null)
   const [welcomeEvents, setWelcomeEvents] = useState<WelcomeEvent[]>([])
   const [hasWelcomeBooking, setHasWelcomeBooking] = useState(false)
+  // Ya usó sus 2 bienvenidas: no se le ofrece otra (tope de MOSAICO).
+  const [welcomeAgotado, setWelcomeAgotado] = useState(false)
   // Módulo de las sesiones WELCOME ('MOSAICO' | 'IMPULSA'); si viene, se ofrece agendar.
   const [welcomeModule, setWelcomeModule] = useState<string | null>(null)
 
@@ -92,6 +94,7 @@ export default function NuevoUsuarioPage() {
       setStudent(data.student)
       setWelcomeEvents(data.welcomeEvents || [])
       setHasWelcomeBooking(data.hasWelcomeBooking)
+      setWelcomeAgotado(data.welcomeAgotado === true)
       setWelcomeModule(data.welcomeModule || null)
 
       if (data.student.email) setEmail(data.student.email)
@@ -175,7 +178,7 @@ export default function NuevoUsuarioPage() {
     }
 
     // If nivel is WELCOME and no event selected and events are available (skip if noWelcome)
-    if (!noWelcome && !!welcomeModule && !hasWelcomeBooking && welcomeEvents.length > 0 && !selectedEvent) {
+    if (!noWelcome && !!welcomeModule && !hasWelcomeBooking && !welcomeAgotado && welcomeEvents.length > 0 && !selectedEvent) {
       setFormError('Por favor selecciona una fecha para tu sesión Welcome')
       return
     }
@@ -486,7 +489,15 @@ export default function NuevoUsuarioPage() {
           </div>
 
           {/* Welcome Session Dropdown */}
-          {!noWelcome && !!welcomeModule && !hasWelcomeBooking && (
+          {!noWelcome && !!welcomeModule && !hasWelcomeBooking && welcomeAgotado && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-amber-800 text-sm">
+                Ya usaste tus dos sesiones de bienvenida. El equipo de Servicio te enviará el video de bienvenida por WhatsApp.
+              </p>
+            </div>
+          )}
+
+          {!noWelcome && !!welcomeModule && !hasWelcomeBooking && !welcomeAgotado && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Agenda tu sesión Welcome

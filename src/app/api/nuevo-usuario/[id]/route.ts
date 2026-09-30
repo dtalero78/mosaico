@@ -4,6 +4,8 @@ import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
+import { BookingRepository } from '@/repositories/booking.repository';
+import { puedeAgendarOtroWelcome } from '@/lib/welcome-intentos';
 
 // One-time migration: ensure columns exist (idempotent, runs once per server start)
 let migrationDone = false;
@@ -111,6 +113,10 @@ export const GET = handler(async (
     hasWelcomeBooking = !!existingBooking;
   }
 
+  // Tope de 2 bienvenidas (sin canceladas): quien ya las usó no puede agendar otra.
+  const welcomeAgotado = !hasWelcomeBooking
+    && !puedeAgendarOtroWelcome(await BookingRepository.contarWelcomeAgendados(academicId));
+
   return successResponse({
     student: {
       _id: student._id,
@@ -127,7 +133,8 @@ export const GET = handler(async (
       detallesPersonales: student.detallesPersonales || null,
       hobbies: student.hobbies || null,
     },
-    welcomeEvents: welcomeEvents.map(e => ({
+    welcomeAgotado,
+    welcomeEvents: (welcomeAgotado ? [] : welcomeEvents).map(e => ({
       _id: e._id,
       dia: e.dia,
       hora: e.hora,
@@ -335,6 +342,7 @@ export const POST = handler(async (
   // Create WELCOME booking if event selected
   let bookingCreated = false;
   let bookingId: string | null = null;
+  let welcomeAgotado = false;
 
   if (welcomeEventId) {
     // Get the event data
@@ -363,6 +371,10 @@ export const POST = handler(async (
         console.log(`ℹ️ [NuevoUsuario] Booking ya existe para evento ${welcomeEventId}`);
         bookingId = existingBooking._id;
         bookingCreated = false;
+      } else if (!puedeAgendarOtroWelcome(await BookingRepository.contarWelcomeAgendados(academicId))) {
+        // Tope de 2 bienvenidas: el registro sigue, pero sin agendar una tercera.
+        console.warn(`⚠️ [NuevoUsuario] ${academicId} ya usó sus bienvenidas; no se agenda ${welcomeEventId}`);
+        welcomeAgotado = true;
       } else {
         bookingId = ids.booking();
         const eventType = event.tipo || event.evento || 'WELCOME';
@@ -422,5 +434,6 @@ export const POST = handler(async (
     message: 'Registro completado exitosamente',
     bookingCreated,
     bookingId,
+    welcomeAgotado,
   });
 });

@@ -10,6 +10,8 @@ import { campanasActuales, estadosDeCampanas, ESTADO_CURSO_META } from '@/lib/cu
 import { estadoWelcome, pasaFiltroAsistencia, ESTADO_WELCOME_META, type FiltroAsistenciaWelcome } from '@/lib/welcome-asistencia'
 import { coincidePersona } from '@/lib/busqueda-persona'
 import WelcomeReagendamientosTab from '@/components/servicio/WelcomeReagendamientosTab'
+import WelcomeVideoTab from '@/components/servicio/WelcomeVideoTab'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface WelcomeEvent {
   _id: string
@@ -34,7 +36,7 @@ interface WelcomeEvent {
   totalSesionesWelcome?: number
 }
 
-type Tab = 'eventos' | 'reagendamientos'
+type Tab = 'eventos' | 'reagendamientos' | 'video'
 
 /** Valor del desplegable de campaña: el conjunto "actuales" o una campaña concreta. */
 const CAMPANA_ACTUALES = '__actuales__'
@@ -44,6 +46,13 @@ const nombreCompleto = (e: WelcomeEvent) => `${e.primerNombre} ${e.primerApellid
 
 export default function WelcomeSessionPage() {
   const [tab, setTab] = useState<Tab>('eventos')
+  // "Video Welcome" tiene su propio permiso: quien sólo tiene ése entra directo ahí.
+  const { hasPermission, isLoading: permisosCargando } = usePermissions()
+  const verEventos = hasPermission(ServicioPermission.WELCOME_CARGAR_EVENTOS)
+  const verVideo = hasPermission(ServicioPermission.WELCOME_VIDEO_VER)
+  useEffect(() => {
+    if (!permisosCargando && !verEventos && verVideo) setTab('video')
+  }, [permisosCargando, verEventos, verVideo])
   const [welcomeEvents, setWelcomeEvents] = useState<WelcomeEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -195,7 +204,7 @@ export default function WelcomeSessionPage() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard permission={ServicioPermission.WELCOME_CARGAR_EVENTOS}>
+      <PermissionGuard anyPermissions={[ServicioPermission.WELCOME_CARGAR_EVENTOS, ServicioPermission.WELCOME_VIDEO_VER]}>
         <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">📅 Eventos WELCOME</h1>
@@ -205,8 +214,11 @@ export default function WelcomeSessionPage() {
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex gap-6" aria-label="Pestañas">
             {([
-              { id: 'eventos' as Tab, label: 'Eventos WELCOME' },
-              { id: 'reagendamientos' as Tab, label: 'Gestión de Reagendamientos' },
+              ...(verEventos ? [
+                { id: 'eventos' as Tab, label: 'Eventos WELCOME' },
+                { id: 'reagendamientos' as Tab, label: 'Gestión de Reagendamientos' },
+              ] : []),
+              ...(verVideo ? [{ id: 'video' as Tab, label: 'Video Welcome' }] : []),
             ]).map((t) => (
               <button
                 key={t.id}
@@ -223,7 +235,9 @@ export default function WelcomeSessionPage() {
           </nav>
         </div>
 
-        {tab === 'reagendamientos' ? (
+        {tab === 'video' ? (
+          <WelcomeVideoTab estadosCampana={estadosCampana} actuales={actuales} />
+        ) : tab === 'reagendamientos' ? (
           <WelcomeReagendamientosTab estadosCampana={estadosCampana} actuales={actuales} />
         ) : (
         <div className="card">

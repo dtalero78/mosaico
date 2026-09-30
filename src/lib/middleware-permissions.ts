@@ -208,6 +208,7 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/servicio/welcome-session': [
     'SERVICIO.WELCOME.CARGAR_EVENTOS' as Permission,
     'SERVICIO.WELCOME.EXPORTAR_CSV' as Permission,
+    'SERVICIO.WELCOME.VIDEO_VER' as Permission,
   ],
 
   // Servicio - Lista de Sesiones
