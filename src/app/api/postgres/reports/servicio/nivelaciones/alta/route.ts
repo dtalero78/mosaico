@@ -2,9 +2,10 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query, queryOne } from '@/lib/postgres'
-import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors'
+import { ValidationError, NotFoundError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
 import { esHoraNivelacionValida, esDuracionNivelacionValida } from '@/lib/nivelacion-confirmacion'
+import { nivelacionVivaDe, errorNivelacionSinResolver } from '@/services/nivelacion.service'
 
 /**
  * POST /api/postgres/reports/servicio/nivelaciones/alta
@@ -24,7 +25,8 @@ import { esHoraNivelacionValida, esDuracionNivelacionValida } from '@/lib/nivela
  *  - el guía tiene que dictar REALMENTE el salón del alumno, o se estaría
  *    pidiendo una nivelación a nombre de alguien que no le da clase;
  *  - el alumno no puede tener otra nivelación viva (pedida o ya aprobada), o
- *    aparecería dos veces en el flujo y el conteo quedaría inflado.
+ *    aparecería dos veces en el flujo y el conteo quedaría inflado. Es la MISMA
+ *    regla que rige la casilla del guía (`nivelacionVivaDe`).
  */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.NIVELACIONES_GESTION as any)
@@ -46,7 +48,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   if (!motivo) throw new ValidationError('Escribe el motivo de la nivelación')
 
   const alumno = await queryOne<any>(
-    `SELECT a."_id", a."nivelacion", a."aprobadoNivelacion",
+    `SELECT a."_id",
             COALESCE(a."NivelacionCount", 0)::int AS conteo,
             p."tipoCurso", p."salon", p."campaign", p."horarioCurso",
             TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."primerApellido"), '\\s+', ' ', 'g')) AS nombre
@@ -57,12 +59,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   )
   if (!alumno) throw new NotFoundError('ACADEMICA', academicaId)
 
-  if (alumno.nivelacion === true) {
-    throw new ConflictError(`${alumno.nombre} ya tiene una nivelación solicitada sin resolver.`)
-  }
-  if (alumno.aprobadoNivelacion === true) {
-    throw new ConflictError(`${alumno.nombre} ya tiene una nivelación aprobada pendiente de dictarse.`)
-  }
+  const viva = await nivelacionVivaDe(academicaId)
+  if (viva) throw errorNivelacionSinResolver(viva)
 
   // El guía se comprueba contra el curso del alumno, no se confía en el que llegó.
   const guia = await queryOne<any>(
@@ -88,15 +86,25 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     registradoPorEmail: session.user?.email || null,
   }
 
-  await query(
+  // El WHERE repite la condición: si el guía la pidió entre la lectura de arriba
+  // y este UPDATE, no se pisa la suya.
+  const upd = await query(
     `UPDATE "ACADEMICA"
         SET "nivelacion" = true,
             "detalleNivelacion" = $2::jsonb,
             "NivelacionCount" = $3,
             "_updatedDate" = NOW()
-      WHERE "_id" = $1`,
+      WHERE "_id" = $1
+        AND COALESCE("nivelacion", false) = false
+        AND COALESCE("aprobadoNivelacion", false) = false
+      RETURNING "_id"`,
     [academicaId, JSON.stringify(detalle), alumno.conteo + 1]
   )
+  if (!upd.rows.length) {
+    const ahora = await nivelacionVivaDe(academicaId)
+    if (ahora) throw errorNivelacionSinResolver(ahora)
+    throw new ValidationError('No se pudo registrar la nivelación. Vuelve a intentarlo.')
+  }
 
   return successResponse({
     academicaId,

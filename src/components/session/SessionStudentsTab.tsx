@@ -16,6 +16,9 @@ import { isJumpStep as esJumpStep } from '@/lib/motor-academico'
 import {
   HORAS_NIVELACION, DURACIONES_NIVELACION, etiquetaDuracionNivelacion, NOTA_NIVELACION_SUGERIDA,
 } from '@/lib/nivelacion-confirmacion'
+import {
+  ETAPA_NIVELACION_META, TIPO_NIVELACION_SIN_RESOLVER, type NivelacionViva,
+} from '@/lib/nivelacion-viva'
 
 interface CalendarioEvent {
   _id: string
@@ -121,6 +124,46 @@ function SesionAnteriorBadge({ rec }: { rec?: ClassRecord }) {
   )
 }
 
+/** Fecha de una nivelación en la hora de quien la mira (la solicitud, sin hora). */
+function fechaNivelacion(iso: string | null | undefined, conHora = false): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  // Hora en 24 h: "08:28 p. m." termina en punto y la frase quedaba con dos.
+  return d.toLocaleString('es-CL', conHora
+    ? { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }
+    : { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/**
+ * La nivelación sin resolver del usuario, en solo lectura. El guía la ve pero no
+ * la cambia: desde que existe la gestiona el Área de Nivelación.
+ */
+function NivelacionVivaResumen({ viva }: { viva: NivelacionViva }) {
+  const meta = ETAPA_NIVELACION_META[viva.etapa]
+  const datos = [
+    viva.modulo, viva.leccion,
+    viva.hora ? `${viva.hora} sugerida` : null,
+    viva.duracionMin ? etiquetaDuracionNivelacion(viva.duracionMin) : null,
+  ].filter(Boolean).join(' · ')
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-gray-700 space-y-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${meta.clase}`}>
+          En {meta.pestana}
+        </span>
+        <span className="text-xs text-gray-600">{meta.estado}</span>
+      </div>
+      {datos && <p className="font-medium text-gray-900">{datos}</p>}
+      {viva.motivo && <p className="text-xs text-gray-600">Motivo: {viva.motivo}</p>}
+      <p className="text-xs text-gray-600">
+        {viva.fechaSolicitud ? `Solicitada el ${fechaNivelacion(viva.fechaSolicitud)}.` : 'Solicitada.'}
+        {viva.fechaEvento ? ` Agendada para el ${fechaNivelacion(viva.fechaEvento, true)}.` : ''}
+      </p>
+    </div>
+  )
+}
+
 /** Fila de criterio: casilla + ícono + texto (estilo ítem del sidebar). */
 function CritRow({ Icon, checked, onChange, disabled, label }: {
   Icon: ComponentType<{ className?: string }>
@@ -184,7 +227,18 @@ export default function SessionStudentsTab({
   // ningún texto escrito antes se pierde ni se pisa con vacío.
   const [actividadPropuesta, setActividadPropuesta] = useState('')
 
-  // Nivelación (ACADEMICA.nivelacion / detalleNivelacion) — casilla + dropdown de lecciones
+  // Nivelación (ACADEMICA.nivelacion / detalleNivelacion) — casilla + dropdown de lecciones.
+  // El guía SÓLO SOLICITA: lo de abajo es un borrador que no se envía hasta pulsar
+  // «Solicitar nivelación». Una vez pedida no la cambia ni la quita desde aquí.
+  /** La nivelación sin resolver del usuario (en Solicitudes, Agrupaciones o
+   *  Pendientes). Con ella el bloque se muestra en solo lectura. */
+  const [nivelViva, setNivelViva] = useState<NivelacionViva | null>(null)
+  /** Modal "ya tiene una sin resolver". */
+  const [nivelBloqueo, setNivelBloqueo] = useState<NivelacionViva | null>(null)
+  /** Modal de confirmación antes de enviar la solicitud. */
+  const [confirmarNivel, setConfirmarNivel] = useState(false)
+  /** Aviso al guardar el registro con la casilla marcada y la solicitud sin enviar. */
+  const [showNivelSinEnviar, setShowNivelSinEnviar] = useState(false)
   const [nivelacion, setNivelacion] = useState(false)
   const [nivelacionLeccion, setNivelacionLeccion] = useState('')
   /** Módulo elegido para la nivelación. Arranca en el del alumno, pero se puede
@@ -237,61 +291,73 @@ export default function SessionStudentsTab({
       .catch(() => setLecciones([]))
   }, [evento?.nivel])
 
+  /** Deja el borrador de la solicitud en blanco, con el módulo del alumno propuesto. */
+  const limpiarBorradorNivelacion = (modulo: string | null) => {
+    setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo(modulo || '')
+    setNivelacionHora(''); setNivelacionDuracion(''); setNivelacionMotivo('')
+  }
+
   // Cargar estado de nivelación del estudiante seleccionado
   useEffect(() => {
+    setNivelBloqueo(null); setConfirmarNivel(false); setShowNivelSinEnviar(false)
     if (!selectedStudent?._id) {
-      setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo('')
-      setNivelacionHora(''); setNivelacionDuracion(''); setNivelacionMotivo(''); setModuloActual(null); return
+      setNivelViva(null); setModuloActual(null); limpiarBorradorNivelacion(null); return
     }
     fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => {
-        setNivelacion(d.nivelacion === true)
-        setNivelacionLeccion(d.detalleNivelacion?.leccion || '')
+        setNivelViva(d.viva || null)
         setModuloActual(d.moduloActual || null)
-        // Si ya había una nivelación marcada se respeta SU módulo; si no, se
-        // propone el del alumno, que es el caso habitual.
-        setNivelacionModulo(d.detalleNivelacion?.modulo || d.moduloActual || '')
-        setNivelacionHora(d.detalleNivelacion?.hora || '')
-        setNivelacionDuracion(d.detalleNivelacion?.duracionMin ? String(d.detalleNivelacion.duracionMin) : '')
-        setNivelacionMotivo(d.detalleNivelacion?.motivo || '')
+        // El borrador arranca SIEMPRE en blanco. Antes se precargaba con el
+        // detalle guardado, que sigue ahí cuando la nivelación anterior ya se
+        // dictó: marcar la casilla volvía a pedir esa misma lección.
+        limpiarBorradorNivelacion(d.moduloActual || null)
       })
       .catch(() => {
-        setNivelacion(false); setNivelacionLeccion(''); setNivelacionModulo('')
-        setNivelacionHora(''); setNivelacionDuracion(''); setNivelacionMotivo(''); setModuloActual(null)
+        setNivelViva(null); setModuloActual(null); limpiarBorradorNivelacion(null)
       })
   }, [selectedStudent?._id])
 
+  /** Los cuatro datos que hacen falta para pedirla (el módulo acota la lección). */
+  const nivelacionCompleta = !!(nivelacionLeccion && nivelacionHora && nivelacionDuracion && nivelacionMotivo.trim())
+
   /**
-   * Guarda la nivelación. Sólo se manda cuando están los CINCO datos —lección,
-   * módulo, hora, duración y motivo—: son obligatorios, así que una solicitud a
-   * medias no debe llegar a existir. Mientras falte alguno la casilla queda
-   * marcada en pantalla y se avisa qué falta; desmarcarla borra la solicitud
-   * enseguida.
+   * Envía la solicitud. Es el ÚNICO momento en que el panel escribe la
+   * nivelación: el guía solicita, y desde ahí la gestiona el Área de Nivelación.
+   * Si mientras tanto otro la pidió, el servidor responde 409 y se muestra el
+   * aviso con la que encontró.
    */
-  const saveNivelacion = async (
-    checked: boolean, modulo: string, leccion: string, hora: string, duracion: string, motivo: string,
-  ) => {
-    if (!selectedStudent?._id) return
-    if (checked && !(leccion && hora && duracion && motivo.trim())) return   // incompleta: aún no se manda
+  const solicitarNivelacion = async () => {
+    if (!selectedStudent?._id || !nivelacionCompleta) return
     setSavingNivel(true)
     try {
-      const r = await fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, {
+      const res = await fetch(`/api/postgres/students/${selectedStudent._id}/nivelacion`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          nivelacion: checked,
-          leccion: checked ? leccion : null,
-          modulo: checked && modulo ? modulo : null,
-          hora: checked ? hora : null,
-          duracionMin: checked ? Number(duracion) : null,
-          motivo: checked ? motivo.trim() : null,
+          nivelacion: true,
+          leccion: nivelacionLeccion,
+          modulo: nivelacionModulo || null,
+          hora: nivelacionHora,
+          duracionMin: Number(nivelacionDuracion),
+          motivo: nivelacionMotivo.trim(),
         }),
-      }).then(x => x.json())
-      if (r.error) throw new Error(r.error)
-      toast.success(checked ? 'Nivelación solicitada' : 'Nivelación quitada')
+      })
+      const r = await res.json().catch(() => ({} as any))
+      if (res.status === 409 && r?.detail?.tipo === TIPO_NIVELACION_SIN_RESOLVER) {
+        setConfirmarNivel(false)
+        setNivelViva(r.detail)
+        setNivelBloqueo(r.detail)
+        limpiarBorradorNivelacion(moduloActual)
+        return
+      }
+      if (!res.ok || r?.error) throw new Error(r?.error || 'Error al solicitar la nivelación')
+      setConfirmarNivel(false)
+      setNivelViva(r.viva || null)
+      limpiarBorradorNivelacion(moduloActual)
+      toast.success('Nivelación solicitada')
     } catch (e: any) {
-      toast.error(e?.message || 'Error al guardar nivelación')
+      toast.error(e?.message || 'Error al solicitar la nivelación')
     } finally {
       setSavingNivel(false)
     }
@@ -405,8 +471,15 @@ export default function SessionStudentsTab({
     }
   }
 
-  const handleSaveClassRecord = async () => {
+  const handleSaveClassRecord = async (opts: { sinNivelacion?: boolean } = {}) => {
     if (!selectedStudent) return
+    // La nivelación ya no se guarda sola al llenar los datos: se envía con su
+    // propio botón. Si el guía marcó la casilla y va a guardar el registro sin
+    // haberla solicitado, se le avisa — si no, creería que quedó pedida.
+    if (!opts.sinNivelacion && !esNivelacionEvent && !esImpulsa && nivelacion && !nivelViva) {
+      setShowNivelSinEnviar(true)
+      return
+    }
     // Evento tipo NIVELACION: el guardado CIERRA la nivelación.
     //  - Asistió Y Participó → modal de comentario obligatorio → REALIZADA.
     //  - Ninguna → no asistió (guarda directo; backend limpia detalle y baja conteo).
@@ -626,20 +699,29 @@ export default function SessionStudentsTab({
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={nivelacion}
+                        // Con una nivelación sin resolver la casilla se ve marcada
+                        // y no cambia: tocarla abre el aviso, no pide otra.
+                        checked={nivelViva ? true : nivelacion}
                         onChange={(e) => {
+                          if (nivelViva) { setNivelBloqueo(nivelViva); return }
                           const c = e.target.checked
-                          setNivelacion(c)
-                          if (!c) { setNivelacionLeccion(''); setNivelacionHora(''); setNivelacionDuracion(''); setNivelacionMotivo('') }
-                          saveNivelacion(c, c ? nivelacionModulo : '', c ? nivelacionLeccion : '',
-                            c ? nivelacionHora : '', c ? nivelacionDuracion : '', c ? nivelacionMotivo : '')
+                          if (c) setNivelacion(true)
+                          else limpiarBorradorNivelacion(moduloActual)
                         }}
                         className="w-5 h-5 text-amber-600 rounded focus:ring-amber-500"
                       />
                       <span className="text-gray-700 font-medium">Nivelación</span>
-                      {savingNivel && <span className="text-xs text-gray-400">guardando…</span>}
+                      {savingNivel && <span className="text-xs text-gray-400">enviando…</span>}
                     </label>
-                    {(() => {
+                    {nivelViva && (
+                      <div className="mt-2 ml-8 w-[calc(100%-2rem)] space-y-1">
+                        <NivelacionVivaResumen viva={nivelViva} />
+                        <p className="text-xs text-gray-500">
+                          No se puede solicitar otra hasta que esta se resuelva. La gestiona el Área de Nivelación.
+                        </p>
+                      </div>
+                    )}
+                    {!nivelViva && (() => {
                       // Módulo y lección se eligen APARTE: la nivelación puede ser
                       // sobre cualquier punto del curso, no sólo sobre el módulo en
                       // que va el alumno (arrastra algo de un módulo anterior). El
@@ -655,13 +737,11 @@ export default function SessionStudentsTab({
                           <select
                             value={nivelacionModulo}
                             onChange={(e) => {
-                              const m = e.target.value
-                              setNivelacionModulo(m)
+                              setNivelacionModulo(e.target.value)
                               // Al cambiar de módulo la lección deja de pertenecerle:
-                              // se limpia y se guarda así, para que lo registrado no
-                              // contradiga al módulo elegido.
+                              // se limpia, para que lo que se pida no contradiga al
+                              // módulo elegido.
                               setNivelacionLeccion('')
-                              if (nivelacion) saveNivelacion(true, m, '', nivelacionHora, nivelacionDuracion, nivelacionMotivo)
                             }}
                             disabled={!nivelacion || !modulos.length}
                             className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -673,7 +753,7 @@ export default function SessionStudentsTab({
                           </select>
                           <select
                             value={nivelacionLeccion}
-                            onChange={(e) => { const v = e.target.value; setNivelacionLeccion(v); saveNivelacion(true, nivelacionModulo, v, nivelacionHora, nivelacionDuracion, nivelacionMotivo) }}
+                            onChange={(e) => setNivelacionLeccion(e.target.value)}
                             disabled={!nivelacion || !leccionesModulo.length}
                             className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                           >
@@ -685,7 +765,7 @@ export default function SessionStudentsTab({
                               a mano cada guía la pondría a su manera. */}
                           <select
                             value={nivelacionHora}
-                            onChange={(e) => { const v = e.target.value; setNivelacionHora(v); saveNivelacion(true, nivelacionModulo, nivelacionLeccion, v, nivelacionDuracion, nivelacionMotivo) }}
+                            onChange={(e) => setNivelacionHora(e.target.value)}
                             disabled={!nivelacion}
                             aria-label="Hora sugerida"
                             className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -698,7 +778,7 @@ export default function SessionStudentsTab({
                               cuánto dura de verdad al agrupar. */}
                           <select
                             value={nivelacionDuracion}
-                            onChange={(e) => { const v = e.target.value; setNivelacionDuracion(v); saveNivelacion(true, nivelacionModulo, nivelacionLeccion, nivelacionHora, v, nivelacionMotivo) }}
+                            onChange={(e) => setNivelacionDuracion(e.target.value)}
                             disabled={!nivelacion}
                             aria-label="Duración sugerida"
                             className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -706,29 +786,42 @@ export default function SessionStudentsTab({
                             <option value="">— Duración sugerida —</option>
                             {DURACIONES_NIVELACION.map(d => <option key={d} value={String(d)}>{etiquetaDuracionNivelacion(d)}</option>)}
                           </select>
-                          {/* El motivo se guarda al salir del campo, no en cada tecla. */}
                           <input
                             type="text"
                             value={nivelacionMotivo}
                             onChange={(e) => setNivelacionMotivo(e.target.value)}
-                            onBlur={() => { if (nivelacion) saveNivelacion(true, nivelacionModulo, nivelacionLeccion, nivelacionHora, nivelacionDuracion, nivelacionMotivo) }}
                             disabled={!nivelacion}
                             maxLength={300}
                             placeholder="Motivo de la nivelación"
                             className="sm:col-span-2 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                           />
-                          {nivelacion && !(nivelacionLeccion && nivelacionHora && nivelacionDuracion && nivelacionMotivo.trim()) && (
+                          {nivelacion && !nivelacionCompleta && (
                             <p className="sm:col-span-2 text-xs text-amber-700">
                               Falta {[
                                 !nivelacionLeccion ? 'la lección' : null,
                                 !nivelacionHora ? 'la hora sugerida' : null,
                                 !nivelacionDuracion ? 'la duración sugerida' : null,
                                 !nivelacionMotivo.trim() ? 'el motivo' : null,
-                              ].filter(Boolean).join(', ')} — la nivelación se guarda cuando estén los cuatro.
+                              ].filter(Boolean).join(', ')} — completa los cuatro datos para poder solicitarla.
                             </p>
                           )}
                           {nivelacion && (
                             <p className="sm:col-span-2 text-xs text-gray-500">{NOTA_NIVELACION_SUGERIDA}</p>
+                          )}
+                          {/* La solicitud NO se envía sola: va con este botón y una
+                              confirmación, porque el guía no puede corregirla después. */}
+                          {nivelacion && (
+                            <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setConfirmarNivel(true)}
+                                disabled={!nivelacionCompleta || savingNivel}
+                                className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Solicitar nivelación
+                              </button>
+                              <span className="text-xs text-amber-700">Todavía no está solicitada.</span>
+                            </div>
                           )}
                         </div>
                       )
@@ -800,7 +893,7 @@ export default function SessionStudentsTab({
             <div className="bg-white rounded-lg shadow-sm p-6">
               <button
                 type="button"
-                onClick={handleSaveClassRecord}
+                onClick={() => handleSaveClassRecord()}
                 disabled={isLocked}
                 className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
               >
@@ -841,6 +934,103 @@ export default function SessionStudentsTab({
                 disabled={!escusaModal.trim()}
                 className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
                 Guardar motivo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: el usuario ya tiene una nivelación sin resolver. Sale al tocar la
+          casilla y también si el servidor rechaza la solicitud (otro la pidió
+          mientras el guía llenaba la suya). */}
+      {nivelBloqueo && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <ExclamationTriangleIcon className="h-6 w-6 text-amber-500" />
+              No se puede solicitar la nivelación
+            </h3>
+            <p className="text-sm text-gray-700 mb-3">
+              <strong>
+                {nivelBloqueo.nombre
+                  || `${selectedStudent?.primerNombre || ''} ${selectedStudent?.primerApellido || ''}`.trim()
+                  || 'El usuario'}
+              </strong>{' '}
+              ya tiene una nivelación <strong>sin resolver</strong>. No se puede generar otra hasta que esa se
+              dicte, se cancele o se cierre.
+            </p>
+            <NivelacionVivaResumen viva={nivelBloqueo} />
+            <p className="text-xs text-gray-500 mt-3">
+              La gestiona el Área de Nivelación. Si hay que cambiarla o quitarla, consulta con ellos.
+            </p>
+            <div className="flex justify-end mt-4">
+              <button type="button" onClick={() => setNivelBloqueo(null)}
+                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700">
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: confirmar la solicitud. Se pide confirmación porque el guía no
+          puede cambiarla ni quitarla después. */}
+      {confirmarNivel && selectedStudent && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Solicitar nivelación</h3>
+            <p className="text-sm text-gray-700 mb-3">
+              Vas a solicitar una nivelación para{' '}
+              <strong>{`${selectedStudent.primerNombre || ''} ${selectedStudent.primerApellido || ''}`.trim()}</strong>:
+            </p>
+            <dl className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
+              <dt className="text-gray-500">Módulo</dt><dd className="text-gray-900">{nivelacionModulo || '—'}</dd>
+              <dt className="text-gray-500">Lección</dt><dd className="text-gray-900">{nivelacionLeccion}</dd>
+              <dt className="text-gray-500">Hora sugerida</dt><dd className="text-gray-900">{nivelacionHora}</dd>
+              <dt className="text-gray-500">Duración sugerida</dt>
+              <dd className="text-gray-900">{etiquetaDuracionNivelacion(Number(nivelacionDuracion))}</dd>
+              <dt className="text-gray-500">Motivo</dt><dd className="text-gray-900 break-words">{nivelacionMotivo.trim()}</dd>
+            </dl>
+            <p className="text-xs text-amber-700 mt-3">
+              Una vez solicitada no podrás cambiarla ni quitarla desde aquí: la gestiona el Área de Nivelación.
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <button type="button" onClick={() => setConfirmarNivel(false)} disabled={savingNivel}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
+                Volver
+              </button>
+              <button type="button" onClick={solicitarNivelacion} disabled={savingNivel || !nivelacionCompleta}
+                className="px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {savingNivel ? 'Enviando…' : 'Solicitar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso: va a guardar el registro con la casilla de Nivelación marcada y
+          la solicitud sin enviar. */}
+      {showNivelSinEnviar && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">⚠️ Nivelación sin solicitar</h3>
+            <p className="text-sm text-gray-700 mb-4">
+              Marcaste <strong>Nivelación</strong> pero todavía no la has solicitado. Guardar el registro
+              <strong> no la envía</strong>: se solicita con el botón <strong>Solicitar nivelación</strong>.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowNivelSinEnviar(false)}
+                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700">
+                Volver a solicitarla
+              </button>
+              <button type="button"
+                onClick={() => {
+                  setShowNivelSinEnviar(false)
+                  limpiarBorradorNivelacion(moduloActual)
+                  handleSaveClassRecord({ sinNivelacion: true })
+                }}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded hover:bg-gray-200">
+                Guardar sin nivelación
               </button>
             </div>
           </div>

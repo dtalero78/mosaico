@@ -6,11 +6,16 @@ import { NotFoundError, ValidationError } from '@/lib/errors'
 import { requirePermission } from '@/lib/api-permissions'
 import { ServicioPermission } from '@/types/permissions'
 import { esHoraNivelacionValida, esDuracionNivelacionValida } from '@/lib/nivelacion-confirmacion'
+import { armarNivelacionViva } from '@/lib/nivelacion-viva'
+import { nivelacionVivaDe, errorNivelacionSinResolver } from '@/services/nivelacion.service'
 
 /**
  * GET /api/postgres/students/[id]/nivelacion
  * Devuelve el estado de nivelación del estudiante (ACADEMICA):
- *   { nivelacion: boolean, detalleNivelacion: any }
+ *   { nivelacion: boolean, detalleNivelacion: any, viva, ... }
+ * `viva` es la nivelación sin resolver (con la pestaña en la que está) o `null`:
+ * con ella el panel del guía muestra la solicitud en solo lectura en vez de
+ * dejar pedir otra.
  * [id] resuelve por _id/studentId/peopleId/numeroId (findByAnyId).
  */
 export const GET = handlerWithAuth(async (_req, { params }, _session) => {
@@ -32,6 +37,7 @@ export const GET = handlerWithAuth(async (_req, { params }, _session) => {
   return successResponse({
     nivelacion: row?.nivelacion ?? false,
     detalleNivelacion: row?.detalleNivelacion ?? null,
+    viva: await nivelacionVivaDe(rec._id),
     historial: Array.isArray(row?.NivelacionHistory) ? row!.NivelacionHistory : [],
     moduloActual,
     curso: row?.tipoCurso || row?.a_curso || null,
@@ -45,7 +51,12 @@ export const GET = handlerWithAuth(async (_req, { params }, _session) => {
  * ACADEMICA.detalleNivelacion (jsonb: { leccion, modulo, hora, duracionMin,
  * motivo, fecha, marcadoPor }). `hora` y `duracionMin` son SUGERIDAS por el
  * guía: la duración real la fija el Área de Nivelación al crear el evento.
- * Al desmarcar (nivelacion=false) se limpia detalleNivelacion.
+ *
+ * El guía SÓLO SOLICITA. Con una nivelación viva (en Solicitudes, Agrupaciones
+ * o Pendientes) la marca se rechaza con 409 y `detail.tipo =
+ * 'nivelacion_sin_resolver'` — tanto pedir otra como cambiar o quitar la que
+ * hay: desde que existe la gestiona el Área de Nivelación (`aprobar`,
+ * `cancelar`, `confirmar`, y devolver/remover/cerrar en sus endpoints).
  */
 export const PATCH = handlerWithAuth(async (request, { params }, session) => {
   const rec: any = await AcademicaRepository.findByAnyId(params.id)
@@ -64,6 +75,7 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
   // (nivelacion=false) y queda marcado aprobadoNivelacion=true. Se CONSERVA el conteo
   // y el detalle (registro), para que la próxima nivelación incremente a la 2ª.
   if (body?.aprobar === true) {
+    await requirePermission(session, ServicioPermission.NIVELACIONES_GESTION as any)
     await query(
       `UPDATE "ACADEMICA" SET "nivelacion" = false, "aprobadoNivelacion" = true, "_updatedDate" = NOW() WHERE "_id" = $1`,
       [rec._id]
@@ -97,6 +109,7 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
 
   // Acción CANCELAR (reporte) → quita la nivelación pendiente (decrementa el conteo)
   if (body?.cancelar === true) {
+    await requirePermission(session, ServicioPermission.NIVELACIONES_GESTION as any)
     const nc = Math.max(0, curCount - (curNivel ? 1 : 0))
     await query(
       `UPDATE "ACADEMICA" SET "nivelacion" = false, "detalleNivelacion" = NULL, "NivelacionCount" = $2, "_updatedDate" = NOW() WHERE "_id" = $1`,
@@ -115,33 +128,53 @@ export const PATCH = handlerWithAuth(async (request, { params }, session) => {
   const duracionMin = body?.duracionMin == null || body?.duracionMin === '' ? null : Number(body.duracionMin)
   const motivo = (body?.motivo || '').trim() || null
 
+  // Con una nivelación viva el guía no puede pedir otra, ni cambiar o quitar la
+  // que hay. Va ANTES de validar los datos: lo que hay que decirle es que ya
+  // tiene una, no que le falta la lección.
+  const viva = await nivelacionVivaDe(rec._id)
+  if (viva) throw errorNivelacionSinResolver(viva)
+
+  // Sin nivelación viva no hay nada que quitar. No se toca la fila: el detalle
+  // que quede de una nivelación ya cerrada es historia, no una solicitud.
+  if (!nivelacion) {
+    return successResponse({ nivelacion: false, detalleNivelacion: null, NivelacionCount: curCount, viva: null })
+  }
+
   // Pedir una nivelación exige decir SOBRE QUÉ, A QUÉ HORA, CUÁNTO TIEMPO y POR
   // QUÉ: sin hora y duración Servicio no puede armar los grupos, y sin el motivo
   // la solicitud llega sin contexto a quien la gestiona. Hora y duración son
   // sugeridas (el Área de Nivelación decide), pero igual se exigen. Se valida
   // aquí y no sólo en el panel.
-  if (nivelacion) {
-    if (!leccion) throw new ValidationError('Elige la lección de la nivelación')
-    if (!esHoraNivelacionValida(hora)) throw new ValidationError('Elige una hora sugerida válida para la nivelación')
-    if (!esDuracionNivelacionValida(duracionMin)) throw new ValidationError('Elige la duración sugerida de la nivelación (entre 30 minutos y 1 hora)')
-    if (!motivo) throw new ValidationError('Escribe el motivo de la nivelación')
+  if (!leccion) throw new ValidationError('Elige la lección de la nivelación')
+  if (!esHoraNivelacionValida(hora)) throw new ValidationError('Elige una hora sugerida válida para la nivelación')
+  if (!esDuracionNivelacionValida(duracionMin)) throw new ValidationError('Elige la duración sugerida de la nivelación (entre 30 minutos y 1 hora)')
+  if (!motivo) throw new ValidationError('Escribe el motivo de la nivelación')
+
+  const detalle = { leccion, modulo, hora, duracionMin, motivo, fecha: new Date().toISOString(), marcadoPor: session.user?.email || null }
+
+  // El WHERE repite la condición: si otro la pidió entre la lectura de arriba y
+  // este UPDATE, no se pisa la suya.
+  const upd = await query<{ NivelacionCount: number | null }>(
+    `UPDATE "ACADEMICA"
+        SET "nivelacion" = true, "detalleNivelacion" = $2::jsonb,
+            "NivelacionCount" = COALESCE("NivelacionCount", 0) + 1, "_updatedDate" = NOW()
+      WHERE "_id" = $1
+        AND COALESCE("nivelacion", false) = false
+        AND COALESCE("aprobadoNivelacion", false) = false
+      RETURNING "NivelacionCount"`,
+    [rec._id, JSON.stringify(detalle)]
+  )
+  if (!upd.rows.length) {
+    const ahora = await nivelacionVivaDe(rec._id)
+    if (ahora) throw errorNivelacionSinResolver(ahora)
+    throw new ValidationError('No se pudo registrar la nivelación. Vuelve a intentarlo.')
   }
 
-  const detalle = nivelacion && leccion
-    ? { leccion, modulo, hora, duracionMin, motivo, fecha: new Date().toISOString(), marcadoPor: session.user?.email || null }
-    : null
-
-  // Conteo: +1 al pasar de false→true, -1 al pasar de true→false
-  let nuevoCount = curCount
-  if (nivelacion && !curNivel) nuevoCount = curCount + 1
-  else if (!nivelacion && curNivel) nuevoCount = Math.max(0, curCount - 1)
-
-  await query(
-    `UPDATE "ACADEMICA"
-       SET "nivelacion" = $2, "detalleNivelacion" = $3::jsonb, "NivelacionCount" = $4, "_updatedDate" = NOW()
-     WHERE "_id" = $1`,
-    [rec._id, nivelacion, detalle ? JSON.stringify(detalle) : null, nuevoCount]
-  )
-
-  return successResponse({ nivelacion, detalleNivelacion: detalle, NivelacionCount: nuevoCount })
+  const pedida = await nivelacionVivaDe(rec._id)
+  return successResponse({
+    nivelacion: true,
+    detalleNivelacion: detalle,
+    NivelacionCount: Number(upd.rows[0].NivelacionCount) || curCount + 1,
+    viva: pedida ?? armarNivelacionViva({ nivelacion: true, detalle }),
+  })
 })

@@ -1,9 +1,65 @@
 import 'server-only';
 import { query, queryOne } from '@/lib/postgres';
+import { ConflictError } from '@/lib/errors';
+import {
+  armarNivelacionViva, mensajeNivelacionSinResolver, TIPO_NIVELACION_SIN_RESOLVER,
+  type NivelacionViva,
+} from '@/lib/nivelacion-viva';
+import { agendamientoDeNivelacionActualDe } from '@/services/nivelacion-agendada.service';
 
 /** Lo mínimo que se necesita del cliente de la transacción (evita importar `pg`). */
 interface ClienteSql {
   query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number | null }>
+}
+
+/**
+ * La nivelación viva del usuario (pedida o aprobada, sin cerrar), con la pestaña
+ * en la que está. `null` si no tiene ninguna.
+ *
+ * Que ya tenga evento se resuelve con la misma regla que parte Agrupaciones de
+ * Pendientes (`agendamientoDeNivelacionActualDe`): sólo cuenta el agendamiento
+ * creado después de la solicitud.
+ */
+export async function nivelacionVivaDe(academicaId: string): Promise<NivelacionViva | null> {
+  const row = await queryOne<any>(
+    `SELECT a."nivelacion", a."aprobadoNivelacion", a."detalleNivelacion",
+            TRIM(REGEXP_REPLACE(CONCAT_WS(' ',
+              COALESCE(NULLIF(TRIM(p."primerNombre"), ''), a."primerNombre"),
+              COALESCE(NULLIF(TRIM(p."primerApellido"), ''), a."primerApellido")), '\\s+', ' ', 'g')) AS nombre
+       FROM "ACADEMICA" a
+       LEFT JOIN "PEOPLE" p ON p."_id" = a."peopleId"
+      WHERE a."_id" = $1`,
+    [academicaId]
+  );
+  if (!row || (row.nivelacion !== true && row.aprobadoNivelacion !== true)) return null;
+
+  let agendamiento = null;
+  if (row.aprobadoNivelacion === true) {
+    const det = row.detalleNivelacion && typeof row.detalleNivelacion === 'object' ? row.detalleNivelacion : null;
+    agendamiento = await agendamientoDeNivelacionActualDe(academicaId, det?.fecha ?? null);
+  }
+  return armarNivelacionViva({
+    nivelacion: row.nivelacion,
+    aprobadoNivelacion: row.aprobadoNivelacion,
+    detalle: row.detalleNivelacion,
+    nombre: row.nombre,
+    tieneEvento: !!agendamiento,
+    fechaEvento: agendamiento?.eventoDia ?? null,
+  });
+}
+
+/** El 409 de "ya tiene una sin resolver", con el detalle que abre el modal. */
+export function errorNivelacionSinResolver(viva: NivelacionViva): ConflictError {
+  return new ConflictError(mensajeNivelacionSinResolver(viva), { tipo: TIPO_NIVELACION_SIN_RESOLVER, ...viva });
+}
+
+/**
+ * Rechaza pedir una nivelación a quien ya tiene una viva. Lo usan las DOS vías
+ * que crean una solicitud a mano: la casilla del guía y el alta de Servicio.
+ */
+export async function assertSinNivelacionViva(academicaId: string): Promise<void> {
+  const viva = await nivelacionVivaDe(academicaId);
+  if (viva) throw errorNivelacionSinResolver(viva);
 }
 
 /**
