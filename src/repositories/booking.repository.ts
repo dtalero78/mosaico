@@ -850,8 +850,16 @@ class BookingRepositoryClass extends BaseRepository {
   async findScheduleConflict(
     studentId: string,
     startISO: string,
-    endISO: string
+    endISO: string,
+    /** Sólo cuenta los cruces con agendamientos de este tipo (p.ej. un taller sólo choca con otro taller). */
+    soloTipo?: string
   ): Promise<{ _id: string; nombreEvento: string | null; ts: string; tipo: string | null } | null> {
+    const params: any[] = [studentId, startISO, endISO];
+    let filtroTipo = '';
+    if (soloTipo) {
+      params.push(soloTipo.toUpperCase());
+      filtroTipo = `AND UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = $4`;
+    }
     const row = await queryOne<{ _id: string; nombreEvento: string | null; ts: string; tipo: string | null }>(
       `SELECT b."_id", b."nombreEvento", b."fechaEvento"::text AS ts,
               COALESCE(b."tipo", b."tipoEvento") AS tipo
@@ -861,9 +869,10 @@ class BookingRepositoryClass extends BaseRepository {
          AND b."fechaEvento" < $3::timestamptz
          AND b."fechaEvento" + (CASE WHEN UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = 'NIVELACION'
                                      THEN interval '30 minutes' ELSE interval '60 minutes' END) > $2::timestamptz
+         ${filtroTipo}
        ORDER BY b."fechaEvento"
        LIMIT 1`,
-      [studentId, startISO, endISO]
+      params
     );
     return row ?? null;
   }

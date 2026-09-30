@@ -87,6 +87,21 @@ export function agendamientoSeCruza(
 }
 
 /**
+ * ¿El cruce se PERMITE? Sólo un TALLER (CLUB) puede agendarse encima de otra
+ * clase del alumno: se conecta con dos dispositivos, uno por evento, para que
+ * no se le marque ausente en su sesión. Un taller encima de otro taller sigue
+ * rechazándose (no se puede estar en dos talleres), igual que cualquier cruce
+ * de los demás tipos, incluidas las olimpiadas.
+ */
+export function crucePermitido(
+  eventoTipo?: string | null,
+  agendamientoTipo?: string | null,
+): boolean {
+  return String(eventoTipo || '').toUpperCase() === 'CLUB'
+    && String(agendamientoTipo || '').toUpperCase() !== 'CLUB';
+}
+
+/**
  * Rango "HH:mm – HH:mm" (inicio – fin) en la hora LOCAL del navegador.
  * `fmt` permite otro patrón de date-fns (default 'HH:mm', 24h).
  */

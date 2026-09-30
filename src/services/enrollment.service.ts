@@ -200,8 +200,11 @@ export async function enrollStudents(input: EnrollInput) {
       // REGLA MOSAICO (prevalece, sin bypass): el alumno no puede quedar en dos
       // eventos que se CRUCEN en el tiempo — también cuando lo agenda un admin.
       // Solape real por duración (NIVELACION=30 min, resto=60).
+      // EXCEPCIÓN (2026-09-30), la misma del panel del alumno (`crucePermitido`):
+      // un TALLER puede quedar encima de otra clase; sólo choca con otro taller.
       const evStart = new Date(event.dia);
       const evEnd = eventEndDate(evStart, event.tipo || event.evento || '', event.nombreEvento, (event as any).duracionMin);
+      const esTaller = String(event.tipo || event.evento || '').toUpperCase() === 'CLUB';
       const overlap = await client.query(
         `SELECT b."nombreEvento", b."fechaEvento"::text AS ts
          FROM "ACADEMICA_BOOKINGS" b
@@ -210,8 +213,9 @@ export async function enrollStudents(input: EnrollInput) {
            AND b."fechaEvento" < $3::timestamptz
            AND b."fechaEvento" + (CASE WHEN UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = 'NIVELACION'
                                        THEN interval '30 minutes' ELSE interval '60 minutes' END) > $2::timestamptz
+           AND ($4::boolean = false OR UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = 'CLUB')
          LIMIT 1`,
-        [student._id, evStart.toISOString(), evEnd.toISOString()]
+        [student._id, evStart.toISOString(), evEnd.toISOString(), esTaller]
       );
       if (overlap.rows.length > 0) {
         const c = overlap.rows[0];

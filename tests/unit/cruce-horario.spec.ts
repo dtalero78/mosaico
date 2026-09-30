@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { agendamientoSeCruza, eventEndDate } from '@/lib/event-duration';
+import { agendamientoSeCruza, eventEndDate, crucePermitido } from '@/lib/event-duration';
 
 /**
  * Cuándo un taller se cruza con una clase que el alumno ya tiene.
@@ -58,5 +58,24 @@ test.describe('Cruce de un taller con la clase del alumno', () => {
   test('sin tipo se asume una hora', () => {
     expect(agendamientoSeCruza(TALLER, FIN, a('18:45'), null)).toBe(true);
     expect(agendamientoSeCruza(TALLER, FIN, a('18:30'), undefined)).toBe(false);
+  });
+});
+
+test.describe('crucePermitido — el taller se deja agendar encima de otra clase', () => {
+  test('taller encima de una sesión, nivelación o bienvenida: permitido', () => {
+    expect(crucePermitido('CLUB', 'SESSION')).toBe(true);
+    expect(crucePermitido('club', 'NIVELACION')).toBe(true);
+    expect(crucePermitido('CLUB', 'WELCOME')).toBe(true);
+    expect(crucePermitido('CLUB', null)).toBe(true);
+  });
+  test('taller encima de otro taller: bloqueado', () => {
+    expect(crucePermitido('CLUB', 'CLUB')).toBe(false);
+    expect(crucePermitido('CLUB', 'club')).toBe(false);
+  });
+  test('olimpiada y los demás tipos: el cruce sigue bloqueado', () => {
+    expect(crucePermitido('OLIMPIADA', 'SESSION')).toBe(false);
+    expect(crucePermitido('SESSION', 'CLUB')).toBe(false);
+    expect(crucePermitido('NIVELACION', 'SESSION')).toBe(false);
+    expect(crucePermitido(null, 'SESSION')).toBe(false);
   });
 });

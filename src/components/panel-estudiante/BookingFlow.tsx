@@ -43,15 +43,24 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
   const nombreTipo =
     initialTipo === 'CLUB' ? 'este taller' : initialTipo === 'OLIMPIADA' ? 'esta olimpiada' : 'este evento'
 
-  // Eventos del día que se cruzan con una clase del alumno. No se pueden agendar
-  // (la regla de cruce no cambia): se avisa con quién coincide y a quién acudir.
+  // Eventos del día que se cruzan con una clase del alumno. Se avisa con quién
+  // coincide. Un TALLER sí se puede agendar igual (`crucePermitido`: el alumno
+  // se conecta con dos dispositivos); el resto —olimpiadas, o un taller encima
+  // de otro taller— sigue bloqueado y remite al Área Académica.
   // Si el mismo día trae los dos avisos, éste sale después del de inscripción.
   const cruces = events.filter((e: any) => e.cruceHorario && !e.yaInscrito)
+  const crucesPermitidos = cruces.filter((e: any) => e.crucePermitido)
+  const todosPermitidos = cruces.length > 0 && crucesPermitidos.length === cruces.length
   const [avisoCruceCerradoPara, setAvisoCruceCerradoPara] = useState('')
   const mostrarAvisoCruce =
     step === 'events' && !isLoading && cruces.length > 0 && !mostrarAvisoInscrito &&
     avisoCruceCerradoPara !== selectedDate
   const alumno: string = data?.alumno || ''
+  // Los que de verdad se pueden agendar desde el aviso (cruce permitido, con
+  // cupo y a tiempo). Con uno solo, «Inscribirse» lleva directo a confirmarlo.
+  const crucesInscribibles = crucesPermitidos.filter((e: any) => !e.cupoLleno && !e.tiempoInsuficiente)
+  const textoDosDispositivos =
+    `Debe contar con dos dispositivos para conectarse, para que no se le marque ausente a ${alumno || 'el usuario'}.`
   const elTipo =
     initialTipo === 'CLUB' ? 'El taller' : initialTipo === 'OLIMPIADA' ? 'La olimpiada' : 'El evento'
 
@@ -317,7 +326,7 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                 <div className="space-y-2">
                   {events.map((evt: any) => {
                     const eventDate = new Date(evt.dia)
-                    const isDisabled = evt.cupoLleno || evt.yaInscrito || evt.tiempoInsuficiente || evt.cruceHorario
+                    const isDisabled = evt.cupoLleno || evt.yaInscrito || evt.tiempoInsuficiente || (evt.cruceHorario && !evt.crucePermitido)
                     const tipoColor = evt.esESS
                       ? 'border-l-orange-400'
                       : evt.tipo === 'SESSION'
@@ -360,10 +369,10 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                           <div className="text-right">
                             {evt.yaInscrito ? (
                               <span className="text-xs font-medium text-blue-600">Ya inscrito</span>
-                            ) : evt.cruceHorario ? (
-                              <span className="text-xs font-medium text-amber-700">Coincide con la sesión</span>
                             ) : evt.cupoLleno ? (
                               <span className="text-xs font-medium text-red-600">Lleno</span>
+                            ) : evt.cruceHorario ? (
+                              <span className="text-xs font-medium text-amber-700">Coincide con la sesión</span>
                             ) : evt.tiempoInsuficiente ? (
                               <span className="text-xs font-medium text-gray-400">Próximamente</span>
                             ) : null}
@@ -397,6 +406,19 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                   )}
                 </div>
               </div>
+
+              {selectedEvent.cruceHorario && selectedEvent.crucePermitido && (
+                <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-600" />
+                  <div>
+                    <div className="font-semibold">
+                      Coincide con la sesión de {alumno || 'el usuario'}
+                      {selectedEvent.cruceCon?.dia && ` (${format(new Date(selectedEvent.cruceCon.dia), 'HH:mm')})`}
+                    </div>
+                    <div className="mt-0.5">{textoDosDispositivos}</div>
+                  </div>
+                </div>
+              )}
 
               <button
                 type="button"
@@ -478,7 +500,12 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
             <h3 id="aviso-cruce-titulo" className="text-lg font-semibold text-gray-900">
               {elTipo} coincide con la sesión de {alumno || 'el usuario'}
             </h3>
-            <p className="mt-2 text-sm text-gray-600">Consulte con el Área Académica.</p>
+            {crucesPermitidos.length > 0 ? (
+              <p className="mt-2 text-sm font-medium text-amber-800">{textoDosDispositivos}</p>
+            ) : null}
+            {!todosPermitidos && (
+              <p className="mt-2 text-sm text-gray-600">Consulte con el Área Académica.</p>
+            )}
             <div className="mt-4 space-y-2 text-left">
               {cruces.map((evt: any) => (
                 <div key={evt._id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -492,16 +519,42 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
                       Sesión a las {format(new Date(evt.cruceCon.dia), 'HH:mm')}
                     </div>
                   )}
+                  {!todosPermitidos && !evt.crucePermitido && (
+                    <div className="mt-1 text-xs text-red-700">No se puede agendar este horario.</div>
+                  )}
                 </div>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={() => setAvisoCruceCerradoPara(selectedDate)}
-              className="mt-5 w-full px-4 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              Entendido
-            </button>
+            {crucesInscribibles.length > 0 ? (
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAvisoCruceCerradoPara(selectedDate)}
+                  className="px-4 py-3 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvisoCruceCerradoPara(selectedDate)
+                    // Con uno solo, directo a confirmar; con varios, elige en la lista.
+                    if (crucesInscribibles.length === 1) handleEventSelect(crucesInscribibles[0])
+                  }}
+                  className="px-4 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  Inscribirse
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAvisoCruceCerradoPara(selectedDate)}
+                className="mt-5 w-full px-4 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Entendido
+              </button>
+            )}
           </div>
         </div>
       )}

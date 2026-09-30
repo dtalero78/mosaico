@@ -27,7 +27,7 @@ import { StepOverridesRepository } from '@/repositories/niveles.repository';
 import { ValidationError, ConflictError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { queryMany, queryOne } from '@/lib/postgres';
-import { eventEndDate, agendamientoSeCruza } from '@/lib/event-duration';
+import { eventEndDate, agendamientoSeCruza, crucePermitido } from '@/lib/event-duration';
 import { extractStepNumber, isExitosa as isExitosaBooking, aproboElJump as aproboElJumpBooking, getClassType as getClassTypeBooking, esTrainingClub } from '@/lib/motor-academico';
 
 // --- Helpers (mirrors progress.service.ts logic) ---
@@ -264,9 +264,12 @@ export async function getAvailableEvents(
     // Choque de horario con OTRA clase del alumno, medido igual que en
     // `bookEvent`: lo que aquí se marca es exactamente lo que allá se rechaza.
     const evtFin = eventEndDate(evtDate, evt.tipo || evt.evento || '');
-    const cruce = avisaCruce && !yaInscrito
-      ? booked.find((b) => b.eventoId !== evt._id && agendamientoSeCruza(evtDate, evtFin, new Date(b.ts), b.tipo))
-      : undefined;
+    // Si se cruza con varias, manda la que BLOQUEA (p.ej. otro taller): marcar
+    // como permitido un cruce que `bookEvent` después rechaza engañaría al alumno.
+    const cruces = avisaCruce && !yaInscrito
+      ? booked.filter((b) => b.eventoId !== evt._id && agendamientoSeCruza(evtDate, evtFin, new Date(b.ts), b.tipo))
+      : [];
+    const cruce = cruces.find((b) => !crucePermitido(evt.tipo || evt.evento, b.tipo)) ?? cruces[0];
 
     const activeCount = enrollmentCounts.get(evt._id) ?? 0;
     const cupoLleno = evt.limiteUsuarios > 0 && activeCount >= evt.limiteUsuarios;
@@ -282,6 +285,9 @@ export async function getAvailableEvents(
       yaInscrito,
       tiempoInsuficiente,
       cruceHorario: !!cruce,
+      // El taller se deja agendar encima de otra clase (con aviso); un cruce
+      // con otro taller, o en una olimpiada, sigue bloqueando.
+      crucePermitido: !!cruce && crucePermitido(evt.tipo || evt.evento, cruce.tipo),
       cruceCon: cruce ? { dia: cruce.ts, tipo: cruce.tipo, nombreEvento: cruce.nombreEvento } : null,
     };
   });
@@ -362,13 +368,16 @@ export async function bookEvent(
   // PRECARGADAS por la aprobación, esas reglas bloqueaban cualquier agendamiento.
   // Talleres y Olimpiadas quedan sin límite semanal; los frena solo el cupo.
 
-  // 5. Choque de horario (REGLA QUE PREVALECE): el alumno no puede quedar en dos
-  //    eventos que se CRUCEN en el tiempo. Solape real por duración
-  //    (NIVELACION=30 min, resto=60), no solo el mismo instante.
+  // 5. Choque de horario: el alumno no puede quedar en dos eventos que se CRUCEN
+  //    en el tiempo. Solape real por duración (NIVELACION=30 min, resto=60).
+  //    EXCEPCIÓN (2026-09-30): un TALLER sí puede agendarse encima de otra clase
+  //    —se conecta con dos dispositivos—, así que para él sólo cuenta el cruce
+  //    con OTRO taller (`crucePermitido`). Las olimpiadas y el resto no cambian.
   const eventStart = eventDiaToUTC(event.dia);
   const eventEnd = eventEndDate(eventStart, eventTipo);
+  const esTaller = String(eventTipo).toUpperCase() === 'CLUB';
   const conflicto = await BookingRepository.findScheduleConflict(
-    studentId, eventStart.toISOString(), eventEnd.toISOString()
+    studentId, eventStart.toISOString(), eventEnd.toISOString(), esTaller ? 'CLUB' : undefined
   );
   if (conflicto) {
     throw new ConflictError(
