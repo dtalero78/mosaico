@@ -1,5 +1,8 @@
 import 'server-only';
 import { queryOne, queryMany } from '@/lib/postgres';
+import { ValidationError } from '@/lib/errors';
+import { htmlToPdfBuffer } from '@/lib/pdf';
+import { putBuffer, deleteObject, getPresignedGetUrl } from '@/lib/spaces';
 import { fillContractTemplate } from '@/lib/contract-template-filler';
 import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
 import { isContratoPrueba } from '@/lib/contrato-prueba';
@@ -125,6 +128,63 @@ export async function buildContractHtmlForTitular(
     contrato: titular.contrato,
     isImpulsa: titular.esCursoImpulsa === true,
   };
+}
+
+export interface RegeneracionDrive {
+  destino: 'DRIVE_MOSAICO' | 'DRIVE_LGS_TEMPORAL';
+  archivo: string;
+  driveUpload: any;
+  pdfBytes: number;
+  contrato: string;
+}
+
+/**
+ * Regenera el PDF del contrato con Chromium propio y lo sube a Drive. NO envía
+ * WhatsApp. Es lo que hace Mantenimiento › Generar Contrato, y lo reusa la
+ * aprobación de contratos migrados.
+ *
+ * Destino: el Drive propio (carpeta CONTRATOS MOS), que sobreescribe por nombre
+ * (`MOS_<contrato>.pdf`); si no está configurado, el puente bsl-utilidades →
+ * carpeta de LGS, que sólo acepta una URL y por eso el PDF pasa unos minutos por
+ * el bucket propio. Los contratos de prueba no se archivan.
+ *
+ * Lanza ValidationError cuando el contrato no se puede renderizar o es de prueba.
+ */
+export async function regenerarContratoEnDrive(titularId: string): Promise<RegeneracionDrive> {
+  const built = await buildContractHtmlForTitular(titularId);
+  if (built.html === null) throw new ValidationError(`No se puede generar el contrato: ${built.reason}.`);
+  if (isContratoPrueba(built.contrato)) {
+    throw new ValidationError('Es un contrato de prueba: no se archiva en Drive.');
+  }
+
+  const pdf = await htmlToPdfBuffer(built.html, buildContractPdfOptions(built.contrato, built.isImpulsa));
+  const baseName = buildContractFileBase(built.contrato, titularId);
+
+  if (isDriveConfigured()) {
+    const driveUpload = await uploadPdfToDrive(pdf, `${baseName}.pdf`);
+    return { destino: 'DRIVE_MOSAICO', archivo: `${baseName}.pdf`, driveUpload, pdfBytes: pdf.length, contrato: built.contrato };
+  }
+
+  // Puente temporal: `documento` es lo que bsl-utilidades usa para NOMBRAR el archivo.
+  const tmpKey = `contratos-tmp/${baseName}-${Date.now()}.pdf`;
+  let driveUpload: any;
+  try {
+    await putBuffer(tmpKey, pdf, 'application/pdf');
+    const pdfUrl = await getPresignedGetUrl(tmpKey, 600); // 10 min: sólo para que BSL lo descargue
+    const uploadRes = await fetch(BSL_UPLOAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pdfUrl, documento: baseName, empresa: 'LGS' }),
+    });
+    driveUpload = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok || driveUpload?.error) {
+      throw new Error(`bsl-utilidades: ${driveUpload?.error || uploadRes.status}`);
+    }
+  } finally {
+    // El PDF ya está en Drive; el temporal no debe quedarse en el bucket.
+    await deleteObject(tmpKey).catch(() => {});
+  }
+  return { destino: 'DRIVE_LGS_TEMPORAL', archivo: `${baseName}.pdf`, driveUpload, pdfBytes: pdf.length, contrato: built.contrato };
 }
 
 /**

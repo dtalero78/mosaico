@@ -1,11 +1,10 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { query, queryOne, queryMany } from '@/lib/postgres';
+import { queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/errors';
-import { generateId } from '@/lib/id-generator';
 import { requirePermission } from '@/lib/api-permissions';
 import { AprobacionPermission } from '@/types/permissions';
-import { autoApproveConsent } from '@/services/consent.service';
+import { autoApproveConsent, registrarAuditoriaAutoaprobacion } from '@/services/consent.service';
 import { generateAndArchiveContractPdf, ConsentBlock } from '@/services/contract-archive.service';
 import { approveContract } from '@/services/approval.service';
 import { promoteFromWelcome } from '@/services/student.service';
@@ -29,26 +28,6 @@ import { promoteFromWelcome } from '@/services/student.service';
  * NOTA: no genera/archiva el PDF del contrato — el consentimiento y su hash sí
  * quedan registrados; el PDF se puede generar aparte con "Generar Contrato".
  */
-
-// Auditoría de auto-aprobaciones (misma tabla que /api/consent/[id]/auto-approve)
-let auditTableReady = false;
-async function ensureAuditTable() {
-  if (auditTableReady) return;
-  await query(
-    `CREATE TABLE IF NOT EXISTS "auditautoaprov" (
-      "_id"           VARCHAR(60) PRIMARY KEY,
-      "contrato"      VARCHAR(50),
-      "titularId"     VARCHAR(60),
-      "usuarioEmail"  VARCHAR(200),
-      "usuarioNombre" VARCHAR(200),
-      "ip"            VARCHAR(100),
-      "userAgent"     TEXT,
-      "_createdDate"  TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    []
-  );
-  auditTableReady = true;
-}
 
 export const POST = handlerWithAuth(async (request, { params }, session) => {
   await requirePermission(session, AprobacionPermission.AUTOAPROBAR);
@@ -84,13 +63,10 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   if (!titular.hashConsentimiento) {
     const reg = await autoApproveConsent(titularId, actorEmail, actorNombre, ip, ua);
     consentBlock = { hasConsent: true, consent: reg.consent, hash: reg.hash };
-    await ensureAuditTable();
-    await query(
-      `INSERT INTO "auditautoaprov"
-         ("_id", "contrato", "titularId", "usuarioEmail", "usuarioNombre", "ip", "userAgent", "_createdDate")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-      [generateId('aud'), titular.contrato || null, titularId, actorEmail, actorNombre, ip, ua]
-    );
+    await registrarAuditoriaAutoaprobacion({
+      contrato: titular.contrato || null, titularId,
+      usuarioEmail: actorEmail, usuarioNombre: actorNombre, ip, userAgent: ua,
+    });
     consentRegistrado = true;
   }
 

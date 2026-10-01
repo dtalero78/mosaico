@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation'
 import { debounce } from 'lodash'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
+import MigracionTab from '@/components/aprobacion/MigracionTab'
 
 // Tipos
 interface Contrato {
@@ -95,6 +96,20 @@ export default function AprobacionPage() {
   // hasPermission ya bypassa SUPER_ADMIN/ADMIN.
   const { hasPermission } = usePermissions()
   const canAutoaprobar = hasPermission(AprobacionPermission.AUTOAPROBAR)
+
+  // ── Pestañas: Pendientes (la bandeja de siempre) · Migración ──
+  // Quien sólo tiene el permiso de Migración entra directo a esa pestaña.
+  const canMigracion = hasPermission(AprobacionPermission.MIGRACION_APROBAR)
+  const canPendientes = [
+    AprobacionPermission.CENTRO_VER, AprobacionPermission.ACTUALIZAR, AprobacionPermission.EXPORTAR_CSV,
+    AprobacionPermission.VER_CONTRATO, AprobacionPermission.ENVIAR_PDF, AprobacionPermission.DESCARGAR,
+    AprobacionPermission.APROBACION_AUTONOMA,
+  ].some(p => hasPermission(p))
+  const [tab, setTab] = useState<'pendientes' | 'migracion'>('pendientes')
+  const [migracionCount, setMigracionCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!canPendientes && canMigracion) setTab('migracion')
+  }, [canPendientes, canMigracion])
   // Intención por fila: { auto, welcome }. WELCOME no puede ir sin auto.
   const [rowIntent, setRowIntent] = useState<Record<string, { auto: boolean; welcome: boolean }>>({})
   const [showBulkModal, setShowBulkModal] = useState(false)
@@ -388,7 +403,7 @@ export default function AprobacionPage() {
 
   return (
     <DashboardLayout>
-      <PermissionGuard anyPermissions={[AprobacionPermission.CENTRO_VER, AprobacionPermission.ACTUALIZAR]}>
+      <PermissionGuard anyPermissions={[AprobacionPermission.CENTRO_VER, AprobacionPermission.ACTUALIZAR, AprobacionPermission.MIGRACION_APROBAR]}>
         <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-start">
@@ -399,6 +414,7 @@ export default function AprobacionPage() {
             </p>
           </div>
 
+          {tab === 'pendientes' && (
           <div className="flex gap-3">
             <button
               onClick={() => exportToExcel(getFilteredData(), [
@@ -428,8 +444,33 @@ export default function AprobacionPage() {
               Actualizar
             </button>
           </div>
+          )}
         </div>
 
+        {canMigracion && (
+          <div className="border-b border-gray-200 flex gap-6" role="tablist">
+            {canPendientes && (
+              <button type="button" role="tab" aria-selected={tab === 'pendientes'} onClick={() => setTab('pendientes')}
+                className={`pb-2 text-sm font-medium border-b-2 -mb-px ${tab === 'pendientes' ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                Pendientes
+              </button>
+            )}
+            <button type="button" role="tab" aria-selected={tab === 'migracion'} onClick={() => setTab('migracion')}
+              className={`pb-2 text-sm font-medium border-b-2 -mb-px ${tab === 'migracion' ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              Migración{migracionCount !== null && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700">{migracionCount}</span>}
+            </button>
+          </div>
+        )}
+
+        {/* La pestaña queda montada aunque no se vea: así conserva filtros y
+            selección al ir y volver, y el contador se ve sin abrirla. */}
+        {canMigracion && (
+          <div className={tab === 'migracion' ? '' : 'hidden'}>
+            <MigracionTab onCount={setMigracionCount} />
+          </div>
+        )}
+
+        {tab === 'pendientes' && (<>
         {/* Barra de búsqueda y filtros */}
         <div className="card p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
@@ -851,6 +892,8 @@ export default function AprobacionPage() {
             </div>
           </div>
         )}
+
+        </>)}
 
         {/* Modal de documentos */}
         {showDocumentModal && selectedContrato && (

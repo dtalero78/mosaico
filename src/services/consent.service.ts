@@ -12,6 +12,8 @@ import { PeopleRepository } from '@/repositories/people.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { generateOtp, saveOtp, verifyOtp } from '@/lib/otp-store';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { query } from '@/lib/postgres';
+import { generateId } from '@/lib/id-generator';
 
 // ── Types ──
 
@@ -161,6 +163,42 @@ export async function autoApproveConsent(
   );
 
   return { hash, consent };
+}
+
+/**
+ * Bitácora de las firmas registradas sin OTP (`auditautoaprov`): quién, desde
+ * dónde y para qué contrato. La escriben todas las vías que firman por el
+ * cliente — la Acción Administrativa del contrato, el Autoaprobar del Centro y
+ * la aprobación de contratos migrados —; antes la tabla y el INSERT estaban
+ * copiados en cada ruta.
+ */
+let auditAutoaprobTableReady = false;
+export async function registrarAuditoriaAutoaprobacion(a: {
+  contrato: string | null; titularId: string;
+  usuarioEmail: string; usuarioNombre: string; ip: string; userAgent: string;
+}): Promise<void> {
+  if (!auditAutoaprobTableReady) {
+    await query(
+      `CREATE TABLE IF NOT EXISTS "auditautoaprov" (
+        "_id"           VARCHAR(60) PRIMARY KEY,
+        "contrato"      VARCHAR(50),
+        "titularId"     VARCHAR(60),
+        "usuarioEmail"  VARCHAR(200),
+        "usuarioNombre" VARCHAR(200),
+        "ip"            VARCHAR(100),
+        "userAgent"     TEXT,
+        "_createdDate"  TIMESTAMPTZ DEFAULT NOW()
+      )`,
+      []
+    );
+    auditAutoaprobTableReady = true;
+  }
+  await query(
+    `INSERT INTO "auditautoaprov"
+       ("_id", "contrato", "titularId", "usuarioEmail", "usuarioNombre", "ip", "userAgent", "_createdDate")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+    [generateId('aud'), a.contrato, a.titularId, a.usuarioEmail, a.usuarioNombre, a.ip, a.userAgent]
+  );
 }
 
 /**

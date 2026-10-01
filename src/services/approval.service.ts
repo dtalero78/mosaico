@@ -22,11 +22,21 @@ export interface ApproveResult {
   academicCreated: boolean;
   whatsappSent: boolean;
   whatsappError: string | null;
+  /** Agendamientos creados al aprobar (sólo beneficiarios). */
+  bookingsCreados?: number;
 }
 
 export interface ApproveOpts {
   /** default true. false = no envía el WhatsApp de bienvenida (autoaprobar). */
   sendWhatsApp?: boolean;
+  /**
+   * Sólo agenda las clases que aún no ocurren. Lo usa la aprobación de contratos
+   * migrados: sus salones llevan meses dictando, y agendar las clases pasadas
+   * dejaría al alumno AUSENTE en clases en las que nunca estuvo inscrito.
+   */
+  soloFuturos?: boolean;
+  /** Quién genera los agendamientos (registro del booking). */
+  agendadoPor?: string;
 }
 
 /**
@@ -264,9 +274,10 @@ export async function approveOnePerson(
   // tiene eventos generados, simplemente no crea bookings (sin error).
   // ACADEMICA y USUARIOS_ROLES siguen INACTIVOS — el cron los enciende 1 semana
   // antes de inicioCurso. Aquí sólo se dejan listos los agendamientos.
+  let bookingsCreados = 0;
   if (person.tipoUsuario === 'BENEFICIARIO' && academicId) {
     try {
-      const creados = await generarBookingsBeneficiario(academicId, {
+      const creados = bookingsCreados = await generarBookingsBeneficiario(academicId, {
         campaign: person.campaign,
         tipoCurso: person.tipoCurso,
         horarioCurso: person.horarioCurso,
@@ -275,7 +286,7 @@ export async function approveOnePerson(
         primerApellido: person.primerApellido,
         celular: person.celular,
         plataforma: person.plataforma,
-      });
+      }, { soloFuturos: opts.soloFuturos === true, agendadoPor: opts.agendadoPor });
       console.log(`✅ [Approve] Bookings precargados para ${person.primerNombre}: ${creados}`);
     } catch (err: any) {
       console.warn(`⚠️ [Approve] No se pudieron generar bookings para ${personId}:`, err?.message || err);
@@ -329,6 +340,7 @@ export async function approveOnePerson(
     academicCreated,
     whatsappSent,
     whatsappError,
+    bookingsCreados,
   };
 }
 

@@ -35,7 +35,7 @@ export interface CambioAcademicoInput {
 
 interface Actor { email?: string | null; nombre?: string | null }
 
-async function resolverCursoId(campaign: string, tipoCurso: string, horarioCurso: string): Promise<string | null> {
+export async function resolverCursoId(campaign: string, tipoCurso: string, horarioCurso: string): Promise<string | null> {
   const r = await queryOne<{ _id: string }>(
     `SELECT "_id" FROM "CURSOS_CAMPAIGN" WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
     [campaign, tipoCurso, horarioCurso]
@@ -44,7 +44,7 @@ async function resolverCursoId(campaign: string, tipoCurso: string, horarioCurso
 }
 
 /** Lección "actual" del curso destino: la del primer evento futuro (o el último si ya terminó). */
-async function leccionActualCurso(cursoId: string, tipoCurso: string): Promise<{ modulo: string | null; leccion: string | null }> {
+export async function leccionActualCurso(cursoId: string, tipoCurso: string): Promise<{ modulo: string | null; leccion: string | null }> {
   const fut = await queryOne<{ sesionModulo: string | null; sesionLeccion: string | null }>(
     `SELECT "sesionModulo","sesionLeccion" FROM "CALENDARIO"
      WHERE "cursoCampaignId"=$1 AND "dia" >= NOW() AND "sesionLeccion" IS NOT NULL

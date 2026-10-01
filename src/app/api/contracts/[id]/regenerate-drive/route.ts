@@ -1,40 +1,18 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { NotFoundError, ValidationError } from '@/lib/errors';
-import { queryOne, queryMany } from '@/lib/postgres';
-import { fillContractTemplate } from '@/lib/contract-template-filler';
-import { getAsesorInfo } from '@/lib/asesor';
+import { NotFoundError } from '@/lib/errors';
+import { queryOne } from '@/lib/postgres';
 import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
-import { htmlToPdfBuffer } from '@/lib/pdf';
-import { buildContractHtml, buildContractPdfOptions, buildContractFileBase } from '@/lib/contract-pdf';
-import { isContratoPrueba } from '@/lib/contrato-prueba';
-import { uploadPdfToDrive, isDriveConfigured } from '@/lib/gdrive';
-import { putBuffer, deleteObject, getPresignedGetUrl } from '@/lib/spaces';
-import { templatePlataformaFor } from '@/lib/contract-template';
-
-const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
+import { regenerarContratoEnDrive } from '@/services/contract-archive.service';
 
 /**
  * POST /api/contracts/[id]/regenerate-drive
  *
  * Regenera el PDF del contrato con Chromium propio (puppeteer-core) y lo sube a
- * Drive. NO envía WhatsApp.
- *
- * Destino del PDF — hay dos rutas y se elige sola:
- *   1. Drive PROPIO de MOSAICO (carpeta CONTRATOS MOS), si está configurado
- *      (OAuth de la cuenta dueña + GDRIVE_CONTRATOS_FOLDER_ID). Es el destino
- *      definitivo: sube los bytes directo, sin terceros.
- *   2. PUENTE TEMPORAL vía bsl-utilidades → carpeta de LGS, mientras se resuelve
- *      el acceso a CONTRATOS MOS. bsl-utilidades es un servicio de LGS que pide
- *      una URL del PDF (no acepta bytes), así que el PDF se deja unos minutos en
- *      el bucket propio de MOSAICO con una URL firmada, y se borra después.
- *      Va con empresa='LGS' porque bsl-utilidades NO tiene dada de alta la
- *      empresa "MOSAICO" (responde "No se encontró configuración para la empresa
- *      MOSAICO"), igual que send-pdf y auto-approve hoy.
- *
- * PENDIENTE: al terminar el OAuth, la ruta 1 se activa sola y este puente
- * (BSL + el paso por Spaces) se puede borrar.
+ * Drive. NO envía WhatsApp. La lógica vive en `regenerarContratoEnDrive`
+ * (contract-archive.service), que también usa la aprobación de contratos
+ * migrados; aquí sólo se valida el permiso y se arma la respuesta.
  *
  * Útil para casos donde se detecta un error en un contrato ya entregado:
  *   - bug que dejó valores financieros vacíos
@@ -48,125 +26,23 @@ export const POST = handlerWithAuth(async (_request, { params }, session) => {
   await requirePermission(session, MantenimientoPermission.GENERAR_CONTRATO);
 
   const titularId = params.id;
-
   const titular = await queryOne<any>(
-    `SELECT * FROM "PEOPLE" WHERE "_id" = $1`,
+    `SELECT "_id", "primerNombre", "primerApellido", "numeroId" FROM "PEOPLE" WHERE "_id" = $1`,
     [titularId]
   );
   if (!titular) throw new NotFoundError('Titular', titularId);
-  if (!titular.plataforma) throw new ValidationError('El titular no tiene plataforma asignada');
 
-  const beneficiarios = await queryMany<any>(
-    `SELECT * FROM "PEOPLE" WHERE "contrato" = $1 AND "_id" != $2 ORDER BY "_createdDate" ASC`,
-    [titular.contrato, titularId]
-  );
-
-  // FINANCIEROS por contrato (NO titularId — la columna está NULL en la migración)
-  const financial = titular.contrato
-    ? await queryOne<any>(
-        `SELECT * FROM "FINANCIEROS" WHERE "contrato" = $1
-         ORDER BY "_createdDate" DESC LIMIT 1`,
-        [titular.contrato]
-      )
-    : null;
-
-  // Template del contrato (IMPULSA usa plantilla propia; si no, la de su plataforma)
-  const templatePlat = templatePlataformaFor(titular);
-  let templateRow = await queryOne<{ template: string }>(
-    `SELECT "template" FROM "ContractTemplates" WHERE "plataforma" = $1`,
-    [templatePlat]
-  );
-  if (!templateRow) {
-    templateRow = await queryOne<{ template: string }>(
-      `SELECT "template" FROM "ContractTemplates" WHERE LOWER("plataforma") = LOWER($1)`,
-      [templatePlat]
-    );
-  }
-  if (!templateRow?.template) throw new NotFoundError('ContractTemplate', templatePlat);
-
-  // Datos de consentimiento (si existen)
-  const consentRaw = titular.consentimientoDeclarativo;
-  const consentObj = typeof consentRaw === 'string' ? JSON.parse(consentRaw) : consentRaw;
-  const consentData = consentObj?.aceptado || consentObj?.declaracionAceptada
-    ? { hasConsent: true, consent: consentObj, hash: titular.hashConsentimiento }
-    : { hasConsent: false };
-
-  const asesorInfo = await getAsesorInfo((titular as any).asesor, (titular as any).asesorMail);
-  const contractText = fillContractTemplate(
-    templateRow.template,
-    titular,
-    beneficiarios,
-    financial,
-    consentData,
-    asesorInfo,
-  );
-
-  // HTML y presentación (membrete con logo + "Página X de Y") compartidos con
-  // send-pdf y auto-approve, para que los tres PDFs salgan idénticos.
-  // Los contratos de prueba (PRB-) no se archivan: esta pantalla existe para
-  // reponer el contrato en Drive, y CONTRATOS MOS guarda sólo los reales. El
-  // PDF de una prueba se obtiene con "Enviar PDF" desde el propio contrato.
-  if (isContratoPrueba(titular.contrato)) {
-    throw new ValidationError('Es un contrato de prueba: no se archiva en Drive.');
-  }
-
-  const htmlContent = buildContractHtml(contractText, titular.contrato);
-
-  // 1. Generar el PDF con Chromium propio (sin API2PDF)
-  const pdf = await htmlToPdfBuffer(htmlContent, buildContractPdfOptions(titular.contrato, titular.esCursoImpulsa === true));
-
-  // Nombre del archivo en Drive (compartido con send-pdf y auto-approve).
-  const baseName = buildContractFileBase(titular.contrato, titularId);
-
-  // 2a. Destino definitivo: Drive propio de MOSAICO (cuando esté configurado).
-  if (isDriveConfigured()) {
-    const driveUpload = await uploadPdfToDrive(pdf, `${baseName}.pdf`);
-    return successResponse({
-      destino: 'DRIVE_MOSAICO',
-      driveUpload,
-      pdfBytes: pdf.length,
-      contrato: titular.contrato,
-      titular: {
-        _id: titular._id, primerNombre: titular.primerNombre,
-        primerApellido: titular.primerApellido, numeroId: titular.numeroId,
-      },
-    });
-  }
-
-  // 2b. Puente temporal: bsl-utilidades sólo acepta una URL, así que el PDF pasa
-  //     unos minutos por el bucket propio con una URL firmada. `documento` es lo
-  //     que bsl-utilidades usa para NOMBRAR el archivo en Drive (y como clave de
-  //     sobreescritura), por eso se le manda el nombre completo.
-  const tmpKey = `contratos-tmp/${baseName}-${Date.now()}.pdf`;
-  let driveUpload: any;
-  try {
-    await putBuffer(tmpKey, pdf, 'application/pdf');
-    const pdfUrl = await getPresignedGetUrl(tmpKey, 600); // 10 min: sólo para que BSL lo descargue
-
-    const uploadRes = await fetch(BSL_UPLOAD_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pdfUrl, documento: baseName, empresa: 'LGS' }),
-    });
-    driveUpload = await uploadRes.json().catch(() => ({}));
-    if (!uploadRes.ok || driveUpload?.error) {
-      throw new Error(`bsl-utilidades: ${driveUpload?.error || uploadRes.status}`);
-    }
-  } finally {
-    // El PDF ya está en Drive; el temporal no debe quedarse en el bucket.
-    await deleteObject(tmpKey).catch(() => {});
-  }
+  const r = await regenerarContratoEnDrive(titularId);
 
   return successResponse({
-    destino: 'DRIVE_LGS_TEMPORAL',
-    aviso: 'Subido a la carpeta de LGS vía bsl-utilidades (puente temporal). Pendiente: mover el proceso a la carpeta CONTRATOS MOS con el Drive propio.',
-    archivo: `${baseName}.pdf`,
-    driveUpload,
-    pdfBytes: pdf.length,
-    contrato: titular.contrato,
-    titular: {
-      _id: titular._id, primerNombre: titular.primerNombre,
-      primerApellido: titular.primerApellido, numeroId: titular.numeroId,
-    },
+    destino: r.destino,
+    ...(r.destino === 'DRIVE_LGS_TEMPORAL'
+      ? { aviso: 'Subido a la carpeta de LGS vía bsl-utilidades (puente temporal). Pendiente: mover el proceso a la carpeta CONTRATOS MOS con el Drive propio.' }
+      : {}),
+    archivo: r.archivo,
+    driveUpload: r.driveUpload,
+    pdfBytes: r.pdfBytes,
+    contrato: r.contrato,
+    titular,
   });
 });

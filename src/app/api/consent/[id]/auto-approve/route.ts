@@ -2,31 +2,10 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { ComercialPermission } from '@/types/permissions';
-import { autoApproveConsent } from '@/services/consent.service';
+import { autoApproveConsent, registrarAuditoriaAutoaprobacion } from '@/services/consent.service';
 import { generateAndArchiveContractPdf } from '@/services/contract-archive.service';
-import { query, queryOne } from '@/lib/postgres';
-import { generateId } from '@/lib/id-generator';
+import { queryOne } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
-
-// One-time migration: ensure auditautoaprov table exists
-let auditTableReady = false;
-async function ensureAuditTable() {
-  if (auditTableReady) return;
-  await query(
-    `CREATE TABLE IF NOT EXISTS "auditautoaprov" (
-      "_id"           VARCHAR(60) PRIMARY KEY,
-      "contrato"      VARCHAR(50),
-      "titularId"     VARCHAR(60),
-      "usuarioEmail"  VARCHAR(200),
-      "usuarioNombre" VARCHAR(200),
-      "ip"            VARCHAR(100),
-      "userAgent"     TEXT,
-      "_createdDate"  TIMESTAMPTZ DEFAULT NOW()
-    )`,
-    []
-  );
-  auditTableReady = true;
-}
 
 export const POST = handlerWithAuth(async (request, { params }, session) => {
   // "Acción Administrativa": por perfil; SUPER_ADMIN/ADMIN bypassean.
@@ -63,21 +42,14 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   );
 
   // 3. Write audit record
-  await ensureAuditTable();
-  await query(
-    `INSERT INTO "auditautoaprov"
-       ("_id", "contrato", "titularId", "usuarioEmail", "usuarioNombre", "ip", "userAgent", "_createdDate")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-    [
-      generateId('aud'),
-      titular?.contrato || null,
-      params.id,
-      session.user?.email || 'system@lgs.com',
-      session.user?.name || 'System',
-      ip,
-      ua,
-    ]
-  );
+  await registrarAuditoriaAutoaprobacion({
+    contrato: titular?.contrato || null,
+    titularId: params.id,
+    usuarioEmail: session.user?.email || 'system@lgs.com',
+    usuarioNombre: session.user?.name || 'System',
+    ip,
+    userAgent: ua,
+  });
 
   // 4. Generar PDF y archivar en Drive (best-effort — un fallo no rompe el consentimiento).
   //    Lógica compartida con el "Autoaprobar" del centro de aprobación.

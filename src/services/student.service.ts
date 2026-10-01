@@ -137,9 +137,21 @@ export async function previewPromoteFromWelcome(academicId: string) {
   };
 }
 
+export interface PromoteWelcomeOpts {
+  /**
+   * Deja al alumno en la lección por la que VA su salón, no en la primera del
+   * curso. Lo usa la aprobación de contratos migrados: entran a un salón que ya
+   * lleva meses dictando, y con la Lección 00 quedarían desfasados del grupo.
+   */
+  leccionDelSalon?: boolean;
+  /** Sólo agenda las clases que aún no ocurren (ver `approval.service`). */
+  soloFuturos?: boolean;
+}
+
 export async function promoteFromWelcome(
   academicId: string,
-  actor?: { email?: string; nombre?: string }
+  actor?: { email?: string; nombre?: string },
+  opts: PromoteWelcomeOpts = {}
 ) {
   const academic = await queryOne<any>(
     `SELECT "_id", "peopleId", "numeroId", "userLogin", "curso", "nivel", "step", "cambioStepHistory" FROM "ACADEMICA" WHERE "_id" = $1`,
@@ -159,7 +171,7 @@ export async function promoteFromWelcome(
   // PEOPLE del beneficiario: por peopleId; fallback por numeroId (BENEFICIARIO).
   // `fechaOnHold` y `finalContrato` se traen para decidir si el alumno queda
   // operativo al promoverlo (ver más abajo).
-  const PEOPLE_COLS = `"campaign", "tipoCurso", "horarioCurso", "salon", "nivel", "step", "primerNombre", "primerApellido", "celular", "plataforma", "fechaOnHold", "finalContrato"`;
+  const PEOPLE_COLS = `"_id", "campaign", "tipoCurso", "horarioCurso", "salon", "nivel", "step", "primerNombre", "primerApellido", "celular", "plataforma", "fechaOnHold", "finalContrato"`;
   let people = academic.peopleId
     ? await queryOne<any>(`SELECT ${PEOPLE_COLS} FROM "PEOPLE" WHERE "_id" = $1`, [academic.peopleId])
     : null;
@@ -176,10 +188,33 @@ export async function promoteFromWelcome(
   // Fallback: si PEOPLE no trae nivel/step, aterrizar en el primer módulo/lección del curso real.
   let destNivel = people.nivel || '';
   let destStep = people.step || '';
+  let leccionDelSalon = false;
+  if (opts.leccionDelSalon && people.campaign && people.tipoCurso && people.horarioCurso) {
+    // La misma regla que Cambio Académico: la lección del próximo evento del
+    // salón (o la última, si el curso ya terminó).
+    const { resolverCursoId, leccionActualCurso } = await import('@/services/cambio-academico.service');
+    const cursoId = await resolverCursoId(people.campaign, people.tipoCurso, people.horarioCurso);
+    if (cursoId) {
+      const l = await leccionActualCurso(cursoId, people.tipoCurso);
+      if (l.modulo && l.leccion) {
+        destNivel = l.modulo;
+        destStep = l.leccion;
+        leccionDelSalon = true;
+      }
+    }
+  }
   if (!destNivel || !destStep) {
     const first = await resolveFirstModuloLeccion(people.tipoCurso);
     destNivel = destNivel || first.nivel;
     destStep = destStep || first.step;
+  }
+  // PEOPLE guarda el mismo módulo/lección del alumno: si se tomó la del salón,
+  // se alinea para que la ficha y el panel no digan dos cosas distintas.
+  if (leccionDelSalon && people._id) {
+    await query(
+      `UPDATE "PEOPLE" SET "nivel" = $2, "step" = $3, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      [people._id, destNivel, destStep]
+    );
   }
 
   const before = `${academic.curso || '—'} / ${academic.nivel || '—'} / ${academic.step || '—'}`;
@@ -257,12 +292,12 @@ export async function promoteFromWelcome(
       primerApellido: people.primerApellido,
       celular: people.celular,
       plataforma: people.plataforma,
-    });
+    }, { soloFuturos: opts.soloFuturos === true });
   } catch (err: any) {
     console.warn(`[promoteFromWelcome] generarBookings falló para ${academicId}:`, err?.message || err);
   }
 
-  return { promoted: true, before, after, bookingsCreados, activado, enOnHold, contratoVencido };
+  return { promoted: true, before, after, bookingsCreados, activado, enOnHold, contratoVencido, leccionDelSalon };
 }
 
 /**

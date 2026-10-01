@@ -380,6 +380,7 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
     'APROBACION.MODIFICAR.ENVIAR_PDF' as Permission,
     'APROBACION.MODIFICAR.DESCARGAR' as Permission,
     'APROBACION.MODIFICAR.APROBACION_AUTONOMA' as Permission,
+    'APROBACION.MIGRACION.APROBAR' as Permission,
   ],
   '/dashboard/aprobacion/aprobados': [
     'APROBACION.APROBADOS.VER' as Permission,

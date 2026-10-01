@@ -491,6 +491,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       AprobacionPermission.ENVIAR_PDF,
       AprobacionPermission.DESCARGAR,
       AprobacionPermission.APROBACION_AUTONOMA,
+      AprobacionPermission.MIGRACION_APROBAR,
     ],
     '/dashboard/aprobacion/aprobados': [
       AprobacionPermission.APROBADOS_VER,
@@ -557,6 +558,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // Acceso por ítem (MOSAICO)
       AprobacionPermission.CENTRO_VER,
       AprobacionPermission.GESTION_VER,
+      AprobacionPermission.MIGRACION_APROBAR,
       // APROBACION.MODIFICAR.*
       AprobacionPermission.ACTUALIZAR,
       AprobacionPermission.EXPORTAR_CSV,

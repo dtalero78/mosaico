@@ -1184,6 +1184,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Casillas "Autoaprobar" / "Promover WELCOME"',
     description: 'En el centro de aprobación: autoaprobar el contrato (titular + beneficiarios, sin WhatsApp) registrando el consentimiento AUTOMÁTICA, y promover a los beneficiarios de WELCOME a su curso real',
   },
+  {
+    code: AprobacionPermission.MIGRACION_APROBAR,
+    module: Module.APROBACION,
+    section: 'Lista de Aprobaciones',
+    name: 'Pestaña "Migración"',
+    description: 'Ver la pestaña Migración del centro de aprobación y aprobar los contratos migrados en lote: registra la firma si falta, lo deja listo, lo aprueba dejando a cada alumno en su curso y salón (sólo clases futuras), regenera el contrato en Drive y, si se marca, envía el WhatsApp de bienvenida. No incluye contratos de la campaña en matrícula ni de la inmediatamente anterior.',
+  },
 
   // ========== MANTENIMIENTO MODULE (Menú Mantenimiento) ==========
   {

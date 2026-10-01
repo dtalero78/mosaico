@@ -450,6 +450,35 @@ export function estadosDeCampanas(
 }
 
 /**
+ * Campañas que la aprobación de contratos MIGRADOS no toca: la(s) que está(n)
+ * EN MATRÍCULA y la inmediatamente ANTERIOR a ella (la que arrancó justo antes).
+ *
+ * Esas dos son las de la venta en curso: sus contratos los gestiona Comercial y
+ * se aprueban por el Centro, con su flujo normal. La migración es para las
+ * campañas anteriores, que ya llevan tiempo dictando.
+ *
+ * "Anterior" se mide por la fecha en que arranca cada campaña (su primer curso),
+ * no por el nombre. Si no hay ninguna en matrícula, la anterior es la que
+ * arrancó más recientemente: es la que está vendiendo con extemporánea.
+ */
+export function campanasExcluidasMigracion(
+  rows: Array<{ campaign?: any; inicioCampanaCursos?: any; inicioCurso?: any; finalCurso?: any }>,
+  now: Date = new Date()
+): { enMatricula: string[]; anterior: string | null; excluidas: string[] } {
+  const estados = estadosDeCampanas(rows, now);
+  const enMatricula = estados.filter(e => e.estado === 'matricula').map(e => e.campaign).sort();
+  const inicioMatricula = estados
+    .filter(e => e.estado === 'matricula' && e.inicio)
+    .map(e => e.inicio)
+    .sort()[0] || '';
+  const previas = estados
+    .filter(e => e.estado !== 'matricula' && e.inicio && (!inicioMatricula || e.inicio < inicioMatricula))
+    .sort((a, b) => b.inicio.localeCompare(a.inicio) || b.campaign.localeCompare(a.campaign));
+  const anterior = previas[0]?.campaign || null;
+  return { enMatricula, anterior, excluidas: anterior ? [...enMatricula, anterior] : enMatricula };
+}
+
+/**
  * Las campañas "actuales": la que está EN MATRÍCULA más la ACTIVA más reciente.
  *
  * Es el conjunto con el que abre la bandeja de Welcome: quien se está

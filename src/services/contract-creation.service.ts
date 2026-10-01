@@ -177,6 +177,10 @@ export async function insertBeneficiarioTx(
     numeroId: normalizeNumeroId(args.b.numeroId),
     celular: normalizeTelefonoOrNull(args.b.celular),
     apoderadoTelefono: normalizeTelefonoOrNull(args.b.apoderadoTelefono),
+    // El curso es la llave del salón y el catálogo lo guarda en MAYÚSCULAS: un
+    // "senpai" llegado por Subir Lote no encontraba su salón y el alumno quedaba
+    // sin curso real.
+    tipoCurso: args.b.tipoCurso ? String(args.b.tipoCurso).trim().toUpperCase() : args.b.tipoCurso,
   };
   const { titularId, contrato, plataforma, vigencia, finalContrato } = args;
   const confirmarCupo = args.confirmarCupo === true;
@@ -526,10 +530,12 @@ export async function createFullContract(input: CreateContractInput) {
     // cerradas: nacen con el cupo tomado y con la gestión comercial dada por
     // hecha. Sin esto no podrían aprobarse, porque aprobar exige el contrato
     // listo (ver `approval.service`).
+    // `altaMigracion` las distingue de las ventas del comercial: es lo que lista
+    // la pestaña «Migración» del Centro de Aprobaciones.
     if (input.confirmarCupo === true) {
       await client.query(
         `UPDATE "PEOPLE" SET "gestionContratoListo"=true, "gestionContratoListoBy"=$2,
-                             "gestionContratoListoDate"=NOW()
+                             "gestionContratoListoDate"=NOW(), "altaMigracion"=true
           WHERE "_id"=$1`,
         [titularId, input.createdBy]
       );

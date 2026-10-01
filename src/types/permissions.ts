@@ -481,6 +481,9 @@ export enum AprobacionPermission {
   // beneficiarios, sin WhatsApp) + registra el consentimiento AUTOMÁTICA, y
   // opcionalmente promueve a los beneficiarios de WELCOME a su curso real.
   AUTOAPROBAR = 'APROBACION.MODIFICAR.AUTOAPROBAR',
+  // Pestaña "Migración" del centro: ver los contratos migrados y aprobarlos en
+  // lote (firma + listo + aprobación + PDF en Drive, WhatsApp opcional).
+  MIGRACION_APROBAR = 'APROBACION.MIGRACION.APROBAR',
 
   // Legacy (mantener compatibilidad)
   GLOBAL_ACTUALIZAR = 'APROBACION.GLOBAL.ACTUALIZAR',
