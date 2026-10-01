@@ -44,6 +44,7 @@ Analiza el comprobante adjunto y devuelve EXCLUSIVAMENTE un objeto JSON válido 
 }
 
 Reglas ESTRICTAS:
+- En Chile, Colombia y Perú el PUNTO separa los MILES y la coma los decimales: "$125.000" son 125000 (ciento veinticinco mil), "$1.150.000" son 1150000. Los pesos no llevan decimales: nunca devuelvas 125 por "$125.000".
 - Si un campo no aparece en el comprobante, usa null. NUNCA inventes datos.
 - Si el archivo NO es un comprobante de pago, pon "confianza": 0 y todo lo demás null.
 - Responde ÚNICAMENTE el objeto JSON.`;
@@ -67,6 +68,9 @@ async function descargar(url: string): Promise<{ buf: Buffer; tipo: string }> {
   const bytes = await (r.Body as any)?.transformToByteArray?.();
   if (!bytes) throw new ValidationError('No se pudo descargar el recibo.');
   const buf = Buffer.from(bytes);
+  if (buf.length === 0) {
+    throw new ValidationError('El archivo está vacío (0 bytes): se subió mal y hay que volver a subirlo.');
+  }
   if (buf.length > MAX_MB_RECIBO * 1024 * 1024) {
     throw new ValidationError(`El recibo supera ${MAX_MB_RECIBO} MB.`);
   }
@@ -97,17 +101,27 @@ export async function leerRecibo(url: string): Promise<ReciboExtraido> {
 
   const OpenAI = (await import('openai')).default;
   const client = new OpenAI({ apiKey });
+  // Un PDF consume muchos tokens: si varias lecturas coinciden en el mismo minuto,
+  // OpenAI responde 429 (límite por minuto). Se reintenta con espera creciente en
+  // vez de dejar el recibo "sin leer" por algo que se resuelve en segundos.
   let respuesta: any;
-  try {
-    respuesta = await client.chat.completions.create({
-      model: OPENAI_MODEL,
-      max_tokens: 600,
-      temperature: 0,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT }, archivo] as any }],
-    });
-  } catch (e: any) {
-    throw new ValidationError(`La lectura del recibo falló: ${e?.message || e}`);
+  for (let intento = 1; ; intento++) {
+    try {
+      respuesta = await client.chat.completions.create({
+        model: OPENAI_MODEL,
+        max_tokens: 600,
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT }, archivo] as any }],
+      });
+      break;
+    } catch (e: any) {
+      if (e?.status === 429 && intento < 4) {
+        await new Promise(r => setTimeout(r, intento * 4000));
+        continue;
+      }
+      throw new ValidationError(`La lectura del recibo falló: ${e?.message || e}`);
+    }
   }
   const texto = String(respuesta?.choices?.[0]?.message?.content ?? '')
     .trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
