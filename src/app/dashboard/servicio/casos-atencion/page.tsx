@@ -9,7 +9,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
-import { estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel, origenLabel, esOrigenAdmin } from '@/lib/casos-atencion-estados'
+import { estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel, origenLabel, esOrigenAdmin, ORIGENES_ADMIN } from '@/lib/casos-atencion-estados'
 import { hoyEnChile } from '@/lib/cursos-campaign'
 
 /**
@@ -267,6 +267,12 @@ function CasosAtencionContent() {
   const [tab, setTab] = useState<Tab>('casos')
   const cfg = TABS.find(t => t.id === tab)!
   const [subCasos, setSubCasos] = useState<SubCasos>('docentes')
+  // En Admin el filtro de Guía se reemplaza por ÁREA (el origen del caso). Se
+  // filtra en el navegador sobre las filas ya traídas, como la propia división
+  // Docentes/Admin; `areaOrigen` es lo elegido y `areaFiltro` lo aplicado, para
+  // que respete «Aplicar filtros» igual que los demás.
+  const [areaOrigen, setAreaOrigen] = useState('')
+  const [areaFiltro, setAreaFiltro] = useState('')
 
   /**
    * Contadores de cada pestaña, con el período por DEFECTO de cada una (decisión
@@ -277,28 +283,29 @@ function CasosAtencionContent() {
    */
   const [conteos, setConteos] = useState<Partial<Record<Tab | SubCasos, number>>>({})
   const cargarConteos = useCallback(async () => {
-    const res = await Promise.all(TABS.map(async (t) => {
+    // Cada contador se pinta en cuanto llega su respuesta: esperar a todas hacía
+    // que ninguno apareciera hasta que respondiera Asistencia, que es la lenta.
+    await Promise.all(TABS.map(async (t) => {
       const qs = new URLSearchParams()
       if (t.area) qs.set('area', t.area)
       const { desde, hasta } = fechasPorDefecto(t.id)
       if (desde) { qs.set('startDate', desde); qs.set('endDate', hasta) }
       try {
         const r = await fetch(`${t.endpoint}?${qs}`, { cache: 'no-store' }).then(x => x.json())
-        if (r?.error) return { id: t.id, total: null as number | null, filas: null as Row[] | null }
-        return { id: t.id, total: (r.total ?? (r.rows?.length || 0)) as number, filas: (r.rows || null) as Row[] | null }
-      } catch { return { id: t.id, total: null as number | null, filas: null as Row[] | null } }
+        if (r?.error) return
+        const total = (r.total ?? (r.rows?.length || 0)) as number
+        const filas = (r.rows || []) as Row[]
+        setConteos(prev => {
+          const next = { ...prev, [t.id]: total }
+          if (t.id === 'casos') {
+            const admin = filas.filter(x => esOrigenAdmin(x.origen)).length
+            next.admin = admin
+            next.docentes = filas.length - admin
+          }
+          return next
+        })
+      } catch { /* sin contador para esa pestaña */ }
     }))
-    const next: Partial<Record<Tab | SubCasos, number>> = {}
-    for (const { id, total, filas } of res) {
-      if (total === null) continue
-      next[id] = total
-      if (id === 'casos' && filas) {
-        const admin = filas.filter(r => esOrigenAdmin(r.origen)).length
-        next.admin = admin
-        next.docentes = filas.length - admin
-      }
-    }
-    setConteos(next)
   }, [])
   useEffect(() => { cargarConteos() }, [cargarConteos])
   const contador = (k: Tab | SubCasos) => (conteos[k] === undefined ? '' : ` (${conteos[k]})`)
@@ -395,17 +402,30 @@ function CasosAtencionContent() {
   }, [tab, fetchData])
 
   const filtros = { campaign, curso, salon, leccion, guia, usuario, startDate, endDate }
-  const aplicar = () => fetchData(tab, filtros)
+  const aplicar = () => { setAreaFiltro(areaOrigen); fetchData(tab, filtros) }
 
   /** "Borrar filtros" devuelve a la pestaña su período por defecto, no a vacío. */
   const borrar = () => {
     setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setUsuario('')
+    setAreaOrigen(''); setAreaFiltro('')
     const { desde, hasta } = fechasPorDefecto(tab)
     setStartDate(desde); setEndDate(hasta)
     fetchData(tab, desde ? { startDate: desde, endDate: hasta } : undefined)
   }
+  /**
+   * Al cambiar de subpestaña se suelta el filtro que sólo existe en la otra: el
+   * Guía en Docentes, el Área en Admin. Si había un guía aplicado, se vuelve a
+   * consultar sin él — si no, Admin mostraría sólo los casos de ese guía sin
+   * que se vea el filtro que los está acotando.
+   */
+  const cambiarSub = (s: SubCasos) => {
+    setSubCasos(s)
+    setAreaOrigen(''); setAreaFiltro('')
+    if (guia) { setGuia(''); fetchData('casos', { ...filtros, guia: '' }) }
+  }
   const cambiarTab = (t: Tab) => {
     setCampaign(''); setCurso(''); setSalon(''); setLeccion(''); setGuia(''); setUsuario('')
+    setAreaOrigen(''); setAreaFiltro('')
     setTab(t)   // las fechas las repone el efecto, según la pestaña
   }
 
@@ -596,7 +616,8 @@ function CasosAtencionContent() {
 
   // En Casos de Atención la tabla muestra sólo la subpestaña elegida.
   const filas = tab === 'casos'
-    ? rows.filter(r => (subCasos === 'admin') === esOrigenAdmin(r.origen))
+    ? rows.filter(r => (subCasos === 'admin') === esOrigenAdmin(r.origen)
+        && (subCasos !== 'admin' || !areaFiltro || r.origen === areaFiltro))
     : rows
   const totalVista = tab === 'casos' ? filas.length : total
   const hayDatos = tab === 'vacias' ? grupos.length > 0 : filas.length > 0
@@ -668,7 +689,7 @@ function CasosAtencionContent() {
         <div className="flex gap-2 mb-4" role="tablist" aria-label="Origen del caso">
           {([['docentes', 'Docentes'], ['admin', 'Admin']] as const).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={subCasos === id}
-              onClick={() => setSubCasos(id)}
+              onClick={() => cambiarSub(id)}
               className={`px-3 py-1.5 rounded-full text-sm font-medium border ${
                 subCasos === id
                   ? 'bg-primary-600 text-white border-primary-600'
@@ -717,12 +738,22 @@ function CasosAtencionContent() {
               <option value="">Todas</option>{lecciones.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
+          {tab === 'casos' && subCasos === 'admin' ? (
+          <div>
+            <label htmlFor="ca-area" className="block text-xs font-medium text-gray-500 mb-1">Área</label>
+            <select id="ca-area" value={areaOrigen} onChange={e => setAreaOrigen(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Todas</option>
+              {ORIGENES_ADMIN.map(o => <option key={o} value={o}>{origenLabel(o)}</option>)}
+            </select>
+          </div>
+          ) : (
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
             <select value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todos</option>{guias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
             </select>
           </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1">Fecha inicial</label>
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
