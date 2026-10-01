@@ -1250,6 +1250,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Pestaña "Cambiar rol" en /admin/roles/create/consultar. Cambia el rol de una cuenta existente, lo que cambia lo que esa persona puede ver y hacer. NO permite asignar ADMIN ni SUPER_ADMIN, ni tocar a quien ya los tenga, ni cambiarse el rol a uno mismo; todo cambio queda auditado. Es un permiso aparte de "Crear Rol" porque dar de alta un usuario y cambiarle los privilegios a uno existente no son la misma decisión',
   },
   {
+    code: MantenimientoPermission.USUARIO_EDITAR,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: '↳ Gestión de Usuarios: Editar',
+    description: 'Botón "Editar" de cada cuenta en la consulta por rol: nombre, apellido, email, teléfono, plataforma y si está activa. No toca cuentas ADMIN ni SUPER_ADMIN. Si la cuenta es de un guía, el email se actualiza también en su ficha de GUIAS',
+  },
+  {
+    code: MantenimientoPermission.USUARIO_CLAVE,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: '↳ Gestión de Usuarios: Cambiar clave',
+    description: 'Botón "Clave" de cada cuenta: le asigna una clave nueva. No toca cuentas ADMIN ni SUPER_ADMIN. En un estudiante la clave también se actualiza en su registro académico',
+  },
+  {
+    code: MantenimientoPermission.USUARIO_ELIMINAR,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: '↳ Gestión de Usuarios: Eliminar',
+    description: 'Botón "Eliminar" de cada cuenta: borra la cuenta de acceso (la persona deja de poder entrar). No borra su ficha ni su historial. Pide motivo y deja copia en PURGE_LOG. No permite eliminar la propia cuenta ni una ADMIN o SUPER_ADMIN',
+  },
+  {
     code: MantenimientoPermission.GENERAR_CONTRATO,
     module: Module.MANTENIMIENTO,
     section: 'Usuarios',

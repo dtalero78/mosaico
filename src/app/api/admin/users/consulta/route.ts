@@ -45,7 +45,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   const usuarios = await queryMany(
     `SELECT "_id", "email", "userLogin", "nombre", "apellido", "password",
-            "celular", "numberid", "rol", "activo"
+            "celular", "numberid", "rol", "activo", "plataforma"
        FROM "USUARIOS_ROLES"
       WHERE "rol" = $1
       ORDER BY "nombre" NULLS LAST, "apellido" NULLS LAST, "email" NULLS LAST`,

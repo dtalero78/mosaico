@@ -660,7 +660,7 @@ function CasosAtencionContent() {
             un caso que adicionar, son otra cosa. */}
         {ORIGEN_POR_TAB[tab] && canGestion && (
           <button type="button" onClick={() => setAdicionar(true)}
-            className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700">
+            className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent-600 text-white text-sm font-semibold shadow-md hover:bg-accent-700 focus:outline-none focus:ring-2 focus:ring-accent-400 focus:ring-offset-2">
             <PlusCircleIcon className="h-5 w-5" />
             Adicionar caso
           </button>
