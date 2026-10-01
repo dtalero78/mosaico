@@ -33,7 +33,9 @@ const APO_DIGITS = `REGEXP_REPLACE(COALESCE(p."apoderadoTelefono",''),'[^0-9]','
 const SELECT_COLS = `
   p."_id" AS "peopleId", p."primerNombre" AS "nombre", p."primerApellido",
   p."apoderado", p."apoderadoTelefono", p."campaign", p."tipoCurso", p."salon",
-  p."plataforma", p."contrato", p."nivel", p."step", p."estadoInactivo", p."numeroId"`;
+  p."plataforma", p."contrato", p."nivel", p."step", p."estadoInactivo", p."numeroId",
+  (SELECT a."_id" FROM "ACADEMICA" a WHERE a."numeroId" = p."numeroId"
+    ORDER BY CASE WHEN a."tipoUsuario" = 'BENEFICIARIO' THEN 0 ELSE 1 END LIMIT 1) AS "academicaId"`;
 
 function mapRow(r: any, numeroIdOriginal: string) {
   const tel = String(r?.apoderadoTelefono || '').replace(/\D/g, '');
@@ -46,6 +48,8 @@ function mapRow(r: any, numeroIdOriginal: string) {
     numeroId: r?.numeroId || r?.peopleId || numeroIdOriginal, // clave única de la fila
     valido, error,
     peopleId: r?.peopleId ?? null,
+    // Para la vista previa de {{linkPerfil}}; el envío lo vuelve a resolver en el servidor.
+    academicaId: r?.academicaId ?? null,
     nombre: r?.nombre ?? null,
     primerApellido: r?.primerApellido ?? null,
     celular: tel || null,               // DESTINO = teléfono del apoderado (BD)

@@ -219,6 +219,8 @@ export default function EnvioMensajesPage() {
       nivel: sample.nivel, step: sample.step,
       plataforma: sample.plataforma, contrato: sample.contrato,
       numeroId: sample.numeroId,
+      academicaId: sample.academicaId,
+      baseUrl: typeof window !== 'undefined' ? window.location.origin : null,
     })
   }, [selectedTemplate, lookupItems, selectedNumeroIds])
 

@@ -28,9 +28,35 @@ import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { MessageTemplatesRepository } from '@/repositories/message-templates.repository';
-import { fillTemplate } from '@/lib/message-template-filler';
+import { fillTemplate, usaLinkPerfil, BASE_URL_PLATAFORMA } from '@/lib/message-template-filler';
 import { sendWhatsAppMessage, sendWhatsAppMedia, type WhatsAppMediaKind } from '@/lib/whatsapp';
 import { getPresignedGetUrl } from '@/lib/spaces';
+import { query } from '@/lib/postgres';
+import { normalizeNumeroId, normalizeNumeroIdList } from '@/lib/numeroid-normalize';
+
+/**
+ * ACADEMICA._id de cada documento — para {{linkPerfil}}. Mismo criterio que
+ * `lookup`: documento normalizado y, si hay duplicados, el BENEFICIARIO.
+ * Se resuelve aquí y no se toma del navegador: el enlace da acceso a crear el
+ * perfil de esa persona.
+ */
+async function academicaIdsPorDocumento(numeroIds: string[]): Promise<Map<string, string>> {
+  const ids = normalizeNumeroIdList(numeroIds);
+  if (!ids.length) return new Map();
+  const r = await query<{ numeroId: string; academicaId: string }>(
+    `SELECT i."numeroId", a."_id" AS "academicaId"
+       FROM UNNEST($1::text[]) AS i("numeroId")
+       JOIN LATERAL (
+         SELECT aa."_id" FROM "ACADEMICA" aa
+          WHERE UPPER(REGEXP_REPLACE(COALESCE(aa."numeroId",''), '[.\\s\\-_]', '', 'g')) = i."numeroId"
+          ORDER BY CASE WHEN aa."tipoUsuario" = 'BENEFICIARIO' THEN 0 ELSE 1 END,
+                   aa."_createdDate" DESC NULLS LAST
+          LIMIT 1
+       ) a ON true`,
+    [ids]
+  );
+  return new Map(r.rows.map(x => [x.numeroId, x.academicaId]));
+}
 
 const MAX_SEND = 300;
 // Con adjunto (imagen/video/documento) el tope baja para no arriesgar el bloqueo
@@ -96,12 +122,29 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // para los ≤30 envíos secuenciales.
   const mediaUrl = mediaIn ? await getPresignedGetUrl(mediaIn.key, 1800) : null;
 
+  const conLink = usaLinkPerfil(tpl.contenido);
+  const academicaPorDoc = conLink ? await academicaIdsPorDocumento(destinatarios.map(d => d.numeroId)) : new Map();
+  const baseUrl = process.env.APP_URL || BASE_URL_PLATAFORMA;
+
   for (const d of destinatarios) {
+    const academicaId = academicaPorDoc.get(normalizeNumeroId(d.numeroId)) || null;
+    // Un mensaje que promete "tu enlace" y llega sin él es peor que no mandarlo.
+    if (conLink && !academicaId) {
+      resultados.push({
+        numeroId: d.numeroId,
+        nombre: `${d.nombre || ''} ${d.primerApellido || ''}`.trim() || '(sin nombre)',
+        celular: d.celular,
+        ok: false,
+        error: 'No tiene registro académico: no hay enlace de perfil para enviarle.',
+      });
+      continue;
+    }
     const mensajeFinal = fillTemplate(tpl.contenido, {
       nombre: d.nombre, primerApellido: d.primerApellido,
       nivel: d.nivel, step: d.step,
       plataforma: d.plataforma, contrato: d.contrato,
       numeroId: d.numeroId,
+      academicaId, baseUrl,
     });
 
     try {

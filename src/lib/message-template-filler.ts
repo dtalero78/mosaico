@@ -9,6 +9,9 @@
  *   - plataforma      → plataforma
  *   - contrato        → contrato
  *   - numeroId        → numeroId
+ *   - linkPerfil      → enlace PERSONAL para crear el perfil del alumno
+ *                       (`/nuevo-usuario/<ACADEMICA._id>`, el mismo que manda la
+ *                       aprobación). Lo resuelve el servidor por el documento.
  *
  * Cualquier placeholder no soportado se reemplaza por cadena vacía (no
  * rompe el envío). El regex coincide con `{{ key }}` con espacios opcionales.
@@ -24,6 +27,23 @@ export interface RecipientContext {
   step?: string | null;
   plataforma?: string | null;
   contrato?: string | null;
+  /** ACADEMICA._id del alumno: arma {{linkPerfil}}. */
+  academicaId?: string | null;
+  /** Dominio de la plataforma para {{linkPerfil}}. */
+  baseUrl?: string | null;
+}
+
+export const BASE_URL_PLATAFORMA = 'https://mosaicosorobanplataforma.com';
+
+/** Enlace para crear el perfil: el mismo que va en el WhatsApp de aprobación. */
+export function linkPerfil(academicaId?: string | null, baseUrl?: string | null): string {
+  if (!academicaId) return '';
+  return `${String(baseUrl || BASE_URL_PLATAFORMA).replace(/\/+$/, '')}/nuevo-usuario/${academicaId}`;
+}
+
+/** ¿La plantilla usa el enlace de perfil? Si sí, cada destinatario necesita su registro académico. */
+export function usaLinkPerfil(template: string): boolean {
+  return /\{\{\s*linkPerfil\s*\}\}/.test(template || '');
 }
 
 /** Lista única de placeholders válidos — el editor de plantillas la usa para auto-sugerir. */
@@ -35,6 +55,7 @@ export const AVAILABLE_PLACEHOLDERS = [
   'plataforma',
   'contrato',
   'numeroId',
+  'linkPerfil',
 ] as const;
 
 export type PlaceholderKey = typeof AVAILABLE_PLACEHOLDERS[number];
@@ -48,6 +69,7 @@ function valueFor(ctx: RecipientContext, key: string): string {
     case 'plataforma':     return (ctx.plataforma ?? '').trim();
     case 'contrato':       return (ctx.contrato ?? '').trim();
     case 'numeroId':       return (ctx.numeroId ?? '').trim();
+    case 'linkPerfil':     return linkPerfil(ctx.academicaId, ctx.baseUrl);
     default:               return ''; // placeholder desconocido → vacío
   }
 }
