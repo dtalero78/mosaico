@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { origenLabel } from '@/lib/casos-atencion-estados'
 
 /**
  * "Reportar a <alumno>" — el punto donde NACE un reporte (R1).
@@ -50,7 +51,7 @@ const OPCIONES = '/api/postgres/casos-atencion/alta-opciones'
 
 export default function ReportarCasoModal({
   academicaId: academicaIdProp, alumno: alumnoProp, eventoId, bookingId, sesionLabel,
-  conCascada = false, onClose, onEnviado,
+  conCascada = false, origen, onClose, onEnviado,
 }: {
   /** ACADEMICA._id. Vacío cuando el alumno se elige dentro del modal. */
   academicaId?: string
@@ -60,6 +61,8 @@ export default function ReportarCasoModal({
   sesionLabel?: string
   /** Alta desde Servicio: pide Guía → Curso → Salón → Usuario. */
   conCascada?: boolean
+  /** Pestaña desde la que se levanta el caso (SERVICIO, ASIST_ACADEM…). Sin él, el reporte es del guía. */
+  origen?: string
   onClose: () => void
   onEnviado?: (r: { codigo: string; abrioCaso: boolean }) => void
 }) {
@@ -154,6 +157,7 @@ export default function ReportarCasoModal({
         body: JSON.stringify({
           academicaId, texto, tema, eventoId: eventoId ?? null, bookingId: bookingId ?? null,
           guiaId: guiaId || undefined,
+          origen: origen || undefined,
           destino: abiertos.length ? (destino || 'nuevo') : null,
         }),
       })
@@ -186,6 +190,11 @@ export default function ReportarCasoModal({
         <h3 className="text-xl font-semibold text-gray-900">
           {alumno ? `Reportar a ${alumno}` : 'Adicionar caso de atención'}
         </h3>
+        {origen && (
+          <p className="mt-1 text-sm text-gray-500">
+            Origen: <span className="font-medium text-gray-700">{origenLabel(origen)}</span>
+          </p>
+        )}
 
         {/* Cascada Guía → Curso → Salón → Usuario. Sólo en el alta de Servicio:
             desde la sesión del guía esos cuatro datos ya vienen dados. */}

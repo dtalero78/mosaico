@@ -5,6 +5,7 @@ import { crearReporte, casosAbiertosDeAlumno, guiaDeSesion } from '@/services/ca
 import { requirePermission } from '@/lib/api-permissions';
 import { ServicioPermission } from '@/types/permissions';
 import { queryOne } from '@/lib/postgres';
+import { esOrigenAdmin, ORIGEN_DOCENTE, type OrigenCaso } from '@/lib/casos-atencion-estados';
 
 /**
  * Reportes de Casos de Atención — se crean SÓLO desde aquí (R1) y son
@@ -44,6 +45,18 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // exista de verdad — un id inventado dejaría el caso firmado por nadie.
   const guiaPedido = String(body?.guiaId || '').trim();
   const atribuyeAOtro = !!guiaPedido && guiaPedido !== guia?._id;
+  // Origen: un alta desde una pestaña del equipo (Servicio, Académicos,
+  // Nivelaciones, Coordinador, Financieros) manda el suyo. Declararse "equipo"
+  // exige el mismo permiso de gestión que atribuir a otro guía; sin origen, el
+  // alta de Servicio de siempre sigue siendo SERVICIO y el guía, DOCENTE.
+  const origenPedido = String(body?.origen || '').trim().toUpperCase();
+  const esAdmin = esOrigenAdmin(origenPedido);
+  if (origenPedido && !esAdmin && origenPedido !== ORIGEN_DOCENTE) {
+    throw new ValidationError(`Origen inválido: "${body.origen}".`);
+  }
+  const origen: OrigenCaso = esAdmin ? (origenPedido as OrigenCaso) : (atribuyeAOtro ? 'SERVICIO' : ORIGEN_DOCENTE);
+  const registraEquipo = esAdmin || atribuyeAOtro;
+  if (esAdmin) await requirePermission(session, ServicioPermission.CASOS_ATENCION_GESTION as any);
   let autor = guia;
   if (atribuyeAOtro) {
     await requirePermission(session, ServicioPermission.CASOS_ATENCION_GESTION as any);
@@ -97,9 +110,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     guiaNombre: autor?.nombreCompleto || (atribuyeAOtro ? null : (u.name || u.email)) || null,
     // Sólo cuando el autor y quien captura son personas distintas: si reporta el
     // propio guía no hay nada que distinguir.
-    registradoPor: atribuyeAOtro ? (u.name || u.email || null) : null,
-    registradoPorEmail: atribuyeAOtro ? (u.email || null) : null,
+    registradoPor: registraEquipo ? (u.name || u.email || null) : null,
+    registradoPorEmail: registraEquipo ? (u.email || null) : null,
     destino: body?.destino ?? null,
+    origen,
   });
 
   return successResponse({

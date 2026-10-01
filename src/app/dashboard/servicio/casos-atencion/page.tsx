@@ -9,7 +9,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
-import { estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel } from '@/lib/casos-atencion-estados'
+import { estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel, origenLabel, esOrigenAdmin } from '@/lib/casos-atencion-estados'
 import { hoyEnChile } from '@/lib/cursos-campaign'
 
 /**
@@ -142,6 +142,22 @@ const EXIGE_TEXTO = (_d: string | null | undefined) => true
  */
 const MUESTRA_TIPO = (t: Tab) => t !== 'asistencia' && t !== 'vacias'
 
+/**
+ * «Adicionar caso» desde cada bandeja deja marcado de dónde salió el caso. El
+ * caso NO queda asignado a esa área: entra a Casos de Atención › Admin y se
+ * asigna con «Asignar», igual que los demás (decisión del usuario).
+ */
+const ORIGEN_POR_TAB: Partial<Record<Tab, string>> = {
+  casos: 'SERVICIO',
+  academicos: 'ASIST_ACADEM',
+  nivelaciones: 'NIVELACION',
+  coordinador: 'COORD_ACADEM',
+  financieros: 'FINANZAS',
+}
+
+/** Casos de Atención se parte en Docentes (lo reportó el guía) y Admin (el equipo). */
+type SubCasos = 'docentes' | 'admin'
+
 const ES_GESTION = (t: Tab) =>
   t === 'historico' || t === 'academicos' || t === 'financieros' ||
   t === 'coordinador' || t === 'nivelaciones'
@@ -204,6 +220,8 @@ interface Row {
   caso: string | null
   conteo: number
   fecha: string | null
+  /** Quién levantó el caso: DOCENTE o el área del equipo (pestaña Casos). */
+  origen?: string | null
   // Estado REAL del caso (viene de CASOS_ATENCION, no de la marca del booking)
   estado?: string | null
   codigoCaso?: string | null
@@ -248,6 +266,42 @@ function CasosAtencionContent() {
 
   const [tab, setTab] = useState<Tab>('casos')
   const cfg = TABS.find(t => t.id === tab)!
+  const [subCasos, setSubCasos] = useState<SubCasos>('docentes')
+
+  /**
+   * Contadores de cada pestaña, con el período por DEFECTO de cada una (decisión
+   * del usuario): se ven sin entrar a la pestaña y no cambian al filtrar. Salen
+   * de los MISMOS endpoints que llenan cada tabla —no de una consulta aparte—,
+   * así el número no puede contradecir a la lista. Se recalculan al cargar y
+   * después de asignar, cerrar o adicionar un caso.
+   */
+  const [conteos, setConteos] = useState<Partial<Record<Tab | SubCasos, number>>>({})
+  const cargarConteos = useCallback(async () => {
+    const res = await Promise.all(TABS.map(async (t) => {
+      const qs = new URLSearchParams()
+      if (t.area) qs.set('area', t.area)
+      const { desde, hasta } = fechasPorDefecto(t.id)
+      if (desde) { qs.set('startDate', desde); qs.set('endDate', hasta) }
+      try {
+        const r = await fetch(`${t.endpoint}?${qs}`, { cache: 'no-store' }).then(x => x.json())
+        if (r?.error) return { id: t.id, total: null as number | null, filas: null as Row[] | null }
+        return { id: t.id, total: (r.total ?? (r.rows?.length || 0)) as number, filas: (r.rows || null) as Row[] | null }
+      } catch { return { id: t.id, total: null as number | null, filas: null as Row[] | null } }
+    }))
+    const next: Partial<Record<Tab | SubCasos, number>> = {}
+    for (const { id, total, filas } of res) {
+      if (total === null) continue
+      next[id] = total
+      if (id === 'casos' && filas) {
+        const admin = filas.filter(r => esOrigenAdmin(r.origen)).length
+        next.admin = admin
+        next.docentes = filas.length - admin
+      }
+    }
+    setConteos(next)
+  }, [])
+  useEffect(() => { cargarConteos() }, [cargarConteos])
+  const contador = (k: Tab | SubCasos) => (conteos[k] === undefined ? '' : ` (${conteos[k]})`)
 
   // "Adicionar caso": el mismo modal del panel del guía. Aquí no hay sesión de la
   // que sacar el guía ni el alumno, así que el modal los pide en cascada.
@@ -420,7 +474,8 @@ function CasosAtencionContent() {
         { header: 'Recordatorio enviado', accessor: (r: Row) => (r.recordatorioEnviado ? 'Sí' : 'No') },
       )
     }
-    exportToExcel(rows, cols, tab === 'casos' ? 'casos-atencion' : 'inasistencias-semana')
+    if (tab === 'casos') cols.push({ header: 'Origen', accessor: (r: Row) => origenLabel(r.origen) })
+    exportToExcel(filas, cols, tab === 'casos' ? `casos-atencion-${subCasos}` : 'inasistencias-semana')
   }
 
   const confirmarResuelto = async () => {
@@ -442,6 +497,7 @@ function CasosAtencionContent() {
         : `Caso asignado a ${DESTINOS.find(d => d.area === destino)?.label || destino}`)
       setRows(prev => prev.filter(x => x.bookingId !== resolver.bookingId))
       setResolver(null); setComentario(''); setDestino(undefined)
+      cargarConteos()
     } catch (e: any) {
       toast.error(e?.message || 'Error')
     } finally {
@@ -491,6 +547,7 @@ function CasosAtencionContent() {
         .map(e => e.estado === estadoPrevio ? { ...e, n: e.n - 1 } : e)
         .filter(e => e.n > 0))
       setCerrar(null); setConclusion(''); setCierreConfirmado(false)
+      cargarConteos()
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo cerrar el caso')
     } finally {
@@ -537,7 +594,12 @@ function CasosAtencionContent() {
     }
   }
 
-  const hayDatos = tab === 'vacias' ? grupos.length > 0 : rows.length > 0
+  // En Casos de Atención la tabla muestra sólo la subpestaña elegida.
+  const filas = tab === 'casos'
+    ? rows.filter(r => (subCasos === 'admin') === esOrigenAdmin(r.origen))
+    : rows
+  const totalVista = tab === 'casos' ? filas.length : total
+  const hayDatos = tab === 'vacias' ? grupos.length > 0 : filas.length > 0
   const columnas = ES_GESTION(tab)
     ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha',
        ...(MUESTRA_DETALLE(tab) ? [DETALLE_HEADER(tab)] : []), 'Estado']
@@ -553,7 +615,11 @@ function CasosAtencionContent() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Casos de Atención</h1>
           <p className="text-gray-500">
-            {cfg.descripcion} Total: <span className="font-semibold text-gray-700">{total}</span>
+            {tab === 'casos'
+              ? (subCasos === 'admin'
+                  ? 'Casos abiertos por el equipo (Servicio, Académicos, Nivelaciones, Coordinador o Finanzas), sin asignar.'
+                  : 'Casos abiertos por el guía en su sesión, sin asignar.')
+              : cfg.descripcion} Total: <span className="font-semibold text-gray-700">{totalVista}</span>
           </p>
           {/* Desglose por estado: en una pestaña que junta varias gestiones, el
               total solo no dice cuánto hay de cada una. */}
@@ -571,7 +637,7 @@ function CasosAtencionContent() {
         </div>
         {/* Sólo en la pestaña de casos: en Asistencia y Sesiones vacías no hay
             un caso que adicionar, son otra cosa. */}
-        {tab === 'casos' && canGestion && (
+        {ORIGEN_POR_TAB[tab] && canGestion && (
           <button type="button" onClick={() => setAdicionar(true)}
             className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700">
             <PlusCircleIcon className="h-5 w-5" />
@@ -585,16 +651,34 @@ function CasosAtencionContent() {
         {TABS.map(t => (
           <button
             key={t.id} type="button" onClick={() => cambiarTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
               tab === t.id
                 ? 'border-primary-600 text-primary-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
-            {t.label}
+            {t.label}{contador(t.id)}
           </button>
         ))}
       </div>
+
+      {/* Subpestañas de Casos de Atención: quién levantó el caso. Las dos se
+          gestionan igual (mismo botón Asignar). */}
+      {tab === 'casos' && (
+        <div className="flex gap-2 mb-4" role="tablist" aria-label="Origen del caso">
+          {([['docentes', 'Docentes'], ['admin', 'Admin']] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={subCasos === id}
+              onClick={() => setSubCasos(id)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border ${
+                subCasos === id
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}>
+              {label}{contador(id)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
@@ -798,7 +882,7 @@ function CasosAtencionContent() {
                     )}
                   </td>
                 </tr>
-              )) : tab === 'casos' ? rows.map((r) => (
+              )) : tab === 'casos' ? filas.map((r) => (
                 /* Curso · Nombre · Contrato · ID · Salón · Guía · Fecha · Estado */
                 <tr key={r.bookingId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
                   <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
@@ -814,6 +898,9 @@ function CasosAtencionContent() {
                         {r.nombre}
                       </button>
                     ) : <span className="text-gray-900">—</span>}
+                    {subCasos === 'admin' && (
+                      <span className="block text-xs font-normal text-gray-500">Origen: {origenLabel(r.origen)}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {r.contrato ? (
@@ -1115,10 +1202,14 @@ function CasosAtencionContent() {
       {adicionar && (
         <ReportarCasoModal
           conCascada
+          origen={ORIGEN_POR_TAB[tab]}
           onClose={() => setAdicionar(false)}
           onEnviado={(r) => {
-            toast.success(r.abrioCaso ? `Se abrió el caso ${r.codigo}` : `Reporte agregado al caso ${r.codigo}`)
+            toast.success(r.abrioCaso
+              ? `Se abrió el caso ${r.codigo}: queda en Casos de Atención › Admin para asignarlo`
+              : `Reporte agregado al caso ${r.codigo}`)
             fetchData(tab, filtros)   // el caso nuevo debe aparecer en la lista
+            cargarConteos()
           }}
         />
       )}

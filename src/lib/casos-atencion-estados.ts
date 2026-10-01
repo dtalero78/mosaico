@@ -246,3 +246,36 @@ export function tipoCasoLabel(t: string | null | undefined): string {
   if (!t) return '';
   return TIPO_CASO_LABEL[String(t).toUpperCase()] || String(t);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * ORIGEN del caso: quién lo levantó.
+ *
+ * La pestaña Casos de Atención se parte en dos según esto: «Docentes» (lo que
+ * reportó el guía desde su sesión) y «Admin» (lo que levantó una persona del
+ * equipo con el botón «Adicionar caso» de alguna pestaña). Se guarda en el caso
+ * —el origen del reporte que lo ABRIÓ— y en cada reporte.
+ * ──────────────────────────────────────────────────────────────────────────── */
+export type OrigenCaso =
+  | 'DOCENTE' | 'SERVICIO' | 'ASIST_ACADEM' | 'NIVELACION' | 'COORD_ACADEM' | 'FINANZAS';
+
+export const ORIGEN_DOCENTE: OrigenCaso = 'DOCENTE';
+
+/** Los que levanta el equipo, no el guía: van a la subpestaña Admin. */
+export const ORIGENES_ADMIN: OrigenCaso[] = ['SERVICIO', 'ASIST_ACADEM', 'NIVELACION', 'COORD_ACADEM', 'FINANZAS'];
+
+export const ORIGEN_LABEL: Record<OrigenCaso, string> = {
+  DOCENTE: 'Docente',
+  SERVICIO: 'Servicio',
+  ASIST_ACADEM: 'Asiste. Academ.',
+  NIVELACION: 'Nivelación',
+  COORD_ACADEM: 'Cord. Academ.',
+  FINANZAS: 'Finanzas',
+};
+
+export function origenLabel(o: string | null | undefined): string {
+  return ORIGEN_LABEL[String(o || ORIGEN_DOCENTE).toUpperCase() as OrigenCaso] || String(o);
+}
+
+export function esOrigenAdmin(o: string | null | undefined): boolean {
+  return ORIGENES_ADMIN.includes(String(o || '').toUpperCase() as OrigenCaso);
+}

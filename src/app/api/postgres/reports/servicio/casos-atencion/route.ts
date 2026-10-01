@@ -79,6 +79,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             ca."codigo" AS "codigoCaso",
             -- Tipo del CASO (Asistencia, Conducta, Pago...): va bajo el guia.
             ca."tema"::text AS "tipoCaso",
+            -- Quién lo levantó: parte la pestaña en Docentes / Admin. Sin caso
+            -- enlazado (datos viejos) es del guía, que era la única vía.
+            COALESCE(ca."origen", 'DOCENTE') AS origen,
             COALESCE(c."dia", b."fechaEvento") AS fecha,
             COUNT(*) OVER (PARTITION BY a."_id")::int AS conteo
        FROM "ACADEMICA_BOOKINGS" b
@@ -93,7 +96,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        -- guía) y el estado vive en CASOS_ATENCION: sin este JOIN la columna
        -- decía siempre "Pendiente" aunque el caso ya estuviera cerrado.
        LEFT JOIN LATERAL (
-         SELECT x."estado", x."codigo", x."area", x."tema" FROM "CASOS_ATENCION" x
+         SELECT x."estado", x."codigo", x."area", x."tema", x."origen" FROM "CASOS_ATENCION" x
           WHERE x."academicaId" = a."_id"
             AND x."eventoOrigenId" = COALESCE(b."eventoId", b."idEvento")
           ORDER BY x."_createdDate" DESC LIMIT 1

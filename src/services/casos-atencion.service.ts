@@ -35,8 +35,9 @@ import {
   ESTADO_ABIERTO, ESTADOS_CIERRE, ESTADOS, ESTADO_LABEL,
   ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS,
   cierraElCaso, TRASLADA_A_AREA,
+  ORIGEN_DOCENTE, ORIGEN_LABEL, esOrigenAdmin,
 } from '@/lib/casos-atencion-estados';
-import type { EstadoCaso } from '@/lib/casos-atencion-estados';
+import type { EstadoCaso, OrigenCaso } from '@/lib/casos-atencion-estados';
 
 export type TemaCaso = 'ASISTENCIA' | 'CONDUCTA' | 'DESEMPENO' | 'SALUD' | 'PAGO' | 'OTRO';
 export type CanalContacto = 'LLAMADA' | 'WHATSAPP' | 'EMAIL';
@@ -148,6 +149,13 @@ export interface CrearReporteInput {
    * Sin casos abiertos se ignora — el reporte abre uno y no se pregunta (R2).
    */
   destino?: string | null;
+  /**
+   * Quién levanta el reporte: DOCENTE (el guía desde su sesión, por defecto) o
+   * el equipo desde su pestaña de Casos de Atención (SERVICIO, ASIST_ACADEM…).
+   * Si el reporte ABRE el caso, el caso hereda este origen: es lo que decide si
+   * aparece en la subpestaña Docentes o en Admin.
+   */
+  origen?: OrigenCaso | null;
 }
 
 export interface CrearReporteResult {
@@ -171,6 +179,7 @@ export async function crearReporte(input: CrearReporteInput): Promise<CrearRepor
   if (!academicaId) throw new ValidationError('Falta el estudiante.');
   if (!texto) throw new ValidationError('El reporte no puede estar vacío.');
   if (!TEMAS.includes(tema)) throw new ValidationError(`Tema inválido: "${input.tema}".`);
+  const origen: OrigenCaso = esOrigenAdmin(input.origen) ? (String(input.origen).toUpperCase() as OrigenCaso) : ORIGEN_DOCENTE;
 
   // El contrato alimenta el código del caso. Se resuelve desde la ficha del
   // BENEFICIARIO (no la del titular, que puede compartir numeroId).
@@ -223,10 +232,10 @@ export async function crearReporte(input: CrearReporteInput): Promise<CrearRepor
 
       await client.query(
         `INSERT INTO "CASOS_ATENCION"
-           ("_id","codigo","academicaId","numeroId","contrato","numeroCaso","tema","estado","eventoOrigenId","abiertoPor")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'${ESTADO_ABIERTO}',$8,$9)`,
+           ("_id","codigo","academicaId","numeroId","contrato","numeroCaso","tema","estado","eventoOrigenId","abiertoPor","origen")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'${ESTADO_ABIERTO}',$8,$9,$10)`,
         [casoId, codigo, academicaId, alumno.numeroId, alumno.contrato, numeroCaso, tema,
-          input.eventoId || null, input.guiaNombre || input.guiaId || null]
+          input.eventoId || null, input.guiaNombre || input.guiaId || null, origen]
       );
       // El "N.º de caso" del alumno vive en ACADEMICA (spec).
       await client.query(
@@ -235,8 +244,11 @@ export async function crearReporte(input: CrearReporteInput): Promise<CrearRepor
       );
       await client.query(
         `INSERT INTO "CASOS_ESTADO_HISTORIAL"("_id","casoId","estadoAnterior","estadoNuevo","autorEmail","autorNombre","motivo")
-         VALUES ($1,$2,NULL,'${ESTADO_ABIERTO}',$3,$4,'Caso abierto por un reporte del guía')`,
-        [ids.comment(), casoId, input.guiaId || null, input.guiaNombre || null]
+         VALUES ($1,$2,NULL,'${ESTADO_ABIERTO}',$3,$4,$5)`,
+        [ids.comment(), casoId, input.registradoPorEmail || input.guiaId || null,
+          input.registradoPor || input.guiaNombre || null,
+          origen === ORIGEN_DOCENTE ? 'Caso abierto por un reporte del guía'
+            : `Caso abierto desde la pestaña de ${ORIGEN_LABEL[origen]}`]
       );
     }
 
@@ -245,11 +257,11 @@ export async function crearReporte(input: CrearReporteInput): Promise<CrearRepor
     await client.query(
       `INSERT INTO "CASOS_REPORTES"
          ("_id","casoId","academicaId","texto","tema","eventoId","bookingId","guiaId","guiaNombre",
-          "registradoPor","registradoPorEmail","abrioCaso","leido")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,false)`,
+          "registradoPor","registradoPorEmail","abrioCaso","leido","origen")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,false,$13)`,
       [reporteId, casoId, academicaId, texto, tema, input.eventoId || null,
         input.bookingId || null, input.guiaId || null, input.guiaNombre || null,
-        input.registradoPor || null, input.registradoPorEmail || null, abrioCaso]
+        input.registradoPor || null, input.registradoPorEmail || null, abrioCaso, origen]
     );
 
     // Origen ÚNICO: reportar aquí alimenta también el informe Servicio › Casos
