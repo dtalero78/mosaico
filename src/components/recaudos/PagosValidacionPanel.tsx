@@ -17,7 +17,7 @@
  * Al "Validar" ya NO se pide factura: el pago pasa a Facturación, donde el
  * modal pide el número de factura.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { BanknotesIcon, BuildingLibraryIcon, CheckBadgeIcon, ArrowPathIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, XMarkIcon, DocumentTextIcon, PaperClipIcon, ArrowTopRightOnSquareIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
@@ -27,6 +27,8 @@ import { mediosPagoPara } from '@/lib/medios-pago'
 import { api, handleApiError } from '@/hooks/use-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { exportToExcel } from '@/lib/export-excel'
+import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
+import { montoCoincide, type ReciboInscripcion } from '@/lib/recibo-inscripcion'
 
 interface DocAdjunto { url: string; nombre?: string | null; tipo?: string | null; fechaSubida?: string | null }
 
@@ -54,6 +56,8 @@ interface PagoRow {
   titular_contrato: string | null
   titular_plataforma: string | null
   titular_asesorNombre: string | null
+  /** Recibo de inscripción del contrato (PEOPLE.reciboInscripcion del titular). */
+  titular_reciboInscripcion?: ReciboInscripcion | null
   documentosAdjuntos: DocAdjunto[] | null
   /**
    * Documentación del TITULAR (PEOPLE.documentacion). La cuota #0 nace sin
@@ -107,6 +111,43 @@ function DocsList({ docs, vacio }: { docs: DocAdjunto[]; vacio: string }) {
   )
 }
 
+/**
+ * Celda "Recibo" de Verificación Inscripción: si hay recibo, lo que leyó la IA y
+ * si el monto cuadra con el valor de la cuota. Al pulsarla se abre el modal en
+ * modo revisión (corregir lo leído y precargar la cuota, sin validarla).
+ */
+function ReciboCelda({ recibo, valor, onAbrir }: { recibo: ReciboInscripcion | null; valor: number | null; onAbrir?: () => void }) {
+  let linea: ReactNode
+  if (!recibo) {
+    linea = <span className="text-xs text-gray-400 italic">Sin recibo</span>
+  } else if (recibo.lectura === 'FALLIDA') {
+    linea = <span className="text-xs text-red-600">No se pudo leer</span>
+  } else if (recibo.lectura !== 'OK' || !recibo.extraido) {
+    linea = <span className="text-xs text-gray-500">Pendiente de lectura</span>
+  } else {
+    const monto = recibo.extraido.monto
+    const ok = montoCoincide(monto ?? null, valor === null ? null : Number(valor))
+    linea = (
+      <span className="flex flex-col leading-tight">
+        <span className={`text-xs font-medium ${ok ? 'text-emerald-700' : 'text-amber-700'}`}>
+          {monto !== null && monto !== undefined ? formatCurrency(monto) : 'Sin monto'} {ok ? '✓' : '≠'}
+        </span>
+        <span className="text-[11px] text-gray-500 truncate">
+          {[recibo.extraido.medioPago, recibo.extraido.fecha].filter(Boolean).join(' · ') || '—'}
+          {recibo.revisadoPor ? ' · revisado' : ''}
+        </span>
+      </span>
+    )
+  }
+  if (!onAbrir) return <div className="max-w-[140px]">{linea}</div>
+  return (
+    <button type="button" onClick={onAbrir} title={recibo ? 'Ver y revisar el recibo' : 'Subir el recibo de inscripción'}
+      className="block w-full max-w-[140px] text-left rounded px-1 -mx-1 py-0.5 hover:bg-emerald-50">
+      {linea}
+    </button>
+  )
+}
+
 export default function PagosValidacionPanel({ variant }: { variant: Variant }) {
   const { hasPermission } = usePermissions()
   const canValidar = hasPermission(PersonPermission.PAGOS_VALIDAR)
@@ -125,6 +166,9 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
   const [tab, setTab] = useState<Tab>('pago')
   const cuotaTipo = tab === 'inscripcion' ? 'inscripcion' : 'regular'
   const isFacturacion = tab === 'facturacion'
+  // En inscripciones se muestra el recibo del contrato y lo que leyó la IA.
+  const esInscripcion = tab === 'inscripcion'
+  const [reciboDe, setReciboDe] = useState<PagoRow | null>(null)
 
   // Filtros
   const [estado, setEstado] = useState<'' | 'validado' | 'pendiente'>('pendiente')
@@ -563,6 +607,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                 <col style={{ width: 104 }} />
                 <col style={{ width: 64 }} />
                 <col style={{ width: 92 }} />
+                {esInscripcion && <col style={{ width: 150 }} />}
                 <col style={{ width: 168 }} />
                 <col style={{ width: 236 }} />
               </colgroup>
@@ -582,6 +627,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                   <th className="px-2 py-2 text-right font-medium text-gray-600">Valor</th>
                   <th className="px-2 py-2 text-center font-medium text-gray-600">Cuota</th>
                   <th className="px-2 py-2 text-left font-medium text-gray-600"># Ref.</th>
+                  {esInscripcion && <th className="px-2 py-2 text-left font-medium text-gray-600">Recibo</th>}
                   <th className="px-2 py-2 text-left font-medium text-gray-600">{lateralLabel}</th>
                   <th className="px-2 py-2 text-right font-medium text-gray-600">Acciones</th>
                 </tr>
@@ -630,6 +676,12 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                       <td className="px-2 py-2 text-gray-700 text-xs align-top">
                         <span className="block max-w-[90px] truncate" title={p.numeroReferencia || ''}>{p.numeroReferencia || '—'}</span>
                       </td>
+                      {esInscripcion && (
+                        <td className="px-2 py-2 align-top">
+                          <ReciboCelda recibo={p.titular_reciboInscripcion || null} valor={p.valorPagado}
+                            onAbrir={canVerDocs ? () => setReciboDe(p) : undefined} />
+                        </td>
+                      )}
                       <td className="px-2 py-2 text-gray-700 align-top">
                         {isGestor ? (
                           g ? (
@@ -837,6 +889,15 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
           </div>
         </div>
       )}
+
+      {/* Recibo de inscripción — el mismo modal del contrato, en modo revisión */}
+      <DocumentosReciboModal
+        open={!!reciboDe}
+        personId={reciboDe?.idPeople || null}
+        subtitulo={reciboDe ? `${reciboDe.titular_primerNombre} ${reciboDe.titular_primerApellido} · Contrato ${reciboDe.titular_contrato || ''}` : undefined}
+        onClose={() => { setReciboDe(null); fetchPagos() }}
+        revision
+      />
 
       {/* Modal documentos */}
       {docsModal && (

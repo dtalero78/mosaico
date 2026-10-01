@@ -124,6 +124,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Registra el número de factura de un pago ya verificado, desde la pestaña Facturación del Centro de Validación. El pago entra a esa cola al verificarlo (validado sin factura) y sale al facturarlo. Sin este permiso el botón no aparece',
   },
   {
+    code: PersonPermission.LEER_RECIBO,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Leer recibo"',
+    description: 'En Verificación Inscripción: la IA lee el recibo de inscripción (medio de pago, fecha, monto, referencia, banco), el gestor corrige lo que haga falta y lo guarda. Precarga esos datos en la cuota de inscripción sin validarla',
+  },
+  {
     code: PersonPermission.VER_DOCUMENTACION,
     module: Module.PERSON,
     section: 'Información General',
@@ -134,8 +141,15 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     code: PersonPermission.ADICION_DOCUMENTACION,
     module: Module.PERSON,
     section: 'Información General',
-    name: 'Botón "Agregar Documentación"',
-    description: 'Subir nueva documentación al perfil del titular',
+    name: 'Botón "Subir documentos"',
+    description: 'Subir documentación del contrato (imágenes, PDF o audios) desde el modal "Documentación y recibo"',
+  },
+  {
+    code: PersonPermission.ELIMINAR_DOCUMENTACION,
+    module: Module.PERSON,
+    section: 'Información General',
+    name: 'Eliminar documentación',
+    description: 'Quitar un documento del contrato (botón de papelera en "Documentación y recibo"). También borra el archivo guardado',
   },
   {
     code: PersonPermission.ACTIVAR_DESACTIVAR,
@@ -1023,6 +1037,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     section: 'Detalle Contrato',
     name: 'Botón "Descargar PDF"',
     description: 'Descargar el contrato generado como PDF',
+  },
+  {
+    code: ComercialPermission.SUBIR_RECIBO_INSCRIPCION,
+    module: Module.COMERCIAL,
+    section: 'Detalle Contrato',
+    name: 'Botón "Subir recibo" (Documentación y recibo)',
+    description: 'Sube o reemplaza el recibo de inscripción del contrato. Al subirlo, la IA lo lee (medio de pago, fecha, monto, referencia, banco) y lo deja adjunto a la cuota de inscripción para Recaudos. Ver el recibo no requiere este permiso',
   },
   {
     code: ComercialPermission.APROBACION_AUTONOMA,

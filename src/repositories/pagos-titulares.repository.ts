@@ -271,7 +271,9 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          -- contrato firmado se adjuntan a la PERSONA, no al pago. La cuota #0 se
          -- crea sin adjuntos propios, así que sin esto la pestaña de inscripciones
          -- no tendría de dónde mirar la evidencia que se está verificando.
-         COALESCE(p."documentacion", '[]'::jsonb) AS "titular_documentacion"
+         COALESCE(p."documentacion", '[]'::jsonb) AS "titular_documentacion",
+         -- Recibo de inscripción del contrato (vive en el titular) con lo que leyó la IA.
+         p."reciboInscripcion" AS "titular_reciboInscripcion"
        FROM "PAGOS_TITULARES" pt
        JOIN "PEOPLE" p ON p."_id" = pt."idPeople"
        ${whereClause}

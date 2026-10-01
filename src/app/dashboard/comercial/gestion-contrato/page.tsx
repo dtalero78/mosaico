@@ -8,6 +8,7 @@ import { ComercialPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import SinCupoModal, { type SinCupoDetalle } from '@/components/comercial/SinCupoModal'
 import EnGestionTab from '@/components/comercial/EnGestionTab'
+import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
 import { HORAS_EN_GESTION } from '@/lib/contrato-en-gestion'
 
 /** Un contrato aprobado ya salió de la gestión comercial. */
@@ -56,6 +57,8 @@ export default function GestionContratoPage() {
   // Pestañas. "En Gestión" queda montada aunque no esté a la vista, para que su
   // total se vea en la pestaña sin tener que abrirla.
   const [tab, setTab] = useState<'firmados' | 'gestion'>('firmados')
+  // Fila cuyo modal "Documentación y recibo" está abierto (antes el botón abría /person).
+  const [docsDe, setDocsDe] = useState<any>(null)
   const [enGestionTotal, setEnGestionTotal] = useState<number | null>(null)
   const puedeSobrecupo = hasPermission(ComercialPermission.GESTION_CONTRATO_SOBRECUPO)
   const puedeDarBaja = hasPermission(ComercialPermission.GESTION_CONTRATO_DAR_BAJA)
@@ -336,9 +339,9 @@ export default function GestionContratoPage() {
                         <div className="flex items-center justify-end gap-2">
                           {/* Etiqueta corta: el botón ocupaba casi el doble que
                               "Dejar listo" y la fila quedaba desbalanceada. */}
-                          <a href={`/person/${r._id}?soloGeneral=1`} target="_blank" rel="noopener noreferrer"
-                            title="Adicionar documentos"
-                            className="px-2.5 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-xs font-medium hover:bg-purple-50 whitespace-nowrap">📎 Documentos</a>
+                          <button type="button" onClick={() => setDocsDe(r)}
+                            title="Documentación y recibo de inscripción"
+                            className="px-2.5 py-1.5 rounded-lg border border-purple-300 text-purple-700 text-xs font-medium hover:bg-purple-50 whitespace-nowrap">📎 Documentos</button>
                           {/* El camino al detalle del contrato (enviar el PDF,
                               imprimir, corregir): al firmarse sale de En Gestión,
                               así que tiene que poder abrirse desde aquí. */}
@@ -519,6 +522,13 @@ export default function GestionContratoPage() {
               </div>
             </div>
           )}
+
+          <DocumentosReciboModal
+            open={!!docsDe}
+            personId={docsDe?._id || null}
+            subtitulo={docsDe ? `${docsDe.nombre || ''} · Contrato ${docsDe.contrato || ''}` : undefined}
+            onClose={() => setDocsDe(null)}
+          />
         </div>
       </PermissionGuard>
     </DashboardLayout>

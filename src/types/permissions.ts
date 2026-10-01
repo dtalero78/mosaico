@@ -61,6 +61,7 @@ export enum PersonPermission {
   VER_CONTRATO = 'PERSON.INFO.VER_CONTRATO',
   VER_DOCUMENTACION = 'PERSON.INFO.VER_DOCUMENTACION',
   ADICION_DOCUMENTACION = 'PERSON.INFO.ADICION_DOCUMENTACION',
+  ELIMINAR_DOCUMENTACION = 'PERSON.INFO.ELIMINAR_DOCUMENTACION',
   CAMBIO_CELULAR = 'PERSON.INFO.CAMBIO_CELULAR',
   CAMBIAR_ESTADO = 'PERSON.INFO.CAMBIAR_ESTADO',
   MODIFICAR = 'PERSON.INFO.MODIFICAR',
@@ -79,6 +80,8 @@ export enum PersonPermission {
   PAGOS_ELIMINAR         = 'PERSON.FINANCIERA.PAGOS_ELIMINAR',
   PAGOS_RECIBO           = 'PERSON.FINANCIERA.PAGOS_RECIBO',
   PAGOS_FACTURAR         = 'PERSON.FINANCIERA.PAGOS_FACTURAR',
+  /** "Leer recibo" en Verificación Inscripción: la IA lee el comprobante y el gestor corrige. */
+  LEER_RECIBO            = 'PERSON.FINANCIERA.LEER_RECIBO',
 
   // Legacy permissions (keeping for backward compatibility)
   ACTIVAR_DESACTIVAR = 'PERSON.ADMIN.ACTIVAR_DESACTIVAR',
@@ -388,6 +391,8 @@ export enum ComercialPermission {
   DESCARGAR = 'COMERCIAL.CONTRATO.DESCARGAR',
   /** Botón "Acción Administrativa" (ex "Auto-Aprobar Consentimiento") en el detalle del contrato. */
   APROBACION_AUTONOMA = 'COMERCIAL.CONTRATO.APROBACION_AUTONOMA',
+  /** Subir / reemplazar el recibo de inscripción del contrato (se lee con IA al subirlo). */
+  SUBIR_RECIBO_INSCRIPCION = 'COMERCIAL.CONTRATO.SUBIR_RECIBO',
 
   // Prospectos
   VER_PROSPECTOS = 'COMERCIAL.PROSPECTOS.VER',

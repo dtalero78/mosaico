@@ -3,14 +3,12 @@
 import { useState } from 'react'
 import { Person } from '@/types'
 import { formatDate } from '@/lib/utils'
-import { ArrowDownTrayIcon, ArrowUpTrayIcon, DocumentTextIcon, PhotoIcon, SpeakerWaveIcon } from '@heroicons/react/24/outline'
+import { ArrowDownTrayIcon, PaperClipIcon } from '@heroicons/react/24/outline'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
-import { api, handleApiError } from '@/hooks/use-api'
-import toast from 'react-hot-toast'
 import PersonContractViewer from './PersonContractViewer'
 import SuspendidaBadge from '@/components/common/SuspendidaBadge'
-import { ACCEPT_DOCUMENTOS, esAudio, esImagen, etiquetaDocumento } from '@/lib/documentos-adjuntos'
+import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
 
 interface PersonGeneralProps {
   person: Person
@@ -19,8 +17,9 @@ interface PersonGeneralProps {
 }
 
 export default function PersonGeneral({ person, isSuspendida }: PersonGeneralProps) {
-  const [showDocuments, setShowDocuments] = useState(false)
-  const [uploadingFiles, setUploadingFiles] = useState<string[]>([])
+  // "Documentación y recibo": el mismo modal del detalle del contrato. Reemplaza
+  // los dos botones que había ("Ver Documentación" y "Agregar Documentación").
+  const [showDocumentos, setShowDocumentos] = useState(false)
 
   // Descargar contrato PDF
   const downloadContrato = () => {
@@ -34,70 +33,7 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
     window.open(downloadUrl, '_blank')
   }
 
-  // Ver documentación
-  const viewDocuments = () => {
-    setShowDocuments(true)
-  }
-
-  const [docs, setDocs] = useState(() => {
-    const rawDocs: any[] = (person as any).documentacion || []
-    return rawDocs.map((entry: any) => {
-      if (typeof entry === 'string') {
-        const urlMatch = entry.match(/wix:image:\/\/v1\/([^/]+)\//)
-        const url = urlMatch ? `https://static.wixstatic.com/media/${urlMatch[1]}` : entry
-        const nameMatch = entry.match(/\/([^/#]+?)(?:#|$)/)
-        const nombre = nameMatch ? decodeURIComponent(nameMatch[1]) : 'Documento'
-        const tipo = entry.includes('.pdf') ? 'application/pdf' : 'image/jpeg'
-        return { url, nombre, tipo }
-      }
-      return entry as { url: string; nombre: string; tipo?: string; fechaSubida?: string }
-    })
-  })
-
-  const handleFileUpload = async (files: File[]) => {
-    if (!files.length) return
-    for (const file of files) {
-      setUploadingFiles(prev => [...prev, file.name])
-      try {
-        const formData = new FormData()
-        formData.append('file', file)
-        const uploadRes = await fetch(`/api/contracts/${person._id}/upload-url`, {
-          method: 'POST',
-          body: formData,
-        })
-        if (!uploadRes.ok) {
-          const err = await uploadRes.json().catch(() => ({}))
-          throw new Error(err.error || `Upload failed: ${uploadRes.status}`)
-        }
-        const { publicUrl } = await uploadRes.json()
-        const saved = await api.post(`/api/contracts/${person._id}/documents`, {
-          url: publicUrl,
-          nombre: file.name,
-          tipo: file.type,
-        })
-        setDocs(saved.documentacion || [])
-        toast.success(`${file.name} subido`)
-      } catch (err) {
-        handleApiError(err, `Error subiendo ${file.name}`)
-      } finally {
-        setUploadingFiles(prev => prev.filter(n => n !== file.name))
-      }
-    }
-  }
-
-  const openFileChooser = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.multiple = true
-    input.accept = ACCEPT_DOCUMENTOS
-    input.style.display = 'none'
-    document.body.appendChild(input)
-    input.addEventListener('change', () => {
-      handleFileUpload(Array.from(input.files || []))
-      document.body.removeChild(input)
-    })
-    input.click()
-  }
+  const nombre = [person.primerNombre, person.primerApellido].filter(Boolean).join(' ')
 
   return (
     <div className="space-y-8">
@@ -115,23 +51,13 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
             <span>Descargar Contrato</span>
           </button>
         </PermissionGuard>
-        <PermissionGuard permission={PersonPermission.VER_DOCUMENTACION}>
+        <PermissionGuard anyPermissions={[PersonPermission.VER_DOCUMENTACION, PersonPermission.ADICION_DOCUMENTACION]}>
           <button
-            onClick={viewDocuments}
+            onClick={() => setShowDocumentos(true)}
             className="btn-secondary flex items-center space-x-2"
           >
-            <DocumentTextIcon className="h-4 w-4" />
-            <span>Ver Documentación</span>
-          </button>
-        </PermissionGuard>
-        <PermissionGuard permission={PersonPermission.ADICION_DOCUMENTACION}>
-          <button
-            onClick={openFileChooser}
-            disabled={uploadingFiles.length > 0}
-            className="btn-secondary flex items-center space-x-2"
-          >
-            <ArrowUpTrayIcon className="h-4 w-4" />
-            <span>{uploadingFiles.length > 0 ? `Subiendo (${uploadingFiles.length})...` : 'Agregar Documentación'}</span>
+            <PaperClipIcon className="h-4 w-4" />
+            <span>Documentación y recibo</span>
           </button>
         </PermissionGuard>
         <SuspendidaBadge
@@ -226,62 +152,12 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
         </div>
       </div>
 
-      {/* Documents Modal */}
-      {showDocuments && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-96 overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Documentación del Contrato</h3>
-              <button
-                onClick={() => setShowDocuments(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {docs.map((doc, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                  <div className="flex items-center space-x-3">
-                    {esImagen(doc.tipo, doc.nombre) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={doc.url} alt={doc.nombre} className="h-12 w-12 rounded object-cover flex-shrink-0 border border-gray-200" />
-                    ) : esAudio(doc.tipo, doc.nombre) ? (
-                      <SpeakerWaveIcon className="h-8 w-8 text-indigo-500 flex-shrink-0" />
-                    ) : (
-                      <DocumentTextIcon className="h-8 w-8 text-red-400 flex-shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{doc.nombre}</p>
-                      <p className="text-xs text-gray-500">{etiquetaDocumento(doc.tipo, doc.nombre)}</p>
-                    </div>
-                  </div>
-                  {/* El audio se escucha aquí mismo: abrirlo en otra pestaña para oír
-                      una nota de voz de 20 segundos es una vuelta innecesaria. */}
-                  {esAudio(doc.tipo, doc.nombre) ? (
-                    <audio controls preload="none" src={doc.url} className="mt-2 w-full h-9">
-                      Tu navegador no puede reproducir este audio.
-                    </audio>
-                  ) : null}
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 text-sm text-primary-600 hover:text-primary-800 block"
-                  >
-                    {esAudio(doc.tipo, doc.nombre) ? 'Descargar audio' : 'Ver documento'}
-                  </a>
-                </div>
-              ))}
-            </div>
-            {docs.length === 0 && (
-              <p className="text-sm text-gray-500 text-center py-8">
-                No hay documentos disponibles
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      <DocumentosReciboModal
+        open={showDocumentos}
+        personId={person._id}
+        subtitulo={`${nombre}${person.contrato ? ` · Contrato ${person.contrato}` : ''}`}
+        onClose={() => setShowDocumentos(false)}
+      />
     </div>
   )
 }

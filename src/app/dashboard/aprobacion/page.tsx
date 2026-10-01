@@ -38,7 +38,7 @@ interface Contrato {
   tipoUsuario: string
   aprobacion?: string
   hashConsentimiento?: string
-  documentacion?: string[]
+  documentacion?: Array<string | { url: string; nombre?: string; tipo?: string; fechaSubida?: string }>
   _createdDate: Date
   fechaProximaGestion?: Date
 }
@@ -871,12 +871,15 @@ export default function AprobacionPage() {
               {selectedContrato.documentacion && selectedContrato.documentacion.length > 0 ? (
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   {selectedContrato.documentacion.map((doc, index) => (
+                    // Cada entrada es un objeto {url, nombre, tipo, fechaSubida}; el
+                    // texto plano sólo existía en los datos de Wix. Antes se abría
+                    // el objeto entero y el navegador iba a "[object Object]".
                     <div key={index} className="border rounded-lg p-3 flex items-center justify-between">
-                      <span className="text-sm truncate flex-1">
-                        Documento {index + 1}
+                      <span className="text-sm truncate flex-1" title={typeof doc === 'string' ? doc : doc?.nombre}>
+                        {typeof doc === 'string' ? `Documento ${index + 1}` : (doc?.nombre || `Documento ${index + 1}`)}
                       </span>
                       <button
-                        onClick={() => window.open(doc, '_blank')}
+                        onClick={() => window.open(typeof doc === 'string' ? doc : doc?.url, '_blank', 'noopener,noreferrer')}
                         className="ml-2 text-blue-600 hover:text-blue-800"
                       >
                         <Eye className="w-4 h-4" />

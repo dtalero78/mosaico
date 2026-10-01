@@ -216,7 +216,9 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
             <span>Ver Documentación</span>
           </button>
         </PermissionGuard>
-        <PermissionGuard permission={PersonPermission.VER_DOCUMENTACION}>
+        {/* Subir exige "Adición documentación" (el endpoint lo valida); antes el
+            botón se mostraba con el permiso de VER y el servidor no pedía nada. */}
+        <PermissionGuard permission={PersonPermission.ADICION_DOCUMENTACION}>
           <button
             onClick={openFileChooser}
             disabled={uploadingFiles.length > 0}
