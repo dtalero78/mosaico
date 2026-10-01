@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import toast from 'react-hot-toast'
+import { useSession } from 'next-auth/react'
 import { CheckCircleIcon, ChatBubbleLeftRightIcon, PlusCircleIcon } from '@heroicons/react/24/outline'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import ReportarCasoModal from '@/components/session/ReportarCasoModal'
@@ -201,6 +202,38 @@ function fechasPorDefecto(t: Tab): { desde: string; hasta: string } {
   return DEFAULT_DOS_SEMANAS(t) ? rangoDosSemanas() : { desde: '', hasta: '' }
 }
 
+/**
+ * "Cerrado por" + fecha y hora del sistema en los diálogos de cierre.
+ * El reloj se refresca cada 30 s para que la hora mostrada sea la del momento
+ * en que se confirma; la que queda registrada la pone el servidor.
+ */
+function FirmaCierre() {
+  const { data: session } = useSession()
+  const [ahora, setAhora] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setAhora(new Date()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+  const u = session?.user as { name?: string | null; email?: string | null } | undefined
+  const quien = u?.name && u?.email ? `${u.name} (${u.email})` : (u?.name || u?.email || '—')
+  const cuando = ahora.toLocaleString('es', {
+    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+  return (
+    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Cerrado por</p>
+        <p className="text-gray-800 break-words">{quien}</p>
+      </div>
+      <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Fecha y hora</p>
+        <p className="text-gray-800 tabular-nums">{cuando}</p>
+      </div>
+    </div>
+  )
+}
+
 interface Row {
   bookingId: string
   academicaId: string
@@ -335,6 +368,7 @@ function CasosAtencionContent() {
 
   // Modal de "Resuelto" (pestaña Casos)
   const [resolver, setResolver] = useState<Row | null>(null)
+  const [resolverConfirmado, setResolverConfirmado] = useState(false)
   const [comentario, setComentario] = useState('')
   // `undefined` = todavía no eligió; `null` = eligió Cerrar (que no tiene área).
   const [destino, setDestino] = useState<string | null | undefined>(undefined)
@@ -622,12 +656,12 @@ function CasosAtencionContent() {
   const totalVista = tab === 'casos' ? filas.length : total
   const hayDatos = tab === 'vacias' ? grupos.length > 0 : filas.length > 0
   const columnas = ES_GESTION(tab)
-    ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha',
+    ? ['Curso / Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha',
        ...(MUESTRA_DETALLE(tab) ? [DETALLE_HEADER(tab)] : []), 'Estado']
     : tab === 'casos'
-    ? ['Curso', 'Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
+    ? ['Curso / Nombre', 'Contrato', 'ID', 'Salón', 'Guía', 'Fecha', 'Estado']
     : tab === 'asistencia'
-      ? ['Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Fecha', 'Contactado apoderado', 'Envío recordatorio']
+      ? ['Curso / Nombre', 'Salón', 'Lección (tema)', 'Guía', 'Fecha', 'Contactado apoderado', 'Envío recordatorio']
       : ['Curso', 'Faltaron', 'Salón', 'Lección (tema)', 'Guía', 'Fecha']
 
   return (
@@ -852,8 +886,10 @@ function CasosAtencionContent() {
                    Casos. Las de área llevan además "Cerrar caso"; el Histórico
                    no, porque ahí ya está cerrado. */
                 <tr key={r.casoId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
-                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                  {/* Curso arriba y nombre debajo, en una sola columna: así caben
+                      todas las columnas sin desplazar la tabla. */}
+                  <td className="px-3 py-2 font-medium min-w-[190px] max-w-[260px] [&_button]:text-left">
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500">{r.curso || '—'}</span>
                     {r.nombre ? (
                       <button
                         type="button"
@@ -916,8 +952,10 @@ function CasosAtencionContent() {
               )) : tab === 'casos' ? filas.map((r) => (
                 /* Curso · Nombre · Contrato · ID · Salón · Guía · Fecha · Estado */
                 <tr key={r.bookingId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
-                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                  {/* Curso arriba y nombre debajo, en una sola columna: así caben
+                      todas las columnas sin desplazar la tabla. */}
+                  <td className="px-3 py-2 font-medium min-w-[190px] max-w-[260px] [&_button]:text-left">
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500">{r.curso || '—'}</span>
                     {r.nombre ? (
                       <button
                         type="button"
@@ -968,7 +1006,7 @@ function CasosAtencionContent() {
                       {r.estado && r.estado !== ESTADO_ABIERTO ? estadoLabel(r.estado) : 'Pendiente'}
                     </span>
                     <button type="button" title="Asignar el caso a un área o cerrarlo"
-                      onClick={() => { setResolver(r); setComentario(''); setDestino(undefined) }}
+                      onClick={() => { setResolver(r); setComentario(''); setDestino(undefined); setResolverConfirmado(false) }}
                       disabled={!canGestion}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
                       <CheckCircleIcon className="h-4 w-4" /> Asignar
@@ -977,8 +1015,10 @@ function CasosAtencionContent() {
                 </tr>
               )) : rows.map((r) => (
                 <tr key={r.bookingId} className="group border-b border-gray-100 hover:bg-gray-50 align-top">
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
-                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                  {/* Curso arriba y nombre debajo, en una sola columna: así caben
+                      todas las columnas sin desplazar la tabla. */}
+                  <td className="px-3 py-2 font-medium min-w-[190px] max-w-[260px] [&_button]:text-left">
+                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500">{r.curso || '—'}</span>
                     {r.nombre ? (
                       <button
                         type="button"
@@ -1056,6 +1096,59 @@ function CasosAtencionContent() {
       {resolver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !saving && setResolver(null)}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
+            {destino === null ? (
+              /* "Cerrar" elegido: el mismo diálogo que "Cerrar caso" de las
+                 bandejas de área, para que cerrar se vea y se confirme igual
+                 venga de donde venga. */
+              <>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Cerrar caso</h3>
+                <p className="text-sm text-gray-500 mb-1">
+                  {resolver.nombre} — {resolver.curso || '—'}{resolver.codigoCaso ? ` · Caso ${resolver.codigoCaso}` : ''}
+                </p>
+                <p className="text-sm text-gray-500 mb-4">
+                  Estado actual:{' '}
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${estadoColor(resolver.estado || ESTADO_ABIERTO)}`}>
+                    {resolver.estado && resolver.estado !== ESTADO_ABIERTO ? estadoLabel(resolver.estado) : 'Pendiente'}
+                  </span>
+                </p>
+                {resolver.caso && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm text-gray-700">
+                    <p className="text-xs font-semibold text-gray-500 mb-1">Último movimiento del caso:</p>
+                    <p className="whitespace-pre-wrap break-words">{resolver.caso}</p>
+                  </div>
+                )}
+                <label htmlFor="rs-conclusion" className="block text-sm font-medium text-gray-700 mb-1">
+                  Conclusión del caso <span className="text-red-500">*</span>
+                </label>
+                <textarea id="rs-conclusion" value={comentario} onChange={e => setComentario(e.target.value)}
+                  rows={3} maxLength={2000} placeholder="Cómo se resolvió el caso y con qué resultado…"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none" />
+                <label className="flex items-start gap-2 mt-4 cursor-pointer">
+                  <input type="checkbox" checked={resolverConfirmado} onChange={e => setResolverConfirmado(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-primary-600" />
+                  <span className="text-sm text-gray-700">
+                    Confirmo el cierre: el caso pasa al <b>Histórico</b> y queda de solo lectura.
+                  </span>
+                </label>
+                <FirmaCierre />
+                <p className="text-xs text-gray-400 mt-2">
+                  La conclusión queda en la bitácora del caso y en la columna Conclusión del Histórico.
+                </p>
+                <div className="flex justify-between gap-2 mt-5">
+                  <button type="button" onClick={() => { setDestino(undefined); setResolverConfirmado(false) }} disabled={saving}
+                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50">← Elegir otro destino</button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { setResolver(null); setDestino(undefined) }} disabled={saving}
+                      className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+                    <button type="button" onClick={confirmarResuelto}
+                      disabled={saving || !comentario.trim() || !resolverConfirmado}
+                      className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
+                      {saving ? 'Cerrando…' : 'Cerrar caso'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (<>
             <h3 className="text-lg font-semibold text-gray-900 mb-1">Asignar caso</h3>
             <p className="text-sm text-gray-500 mb-4">
               {resolver.nombre} — {resolver.curso || '—'} · Lección {resolver.leccion || '—'}
@@ -1101,9 +1194,10 @@ function CasosAtencionContent() {
               <button type="button" onClick={confirmarResuelto}
                 disabled={saving || destino === undefined || (EXIGE_TEXTO(destino) && !comentario.trim())}
                 className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
-                {saving ? 'Guardando…' : destino === null ? 'Cerrar caso' : 'Asignar'}
+                {saving ? 'Guardando…' : 'Asignar'}
               </button>
             </div>
+            </>)}
           </div>
         </div>
       )}
@@ -1186,6 +1280,7 @@ function CasosAtencionContent() {
                   Confirmo el cierre: el caso pasa al <b>Histórico</b> y queda de solo lectura.
                 </span>
               </label>
+              <FirmaCierre />
               <p className="text-xs text-gray-400 mt-2">
                 La conclusión queda en la bitácora del caso y en la columna Conclusión del Histórico.
               </p>
