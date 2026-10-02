@@ -62,6 +62,8 @@ interface ClassRecord {
   prevFecha?: string | null
   prevAsistio?: boolean | null
   prevLeccion?: string | null
+  /** Tiene un caso cerrado como "Usuario NO continúa con el curso". */
+  noContinua?: boolean
 }
 
 interface StudentWithClass {
@@ -559,6 +561,12 @@ export default function SessionStudentsTab({
                           {student.primerNombre} {student.primerApellido}
                         </p>
                         <p className="text-sm text-gray-600">{student.plataforma || '-'}</p>
+                        {student.classRecord?.noContinua && (
+                          <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-300"
+                            title="Se cerró un caso de atención indicando que el alumno no continúa con el curso.">
+                            No reportar asistencia
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         {student.classRecord?.asistencia && (

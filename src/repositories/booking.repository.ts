@@ -225,7 +225,12 @@ class BookingRepositoryClass extends BaseRepository {
               -- historial. Sólo clases ya dictadas y no canceladas por el alumno.
               ant."dia" AS "prevFecha",
               ant."asistio" AS "prevAsistio",
-              ant."step" AS "prevLeccion"
+              ant."step" AS "prevLeccion",
+              -- Un caso cerrado como "Usuario NO continúa con el curso": el Guía
+              -- ve el aviso "No reportar asistencia" en la lista de inscritos.
+              EXISTS (SELECT 1 FROM "CASOS_ATENCION" cn
+                       WHERE cn."academicaId" = COALESCE(b."idEstudiante", b."studentId")
+                         AND cn."noContinua" IS TRUE) AS "noContinua"
        FROM "ACADEMICA_BOOKINGS" b
        LEFT JOIN "ACADEMICA" a ON b."idEstudiante" = a."_id"
        LEFT JOIN "PEOPLE" p ON a."numeroId" = p."numeroId"

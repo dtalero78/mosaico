@@ -94,6 +94,8 @@ interface ClassRecord {
   prevFecha?: string | null
   prevAsistio?: boolean | null
   prevLeccion?: string | null
+  /** Tiene un caso cerrado como "Usuario NO continúa con el curso". */
+  noContinua?: boolean
 }
 
 interface StudentWithClass extends Student {
@@ -229,6 +231,7 @@ export default function SesionPage() {
               prevFecha: booking.prevFecha ?? null,
               prevAsistio: booking.prevAsistio ?? null,
               prevLeccion: booking.prevLeccion ?? null,
+              noContinua: booking.noContinua === true,
             },
           }
         })
