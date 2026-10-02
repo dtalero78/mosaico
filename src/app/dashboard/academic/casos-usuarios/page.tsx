@@ -18,7 +18,7 @@ import {
  * caso. El rol GUIA sólo ve los casos que él reportó, y eso lo decide el
  * servidor, no esta pantalla.
  *
- * Para el GUIA la pantalla se parte en dos pestañas — En Gestión y Cerrados —
+ * Para el GUIA la pantalla se parte en dos pestañas — Pendientes y Cerrados —
  * en vez del filtro de Estado: lo que le importa es si su caso sigue vivo o ya
  * se resolvió, y en Cerrados cómo terminó (si el alumno continúa, quién lo cerró
  * y cuándo). "Cerrado" es el mismo criterio de las bandejas de Servicio
@@ -141,7 +141,7 @@ export default function CasosUsuariosPage() {
         { header: 'Reportes', accessor: (r: any) => r.reportes },
         { header: 'Reincidencia', accessor: (r: any) => r.reincidenciaNivel || '' },
         { header: 'Abierto', accessor: (r: any) => fmt(r.abiertoEn) },
-      ], esGuia ? 'casos-usuarios-en-gestion' : 'casos-usuarios')
+      ], esGuia ? 'casos-usuarios-pendientes' : 'casos-usuarios')
 
   const columnas = vistaCerrados
     ? ['Alumno', 'Curso', 'Salón', 'Tema', 'Reportes', 'Usuario continúa', 'Cerrado', 'Cerrado por', 'Estado']
@@ -160,7 +160,7 @@ export default function CasosUsuariosPage() {
           {/* Pestañas del guía: reemplazan al filtro de Estado. */}
           {esGuia && (
             <div className="flex gap-1 border-b border-gray-200 mb-4" role="tablist" aria-label="Estado del caso">
-              {([['gestion', 'En Gestión', enGestion.length], ['cerrados', 'Cerrados', cerrados.length]] as const).map(([id, label, n]) => (
+              {([['gestion', 'Pendientes', enGestion.length], ['cerrados', 'Cerrados', cerrados.length]] as const).map(([id, label, n]) => (
                 <button key={id} type="button" role="tab" aria-selected={tabGuia === id} onClick={() => setTabGuia(id)}
                   className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
                     tabGuia === id ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -230,7 +230,7 @@ export default function CasosUsuariosPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <p className="text-sm text-gray-600">
               {loading ? 'Cargando…' : esGuia
-                ? `${visibles.length} caso(s) ${vistaCerrados ? 'cerrado(s)' : 'en gestión'}`
+                ? `${visibles.length} caso(s) ${vistaCerrados ? 'cerrado(s)' : 'pendiente(s)'}`
                 : `${meta.total || 0} caso(s) · ${meta.abiertos || 0} abierto(s)`}
               {!vistaCerrados && meta.sinLeer > 0 && <span className="ml-2 text-red-600 font-medium">{meta.sinLeer} reporte(s) sin leer</span>}
             </p>
