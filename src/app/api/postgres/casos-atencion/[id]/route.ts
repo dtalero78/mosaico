@@ -82,7 +82,9 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     if (body?.acuerdo !== undefined || body?.fechaCompromiso !== undefined) {
       await guardarGestion(id, { acuerdo: body?.acuerdo, fechaCompromiso: body?.fechaCompromiso });
     }
-    const r = await cambiarEstado(id, String(body.estado) as EstadoCaso, actor, body.motivo);
+    const r = await cambiarEstado(id, String(body.estado) as EstadoCaso, actor, body.motivo, {
+      noContinua: body?.noContinua === true,
+    });
     return successResponse({
       ...r,
       message: r.cerrado ? 'Caso cerrado y enviado al histórico.' : 'Estado actualizado.',

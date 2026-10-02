@@ -1,12 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
-import { AcademicoPermission } from '@/types/permissions'
+import { AcademicoPermission, Role } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
-import { ESTADO_LABEL, estadoLabel } from '@/lib/casos-atencion-estados'
+import {
+  ESTADO_LABEL, estadoLabel, estadoColor, cierraElCaso, AREA_LABEL, AREA_COLOR, type AreaCaso,
+} from '@/lib/casos-atencion-estados'
 
 /**
  * Académico › Casos Usuarios — listado de los Casos de Atención.
@@ -14,6 +17,12 @@ import { ESTADO_LABEL, estadoLabel } from '@/lib/casos-atencion-estados'
  * El detalle y la gestión viven en la ficha del alumno; desde aquí se entra al
  * caso. El rol GUIA sólo ve los casos que él reportó, y eso lo decide el
  * servidor, no esta pantalla.
+ *
+ * Para el GUIA la pantalla se parte en dos pestañas — En Gestión y Cerrados —
+ * en vez del filtro de Estado: lo que le importa es si su caso sigue vivo o ya
+ * se resolvió, y en Cerrados cómo terminó (si el alumno continúa, quién lo cerró
+ * y cuándo). "Cerrado" es el mismo criterio de las bandejas de Servicio
+ * (`cierraElCaso`): un caso asignado a un área sigue en gestión.
  */
 
 const TEMA_LABEL: Record<string, string> = {
@@ -24,15 +33,51 @@ const REINCIDENCIA_COLOR: Record<string, string> = {
   BAJA: 'bg-emerald-100 text-emerald-700', MEDIA: 'bg-amber-100 text-amber-700', ALTA: 'bg-red-100 text-red-700',
 }
 
+type TabGuia = 'gestion' | 'cerrados'
+
 const fmt = (v: any) => v
   ? new Date(v).toLocaleDateString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: 'short', year: 'numeric' })
   : '—'
 
+/** "Usuario continúa": por defecto Sí; No sólo si se marcó al cerrar, en rojo. */
+function ContinuaBadge({ noContinua }: { noContinua?: boolean }) {
+  return noContinua
+    ? <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-300">No</span>
+    : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">Sí</span>
+}
+
+/**
+ * Estado que ve el GUIA mientras su caso sigue vivo: "Enviado" hasta que
+ * Servicio lo asigna, y después "En gestión" con el área que lo tiene. El estado
+ * técnico (Derivado Finanzas, Salón Cambiado…) va en el tooltip.
+ */
+function EstadoGuiaBadge({ estado, area }: { estado: string; area?: string | null }) {
+  const a = area as AreaCaso | null | undefined
+  if (!a || !AREA_LABEL[a]) {
+    return (
+      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+        title="Lo enviaste a Servicio; todavía no se asigna a un área.">
+        Enviado
+      </span>
+    )
+  }
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${AREA_COLOR[a]}`}
+      title={`Estado: ${estadoLabel(estado)}`}>
+      En gestión · {AREA_LABEL[a]}
+    </span>
+  )
+}
+
 export default function CasosUsuariosPage() {
+  const { data: session } = useSession()
+  const esGuia = String((session?.user as any)?.role || '') === Role.ADVISOR
+
   const [rows, setRows] = useState<any[]>([])
   const [meta, setMeta] = useState<any>({})
   const [loading, setLoading] = useState(false)
   const [estado, setEstado] = useState('abiertos')
+  const [tabGuia, setTabGuia] = useState<TabGuia>('gestion')
   const [tema, setTema] = useState('')
   const [curso, setCurso] = useState('')
   const [salon, setSalon] = useState('')
@@ -40,10 +85,13 @@ export default function CasosUsuariosPage() {
   const [q, setQ] = useState('')
 
   const cargar = useCallback(async () => {
+    if (!session) return
     setLoading(true)
     try {
       const p = new URLSearchParams()
-      if (estado) p.set('estado', estado)
+      // El guía trae TODOS sus casos y la pantalla los parte en las dos
+      // pestañas: así ambos contadores salen de la misma consulta.
+      if (!esGuia && estado) p.set('estado', estado)
       if (tema) p.set('tema', tema)
       if (curso) p.set('curso', curso)
       if (salon) p.set('salon', salon)
@@ -53,9 +101,51 @@ export default function CasosUsuariosPage() {
       const j = await r.json()
       if (j?.success) { setRows(j.rows || []); setMeta(j) }
     } finally { setLoading(false) }
-  }, [estado, tema, curso, salon, guia, q])
+  }, [session, esGuia, estado, tema, curso, salon, guia, q])
 
   useEffect(() => { cargar() }, [cargar])
+
+  const enGestion = useMemo(() => rows.filter(r => !cierraElCaso(r.estado)), [rows])
+  const cerrados = useMemo(() => rows.filter(r => cierraElCaso(r.estado))
+    .sort((a, b) => String(b.cerradoEn || '').localeCompare(String(a.cerradoEn || ''))), [rows])
+  const vistaCerrados = esGuia && tabGuia === 'cerrados'
+  const visibles = !esGuia ? rows : vistaCerrados ? cerrados : enGestion
+
+  const abrirCaso = (r: any) =>
+    window.open(`/student/${r.academicaId}?tab=casos-atencion`, '_blank', 'noopener,noreferrer')
+
+  const exportar = () => vistaCerrados
+    ? exportToExcel(visibles, [
+        { header: 'Alumno', accessor: (r: any) => r.alumno || '' },
+        { header: 'ID', accessor: (r: any) => r.numeroId || '' },
+        { header: 'Curso', accessor: (r: any) => r.curso || '' },
+        { header: 'Salón', accessor: (r: any) => r.salon || '' },
+        { header: 'Tema', accessor: (r: any) => TEMA_LABEL[r.tema] || r.tema },
+        { header: 'Reportes', accessor: (r: any) => r.reportes },
+        { header: 'Usuario continúa', accessor: (r: any) => (r.noContinua ? 'No' : 'Sí') },
+        { header: 'Cerrado', accessor: (r: any) => fmt(r.cerradoEn) },
+        { header: 'Cerrado por', accessor: (r: any) => r.cerradoPorNombre || r.cerradoPor || '' },
+        { header: 'Estado', accessor: (r: any) => estadoLabel(r.estado) },
+      ], 'casos-usuarios-cerrados')
+    : exportToExcel(visibles, [
+        { header: 'Contrato', accessor: (r: any) => r.contrato || '' },
+        { header: 'Código', accessor: (r: any) => r.codigo },
+        { header: 'Alumno', accessor: (r: any) => r.alumno || '' },
+        { header: 'ID', accessor: (r: any) => r.numeroId || '' },
+        { header: 'Curso', accessor: (r: any) => r.curso || '' },
+        { header: 'Salón', accessor: (r: any) => r.salon || '' },
+        { header: 'Guía', accessor: (r: any) => r.guia || '' },
+        { header: 'Tema', accessor: (r: any) => TEMA_LABEL[r.tema] || r.tema },
+        { header: 'Estado', accessor: (r: any) => !esGuia ? estadoLabel(r.estado)
+            : r.area && AREA_LABEL[r.area as AreaCaso] ? `En gestión · ${AREA_LABEL[r.area as AreaCaso]}` : 'Enviado' },
+        { header: 'Reportes', accessor: (r: any) => r.reportes },
+        { header: 'Reincidencia', accessor: (r: any) => r.reincidenciaNivel || '' },
+        { header: 'Abierto', accessor: (r: any) => fmt(r.abiertoEn) },
+      ], esGuia ? 'casos-usuarios-en-gestion' : 'casos-usuarios')
+
+  const columnas = vistaCerrados
+    ? ['Alumno', 'Curso', 'Salón', 'Tema', 'Reportes', 'Usuario continúa', 'Cerrado', 'Cerrado por', 'Estado']
+    : ['Contrato', 'Alumno', 'Curso', 'Salón', 'Guía', 'Tema', 'Reportes', 'Reincidencia', 'Estado', 'Abierto']
 
   return (
     <DashboardLayout>
@@ -67,18 +157,33 @@ export default function CasosUsuariosPage() {
             {meta.soloMisCasos && <span className="ml-1 text-primary-600">Viendo sólo los casos que reportaste.</span>}
           </p>
 
+          {/* Pestañas del guía: reemplazan al filtro de Estado. */}
+          {esGuia && (
+            <div className="flex gap-1 border-b border-gray-200 mb-4" role="tablist" aria-label="Estado del caso">
+              {([['gestion', 'En Gestión', enGestion.length], ['cerrados', 'Cerrados', cerrados.length]] as const).map(([id, label, n]) => (
+                <button key={id} type="button" role="tab" aria-selected={tabGuia === id} onClick={() => setTabGuia(id)}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                    tabGuia === id ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                  {label} ({loading ? '…' : n})
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Filtros */}
           <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
-              <select value={estado} onChange={e => setEstado(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                <option value="abiertos">Abiertos</option>
-                <option value="cerrados">Cerrados</option>
-                <option value="">Todos</option>
-                {Object.entries(ESTADO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
+            {!esGuia && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
+                <select value={estado} onChange={e => setEstado(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <option value="abiertos">Abiertos</option>
+                  <option value="cerrados">Cerrados</option>
+                  <option value="">Todos</option>
+                  {Object.entries(ESTADO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Tema</label>
               <select value={tema} onChange={e => setTema(e.target.value)}
@@ -104,7 +209,7 @@ export default function CasosUsuariosPage() {
               </select>
             </div>
             {/* Un GUIA sólo ve sus propios casos, así que el filtro no le aporta. */}
-            {!meta.soloMisCasos && (
+            {!meta.soloMisCasos && !esGuia && (
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
                 <select value={guia} onChange={e => setGuia(e.target.value)}
@@ -124,24 +229,12 @@ export default function CasosUsuariosPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <p className="text-sm text-gray-600">
-              {loading ? 'Cargando…' : `${meta.total || 0} caso(s) · ${meta.abiertos || 0} abierto(s)`}
-              {meta.sinLeer > 0 && <span className="ml-2 text-red-600 font-medium">{meta.sinLeer} reporte(s) sin leer</span>}
+              {loading ? 'Cargando…' : esGuia
+                ? `${visibles.length} caso(s) ${vistaCerrados ? 'cerrado(s)' : 'en gestión'}`
+                : `${meta.total || 0} caso(s) · ${meta.abiertos || 0} abierto(s)`}
+              {!vistaCerrados && meta.sinLeer > 0 && <span className="ml-2 text-red-600 font-medium">{meta.sinLeer} reporte(s) sin leer</span>}
             </p>
-            <button type="button" disabled={!rows.length}
-              onClick={() => exportToExcel(rows, [
-                { header: 'Contrato', accessor: (r: any) => r.contrato || '' },
-                { header: 'Código', accessor: (r: any) => r.codigo },
-                { header: 'Alumno', accessor: (r: any) => r.alumno || '' },
-                { header: 'ID', accessor: (r: any) => r.numeroId || '' },
-                { header: 'Curso', accessor: (r: any) => r.curso || '' },
-                { header: 'Salón', accessor: (r: any) => r.salon || '' },
-                { header: 'Guía', accessor: (r: any) => r.guia || '' },
-                { header: 'Tema', accessor: (r: any) => TEMA_LABEL[r.tema] || r.tema },
-                { header: 'Estado', accessor: (r: any) => estadoLabel(r.estado) },
-                { header: 'Reportes', accessor: (r: any) => r.reportes },
-                { header: 'Reincidencia', accessor: (r: any) => r.reincidenciaNivel || '' },
-                { header: 'Abierto', accessor: (r: any) => fmt(r.abiertoEn) },
-              ], 'casos-usuarios')}
+            <button type="button" disabled={!visibles.length} onClick={exportar}
               className="inline-flex items-center px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
               <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
             </button>
@@ -152,25 +245,55 @@ export default function CasosUsuariosPage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600">
                   <tr>
-                    {['Contrato', 'Alumno', 'Curso', 'Salón', 'Guía', 'Tema', 'Reportes', 'Reincidencia', 'Estado', 'Abierto'].map(h => (
+                    {columnas.map(h => (
                       <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {loading ? (
-                    <tr><td colSpan={10} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
-                  ) : !rows.length ? (
-                    <tr><td colSpan={10} className="px-3 py-10 text-center text-gray-400">
-                      No hay casos con estos filtros.
+                    <tr><td colSpan={columnas.length} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
+                  ) : !visibles.length ? (
+                    <tr><td colSpan={columnas.length} className="px-3 py-10 text-center text-gray-400">
+                      {vistaCerrados ? 'No tienes casos cerrados con estos filtros.' : 'No hay casos con estos filtros.'}
                     </td></tr>
-                  ) : rows.map(r => (
+                  ) : vistaCerrados ? visibles.map(r => (
+                    <tr key={r._id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <button type="button" onClick={() => abrirCaso(r)}
+                          className="text-primary-600 hover:underline font-medium text-left"
+                          title={`Abrir el caso ${r.codigo} en la ficha del alumno`}>
+                          {r.alumno || r.codigo}
+                        </button>
+                        {r.numeroId && <span className="block text-xs text-gray-400">{r.numeroId}</span>}
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">{r.curso || '—'}</td>
+                      <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">
+                          {TEMA_LABEL[r.tema] || r.tema}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-700">{r.reportes}</td>
+                      <td className="px-3 py-2"><ContinuaBadge noContinua={r.noContinua} /></td>
+                      <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmt(r.cerradoEn)}</td>
+                      <td className="px-3 py-2 text-gray-600">
+                        <span className="block max-w-[180px] truncate" title={r.cerradoPor || ''}>
+                          {r.cerradoPorNombre || r.cerradoPor || '—'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${estadoColor(r.estado)}`}>
+                          {estadoLabel(r.estado)}
+                        </span>
+                      </td>
+                    </tr>
+                  )) : visibles.map(r => (
                     <tr key={r._id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 whitespace-nowrap">
                         {/* El contrato es lo que se reconoce a simple vista; el
                             código del caso queda en el tooltip y en el CSV. */}
-                        <button type="button"
-                          onClick={() => window.open(`/student/${r.academicaId}?tab=casos-atencion`, '_blank', 'noopener,noreferrer')}
+                        <button type="button" onClick={() => abrirCaso(r)}
                           className="text-primary-600 hover:underline font-medium"
                           title={`Abrir el caso ${r.codigo} en la ficha del alumno`}>
                           {r.contrato || r.codigo}
@@ -203,10 +326,12 @@ export default function CasosUsuariosPage() {
                         ) : <span className="text-gray-400 text-xs">—</span>}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.estado === 'EN_GESTION'
-                          ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                          {estadoLabel(r.estado)}
-                        </span>
+                        {esGuia ? <EstadoGuiaBadge estado={r.estado} area={r.area} /> : (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.estado === 'EN_GESTION'
+                            ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {estadoLabel(r.estado)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmt(r.abiertoEn)}</td>
                     </tr>

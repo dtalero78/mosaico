@@ -67,6 +67,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const { rows } = await query<any>(
     `SELECT c."_id", c."codigo", c."tema", c."estado", c."contrato", c."numeroCaso",
             c."abiertoEn", c."cerradoEn", c."reincidenciaNivel",
+            c."noContinua", c."cerradoPor", c."area",
+            -- Quién lo cerró, con nombre: el último movimiento del historial.
+            -- "cerradoPor" sólo guarda el correo.
+            ult."autorNombre" AS "cerradoPorNombre",
             c."academicaId", p."numeroId",
             TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."primerApellido"), '\\s+', ' ', 'g')) AS alumno,
             p."tipoCurso" AS curso, p."salon", g."nombreCompleto" AS guia,
@@ -82,6 +86,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
          ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso"
         AND cc."horarioCurso" = p."horarioCurso"
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
+       LEFT JOIN LATERAL (
+         SELECT h."autorNombre" FROM "CASOS_ESTADO_HISTORIAL" h
+          WHERE h."casoId" = c."_id" ORDER BY h."_createdDate" DESC LIMIT 1
+       ) ult ON true
       WHERE ${where.join(' AND ')}
       ORDER BY (c."estado" = '${ESTADO_ABIERTO}') DESC, "ultimoReporte" DESC NULLS LAST
       LIMIT ${MAX_ROWS}`,

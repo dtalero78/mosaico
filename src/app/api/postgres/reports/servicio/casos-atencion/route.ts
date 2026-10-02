@@ -106,7 +106,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
           WHERE t."contrato" = p."contrato" AND t."tipoUsuario" = 'TITULAR' LIMIT 1
        ) tit ON true
       WHERE ${where.join(' AND ')}
-      ORDER BY curso ASC NULLS LAST, fecha DESC NULLS LAST, nombre ASC
+      -- Del caso más antiguo al más nuevo: lo que lleva más tiempo esperando va arriba.
+      ORDER BY fecha ASC NULLS LAST, curso ASC NULLS LAST, nombre ASC
       LIMIT ${MAX_ROWS}`,
     params
   )).rows

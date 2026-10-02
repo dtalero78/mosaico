@@ -114,6 +114,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             -- de las bandejas de área pide ambos si faltan (R5).
             ca."fechaCompromiso"::text AS "fechaCompromiso",
             ca."cerradoPor",
+            ca."noContinua",
             ${FECHA} AS "fechaEstado",
             a."_id" AS "academicaId",
             p."tipoCurso" AS curso,

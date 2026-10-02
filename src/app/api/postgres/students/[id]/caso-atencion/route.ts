@@ -7,7 +7,7 @@ import { ValidationError, NotFoundError } from '@/lib/errors'
 import { ids } from '@/lib/id-generator'
 import {
   ESTADOS_CIERRE, ESTADO_LABEL, ESTADO_AL_ASIGNAR, AREA_LABEL,
-  type EstadoCaso, type AreaCaso, AREAS,
+  type EstadoCaso, type AreaCaso, AREAS, conclusionConNoContinua,
 } from '@/lib/casos-atencion-estados'
 
 /**
@@ -43,6 +43,9 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
   const area = (String(body?.area || '').trim() || null) as AreaCaso | null
   if (area && !AREAS.includes(area)) throw new ValidationError(`Área no válida: ${area}`)
   const estado: EstadoCaso = area ? ESTADO_AL_ASIGNAR[area] : 'RESUELTO'
+  // "Usuario NO continúa con el curso": sólo al CERRAR (sin área), es la razón
+  // del cierre. Asignar a un área no termina el caso, así que ahí se ignora.
+  const noContinua = !area && body?.noContinua === true
   if (!academicaId) throw new ValidationError('academicaId requerido')
   if (!bookingId) throw new ValidationError('bookingId requerido')
   // Sólo estados de cierre: asignar a un área saca el caso de la bandeja.
@@ -85,7 +88,8 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
 
   const entry = {
     fecha: new Date().toISOString(),
-    comentario,
+    comentario: conclusionConNoContinua(comentario, noContinua),
+    noContinua,
     curso: info.curso || null,
     leccion: info.leccion || null,
     caso: info.caso || null,
@@ -115,16 +119,17 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
       await client.query(
         `UPDATE "CASOS_ATENCION"
             SET "estado" = $3::estado_caso, "area" = $4,
+                "noContinua" = CASE WHEN $5 THEN true ELSE "noContinua" END,
                 "cerradoPor" = $2, "cerradoEn" = NOW(), "_updatedDate" = NOW()
           WHERE "_id" = $1`,
-        [info.casoId, session?.user?.email || null, estado, area]
+        [info.casoId, session?.user?.email || null, estado, area, noContinua]
       )
       await client.query(
         `INSERT INTO "CASOS_ESTADO_HISTORIAL"("_id","casoId","estadoAnterior","estadoNuevo","autorEmail","autorNombre","motivo")
          VALUES ($1,$2,$3,$7::estado_caso,$4,$5,$6)`,
         [ids.comment(), info.casoId, info.estadoCaso || 'EN_GESTION',
          session?.user?.email || null, (session?.user as any)?.name || null,
-         comentario || `Asignado a ${area ? AREA_LABEL[area] : 'Cerrado'}`, estado]
+         conclusionConNoContinua(comentario, noContinua) || `Asignado a ${area ? AREA_LABEL[area] : 'Cerrado'}`, estado]
       )
     }
   })

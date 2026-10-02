@@ -8,6 +8,7 @@ import {
   ESTADOS_POR_AREA, AREA_PESTANA, AREA_COLOR,
 } from '@/lib/casos-atencion-estados'
 import type { EstadoCaso, AreaCaso } from '@/lib/casos-atencion-estados'
+import NoContinuaCasilla from '@/components/casos/NoContinuaCasilla'
 
 /**
  * Pestaña "Casos Atención" de la ficha del estudiante.
@@ -107,6 +108,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
   // que se confirma un cambio de estado.
   const [nota, setNota] = useState('')
   const [motivoCambio, setMotivoCambio] = useState('')
+  const [noContinua, setNoContinua] = useState(false)
   const [confirmando, setConfirmando] = useState(false)
 
   const cargarLista = useCallback(async () => {
@@ -176,7 +178,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
    */
   const guardar = async () => {
     if (!casoId || !d) return
-    if (nuevoEstado !== d.caso.estado) { setMotivoCambio(''); setConfirmando(true); return }
+    if (nuevoEstado !== d.caso.estado) { setMotivoCambio(''); setNoContinua(false); setConfirmando(true); return }
     await patch({ acuerdo, fechaCompromiso: fechaCompromiso || null, responsable })
   }
 
@@ -191,8 +193,11 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
       acuerdo, fechaCompromiso: fechaCompromiso || null, responsable,
     }, 'Gestión guardada, aplicando el cambio…')
     if (!ok) return
-    const hecho = await patch({ estado: nuevoEstado, motivo: motivoCambio.trim() })
-    if (hecho) { setConfirmando(false); setMotivoCambio('') }
+    const hecho = await patch({
+      estado: nuevoEstado, motivo: motivoCambio.trim(),
+      noContinua: cierraElCaso(nuevoEstado) && noContinua,
+    })
+    if (hecho) { setConfirmando(false); setMotivoCambio(''); setNoContinua(false) }
   }
 
   /** Agrega una nota a la bitácora (no cambia el estado del caso). */
@@ -619,6 +624,9 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
                 : 'Qué motiva el movimiento…'}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
             <p className="text-[11px] text-gray-400 mt-1">Queda en el seguimiento del caso, con tu nombre y la fecha.</p>
+            {cierraElCaso(nuevoEstado) && (
+              <NoContinuaCasilla checked={noContinua} onChange={setNoContinua} disabled={busy} />
+            )}
 
             <div className="flex justify-end gap-2 mt-5">
               <button type="button" disabled={busy}

@@ -279,3 +279,15 @@ export function origenLabel(o: string | null | undefined): string {
 export function esOrigenAdmin(o: string | null | undefined): boolean {
   return ORIGENES_ADMIN.includes(String(o || '').toUpperCase() as OrigenCaso);
 }
+
+/**
+ * Marca de cierre "el usuario no continúa con el curso". Es un dato del cierre
+ * (por qué terminó el caso), no una baja: no inactiva ni libera el cupo. Va en
+ * la columna CASOS_ATENCION."noContinua" y, como prefijo, en el texto de la
+ * conclusión, para que se lea en la bitácora y en el Histórico sin buscarla.
+ */
+export const NO_CONTINUA_LABEL = 'Usuario NO continúa con el curso';
+
+export function conclusionConNoContinua(conclusion: string, noContinua: boolean): string {
+  return noContinua ? `[${NO_CONTINUA_LABEL}] ${conclusion}` : conclusion;
+}

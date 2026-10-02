@@ -35,7 +35,7 @@ import {
   ESTADO_ABIERTO, ESTADOS_CIERRE, ESTADOS, ESTADO_LABEL,
   ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS,
   cierraElCaso, TRASLADA_A_AREA,
-  ORIGEN_DOCENTE, ORIGEN_LABEL, esOrigenAdmin,
+  ORIGEN_DOCENTE, ORIGEN_LABEL, esOrigenAdmin, conclusionConNoContinua,
 } from '@/lib/casos-atencion-estados';
 import type { EstadoCaso, OrigenCaso } from '@/lib/casos-atencion-estados';
 
@@ -288,7 +288,8 @@ export async function crearReporte(input: CrearReporteInput): Promise<CrearRepor
  * en solo lectura. Todo cambio queda en el historial (R6).
  */
 export async function cambiarEstado(
-  casoId: string, nuevo: EstadoCaso, actor: Actor, motivo?: string
+  casoId: string, nuevo: EstadoCaso, actor: Actor, motivo?: string,
+  opts: { noContinua?: boolean } = {}
 ): Promise<{ casoId: string; estado: EstadoCaso; cerrado: boolean }> {
   const estado = String(nuevo || '').trim().toUpperCase() as EstadoCaso;
   if (!ESTADOS.includes(estado)) throw new ValidationError(`Estado inválido: "${nuevo}".`);
@@ -326,6 +327,8 @@ export async function cambiarEstado(
   // Hay estados que MUEVEN el caso a otra área en vez de terminarlo: Coordinación
   // puede pasárselo a Finanzas sin darlo por cerrado.
   const areaDestino = TRASLADA_A_AREA[estado] ?? caso.area ?? null;
+  // "No continúa" sólo tiene sentido al cerrar: es la razón del cierre.
+  const noContinua = cierra && opts.noContinua === true;
 
   await transaction(async (client) => {
     await client.query(
@@ -333,14 +336,16 @@ export async function cambiarEstado(
           SET "estado" = $1, "area" = $4,
               "cerradoPor" = CASE WHEN $5 THEN $2 ELSE "cerradoPor" END,
               "cerradoEn"  = CASE WHEN $5 THEN NOW() ELSE "cerradoEn" END,
+              "noContinua" = CASE WHEN $6 THEN true ELSE "noContinua" END,
               "_updatedDate" = NOW()
         WHERE "_id" = $3`,
-      [estado, actor.email || actor.nombre || null, casoId, areaDestino, cierra]
+      [estado, actor.email || actor.nombre || null, casoId, areaDestino, cierra, noContinua]
     );
     await client.query(
       `INSERT INTO "CASOS_ESTADO_HISTORIAL"("_id","casoId","estadoAnterior","estadoNuevo","autorEmail","autorNombre","motivo")
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [ids.comment(), casoId, caso.estado, estado, actor.email || null, actor.nombre || null, comentario]
+      [ids.comment(), casoId, caso.estado, estado, actor.email || null, actor.nombre || null,
+       conclusionConNoContinua(comentario, noContinua)]
     );
   });
 

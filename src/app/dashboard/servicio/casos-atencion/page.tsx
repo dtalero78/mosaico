@@ -11,6 +11,7 @@ import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
 import { estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel, origenLabel, esOrigenAdmin, ORIGENES_ADMIN } from '@/lib/casos-atencion-estados'
+import NoContinuaCasilla from '@/components/casos/NoContinuaCasilla'
 import { hoyEnChile } from '@/lib/cursos-campaign'
 
 /**
@@ -264,6 +265,8 @@ interface Row {
   /** Fecha de compromiso del acuerdo (YYYY-MM-DD). R5 la exige para cerrar. */
   fechaCompromiso?: string | null
   cerradoPor?: string | null
+  /** Se cerró marcando "Usuario NO continúa con el curso". */
+  noContinua?: boolean
   detalle?: string | null
   fechaEstado?: string | null
   // Sólo en la pestaña Asistencia
@@ -369,6 +372,7 @@ function CasosAtencionContent() {
   // Modal de "Resuelto" (pestaña Casos)
   const [resolver, setResolver] = useState<Row | null>(null)
   const [resolverConfirmado, setResolverConfirmado] = useState(false)
+  const [resolverNoContinua, setResolverNoContinua] = useState(false)
   const [comentario, setComentario] = useState('')
   // `undefined` = todavía no eligió; `null` = eligió Cerrar (que no tiene área).
   const [destino, setDestino] = useState<string | null | undefined>(undefined)
@@ -381,6 +385,7 @@ function CasosAtencionContent() {
   const [cierreAcuerdo, setCierreAcuerdo] = useState('')
   const [cierreFecha, setCierreFecha] = useState('')
   const [cierreConfirmado, setCierreConfirmado] = useState(false)
+  const [cierreNoContinua, setCierreNoContinua] = useState(false)
   const [cerrando, setCerrando] = useState(false)
 
   // Confirmación del WhatsApp (pestaña Asistencia)
@@ -496,6 +501,9 @@ function CasosAtencionContent() {
         { header: 'Caso', accessor: (r: Row) => r.codigoCaso || '' },
         { header: 'Acuerdo', accessor: (r: Row) => r.acuerdo || '' },
         { header: 'Cerrado por', accessor: (r: Row) => r.cerradoPor || '' },
+        ...(tab === 'historico'
+          ? [{ header: 'No continúa con el curso', accessor: (r: Row) => (r.noContinua ? 'Sí' : '') }]
+          : []),
       ], `casos-${tab}`)
       return
     }
@@ -544,13 +552,16 @@ function CasosAtencionContent() {
       const res = await fetch(`/api/postgres/students/${resolver.academicaId}/caso-atencion`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: resolver.bookingId, comentario: comentario.trim(), area: destino }),
+        body: JSON.stringify({
+          bookingId: resolver.bookingId, comentario: comentario.trim(), area: destino,
+          noContinua: cierra && resolverNoContinua,
+        }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
       toast.success(cierra ? 'Caso cerrado'
         : `Caso asignado a ${DESTINOS.find(d => d.area === destino)?.label || destino}`)
       setRows(prev => prev.filter(x => x.bookingId !== resolver.bookingId))
-      setResolver(null); setComentario(''); setDestino(undefined)
+      setResolver(null); setComentario(''); setDestino(undefined); setResolverNoContinua(false)
       cargarConteos()
     } catch (e: any) {
       toast.error(e?.message || 'Error')
@@ -569,6 +580,7 @@ function CasosAtencionContent() {
     setCierreAcuerdo(r.acuerdo || '')
     setCierreFecha(r.fechaCompromiso ? String(r.fechaCompromiso).slice(0, 10) : '')
     setCierreConfirmado(false)
+    setCierreNoContinua(false)
   }
 
   const confirmarCierre = async () => {
@@ -589,6 +601,7 @@ function CasosAtencionContent() {
         body: JSON.stringify({
           estado: 'RESUELTO',
           motivo: conclusion.trim(),
+          noContinua: cierreNoContinua,
           ...(pideAcuerdo ? { acuerdo: cierreAcuerdo.trim(), fechaCompromiso: cierreFecha } : {}),
         }),
       }).then(x => x.json())
@@ -924,6 +937,11 @@ function CasosAtencionContent() {
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fechaEstado || null)}</td>
                   {MUESTRA_DETALLE(tab) && (
                   <td className="px-3 py-2 text-gray-700">
+                    {r.noContinua && (
+                      <span className="inline-flex mb-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wide bg-red-100 text-red-700 border border-red-300">
+                        No continúa con el curso
+                      </span>
+                    )}
                     <span className="block max-w-[280px] whitespace-pre-wrap break-words"
                       title={r.detalle || ''}>{r.detalle || '—'}</span>
                   </td>
@@ -1006,7 +1024,7 @@ function CasosAtencionContent() {
                       {r.estado && r.estado !== ESTADO_ABIERTO ? estadoLabel(r.estado) : 'Pendiente'}
                     </span>
                     <button type="button" title="Asignar el caso a un área o cerrarlo"
-                      onClick={() => { setResolver(r); setComentario(''); setDestino(undefined); setResolverConfirmado(false) }}
+                      onClick={() => { setResolver(r); setComentario(''); setDestino(undefined); setResolverConfirmado(false); setResolverNoContinua(false) }}
                       disabled={!canGestion}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
                       <CheckCircleIcon className="h-4 w-4" /> Asignar
@@ -1123,6 +1141,7 @@ function CasosAtencionContent() {
                 <textarea id="rs-conclusion" value={comentario} onChange={e => setComentario(e.target.value)}
                   rows={3} maxLength={2000} placeholder="Cómo se resolvió el caso y con qué resultado…"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none" />
+                <NoContinuaCasilla checked={resolverNoContinua} onChange={setResolverNoContinua} disabled={saving} />
                 <label className="flex items-start gap-2 mt-4 cursor-pointer">
                   <input type="checkbox" checked={resolverConfirmado} onChange={e => setResolverConfirmado(e.target.checked)}
                     className="mt-0.5 h-4 w-4 accent-primary-600" />
@@ -1273,6 +1292,7 @@ function CasosAtencionContent() {
                 </div>
               )}
 
+              <NoContinuaCasilla checked={cierreNoContinua} onChange={setCierreNoContinua} disabled={cerrando} />
               <label className="flex items-start gap-2 mt-4 cursor-pointer">
                 <input type="checkbox" checked={cierreConfirmado} onChange={e => setCierreConfirmado(e.target.checked)}
                   className="mt-0.5 h-4 w-4 accent-primary-600" />
