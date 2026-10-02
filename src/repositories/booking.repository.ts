@@ -515,6 +515,10 @@ class BookingRepositoryClass extends BaseRepository {
     const conditions = [
       esWelcomeSql('ab', 'c'),
       `(ab."cancelo" IS NULL OR ab."cancelo" = false)`,
+      // Quien ya recibió el video de bienvenida queda resuelto en la pestaña Video
+      // Welcome (Enviados): no tiene nada más que gestionarse aquí.
+      `NOT EXISTS (SELECT 1 FROM "WELCOME_VIDEO_ENVIOS" ve
+                    WHERE ve."academicaId" = COALESCE(ab."studentId", ab."idEstudiante"))`,
     ];
     const params: any[] = [];
     let paramIdx = 1;

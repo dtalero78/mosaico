@@ -67,7 +67,8 @@ interface Grupo {
   filas: Alumno[]
 }
 
-type Estado = 'todos' | 'pendientes' | 'enviados'
+/** Subpestañas: los que faltan por recibir el video y los que ya lo recibieron. */
+type Estado = 'pendientes' | 'enviados'
 
 const nombreDe = (r: Alumno) => `${r.primerNombre} ${r.primerApellido}`.trim() || '(sin nombre)'
 const mb = (b?: number | null) => (b ? `${(b / 1048576).toFixed(1)} MB` : '')
@@ -81,7 +82,7 @@ export default function WelcomeVideoTab({ estadosCampana, actuales }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const [buscar, setBuscar] = useState('')
-  const [estado, setEstado] = useState<Estado>('todos')
+  const [estado, setEstado] = useState<Estado>('pendientes')
   const [campanaFiltro, setCampanaFiltro] = useState<string>(CAMPANA_ACTUALES)
 
   const [marcados, setMarcados] = useState<Set<string>>(new Set())
@@ -126,12 +127,18 @@ export default function WelcomeVideoTab({ estadosCampana, actuales }: Props) {
     return c === campanaFiltro
   }, [campanaFiltro, actuales])
 
-  const filtradas = useMemo(() => alumnos.filter((r) => {
-    if (estado === 'pendientes' && r.ultimoEnvio) return false
-    if (estado === 'enviados' && !r.ultimoEnvio) return false
-    if (!enCampana(r)) return false
-    return coincidePersona({ nombre: nombreDe(r), numeroId: r.numeroId, contrato: r.contrato }, buscar)
-  }), [alumnos, estado, enCampana, buscar])
+  // Lo que coincide con campaña y búsqueda, ANTES de partir en las dos
+  // subpestañas: de aquí salen los dos contadores, así cada uno dice cuántos hay
+  // en la otra lista con los mismos filtros.
+  const coinciden = useMemo(() => alumnos.filter((r) =>
+    enCampana(r) && coincidePersona({ nombre: nombreDe(r), numeroId: r.numeroId, contrato: r.contrato }, buscar)
+  ), [alumnos, enCampana, buscar])
+  const nPendientes = coinciden.filter((r) => !r.ultimoEnvio).length
+  const nEnviados = coinciden.length - nPendientes
+
+  const filtradas = useMemo(
+    () => coinciden.filter((r) => (estado === 'enviados' ? !!r.ultimoEnvio : !r.ultimoEnvio)),
+    [coinciden, estado])
 
   /** Agrupado POR SESIÓN perdida (la última), como Gestión de Reagendamientos. */
   const grupos = useMemo<Grupo[]>(() => {
@@ -154,8 +161,6 @@ export default function WelcomeVideoTab({ estadosCampana, actuales }: Props) {
     })
   }, [filtradas])
 
-  const enAlcance = useMemo(() => alumnos.filter(enCampana), [alumnos, enCampana])
-  const pendientes = useMemo(() => enAlcance.filter((r) => !r.ultimoEnvio).length, [enAlcance])
 
   const alternar = (ids: string[], marcar: boolean) => setMarcados((prev) => {
     const next = new Set(prev)
@@ -279,9 +284,23 @@ export default function WelcomeVideoTab({ estadosCampana, actuales }: Props) {
           </div>
         </div>
 
+        {/* Subpestañas: al enviar el video el alumno pasa de Pendientes a Enviados. */}
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Estado del envío">
+          {([['pendientes', 'Pendientes', nPendientes], ['enviados', 'Enviados', nEnviados]] as const).map(([id, label, n]) => (
+            <button key={id} type="button" role="tab" aria-selected={estado === id}
+              onClick={() => { setEstado(id); setMarcados(new Set()) }}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border ${
+                estado === id
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+              {label} ({n})
+            </button>
+          ))}
+        </div>
+
         {/* Filtros */}
         <div className="p-4 bg-gray-50 rounded-lg border">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
               <label htmlFor="vwCampana" className="block text-sm font-medium text-gray-700 mb-1">Campaña</label>
               <select id="vwCampana" value={campanaFiltro} onChange={(e) => setCampanaFiltro(e.target.value)}
@@ -300,18 +319,9 @@ export default function WelcomeVideoTab({ estadosCampana, actuales }: Props) {
                 placeholder="Nombre, documento o contrato..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm" />
             </div>
-            <div>
-              <label htmlFor="vwEstado" className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-              <select id="vwEstado" value={estado} onChange={(e) => setEstado(e.target.value as Estado)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm">
-                <option value="todos">Todos</option>
-                <option value="pendientes">Pendientes de envío</option>
-                <option value="enviados">Enviados</option>
-              </select>
-            </div>
             <div className="flex gap-2">
               <button type="button"
-                onClick={() => { setBuscar(''); setEstado('todos'); setCampanaFiltro(CAMPANA_ACTUALES) }}
+                onClick={() => { setBuscar(''); setCampanaFiltro(CAMPANA_ACTUALES) }}
                 className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                 Limpiar
               </button>
@@ -327,7 +337,7 @@ export default function WelcomeVideoTab({ estadosCampana, actuales }: Props) {
                   { header: 'Apoderado', accessor: (r) => r.apoderado || '' },
                   { header: 'Teléfono apoderado', accessor: (r) => r.destino || 'sin teléfono' },
                   { header: 'Estado', accessor: (r) => (r.ultimoEnvio ? `Enviado ${formatDateTime(r.ultimoEnvio.fecha)}` : 'Pendiente') },
-                ], `welcome-video-${new Date().toISOString().split('T')[0]}`)}
+                ], `welcome-video-${estado}-${new Date().toISOString().split('T')[0]}`)}
                 className="w-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50">
                 Excel
               </button>
@@ -342,7 +352,7 @@ export default function WelcomeVideoTab({ estadosCampana, actuales }: Props) {
               Marcar todos los visibles
             </label>
             <span className="text-sm text-gray-600">
-              {loading ? 'Cargando…' : `Mostrando ${filtradas.length} de ${enAlcance.length} alumno(s) · ${pendientes} sin enviar · ${grupos.length} sesión(es)`}
+              {loading ? 'Cargando…' : `${filtradas.length} alumno(s) · ${grupos.length} sesión(es)`}
             </span>
             <button type="button" disabled={!seleccion.length || !video}
               onClick={() => setConfirmar(seleccion)}
@@ -357,9 +367,15 @@ export default function WelcomeVideoTab({ estadosCampana, actuales }: Props) {
           <div className="alert alert-error"><div className="ml-3 text-sm text-red-700">{error}</div></div>
         ) : grupos.length === 0 && !loading ? (
           <div className="text-center py-10 text-gray-500">
-            <h3 className="text-sm font-medium text-gray-900">No hay alumnos para enviar el video</h3>
+            <h3 className="text-sm font-medium text-gray-900">
+              {estado === 'enviados' ? 'Todavía no se ha enviado el video a nadie' : 'No hay alumnos pendientes de recibir el video'}
+            </h3>
             <p className="mt-1 text-sm">
-              {enAlcance.length > 0 ? 'Nadie cumple con esos filtros.' : `Nadie ha faltado a sus ${MAX_WELCOME_AGENDAMIENTOS} sesiones de bienvenida.`}
+              {buscar || campanaFiltro !== CAMPANA_ACTUALES
+                ? 'Nadie cumple con esos filtros.'
+                : estado === 'enviados'
+                  ? 'Cuando se envíe, el alumno aparecerá aquí.'
+                  : `Nadie más ha faltado a sus ${MAX_WELCOME_AGENDAMIENTOS} sesiones de bienvenida.`}
             </p>
           </div>
         ) : (
