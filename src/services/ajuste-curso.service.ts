@@ -18,7 +18,9 @@ import {
  * Académico › Campañas › Ajuste Cursos.
  *
  *  - CIERRE: adelanta el final del curso. Borra las clases posteriores a la fecha
- *    elegida y sus agendamientos, y fija `finalCurso` y `cierreCurso` en esa fecha.
+ *    elegida y sus agendamientos, y fija `finalCurso` y `cierreCurso` en esa fecha
+ *    — o en la de la última clase que queda, si es anterior: el curso termina en
+ *    su última clase, y sin esto un cierre con fecha de hoy seguía "Activo".
  *    Sólo quita clases que TODAVÍA NO OCURREN: lo ya dictado no se toca. El curso
  *    pasa a «Cerrado» desde el día siguiente (regla de `estadoCurso`) y su guía
  *    queda libre para otro curso desde ese mismo día, porque la colisión de guía
@@ -171,6 +173,20 @@ function validarFecha(fecha: string, etiqueta: string) {
 
 /* ─────────────────────────── Cierre ─────────────────────────── */
 
+/** Beneficiarios ACTIVOS cuya ficha está en este curso (campaña + curso + horario). */
+async function alumnosActivosDelCurso(cursoId: string): Promise<{ _id: string; nombre: string }[]> {
+  return (await query<{ _id: string; nombre: string }>(
+    `SELECT p."_id",
+            TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."primerApellido"), '\\s+', ' ', 'g')) AS nombre
+       FROM "CURSOS_CAMPAIGN" cc
+       JOIN "PEOPLE" p ON p."campaign" = cc."campaign" AND p."tipoCurso" = cc."tipoCurso"
+                      AND p."horarioCurso" = cc."horarioCurso"
+      WHERE cc."_id" = $1 AND p."tipoUsuario" = 'BENEFICIARIO' AND p."estadoInactivo" IS NOT TRUE
+      ORDER BY 2`,
+    [cursoId]
+  )).rows;
+}
+
 export async function planCierre(cursoId: string, fecha: string) {
   validarFecha(fecha, 'Fecha de cierre');
   const grupo = await cursoYGrupo(cursoId);
@@ -204,20 +220,30 @@ export async function planCierre(cursoId: string, fecha: string) {
       [ids]
     )).rows[0];
     const quedan = evs.filter((e) => e.fecha <= fecha);
+    const ultimaNueva = quedan.length ? quedan[quedan.length - 1].fecha : null;
+    // Los alumnos ACTIVOS del curso: al cerrarlo se inactivan (ver aplicarCierre).
+    const activos = await alumnosActivosDelCurso(c._id);
+    // El curso termina en su ÚLTIMA CLASE, no en la fecha elegida: si se cierra
+    // "hoy" y la última clase fue ayer, el estado (cerrado desde el día siguiente
+    // al final) seguía diciendo "Activo" hasta mañana aunque ya no quedara nada.
+    const finEfectivo = ultimaNueva && ultimaNueva < fecha ? ultimaNueva : fecha;
     cursos.push({
       _id: c._id, nombre: nombreCurso(c), tipoCurso: c.tipoCurso, salon: c.salon, horarioCurso: c.horarioCurso,
       guia: c.guia, guiaNombre: c.guiaNombre,
       finalAntes: c.finalCurso ? c.finalCurso.slice(0, 10) : null,
-      ultimaAntes, ultimaNueva: quedan.length ? quedan[quedan.length - 1].fecha : null,
+      ultimaAntes, ultimaNueva, finEfectivo,
+      alumnosAInactivar: activos.map((a) => a.nombre),
       clasesAntes: evs.length, clasesBorra: aBorrar.length, clasesQuedan: quedan.length,
       agendamientos: bk?.n || 0, alumnos: bk?.alumnos || 0,
       primeraBorrada: aBorrar[0].fecha,
       _ids: ids,
     });
   }
+  // Un grupo de salones cierra junto: queda libre cuando termina el último.
+  const finGrupo = cursos.map((c) => c.finEfectivo).sort().slice(-1)[0] || fecha;
   return {
     accion: 'cierre' as const, fecha,
-    cerradoDesde: addDaysISO(fecha, 1), guiaLibreDesde: addDaysISO(fecha, 1),
+    cerradoDesde: addDaysISO(finGrupo, 1), guiaLibreDesde: addDaysISO(finGrupo, 1),
     cursos,
   };
 }
@@ -253,7 +279,8 @@ export async function aplicarCierre(cursoId: string, fecha: string, motivo: stri
         realizadoPor: actor.email,
         realizadoPorNombre: actor.nombre,
         finalAnterior: c.finalAntes,
-        finalNuevo: fecha,
+        finalNuevo: c.finEfectivo,
+        fechaElegida: fecha,
         ultimaClaseAnterior: c.ultimaAntes,
         ultimaClaseNueva: c.ultimaNueva,
         clasesEliminadas: delE.rowCount ?? 0,
@@ -269,14 +296,39 @@ export async function aplicarCierre(cursoId: string, fecha: string, motivo: stri
                 "ajustesHistory" = COALESCE("ajustesHistory", '[]'::jsonb) || $3::jsonb,
                 "_updatedDate" = NOW()
           WHERE "_id" = $1`,
-        [c._id, fecha, JSON.stringify([entrada])]
+        [c._id, c.finEfectivo, JSON.stringify([entrada])]
       );
       (c as any).resultado = { clasesEliminadas: entrada.clasesEliminadas, agendamientosEliminados: entrada.agendamientosEliminados };
     }
   });
 
+  // Los alumnos de un curso cerrado no quedan activos. Se usa la MISMA
+  // inactivación de la ficha (`toggleStatus`): suelta el asiento, deja en
+  // `cupoHistory` de dónde salió y bloquea el acceso. TEMPORAL porque el contrato
+  // sigue: se reactiva con "Activar", eligiendo un salón con cupo. Va después de
+  // la transacción del cierre (toggleStatus abre la suya) y alumno por alumno:
+  // si uno falla, se informa y los demás siguen.
+  const { toggleStatus } = await import('./student.service');
+  const inactivados: { nombre: string; ok: boolean; error?: string }[] = [];
+  for (const c of plan.cursos) {
+    for (const a of await alumnosActivosDelCurso(c._id)) {
+      try {
+        await toggleStatus(a._id, false, {
+          motivo: `Curso cerrado en Ajuste Cursos (${c.nombre}): ${m}`,
+          realizadoPor: actor.email || 'sistema',
+          realizadoPorNombre: actor.nombre || undefined,
+          tipoSalida: 'TEMPORAL',
+        });
+        inactivados.push({ nombre: a.nombre, ok: true });
+      } catch (err: any) {
+        inactivados.push({ nombre: a.nombre, ok: false, error: err?.message || String(err) });
+      }
+    }
+  }
+
   return {
     ...plan,
+    inactivados,
     cursos: plan.cursos.map(({ _ids, ...c }: any) => c),
   };
 }

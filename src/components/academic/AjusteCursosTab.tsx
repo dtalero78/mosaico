@@ -146,7 +146,11 @@ export default function AjusteCursosTab({
       const c = r.cursos || []
       if (modal.accion === 'cierre') {
         const clases = c.reduce((s: number, x: any) => s + (x.clasesBorra || 0), 0)
-        setAviso(`Curso cerrado: se quitaron ${clases} clase(s). Pasa a Cerrado desde el ${r.cerradoDesde}.`)
+        const inact = (r.inactivados || []) as { nombre: string; ok: boolean; error?: string }[]
+        const fallaron = inact.filter((x) => !x.ok)
+        setAviso(`Curso cerrado: se quitaron ${clases} clase(s). Pasa a Cerrado desde el ${r.cerradoDesde}.`
+          + (inact.length ? ` ${inact.length - fallaron.length} alumno(s) quedaron inactivos.` : '')
+          + (fallaron.length ? ` No se pudo inactivar a: ${fallaron.map((x) => x.nombre).join(', ')}.` : ''))
       } else {
         const clases = c.reduce((s: number, x: any) => s + (x.clasesNuevas || 0), 0)
         const ag = c.reduce((s: number, x: any) => s + (x.agendamientos || 0), 0)
@@ -346,6 +350,12 @@ export default function AjusteCursosTab({
                         <p>
                           Se eliminan <strong>{c.clasesBorra} clase(s)</strong> (desde el {c.primeraBorrada}) y <strong>{c.agendamientos} agendamiento(s)</strong> de {c.alumnos} alumno(s).
                           {' '}Quedan {c.clasesQuedan} clases; la última será el <strong>{c.ultimaNueva || '—'}</strong>.
+                          {c.alumnosAInactivar?.length > 0 && (
+                            <span className="block mt-1 text-red-700">
+                              <strong>{c.alumnosAInactivar.length} alumno(s) quedan inactivos</strong> ({c.alumnosAInactivar.join(', ')}):
+                              {' '}sueltan el cupo y pierden el acceso. Se reactivan con «Activar» en su ficha, eligiendo otro salón.
+                            </span>
+                          )}
                         </p>
                       ) : (
                         <p>
