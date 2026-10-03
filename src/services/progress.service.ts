@@ -130,6 +130,7 @@ export async function generateReport(studentId: string) {
 
   const now = Date.now();
   const t = (d: any) => (d ? new Date(d).getTime() : null);
+  const justificaCumple = String(curso || '').trim().toUpperCase() === 'IMPULSA';
 
   function statusLeccion(instances: any[], esEval = false) {
     const refuerzo = instances.length > 1;
@@ -137,9 +138,10 @@ export async function generateReport(studentId: string) {
     const future = instances.filter((b) => { const tt = t(b.dia); return tt === null || tt > now; });
     const asistida = instances.some((b) => isAttended(b) && b.noAprobo !== true && b.cancelo !== true);
     // Inasistencia JUSTIFICADA (escusa) en una clase ya dictada: la lección cuenta
-    // como cumplida y el alumno sigue avanzando (regla del usuario, oct-2026). Sólo
-    // para lecciones: la evaluación del módulo hay que aprobarla.
-    const justificada = !esEval && !asistida
+    // como cumplida y el alumno sigue avanzando (regla del usuario, oct-2026).
+    // SÓLO IMPULSA (decisión del usuario): en los cursos MOSAICO la falta justificada
+    // sigue siendo una falta. Y sólo para lecciones: la evaluación hay que aprobarla.
+    const justificada = justificaCumple && !esEval && !asistida
       && past.some((b) => b.escusa === true && b.cancelo !== true && b.noAprobo !== true);
     const aprobada = asistida || justificada;
     const noAprobada = !aprobada && instances.some((b) => isAttended(b) && b.noAprobo === true);
