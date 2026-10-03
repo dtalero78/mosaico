@@ -11,6 +11,7 @@ interface Leccion {
   refuerzo: boolean
   fecha: string | null
   movimiento?: boolean
+  justificada?: boolean
 }
 interface Evaluacion {
   estado: Leccion['estado']
@@ -181,6 +182,7 @@ export default function StudentProgress({ student }: { student: Student }) {
                           {l.leccion}
                           {l.refuerzo && <span className="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1 py-0.5 rounded">🔁 REFUERZO</span>}
                           {l.movimiento && <span className="text-[9px] font-bold text-sky-700 bg-sky-100 px-1 py-0.5 rounded">↕️ MOVIMIENTO</span>}
+                          {l.justificada && <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1 py-0.5 rounded">FALTA JUSTIFICADA</span>}
                         </span>
                       </td>
                       <td className="py-2 px-3 text-center">

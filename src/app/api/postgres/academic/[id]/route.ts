@@ -2,6 +2,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { CalendarioRepository } from '@/repositories/calendar.repository';
 import { autoAdvanceStep } from '@/services/student.service';
+import { autoAvanceModuloPorBooking } from '@/services/modulo-avance.service';
 import { cerrarNivelacionSiRealizada } from '@/services/nivelacion.service';
 import { NotFoundError } from '@/lib/errors';
 import { queryOne } from '@/lib/postgres';
@@ -65,15 +66,21 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
   if (!booking) throw new NotFoundError('Class record', params.id);
 
   let advancement = null;
+  let avanceModulo = null;
   if (body.asistio === true || body.asistencia === true) {
     advancement = await autoAdvanceStep(params.id).catch(() => null);
+  }
+  // Asistir o justificar la falta cumplen la lección: cualquiera de los dos
+  // puede dejar el módulo completo.
+  if (body.asistio === true || body.asistencia === true || body.escusa === true) {
+    avanceModulo = await autoAvanceModuloPorBooking(params.id);
   }
   // Si es una sesión de NIVELACIÓN marcada asistida+participada, cerrar la nivelación
   // (para que no quede pendiente al marcar por el modal admin, no solo por /sesion).
   const actor = (session?.user as any)?.name || session?.user?.email || 'Sistema';
   const nivelacion = await cerrarNivelacionSiRealizada(params.id, actor).catch(() => ({ cerrada: false }));
 
-  return successResponse({ booking, advancement, nivelacion, message: 'Class record updated successfully' });
+  return successResponse({ booking, advancement, avanceModulo, nivelacion, message: 'Class record updated successfully' });
 });
 
 /**

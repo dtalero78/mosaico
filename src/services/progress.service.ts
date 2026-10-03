@@ -105,7 +105,7 @@ export async function generateReport(studentId: string) {
         `SELECT c."sesionModulo" AS "sm", c."sesionLeccion" AS "sl", c."leccionOrden" AS "lo",
                 c."sesionModulo2" AS "sm2", c."sesionLeccion2" AS "sl2",
                 c."dia" AS "dia", c."tipo" AS "tipo",
-                b."asistio", b."asistencia", b."noAprobo", b."cancelo", b."movimientoAcademico"
+                b."asistio", b."asistencia", b."noAprobo", b."cancelo", b."movimientoAcademico", b."escusa"
          FROM "ACADEMICA_BOOKINGS" b
          JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
          WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)`, [academicaId])
@@ -135,23 +135,29 @@ export async function generateReport(studentId: string) {
     const refuerzo = instances.length > 1;
     const past = instances.filter((b) => { const tt = t(b.dia); return tt !== null && tt <= now; });
     const future = instances.filter((b) => { const tt = t(b.dia); return tt === null || tt > now; });
-    const aprobada = instances.some((b) => isAttended(b) && b.noAprobo !== true && b.cancelo !== true);
+    const asistida = instances.some((b) => isAttended(b) && b.noAprobo !== true && b.cancelo !== true);
+    // Inasistencia JUSTIFICADA (escusa) en una clase ya dictada: la lección cuenta
+    // como cumplida y el alumno sigue avanzando (regla del usuario, oct-2026). Sólo
+    // para lecciones: la evaluación del módulo hay que aprobarla.
+    const justificada = !esEval && !asistida
+      && past.some((b) => b.escusa === true && b.cancelo !== true && b.noAprobo !== true);
+    const aprobada = asistida || justificada;
     const noAprobada = !aprobada && instances.some((b) => isAttended(b) && b.noAprobo === true);
     // Aprobada por Movimiento Académico (no por asistencia real).
-    const movimiento = aprobada && instances.some((b) => isAttended(b) && b.noAprobo !== true && b.movimientoAcademico === true);
+    const movimiento = asistida && instances.some((b) => isAttended(b) && b.noAprobo !== true && b.movimientoAcademico === true);
     // fecha representativa: última pasada, si no la primera futura
     const repDate = (past.length ? past[past.length - 1] : future[0])?.dia || null;
     const cosa = esEval ? 'la evaluación' : 'esta sesión';
 
     let estado: 'aprobada' | 'no_aprobada' | 'ausente' | 'programada' | 'pendiente';
     let mensaje: string | null = null;
-    if (aprobada) { estado = 'aprobada'; }
+    if (aprobada) { estado = 'aprobada'; if (justificada) mensaje = 'Inasistencia justificada'; }
     else if (noAprobada) { estado = 'no_aprobada'; mensaje = `No ${esEval ? 'aprobaste la evaluación' : 'aprobaste esta lección'}. Consulta a tu guía.`; }
     else if (past.length && past.every((b) => b.cancelo === true)) { estado = 'ausente'; mensaje = `Cancelaste ${cosa}. Consulta a tu guía para reagendar.`; }
     else if (past.length) { estado = 'ausente'; mensaje = `No asististe a ${cosa}. Consulta a tu guía para ponerte al día.`; }
     else if (future.length) { estado = 'programada'; }
     else { estado = 'pendiente'; }
-    return { estado, mensaje, refuerzo, fecha: repDate, movimiento };
+    return { estado, mensaje, refuerzo, fecha: repDate, movimiento, justificada };
   }
 
   // 3. Construir módulos (lecciones + evaluación del módulo).

@@ -68,3 +68,23 @@ export async function autoAvanceModuloMosaico(academicaId: string): Promise<{ ad
 
   return { advanced: true, from: cur.modulo, to: next.modulo };
 }
+
+/**
+ * Lo mismo, partiendo de un AGENDAMIENTO: para los guardados que sólo conocen el
+ * booking (detalle de la clase en la ficha del alumno, asistencia masiva,
+ * evaluación). Sin esto, la asistencia corregida por esas vías dejaba el módulo
+ * completo y al alumno sin avanzar — sólo el panel de la sesión revisaba el avance.
+ * Best-effort: nunca lanza.
+ */
+export async function autoAvanceModuloPorBooking(bookingId: string): Promise<{ advanced: boolean; from?: string; to?: string }> {
+  try {
+    const b = await queryOne<{ id: string | null }>(
+      `SELECT COALESCE("idEstudiante","studentId") AS id FROM "ACADEMICA_BOOKINGS" WHERE "_id"=$1`,
+      [bookingId]
+    );
+    if (!b?.id) return { advanced: false };
+    return await autoAvanceModuloMosaico(b.id);
+  } catch {
+    return { advanced: false };
+  }
+}

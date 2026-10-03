@@ -2,6 +2,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { autoAdvanceStep } from '@/services/student.service';
+import { autoAvanceModuloPorBooking } from '@/services/modulo-avance.service';
 
 /**
  * POST /api/postgres/academic/attendance
@@ -19,13 +20,16 @@ export const POST = handlerWithAuth(async (request) => {
 
   // Trigger auto-advance if attendance was marked as present
   let advancement = null;
+  let avanceModulo = null;
   if (body.asistio === true) {
     advancement = await autoAdvanceStep(body.bookingId);
+    avanceModulo = await autoAvanceModuloPorBooking(body.bookingId);
   }
 
   return successResponse({
     booking,
     advancement,
+    avanceModulo,
     message: booking.asistio ? 'Asistencia marcada' : 'Ausencia marcada',
   });
 });
@@ -52,6 +56,8 @@ export const PUT = handlerWithAuth(async (request) => {
   const advancements = await Promise.all(
     attendedIds.map((id: string) => autoAdvanceStep(id).catch(() => null))
   );
+  // En serie: dos bookings del mismo alumno en paralelo podrían avanzarlo dos veces.
+  for (const id of attendedIds) await autoAvanceModuloPorBooking(id);
 
   return successResponse({
     updated: results.length,

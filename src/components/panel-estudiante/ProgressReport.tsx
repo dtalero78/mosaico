@@ -128,7 +128,10 @@ export default function ProgressReport({ data, isLoading }: ProgressReportProps)
                   {l.movimiento && (
                     <span className="text-[10px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.5 rounded">↕️ Movimiento Académico</span>
                   )}
-                  {l.estado === 'aprobada' && !l.movimiento && (
+                  {l.justificada && (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">Falta justificada</span>
+                  )}
+                  {l.estado === 'aprobada' && !l.movimiento && !l.justificada && (
                     <span className="text-[10px] font-medium text-green-700">Asististe y aprobaste</span>
                   )}
                   {l.estado === 'programada' && l.fecha && (
