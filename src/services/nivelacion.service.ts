@@ -183,10 +183,13 @@ export async function cerrarNivelacionSiRealizada(bookingId: string, actor: stri
   const idEstudiante = bk.idEstudiante || bk.studentId;
   if (!idEstudiante) return { cerrada: false };
 
-  const cur = await queryOne<{ nivelacion: boolean | null; NivelacionCount: number | null; detalleNivelacion: any }>(
-    `SELECT "nivelacion","NivelacionCount","detalleNivelacion" FROM "ACADEMICA" WHERE "_id" = $1`, [idEstudiante]
+  const cur = await queryOne<{ nivelacion: boolean | null; aprobadoNivelacion: boolean | null; NivelacionCount: number | null; detalleNivelacion: any }>(
+    `SELECT "nivelacion","aprobadoNivelacion","NivelacionCount","detalleNivelacion" FROM "ACADEMICA" WHERE "_id" = $1`, [idEstudiante]
   );
-  if (!cur || cur.nivelacion !== true) return { cerrada: false }; // ya cerrada / no activa
+  // Viva = pedida (`nivelacion`) O aprobada (`aprobadoNivelacion`). Aprobarla baja
+  // `nivelacion` a false, así que mirar sólo esa columna dejaba fuera justo a las
+  // que ya tienen evento (Pendientes): nunca se cerraban por esta vía.
+  if (!cur || (cur.nivelacion !== true && cur.aprobadoNivelacion !== true)) return { cerrada: false }; // ya cerrada / no activa
 
   let det: any = cur.detalleNivelacion;
   if (typeof det === 'string') { try { det = JSON.parse(det); } catch { det = null; } }
@@ -204,13 +207,15 @@ export async function cerrarNivelacionSiRealizada(bookingId: string, actor: stri
     leccion: det?.leccion || null,
     marcadoPor: actor,
   };
-  await query(
+  // La condición se repite en el WHERE: dos guardados casi simultáneos del modal
+  // leerían ambos la nivelación viva y dejarían DOS entradas en el historial.
+  const r = await query(
     `UPDATE "ACADEMICA"
         SET "nivelacion" = false, "aprobadoNivelacion" = false,
             "NivelacionHistory" = COALESCE("NivelacionHistory", '[]'::jsonb) || $2::jsonb,
             "_updatedDate" = NOW()
-      WHERE "_id" = $1`,
+      WHERE "_id" = $1 AND ("nivelacion" = true OR "aprobadoNivelacion" = true)`,
     [idEstudiante, JSON.stringify([entry])]
-  ).catch(() => {});
-  return { cerrada: true };
+  ).catch(() => null);
+  return { cerrada: (r?.rowCount ?? 0) > 0 };
 }
