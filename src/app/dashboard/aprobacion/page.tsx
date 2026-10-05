@@ -746,7 +746,7 @@ export default function AprobacionPage() {
                             {/* Aviso del comercial desde el detalle del contrato.
                                 No condiciona la aprobación; es trazabilidad. */}
                             {contrato.listoAprobacion && (
-                              <span className="text-[10px] text-gray-400" title="Comercial pulsó «Contrato Para Aprobación» en el detalle del contrato">
+                              <span className="text-[10px] text-gray-400" title="Comercial pulsó «Deja listo para aprobación» en el detalle del contrato">
                                 avisado
                               </span>
                             )}

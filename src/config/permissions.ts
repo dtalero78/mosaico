@@ -1095,8 +1095,8 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     code: ComercialPermission.CONTRATO_LISTO_APROBACION,
     module: Module.COMERCIAL,
     section: 'Contrato',
-    name: 'Botón "Contrato Para Aprobación"',
-    description: 'Botón amarillo del detalle del contrato que lo marca como LISTO para que aparezca en el Centro de Aprobación. Es OTRA cosa que Gestión Contrato: no reserva el cupo del salón. Tiene permiso propio para poder ocultar esa pantalla a un rol sin quitarle también este botón.',
+    name: 'Botón "Deja listo para aprobación"',
+    description: 'Botón amarillo del detalle del contrato que lo deja LISTO para aprobar: toma el cupo del salón de cada beneficiario, igual que «Dejar listo» de Gestión Contrato. Tiene permiso propio para poder ocultar Gestión Contrato a un rol sin quitarle también este botón.',
   },
   {
     code: ComercialPermission.GESTION_CONTRATO_SOBRECUPO,

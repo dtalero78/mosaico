@@ -727,7 +727,7 @@ export default function ContratoDetailPage() {
                   className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-400 text-gray-900 rounded-md hover:bg-yellow-500 text-sm font-medium"
                 >
                   <CheckIcon className="h-4 w-4" />
-                  Contrato Para Aprobación
+                  Deja listo para aprobación
                   {avisadoEn && <span className="text-[11px] font-normal text-yellow-900/80">· falta el cupo</span>}
                 </button>
               )}
@@ -1210,7 +1210,7 @@ export default function ContratoDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/50" onClick={() => setShowListoModal(false)} />
           <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Contrato Para Aprobación</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Deja listo para aprobación</h3>
             <p className="text-sm text-gray-600 mb-3">
               ¿El contrato <strong>{titular?.contrato}</strong> ya está <strong>listo para ser aprobado</strong>?
               Al confirmar <strong>se toma el cupo del salón</strong> de cada beneficiario y el contrato queda
