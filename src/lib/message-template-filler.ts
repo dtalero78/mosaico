@@ -9,9 +9,10 @@
  *   - plataforma      → plataforma
  *   - contrato        → contrato
  *   - numeroId        → numeroId
- *   - linkPerfil      → enlace PERSONAL para crear el perfil del alumno
- *                       (`/nuevo-usuario/<ACADEMICA._id>`, el mismo que manda la
- *                       aprobación). Lo resuelve el servidor por el documento.
+ *   - linkPerfil      → enlace PERSONAL para crear SÓLO el perfil del alumno
+ *                       (`/nuevo-usuario/<ACADEMICA._id>?noWelcome=1`, el mismo del
+ *                       botón "Crear solo perfil": no ofrece agendar la bienvenida).
+ *                       Lo resuelve el servidor por el documento.
  *
  * Cualquier placeholder no soportado se reemplaza por cadena vacía (no
  * rompe el envío). El regex coincide con `{{ key }}` con espacios opcionales.
@@ -35,10 +36,15 @@ export interface RecipientContext {
 
 export const BASE_URL_PLATAFORMA = 'https://mosaicosorobanplataforma.com';
 
-/** Enlace para crear el perfil: el mismo que va en el WhatsApp de aprobación. */
+/**
+ * Enlace para crear SÓLO el perfil. Lleva `?noWelcome=1` (como el botón "Crear solo
+ * perfil" de la ficha): un mensaje masivo llega también a alumnos que ya están en su
+ * curso, y no deben poder agendar una bienvenida que no necesitan. La bienvenida se
+ * ofrece por el enlace de la aprobación, que no pasa por aquí.
+ */
 export function linkPerfil(academicaId?: string | null, baseUrl?: string | null): string {
   if (!academicaId) return '';
-  return `${String(baseUrl || BASE_URL_PLATAFORMA).replace(/\/+$/, '')}/nuevo-usuario/${academicaId}`;
+  return `${String(baseUrl || BASE_URL_PLATAFORMA).replace(/\/+$/, '')}/nuevo-usuario/${academicaId}?noWelcome=1`;
 }
 
 /** ¿La plantilla usa el enlace de perfil? Si sí, cada destinatario necesita su registro académico. */
