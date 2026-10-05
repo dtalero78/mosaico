@@ -822,4 +822,40 @@ export const pagosTitularesService = {
     }
     return updated;
   },
+
+  /**
+   * Facturación EN BLOQUE: cada pago con SU número de factura (no se comparte).
+   * Pasa por `facturar`, así cada uno cumple las mismas reglas que el botón de la
+   * fila; uno que falle (ya no está verificado, se borró) no detiene a los demás.
+   * Repetir un número dentro del mismo lote se rechaza antes de tocar nada.
+   */
+  async facturarMasivo(
+    items: { id: string; numeroFactura: string }[],
+  ): Promise<{ ok: number; fail: number; errores: { id: string; error: string }[] }> {
+    const limpios = items.map(i => ({ id: String(i.id || '').trim(), numeroFactura: String(i.numeroFactura || '').trim() }));
+    if (limpios.some(i => !i.id)) throw new ValidationError('Hay un pago sin identificar en la selección.');
+    if (limpios.some(i => !i.numeroFactura)) throw new ValidationError('Cada pago necesita su número de factura.');
+    const vistos = new Set<string>();
+    for (const i of limpios) {
+      const k = i.numeroFactura.toUpperCase();
+      if (vistos.has(k)) throw new ValidationError(`El número de factura ${i.numeroFactura} está repetido en la selección.`);
+      vistos.add(k);
+    }
+
+    const errores: { id: string; error: string }[] = [];
+    let ok = 0;
+    for (const i of limpios) {
+      try {
+        // Si alguien lo facturó mientras se armaba el lote, no se le pisa el número.
+        const actual = await PagosTitularesRepository.findById(i.id);
+        const yaTiene = String(actual?.numeroFactura || '').trim();
+        if (yaTiene) { errores.push({ id: i.id, error: `ya estaba facturado (${yaTiene})` }); continue; }
+        await this.facturar(i.id, i.numeroFactura, null);
+        ok++;
+      } catch (e: any) {
+        errores.push({ id: i.id, error: e?.message || 'error' });
+      }
+    }
+    return { ok, fail: errores.length, errores };
+  },
 };

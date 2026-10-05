@@ -386,9 +386,15 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
     }
   }
 
-  // ── Aprobación masiva (solo en las pestañas de Verificación) ────────────
+  // ── Selección masiva ─────────────────────────────────────────────────────
+  // Verificación: aprobar en bloque (permiso propio). Facturación: facturar en
+  // bloque con el MISMO permiso del botón Facturar de cada fila.
   const showBulk = canAprobarMasivo && !isFacturacion
-  const pendientes = pagos.filter(p => !p.validado)
+  const showBulkFact = canFacturar && isFacturacion
+  const showSelect = showBulk || showBulkFact
+  // Lo seleccionable: en Verificación los aún no verificados; en Facturación
+  // todas las filas (la vista ya trae sólo los verificados sin factura).
+  const pendientes = isFacturacion ? pagos : pagos.filter(p => !p.validado)
   const allPendingSelected = pendientes.length > 0 && pendientes.every(p => selected.has(p._id))
   const selectedCount = pendientes.filter(p => selected.has(p._id)).length
 
@@ -416,6 +422,46 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
       handleApiError(err, 'Error en la aprobación masiva')
     } finally {
       setBulkValidating(false)
+    }
+  }
+
+  // ── Facturación masiva: un número de factura por pago ───────────────────
+  const [bulkFactModal, setBulkFactModal] = useState(false)
+  const [bulkFacturas, setBulkFacturas] = useState<Record<string, string>>({})
+  const [bulkFacturando, setBulkFacturando] = useState(false)
+  const filasAFacturar = pendientes.filter(p => selected.has(p._id))
+  const numerosLote = filasAFacturar.map(p => (bulkFacturas[p._id] || '').trim())
+  const faltanNumeros = numerosLote.filter(n => !n).length
+  const repetidos = new Set(
+    numerosLote.filter(n => n).map(n => n.toUpperCase())
+      .filter((n, i, arr) => arr.indexOf(n) !== i)
+  )
+
+  const abrirFacturarMasivo = () => { setBulkFacturas({}); setBulkFactModal(true) }
+
+  const handleBulkFacturar = async () => {
+    if (!filasAFacturar.length || faltanNumeros || repetidos.size) return
+    setBulkFacturando(true)
+    try {
+      const r = await api.post<{ ok: number; fail: number; errores: { id: string; error: string }[] }>(
+        `/api/postgres/pagos-titulares/facturar-masivo`,
+        { items: filasAFacturar.map(p => ({ id: p._id, numeroFactura: (bulkFacturas[p._id] || '').trim() })) }
+      )
+      if (r.fail) {
+        const nombre = (id: string) => {
+          const p = filasAFacturar.find(x => x._id === id)
+          return p ? `${p.titular_primerNombre} ${p.titular_primerApellido}`.trim() : id
+        }
+        toast.error(`${r.ok} facturado(s) · ${r.fail} sin facturar: ${r.errores.map(e => `${nombre(e.id)} (${e.error})`).join('; ')}`, { duration: 10000 })
+      } else {
+        toast.success(`${r.ok} pago(s) facturado(s)`)
+      }
+      setBulkFactModal(false)
+      fetchPagos()
+    } catch (err) {
+      handleApiError(err, 'Error en la facturación masiva')
+    } finally {
+      setBulkFacturando(false)
     }
   }
 
@@ -585,6 +631,21 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
           </div>
         )}
 
+        {/* Barra de facturación masiva (pestaña Facturación, con el permiso de facturar) */}
+        {showBulkFact && selectedCount > 0 && (
+          <div className="px-4 py-2 bg-purple-50 border-b border-purple-200 flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm font-medium text-purple-900">{selectedCount} seleccionado(s)</span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setSelected(new Set())}
+                className="px-3 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-md bg-white hover:bg-gray-50">Limpiar</button>
+              <button type="button" onClick={abrirFacturarMasivo}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 rounded-md hover:bg-purple-700">
+                <DocumentTextIcon className="h-4 w-4" /> Facturar seleccionados
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <p className="p-6 text-sm text-gray-400 italic text-center">Cargando…</p>
         ) : pagos.length === 0 ? (
@@ -600,7 +661,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
             */}
             <table className="w-full min-w-[1080px] table-fixed text-sm">
               <colgroup>
-                {showBulk && <col style={{ width: 36 }} />}
+                {showSelect && <col style={{ width: 36 }} />}
                 <col />{/* Titular — absorbe el sobrante */}
                 <col style={{ width: 150 }} />
                 <col style={{ width: 92 }} />
@@ -613,10 +674,10 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
               </colgroup>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr className="whitespace-nowrap text-xs uppercase tracking-wide">
-                  {showBulk && (
+                  {showSelect && (
                     <th className="px-2 py-2 w-8 text-center">
                       <input type="checkbox" aria-label="Seleccionar todos los pendientes"
-                        title="Seleccionar todos los pendientes de esta página"
+                        title={isFacturacion ? 'Seleccionar todos los de esta página' : 'Seleccionar todos los pendientes de esta página'}
                         checked={allPendingSelected} disabled={pendientes.length === 0}
                         onChange={toggleAllPending} />
                     </th>
@@ -644,10 +705,10 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                   const docsTitular = Array.isArray(p.titular_documentacion) ? p.titular_documentacion : []
                   const totalDocs = docsPago.length + docsTitular.length
                   return (
-                    <tr key={p._id} className={`hover:bg-gray-50 ${selected.has(p._id) ? 'bg-emerald-50/40' : ''}`}>
-                      {showBulk && (
+                    <tr key={p._id} className={`hover:bg-gray-50 ${selected.has(p._id) ? (isFacturacion ? 'bg-purple-50/40' : 'bg-emerald-50/40') : ''}`}>
+                      {showSelect && (
                         <td className="px-2 py-2 text-center align-top">
-                          {!p.validado ? (
+                          {isFacturacion || !p.validado ? (
                             <input type="checkbox" aria-label={`Seleccionar pago de ${p.titular_primerNombre}`}
                               checked={selected.has(p._id)} onChange={() => toggleOne(p._id)} />
                           ) : (
@@ -885,6 +946,60 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button type="button" onClick={() => setBulkModal(false)} disabled={bulkValidating} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
               <button type="button" onClick={handleBulkValidar} disabled={bulkValidating} className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50">{bulkValidating ? 'Verificando…' : `Verificar ${selectedCount}`}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal facturación masiva — cada pago con SU número de factura */}
+      {bulkFactModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Facturar {filasAFacturar.length} pago(s)</h3>
+              <button type="button" onClick={() => !bulkFacturando && setBulkFactModal(false)} title="Cerrar" className="text-gray-400 hover:text-gray-600"><XMarkIcon className="h-5 w-5" /></button>
+            </div>
+            <p className="text-sm text-gray-600">
+              Escribe el número de factura de cada pago. Cada uno lleva el suyo; al confirmar salen de la pestaña <strong>Facturación</strong>. El saldo no cambia.
+            </p>
+            <div className="overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+              {filasAFacturar.map((p, idx) => {
+                const valor = (bulkFacturas[p._id] || '').trim()
+                const repetido = !!valor && repetidos.has(valor.toUpperCase())
+                return (
+                  <div key={p._id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-gray-900 truncate">{`${p.titular_primerNombre} ${p.titular_primerApellido}`.trim()}</div>
+                      <div className="text-xs text-gray-500 tabular-nums">
+                        {p.titular_contrato || '—'} · {p.numCuota === 0 ? 'Insc.' : `Cuota ${p.numCuota ?? '—'}`} · {p.valorPagado ? formatCurrency(p.valorPagado) : '—'}
+                      </div>
+                    </div>
+                    <div className="w-44">
+                      <input type="text" value={bulkFacturas[p._id] || ''} autoFocus={idx === 0}
+                        onChange={e => setBulkFacturas(prev => ({ ...prev, [p._id]: e.target.value }))}
+                        placeholder="N.º de factura" aria-label={`Número de factura de ${p.titular_primerNombre}`}
+                        disabled={bulkFacturando}
+                        className={`w-full px-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${repetido ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+                      {repetido && <p className="text-[11px] text-red-600 mt-0.5">Número repetido</p>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {(faltanNumeros > 0 || repetidos.size > 0) && (
+              <p className="text-xs text-amber-700">
+                {faltanNumeros > 0 ? `Falta el número de ${faltanNumeros} pago(s).` : ''}
+                {faltanNumeros > 0 && repetidos.size > 0 ? ' ' : ''}
+                {repetidos.size > 0 ? 'Hay números de factura repetidos.' : ''}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button type="button" onClick={() => setBulkFactModal(false)} disabled={bulkFacturando} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={handleBulkFacturar}
+                disabled={bulkFacturando || faltanNumeros > 0 || repetidos.size > 0 || filasAFacturar.length === 0}
+                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                {bulkFacturando ? 'Facturando…' : `Facturar ${filasAFacturar.length}`}
+              </button>
             </div>
           </div>
         </div>
