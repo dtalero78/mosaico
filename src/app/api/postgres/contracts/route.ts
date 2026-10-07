@@ -2,6 +2,7 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
+import { vigenciaValida, mensajeVigenciaInvalida } from '@/lib/vigencia-modulo';
 import { createFullContract, normalizeTipoPlan, validarNumeroIds, buscarTitularExistente } from '@/services/contract-creation.service';
 
 const CODIGOS_PAIS: Record<string, string> = {
@@ -52,6 +53,14 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const tipoPlan = normalizeTipoPlan(financial?.tipoPlan);
   if (financial?.tipoPlan && !tipoPlan) {
     throw new ValidationError('tipoPlan debe ser uno de: Contado, Credito, Colaborador');
+  }
+
+  // Vigencia del flujo comercial: Módulo = 3 meses fijos; si no, de 3 a 9 meses.
+  // Se valida aquí (no en createFullContract) porque Migrar Contrato, importar PDF
+  // y el bulk registran ventas viejas con las vigencias que tuvieron en su día.
+  const esModulo = financial?.modulo === true;
+  if (!vigenciaValida(financial?.vigencia, esModulo)) {
+    throw new ValidationError(mensajeVigenciaInvalida(esModulo));
   }
 
   // Regla MOSAICO: el numeroId SOLO puede compartirse en el caso

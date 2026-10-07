@@ -1091,6 +1091,14 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Página "Gestión Contrato"',
     description: 'Acceso a /dashboard/comercial/gestion-contrato. Lista de contratos firmados sin aprobar (nombre, contrato, fecha, estado) con opciones de adjuntar documentos y "dejar listo".',
   },
+  // -- Página: Vencimientos (/dashboard/comercial/vencimientos) --
+  {
+    code: ComercialPermission.VENCIMIENTOS,
+    module: Module.COMERCIAL,
+    section: 'Vencimientos',
+    name: 'Página "Vencimientos"',
+    description: 'Consulta de contratos aprobados por vencer (titular, correo, teléfono, Módulo sí/no), con filtros de campaña, curso, asesor comercial y fechas, y descarga CSV. Un líder comercial ve sólo los contratos de su equipo.',
+  },
   {
     code: ComercialPermission.CONTRATO_LISTO_APROBACION,
     module: Module.COMERCIAL,

@@ -10,6 +10,7 @@ import { cursosVisiblesContrato, esMenores } from '@/lib/cursos-campaign'
 import { generateUserLogin } from '@/lib/user-login'
 import { normalizeNumeroId } from '@/lib/numeroid-normalize'
 import { normalizeTelefono } from '@/lib/telefono-normalize'
+import { VIGENCIA_MODULO, VIGENCIA_MIN, VIGENCIA_MAX, vigenciaValida } from '@/lib/vigencia-modulo'
 import CursoCampaignFields, { type CursoRow } from '@/components/contract/CursoCampaignFields'
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 
@@ -158,6 +159,8 @@ function CrearContratoContent() {
     valorCuota: 0,
     fechaPago: '',
     vigencia: '',
+    // Contrato "Módulo": vigencia fija de 3 meses (se guarda en PEOPLE.modulo del titular).
+    modulo: false,
     medioPago: ''
   });
 
@@ -263,7 +266,7 @@ function CrearContratoContent() {
     const draft = (window as any).__contractDraft
     if (draft) {
       if (draft.titular) setTitular(draft.titular)
-      if (draft.financial) setFinancial(draft.financial)
+      if (draft.financial) setFinancial(prev => ({ ...prev, ...draft.financial }))
       if (draft.beneficiarios) setBeneficiarios(draft.beneficiarios)
       if (draft.titularEsBeneficiario !== undefined) setTitularEsBeneficiario(draft.titularEsBeneficiario)
       if (draft.currentStep) setCurrentStep(draft.currentStep)
@@ -499,7 +502,7 @@ function CrearContratoContent() {
         return financial.totalPlan > 0 &&
                financial.pagoInscripcion >= 0 &&
                financial.fechaPago !== '' &&
-               financial.vigencia !== '' &&
+               vigenciaValida(financial.vigencia, financial.modulo === true) &&
                financial.medioPago !== '';
       default:
         return true;
@@ -1308,35 +1311,85 @@ function CrearContratoContent() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Vigencia * <span className="text-xs text-gray-400">(meses, 1–12)</span>
+                    Módulo / Vigencia *{' '}
+                    <span className="text-xs text-gray-400">
+                      {financial.modulo
+                        ? `(módulo: ${VIGENCIA_MODULO} meses fijos)`
+                        : `(meses, ${VIGENCIA_MIN}–${VIGENCIA_MAX})`}
+                    </span>
                   </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={12}
-                    value={financial.vigencia}
-                    onKeyDown={(e) => {
-                      // Block anything that is not a digit, backspace, delete, arrows or tab
-                      if (!/^\d$/.test(e.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key)) {
-                        e.preventDefault()
-                      }
-                    }}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^0-9]/g, '')
-                      if (raw === '') { setFinancial({...financial, vigencia: ''}); return }
-                      const num = parseInt(raw, 10)
-                      if (!isNaN(num) && num >= 1 && num <= 12) {
-                        setFinancial({...financial, vigencia: String(num)})
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const num = parseInt(e.target.value, 10)
-                      if (isNaN(num) || num < 1) setFinancial({...financial, vigencia: '1'})
-                      else if (num > 12)         setFinancial({...financial, vigencia: '12'})
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="1 – 12"
-                  />
+                  <div className="flex items-stretch gap-3">
+                    {/* Módulo: fija la vigencia en 3 meses y bloquea el campo. */}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={financial.modulo}
+                      title={financial.modulo
+                        ? 'Contrato Módulo: vigencia fija de 3 meses. Click para desactivar.'
+                        : 'Activar si el contrato es un Módulo (vigencia de 3 meses).'}
+                      onClick={() => {
+                        const activar = !financial.modulo
+                        setFinancial({
+                          ...financial,
+                          modulo: activar,
+                          // Al activar se fija en 3; al desactivar se deja el 3 (está en rango)
+                          // para que el comercial lo ajuste si el contrato dura más.
+                          vigencia: activar ? String(VIGENCIA_MODULO) : financial.vigencia,
+                        })
+                      }}
+                      className={`flex shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors ${
+                        financial.modulo
+                          ? 'border-primary-600 bg-primary-600 text-white'
+                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span
+                        className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                          financial.modulo ? 'bg-white/40' : 'bg-gray-300'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                            financial.modulo ? 'translate-x-3.5' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </span>
+                      Módulo
+                    </button>
+                    <input
+                      type="number"
+                      min={financial.modulo ? VIGENCIA_MODULO : VIGENCIA_MIN}
+                      max={financial.modulo ? VIGENCIA_MODULO : VIGENCIA_MAX}
+                      value={financial.vigencia}
+                      readOnly={financial.modulo}
+                      onKeyDown={(e) => {
+                        // Block anything that is not a digit, backspace, delete, arrows or tab
+                        if (!/^\d$/.test(e.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key)) {
+                          e.preventDefault()
+                        }
+                      }}
+                      onChange={(e) => {
+                        if (financial.modulo) return
+                        const raw = e.target.value.replace(/[^0-9]/g, '')
+                        if (raw === '') { setFinancial({...financial, vigencia: ''}); return }
+                        // Sólo una cifra: el rango 3–9 no admite dos dígitos.
+                        const num = parseInt(raw.slice(-1), 10)
+                        if (!isNaN(num) && num >= 1 && num <= VIGENCIA_MAX) {
+                          setFinancial({...financial, vigencia: String(num)})
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (financial.modulo) return
+                        const num = parseInt(e.target.value, 10)
+                        if (isNaN(num) || num < VIGENCIA_MIN) setFinancial({...financial, vigencia: String(VIGENCIA_MIN)})
+                        else if (num > VIGENCIA_MAX)          setFinancial({...financial, vigencia: String(VIGENCIA_MAX)})
+                      }}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        financial.modulo ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''
+                      }`}
+                      placeholder={`${VIGENCIA_MIN} – ${VIGENCIA_MAX}`}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

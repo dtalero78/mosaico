@@ -104,6 +104,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Crear Contrato', href: '/dashboard/comercial/crear-contrato' },
       { name: 'Gestión Contrato', href: '/dashboard/comercial/gestion-contrato', newTab: true },
       { name: 'Consulta cursos', href: '/dashboard/comercial/consulta-cursos', newTab: true },
+      { name: 'Vencimientos', href: '/dashboard/comercial/vencimientos', newTab: true },
       { name: 'Subir Lote', href: '/subir-lote' },
     ],
   },
@@ -414,6 +415,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/comercial/gestion-contrato': [
       ComercialPermission.GESTION_CONTRATO,
     ],
+    '/dashboard/comercial/vencimientos': [
+      ComercialPermission.VENCIMIENTOS,
+    ],
     '/subir-lote': [
       ComercialPermission.SUBIR_LOTE,
     ],
@@ -553,6 +557,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ComercialPermission.APROBACION_AUTONOMA,
       // COMERCIAL.PROSPECTOS.*
       ComercialPermission.VER_PROSPECTOS,
+      // Páginas con permiso propio: con sólo una de ellas el grupo debe verse
+      // (los ítems se filtran después uno por uno con pagePermissions).
+      ComercialPermission.GESTION_CONTRATO,
+      ComercialPermission.CONSULTA_CURSOS,
+      ComercialPermission.VENCIMIENTOS,
     ],
     'Aprobación': [
       // Acceso por ítem (MOSAICO)

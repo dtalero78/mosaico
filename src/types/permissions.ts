@@ -414,6 +414,9 @@ export enum ComercialPermission {
   // Dar de baja = BORRAR el contrato y todos sus registros. Irreversible desde
   // la interfaz (queda el snapshot en PURGE_LOG). Va aparte de VER a propósito.
   GESTION_CONTRATO_DAR_BAJA = 'COMERCIAL.GESTION_CONTRATO.DAR_BAJA',
+  // Comercial › Vencimientos: contratos aprobados que vencen pronto (titular,
+  // contacto, módulo sí/no). Incluye descargar el CSV.
+  VENCIMIENTOS = 'COMERCIAL.VENCIMIENTOS.VER',
 }
 
 /**
