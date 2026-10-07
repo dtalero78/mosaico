@@ -69,6 +69,8 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
   const [lecciones, setLecciones] = useState<string[]>([])
   const [guias, setGuias] = useState<Guia[]>([])
   const [loading, setLoading] = useState(true)
+  /** Rol GUIA: el servidor ya acota a lo suyo, así que el filtro de Guía sobra. */
+  const [soloPropios, setSoloPropios] = useState(false)
   const [adicionar, setAdicionar] = useState(false)
   const [acting, setActing] = useState<string | null>(null)
 
@@ -81,6 +83,7 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
       if (r.error) throw new Error(r.error)
       setRows(r.rows || [])
       setCursos(r.cursos || []); setSalones(r.salones || []); setLecciones(r.lecciones || []); setGuias(r.guias || [])
+      setSoloPropios(!!r.soloPropios)
       onCount?.(r.rows?.length || 0)
     } catch (e: any) {
       toast.error(e?.message || 'Error al cargar')
@@ -178,12 +181,14 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
               <option value="">Todas</option>{lecciones.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
-          <div>
-            <label htmlFor="so-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
-            <select id="so-guia" value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-              <option value="">Todos</option>{guias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-            </select>
-          </div>
+          {!soloPropios && (
+            <div>
+              <label htmlFor="so-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
+              <select id="so-guia" value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <option value="">Todos</option>{guias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label htmlFor="so-desde" className="block text-xs font-medium text-gray-500 mb-1">Fecha inicial</label>
             <input id="so-desde" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
@@ -194,7 +199,7 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-4">
-          <PermissionGuard permission={ServicioPermission.NIVELACIONES_GESTION}>
+          <PermissionGuard anyPermissions={[ServicioPermission.NIVELACIONES_ADICIONAR, ServicioPermission.NIVELACIONES_GESTION] as any}>
             <button type="button" onClick={() => setAdicionar(true)}
               className="px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium">
               + Adicionar Nivelación</button>
@@ -226,16 +231,19 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Fecha solicitud', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Hora sugerida', 'Guía', 'Conteo', 'Confirmación', 'Aprobar', 'Cancelar'].map(h => (
+                {/* Aprobar/Cancelar sólo para quien gestiona: al guía no le sirven
+                    dos columnas de botones apagados. */}
+                {['Fecha solicitud', 'Curso', 'Nombre', 'Salón', 'Lección (tema)', 'Hora sugerida', 'Guía', 'Conteo', 'Confirmación',
+                  ...(canGestion ? ['Aprobar', 'Cancelar'] : [])].map(h => (
                   <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
+                <tr><td colSpan={canGestion ? 11 : 9} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={11} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones pendientes</td></tr>
+                <tr><td colSpan={canGestion ? 11 : 9} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones pendientes</td></tr>
               ) : rows.map((r) => (
                 <tr key={r.academicaId} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
@@ -284,6 +292,7 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
                       onConfirmed={() => fetchData({ curso, salon, leccion, guia, startDate, endDate })}
                     />
                   </td>
+                  {canGestion && <>
                   <td className="px-3 py-2">
                     <button type="button" title="Aprobar — pasa a Agrupaciones para agendarla en grupo"
                       onClick={() => accion(r, 'aprobar')}
@@ -300,6 +309,7 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
                       <XCircleIcon className="h-6 w-6" />
                     </button>
                   </td>
+                  </>}
                 </tr>
               ))}
             </tbody>
@@ -318,10 +328,16 @@ function NivelacionesContent() {
   /** Sube cada vez que una pestaña mueve una nivelación a otra: todas recargan. */
   const [refreshKey, setRefreshKey] = useState(0)
 
+  // Agrupaciones y Pendientes son el trabajo del Área de Nivelación: cada una
+  // tiene su permiso. Sin él la pestaña ni se monta (su endpoint respondería 403).
+  const { hasPermission } = usePermissions()
+  const verAgrupaciones = hasPermission(ServicioPermission.NIVELACIONES_AGRUPACIONES_VER as any)
+  const verPendientes = hasPermission(ServicioPermission.NIVELACIONES_PENDIENTES_VER as any)
+
   const tabs: Array<{ id: Tab; label: string; count: number | null }> = [
     { id: 'solicitudes', label: 'Solicitudes', count: solCount },
-    { id: 'agrupaciones', label: 'Agrupaciones', count: agrCount },
-    { id: 'pendientes', label: 'Pendientes', count: penCount },
+    ...(verAgrupaciones ? [{ id: 'agrupaciones' as Tab, label: 'Agrupaciones', count: agrCount }] : []),
+    ...(verPendientes ? [{ id: 'pendientes' as Tab, label: 'Pendientes', count: penCount }] : []),
     { id: 'historial', label: 'Histórico', count: null },
   ]
 
@@ -357,12 +373,16 @@ function NivelacionesContent() {
       <div className={tab === 'solicitudes' ? '' : 'hidden'}>
         <SolicitudesTab onCount={setSolCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
       </div>
-      <div className={tab === 'agrupaciones' ? '' : 'hidden'}>
-        <NivelacionesAgrupacionesTab onCount={setAgrCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
-      </div>
-      <div className={tab === 'pendientes' ? '' : 'hidden'}>
-        <NivelacionesPendientesTab onCount={setPenCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
-      </div>
+      {verAgrupaciones && (
+        <div className={tab === 'agrupaciones' ? '' : 'hidden'}>
+          <NivelacionesAgrupacionesTab onCount={setAgrCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
+        </div>
+      )}
+      {verPendientes && (
+        <div className={tab === 'pendientes' ? '' : 'hidden'}>
+          <NivelacionesPendientesTab onCount={setPenCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
+        </div>
+      )}
       <div className={tab === 'historial' ? '' : 'hidden'}>
         <NivelacionesHistorialTab refreshKey={refreshKey} />
       </div>

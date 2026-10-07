@@ -4,6 +4,8 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { ServicioPermission } from '@/types/permissions'
 import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
+import { alcancePorGuia } from '@/services/guia-sesion.service'
+import { alcanceSinResultados } from '@/lib/alcance-guia'
 
 /**
  * GET /api/postgres/reports/servicio/nivelaciones?curso&salon&leccion&guia&startDate&endDate
@@ -13,6 +15,10 @@ import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
  * (NivelacionCount = 1ª/2ª nivelación). El guía se resuelve por CURSOS_CAMPAIGN
  * (campaña+curso+horario) → GUIAS. Rango de fecha sobre la fecha de marcado
  * (detalleNivelacion->>'fecha'). Gateado por SERVICIO.NIVELACIONES.VER.
+ *
+ * Rol GUIA: sólo ve SUS solicitudes —las de los alumnos de sus salones o las que
+ * él mismo pidió (`marcadoPor` = su correo)—, resuelto con la sesión; el filtro
+ * `guia` que llegue se ignora (ver lib/alcance-guia).
  */
 const MAX_ROWS = 5000
 
@@ -28,16 +34,32 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const startDate = (searchParams.get('startDate') || '').trim()
   const endDate = (searchParams.get('endDate') || '').trim()
 
+  const alcance = await alcancePorGuia(session, guia)
+  if (alcanceSinResultados(alcance)) {
+    return successResponse({ rows: [], total: 0, cursos: [], salones: [], lecciones: [], guias: [], soloPropios: true })
+  }
+
   const where: string[] = [
     `a."nivelacion" = true`,
     `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
   ]
   const params: any[] = []
   let i = 1
+  // El alcance del guía acota también los desplegables (que usan $1/$2).
+  const optsWhere: string[] = []
+  const optsParams: any[] = []
+  if (alcance.soloPropios) {
+    const email = String((session as any)?.user?.email || '').trim()
+    const propias = (a: number, b: number) =>
+      `(cc."guia" = $${a} OR LOWER(TRIM(COALESCE(a."detalleNivelacion"->>'marcadoPor',''))) = LOWER(TRIM($${b})))`
+    where.push(propias(i, i + 1)); params.push(alcance.guiaId, email); i += 2
+    optsWhere.push(propias(1, 2)); optsParams.push(alcance.guiaId, email)
+  } else if (alcance.guiaId) {
+    where.push(`cc."guia" = $${i++}`); params.push(alcance.guiaId)
+  }
   if (curso)   { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (salon)   { where.push(`p."salon" = $${i++}`); params.push(salon) }
   if (leccion) { where.push(`(a."detalleNivelacion"->>'leccion') = $${i++}`); params.push(leccion) }
-  if (guia)    { where.push(`cc."guia" = $${i++}`); params.push(guia) }
   if (startDate) { where.push(`(a."detalleNivelacion"->>'fecha')::timestamptz >= $${i++}::date`); params.push(startDate) }
   if (endDate)   { where.push(`(a."detalleNivelacion"->>'fecha')::timestamptz < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
   if (usuario) {
@@ -88,7 +110,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
        LEFT JOIN "CURSOS_CAMPAIGN" cc ON cc."campaign"=p."campaign" AND cc."tipoCurso"=p."tipoCurso" AND cc."horarioCurso"=p."horarioCurso"
        LEFT JOIN "GUIAS" g ON g."_id"=cc."guia"
-      WHERE a."nivelacion" = true AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`
+      WHERE a."nivelacion" = true AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
+        ${optsWhere.length ? 'AND ' + optsWhere.join(' AND ') : ''}`,
+    optsParams
   )).rows
   const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean)))
   const cursos = uniq(opts.map((o: any) => o.curso)).sort()
@@ -96,5 +120,5 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const lecciones = uniq(opts.map((o: any) => o.leccion)).sort()
   const guias = Array.from(new Map(opts.filter((o: any) => o.guia_id).map((o: any) => [o.guia_id, { id: o.guia_id, nombre: o.guia_nombre }])).values())
 
-  return successResponse({ rows, total: rows.length, cursos, salones, lecciones, guias })
+  return successResponse({ rows, total: rows.length, cursos, salones, lecciones, guias, soloPropios: alcance.soloPropios })
 })

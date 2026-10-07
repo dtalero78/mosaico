@@ -4,6 +4,8 @@ import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
 import { ServicioPermission } from '@/types/permissions'
 import { condicionUsuarioSql } from '@/lib/filtro-usuario'
+import { alcancePorGuia } from '@/services/guia-sesion.service'
+import { alcanceSinResultados } from '@/lib/alcance-guia'
 
 /**
  * GET /api/postgres/reports/servicio/nivelaciones/historial?guia&curso&usuario&startDate&endDate
@@ -21,6 +23,9 @@ import { condicionUsuarioSql } from '@/lib/filtro-usuario'
  * `jsonb_array_elements` para que cada nivelación cerrada sea una fila propia.
  * Las entradas viejas (cerradas desde /sesion) no guardaron módulo/lección; se
  * muestran vacías en vez de inventarlas.
+ *
+ * Rol GUIA: sólo SUS nivelaciones —alumnos de sus salones o las que él pidió—,
+ * con el guía de la sesión (el filtro `guia` que llegue se ignora).
  */
 const MAX_ROWS = 5000
 
@@ -54,10 +59,21 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const endDate = (searchParams.get('endDate') || '').trim()
   const usuario = (searchParams.get('usuario') || '').trim()
 
+  const alcance = await alcancePorGuia(session, guia)
+  if (alcanceSinResultados(alcance)) {
+    return successResponse({ rows: [], total: 0, cursos: [], guias: [], soloPropios: true })
+  }
+  const email = String((session as any)?.user?.email || '').trim()
+
   const params: any[] = []
   let i = 1
   const extra: string[] = []
-  if (guia)  { extra.push(`"guiaId" = $${i++}`); params.push(guia) }
+  if (alcance.soloPropios) {
+    extra.push(`("guiaId" = $${i} OR LOWER(TRIM(COALESCE("marcadoPor",''))) = LOWER(TRIM($${i + 1})))`)
+    params.push(alcance.guiaId, email); i += 2
+  } else if (alcance.guiaId) {
+    extra.push(`"guiaId" = $${i++}`); params.push(alcance.guiaId)
+  }
   if (curso) { extra.push(`curso = $${i++}`); params.push(curso) }
   if (startDate) { extra.push(`fecha >= $${i++}::date`); params.push(startDate) }
   if (endDate)   { extra.push(`fecha < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
@@ -101,12 +117,17 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `SELECT DISTINCT p."tipoCurso" AS curso, cc."guia" AS guia_id, g."nombreCompleto" AS guia_nombre
        ${JOINS}
       WHERE ${NO_PRB}
-        AND jsonb_array_length(COALESCE(a."NivelacionHistory", '[]'::jsonb)) > 0`
+        AND jsonb_array_length(COALESCE(a."NivelacionHistory", '[]'::jsonb)) > 0
+        ${alcance.soloPropios
+          ? `AND (cc."guia" = $1 OR EXISTS (SELECT 1 FROM jsonb_array_elements(a."NivelacionHistory") hh
+                                             WHERE LOWER(TRIM(COALESCE(hh->>'marcadoPor',''))) = LOWER(TRIM($2))))`
+          : ''}`,
+    alcance.soloPropios ? [alcance.guiaId, email] : []
   )).rows
   const cursos = Array.from(new Set(opts.map((o: any) => o.curso).filter(Boolean))).sort()
   const guias = Array.from(
     new Map(opts.filter((o: any) => o.guia_id).map((o: any) => [o.guia_id, { id: o.guia_id, nombre: o.guia_nombre }])).values()
   )
 
-  return successResponse({ rows, total: rows.length, cursos, guias })
+  return successResponse({ rows, total: rows.length, cursos, guias, soloPropios: alcance.soloPropios })
 })

@@ -29,7 +29,7 @@ import { agendamientosDeNivelacionActual } from '@/services/nivelacion-agendada.
 const MAX_ROWS = 5000
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
-  await requirePermission(session, ServicioPermission.NIVELACIONES_VER)
+  await requirePermission(session, ServicioPermission.NIVELACIONES_PENDIENTES_VER)
 
   const { searchParams } = new URL(request.url)
   const curso = (searchParams.get('curso') || '').trim()

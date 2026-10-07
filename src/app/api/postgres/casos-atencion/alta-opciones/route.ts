@@ -4,6 +4,7 @@ import { requireAnyPermission } from '@/lib/api-permissions';
 import { query } from '@/lib/postgres';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { ServicioPermission } from '@/types/permissions';
+import { esRolGuia, guiaDeSesion } from '@/services/guia-sesion.service';
 
 /**
  * Opciones en cascada para adicionar un Caso de Atención desde Servicio:
@@ -35,10 +36,21 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requireAnyPermission(session, [
     ServicioPermission.CASOS_ATENCION_GESTION as any,
     ServicioPermission.NIVELACIONES_GESTION as any,
+    ServicioPermission.NIVELACIONES_ADICIONAR as any,
   ]);
 
   const sp = new URL(request.url).searchParams;
-  const guiaId = (sp.get('guiaId') || '').trim();
+  let guiaId = (sp.get('guiaId') || '').trim();
+
+  // Rol GUIA: la cascada parte SIEMPRE de él mismo. La lista de guías trae sólo
+  // su ficha y el `guiaId` pedido se reemplaza por el suyo, así no puede ver los
+  // salones ni los alumnos de otro guía.
+  if (esRolGuia(session)) {
+    const propio = await guiaDeSesion((session as any)?.user?.email);
+    if (!propio) return successResponse({ guias: [], cursos: [], salones: [], alumnos: [] });
+    if (!guiaId) return successResponse({ guias: [propio] });
+    guiaId = propio._id;
+  }
   const curso = (sp.get('curso') || '').trim();
   const salon = (sp.get('salon') || '').trim();
   const campaign = (sp.get('campaign') || '').trim();

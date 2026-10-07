@@ -47,6 +47,8 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
   const [cursos, setCursos] = useState<string[]>([])
   const [guias, setGuias] = useState<Guia[]>([])
   const [loading, setLoading] = useState(true)
+  /** Rol GUIA: el servidor ya acota a lo suyo, así que el filtro de Guía sobra. */
+  const [soloPropios, setSoloPropios] = useState(false)
 
   const fetchData = useCallback(async (f?: Record<string, string>) => {
     setLoading(true)
@@ -57,6 +59,7 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
       if (r.error) throw new Error(r.error)
       setRows(r.rows || [])
       setCursos(r.cursos || []); setGuias(r.guias || [])
+      setSoloPropios(!!r.soloPropios)
     } catch (e: any) {
       toast.error(e?.message || 'Error al cargar')
     } finally {
@@ -117,12 +120,14 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
               placeholder="Nombre o documento"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
           </div>
-          <div>
-            <label htmlFor="hi-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
-            <select id="hi-guia" value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-              <option value="">Todos</option>{guias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-            </select>
-          </div>
+          {!soloPropios && (
+            <div>
+              <label htmlFor="hi-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
+              <select id="hi-guia" value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <option value="">Todos</option>{guias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label htmlFor="hi-curso" className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
             <select id="hi-curso" value={curso} onChange={e => setCurso(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">

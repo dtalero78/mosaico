@@ -1,6 +1,7 @@
 import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
-import { requirePermission } from '@/lib/api-permissions'
+import { requireAnyPermission } from '@/lib/api-permissions'
+import { esRolGuia, guiaIdDeSesion } from '@/services/guia-sesion.service'
 import { query, queryOne } from '@/lib/postgres'
 import { ValidationError, NotFoundError } from '@/lib/errors'
 import { ServicioPermission } from '@/types/permissions'
@@ -29,11 +30,23 @@ import { nivelacionVivaDe, errorNivelacionSinResolver } from '@/services/nivelac
  *    regla que rige la casilla del guía (`nivelacionVivaDe`).
  */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
-  await requirePermission(session, ServicioPermission.NIVELACIONES_GESTION as any)
+  // El botón tiene permiso propio; GESTION se sigue aceptando para no quitarle
+  // el alta a quien ya la tenía (Servicio).
+  await requireAnyPermission(session, [
+    ServicioPermission.NIVELACIONES_ADICIONAR as any,
+    ServicioPermission.NIVELACIONES_GESTION as any,
+  ])
 
   const body = await request.json().catch(() => ({}))
   const academicaId = String(body?.academicaId || '').trim()
-  const guiaId = String(body?.guiaId || '').trim()
+  // Rol GUIA: la nivelación va SIEMPRE a su nombre; el guía que mande el
+  // navegador se ignora (si no, podría pedirla a nombre de otro).
+  let guiaId = String(body?.guiaId || '').trim()
+  if (esRolGuia(session)) {
+    const propio = await guiaIdDeSesion((session as any)?.user?.email)
+    if (!propio) throw new ValidationError('Tu usuario no está registrado como guía.')
+    guiaId = propio
+  }
   const modulo = String(body?.modulo || '').trim()
   const leccion = String(body?.leccion || '').trim()
   const hora = String(body?.hora || '').trim()

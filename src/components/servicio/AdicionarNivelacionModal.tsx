@@ -50,8 +50,17 @@ export default function AdicionarNivelacionModal({ onClose, onCreated }: {
 
   useEffect(() => {
     setCargando(true)
-    opciones('').then(d => setGuias(d.guias || [])).catch(() => toast.error('No se pudieron cargar los guías'))
+    opciones('')
+      .then(d => {
+        const gs: Guia[] = d.guias || []
+        setGuias(gs)
+        // Con el rol GUIA el servidor devuelve sólo su ficha: queda elegido y
+        // la cascada arranca en sus cursos.
+        if (gs.length === 1) elegirGuia(gs[0]._id)
+      })
+      .catch(() => toast.error('No se pudieron cargar los guías'))
       .finally(() => setCargando(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Cada paso limpia lo que cuelga de él: un salón de otro curso no significa nada.
@@ -140,7 +149,8 @@ export default function AdicionarNivelacionModal({ onClose, onCreated }: {
           <div>
             <label htmlFor="an-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
             <select id="an-guia" value={guiaId} onChange={e => elegirGuia(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              disabled={guias.length === 1}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:bg-gray-100">
               <option value="">Seleccione…</option>
               {guias.map(g => <option key={g._id} value={g._id}>{g.nombreCompleto}</option>)}
             </select>

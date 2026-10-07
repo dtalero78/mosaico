@@ -994,6 +994,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Muestra el botón "Exportar CSV" para descargar el reporte de Nivelaciones.',
   },
   {
+    code: ServicioPermission.NIVELACIONES_AGRUPACIONES_VER,
+    module: Module.SERVICIO,
+    section: 'Nivelaciones',
+    name: '↳ Pestaña "Agrupaciones"',
+    description: 'Muestra la pestaña Agrupaciones (nivelaciones aprobadas sin evento). Sin este permiso la pestaña no aparece y el servidor no entrega sus datos.',
+  },
+  {
+    code: ServicioPermission.NIVELACIONES_PENDIENTES_VER,
+    module: Module.SERVICIO,
+    section: 'Nivelaciones',
+    name: '↳ Pestaña "Pendientes"',
+    description: 'Muestra la pestaña Pendientes (nivelaciones con evento esperando dictarse). Sin este permiso la pestaña no aparece y el servidor no entrega sus datos.',
+  },
+  {
+    code: ServicioPermission.NIVELACIONES_ADICIONAR,
+    module: Module.SERVICIO,
+    section: 'Nivelaciones',
+    name: '↳ Botón "+ Adicionar Nivelación"',
+    description: 'Permite adicionar una nivelación. Con el rol GUIA el guía queda fijo en el propio y sólo se ofrecen sus salones.',
+  },
+  {
     code: ServicioPermission.CASOS_ATENCION_VER,
     module: Module.SERVICIO,
     section: 'Casos Atención',
