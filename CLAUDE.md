@@ -85,6 +85,9 @@ LGS Admin Panel is a Next.js 14 administrative dashboard for "Let's Go Speak" la
 51. Numeración automática secuencial de contratos (next-number)
 52. Smart polling - Auto-actualización del contrato admin cuando el cliente firma consentimiento (timeout 10 min)
 52b. Auto-guardado de borrador en Crear Contrato — guarda estado del formulario en localStorage con TTL de 72h; al volver muestra banner para continuar o descartar
+52c. Botón «Módulo» en el paso Financiero de Crear Contrato — activo: vigencia fija de 3 meses (campo bloqueado); inactivo: vigencia de 3 a 9 meses. Regla en `src/lib/vigencia-modulo.ts`, validada también en `POST /api/postgres/contracts`. Se guarda en `PEOPLE.modulo` del titular
+52d. Comercial › Vencimientos (`/dashboard/comercial/vencimientos`) — titulares aprobados por vencer (por defecto hoy → +1 mes) con correo, teléfono y Módulo Sí/No; filtros campaña, curso, asesor y fechas; CSV; alcance por líder comercial. Permiso `COMERCIAL.VENCIMIENTOS.VER`
+52e. Columna Módulo (Sí/No) en Gestión de Aprobaciones (pestañas Pendientes y Migración)
 
 ### Consentimiento Declarativo (Firma Digital)
 53. Página pública de contrato para el cliente (`/contrato/[id]`)
@@ -703,6 +706,7 @@ La plataforma opera 100% sobre PostgreSQL. Los datos migrados de Wix (marzo 2026
     - Campos paralelos: `nivelParalelo`, `stepParalelo` (nullable)
     - Campo comentarios: `comentarios` (JSONB array) — comentarios internos por persona, NO hay tabla COMENTARIOS separada
     - Campo `gestorRecaudo` (VARCHAR nullable) — `USUARIOS_ROLES._id` del Ejecutivo de Recaudos asignado al titular (rol `RECAUDO_ASIST` o `RECAUDOS_JEFE`, solo activos). Solo aplica a `tipoUsuario='TITULAR'`. Validado en backend en `PATCH /api/postgres/people/[id]`. Asignación gateada por `PersonPermission.ASIGNAR_GESTOR_RECAUDO`
+    - Campo `modulo` (BOOLEAN NOT NULL DEFAULT false) — contrato "Módulo" (vigencia fija de 3 meses). Solo en `tipoUsuario='TITULAR'`; lo escribe Crear Contrato (botón «Módulo»). Los contratos anteriores al 6-oct-2026 quedaron en false. Lo leen Comercial › Vencimientos y Gestión de Aprobaciones (Pendientes y Migración)
   - `ACADEMICA`: Registros académicos por estudiante (nivel, step, nivelParalelo, stepParalelo). **No contiene** campos de contrato/extensión/onhold
   - `ACADEMICA_BOOKINGS`: Inscripciones a eventos (asistencia, evaluación, calificación, participación, comentarios). Datos migrados de Wix usan columna `idEvento` (nueva: `eventoId`) y `tipoEvento` (queries usan COALESCE para compatibilidad)
   - `CALENDARIO`: Eventos (SESSION, CLUB) con advisor, nivel, step, linkZoom, limiteUsuarios. Eventos de bienvenida se distinguen por `tituloONivel=WELCOME`. La columna `tipo=WELCOME` existe solo en datos legacy de Wix. **`tipo` está acotada por un CHECK con los 9 tipos vigentes** (SESSION, CLUB, WELCOME, COMPLEMENTARIA, NIVELACION, OLIMPIADA, ENTRENAMIENTO, EVALUACION, **RECUPERACION**): estrenar un tipo nuevo exige ampliarlo con un script o la inserción revienta contra el constraint — y el script **reescribe el CHECK entero**, así que debe listarlos todos: omitir uno lo dejaría prohibido. **`RECUPERACION` es el único tipo que puede agendarse en un día sin clase** (ver `TIPO_EXENTO_FESTIVO` en [`src/lib/festivo-guard.ts`](src/lib/festivo-guard.ts)): repone la clase que no se dictó, y lo que hay que reponer suele caer justo en la semana de festivos
@@ -1490,6 +1494,7 @@ interface ConsentData {
 | Crear Contrato | `/dashboard/comercial/crear-contrato` | COMERCIAL permissions |
 | Contrato Detail (admin) | `/dashboard/comercial/contrato/[id]` | COMERCIAL permissions |
 | Prospectos | `/dashboard/comercial/prospectos` | COMERCIAL permissions |
+| Vencimientos | `/dashboard/comercial/vencimientos` | COMERCIAL.VENCIMIENTOS.VER |
 | Aprobación | `/dashboard/aprobacion` | APROBACION permissions |
 | Permisos Admin | `/admin/permissions` | SUPER_ADMIN/ADMIN only |
 | Consulta de Scripts | `/admin/scripts/consulta` | MANTENIMIENTO.SCRIPTS.CONSULTA |
