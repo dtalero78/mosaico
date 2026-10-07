@@ -225,6 +225,7 @@ export enum AcademicoPermission {
   // Casos Usuarios — módulo de Casos de Atención (Académico). El rol GUIA sólo
   // ve los casos que él mismo reportó; los demás roles ven todos.
   CASOS_USUARIOS_VER = 'ACADEMICO.CASOS_USUARIOS.VER',
+  CASOS_USUARIOS_ADICIONAR = 'ACADEMICO.CASOS_USUARIOS.ADICIONAR', // botón "+ Adicionar caso"
 
   // Evaluaciones — resultados de evaluaciones/cuestionarios por curso (Académico)
   EVALUACIONES_VER = 'ACADEMICO.EVALUACIONES.VER',

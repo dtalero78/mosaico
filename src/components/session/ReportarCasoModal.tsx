@@ -104,7 +104,14 @@ export default function ReportarCasoModal({
 
   useEffect(() => {
     if (!conCascada) return
-    pedir('', (j) => setGuias(j.guias || []))
+    pedir('', (j) => {
+      const gs: GuiaOpcion[] = j.guias || []
+      setGuias(gs)
+      // Con el rol GUIA el servidor devuelve sólo su ficha: queda elegido y la
+      // cascada arranca en sus cursos.
+      if (gs.length === 1) elegirGuia(gs[0]._id)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conCascada])
 
   const elegirGuia = (id: string) => {
@@ -203,7 +210,8 @@ export default function ReportarCasoModal({
             <div>
               <label htmlFor="caso-guia" className="block text-sm font-medium text-gray-700">Guía</label>
               <select id="caso-guia" value={guiaId} onChange={e => elegirGuia(e.target.value)}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500">
+                disabled={guias.length === 1}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100">
                 <option value="">— Selecciona —</option>
                 {guias.map(g => <option key={g._id} value={g._id}>{g.nombreCompleto || g._id}</option>)}
               </select>

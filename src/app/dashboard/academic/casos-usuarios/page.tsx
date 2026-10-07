@@ -7,6 +7,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { AcademicoPermission, Role } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import ReportarCasoModal from '@/components/session/ReportarCasoModal'
 import {
   ESTADO_LABEL, estadoLabel, estadoColor, cierraElCaso, AREA_LABEL, AREA_COLOR, type AreaCaso,
 } from '@/lib/casos-atencion-estados'
@@ -83,6 +84,7 @@ export default function CasosUsuariosPage() {
   const [salon, setSalon] = useState('')
   const [guia, setGuia] = useState('')
   const [q, setQ] = useState('')
+  const [adicionar, setAdicionar] = useState(false)
 
   const cargar = useCallback(async () => {
     if (!session) return
@@ -234,11 +236,30 @@ export default function CasosUsuariosPage() {
                 : `${meta.total || 0} caso(s) · ${meta.abiertos || 0} abierto(s)`}
               {!vistaCerrados && meta.sinLeer > 0 && <span className="ml-2 text-red-600 font-medium">{meta.sinLeer} reporte(s) sin leer</span>}
             </p>
-            <button type="button" disabled={!visibles.length} onClick={exportar}
-              className="inline-flex items-center px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-              <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
-            </button>
+            <div className="flex items-center gap-2">
+              <PermissionGuard permission={AcademicoPermission.CASOS_USUARIOS_ADICIONAR}>
+                <button type="button" onClick={() => setAdicionar(true)}
+                  className="inline-flex items-center px-3 py-2 text-sm rounded-lg bg-accent-600 text-white hover:bg-accent-700 font-medium shadow-sm">
+                  + Adicionar caso
+                </button>
+              </PermissionGuard>
+              <button type="button" disabled={!visibles.length} onClick={exportar}
+                className="inline-flex items-center px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                <ArrowDownTrayIcon className="h-4 w-4 mr-1" /> Descargar CSV
+              </button>
+            </div>
           </div>
+
+          {/* Guía: la cascada parte de él mismo y el caso sale a su nombre (Docente).
+              Otros roles eligen el guía; atribuirlo a otro exige el permiso de
+              gestión de Servicio, que valida el servidor. */}
+          {adicionar && (
+            <ReportarCasoModal
+              conCascada
+              onClose={() => setAdicionar(false)}
+              onEnviado={() => { setAdicionar(false); cargar() }}
+            />
+          )}
 
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">

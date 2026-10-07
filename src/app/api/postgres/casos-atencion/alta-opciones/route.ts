@@ -3,7 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requireAnyPermission } from '@/lib/api-permissions';
 import { query } from '@/lib/postgres';
 import { cupoOcupadoSql } from '@/lib/cupo';
-import { ServicioPermission } from '@/types/permissions';
+import { ServicioPermission, AcademicoPermission } from '@/types/permissions';
 import { esRolGuia, guiaDeSesion } from '@/services/guia-sesion.service';
 
 /**
@@ -37,6 +37,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     ServicioPermission.CASOS_ATENCION_GESTION as any,
     ServicioPermission.NIVELACIONES_GESTION as any,
     ServicioPermission.NIVELACIONES_ADICIONAR as any,
+    AcademicoPermission.CASOS_USUARIOS_ADICIONAR as any,
   ]);
 
   const sp = new URL(request.url).searchParams;

@@ -658,6 +658,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/casos-usuarios. Casos de Atención de los alumnos: reportes del guía agrupados por tema, estado de gestión, intentos de contacto con el apoderado, acuerdo y seguimiento de finanzas. El rol GUIA ve SÓLO los casos que él mismo reportó; los demás roles ven todos. Distinto del informe Servicio › Casos de Atención, que es la lista plana anterior.',
   },
   {
+    code: AcademicoPermission.CASOS_USUARIOS_ADICIONAR,
+    module: Module.ACADEMICO,
+    section: 'Casos Usuarios',
+    name: '↳ Botón "+ Adicionar caso"',
+    description: 'Permite reportar un caso desde Casos Usuarios eligiendo Curso → Salón → Usuario. Con el rol GUIA el guía queda fijo en el propio y el caso sale a su nombre (origen Docente). Atribuirlo a OTRO guía sigue exigiendo SERVICIO.CASOS_ATENCION.GESTION.',
+  },
+  {
     code: AcademicoPermission.EVALUACIONES_VER,
     module: Module.ACADEMICO,
     section: 'Evaluaciones',
