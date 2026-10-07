@@ -548,6 +548,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // SERVICIO.USUARIOS.*
       ServicioPermission.USUARIOS_ACTUALIZAR,
       ServicioPermission.USUARIOS_EXPORTAR_CSV,
+      // Páginas con permiso propio: con sólo una de ellas el grupo debe verse
+      // (los ítems se filtran después uno por uno con pagePermissions).
+      ServicioPermission.WELCOME_VIDEO_VER,
+      ServicioPermission.NIVELACIONES_VER,
+      ServicioPermission.CASOS_ATENCION_VER,
     ],
     'Comercial': [
       // COMERCIAL.CONTRATO.*
