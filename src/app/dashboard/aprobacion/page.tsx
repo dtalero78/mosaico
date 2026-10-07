@@ -20,6 +20,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { debounce } from 'lodash'
 import { exportToExcel } from '@/lib/export-excel'
+import ModuloBadge from '@/components/common/ModuloBadge'
 import { usePermissions } from '@/hooks/usePermissions'
 import MigracionTab from '@/components/aprobacion/MigracionTab'
 
@@ -33,6 +34,8 @@ interface Contrato {
   numeroId: string
   contrato: string
   campaign?: string
+  /** Contrato "Módulo" (PEOPLE.modulo del titular). */
+  modulo?: boolean
   celular: string
   email: string
   plataforma: string
@@ -422,6 +425,7 @@ export default function AprobacionPage() {
                 { header: 'Documento', accessor: (c) => c.numeroId },
                 { header: 'Contrato', accessor: (c) => c.contrato },
                 { header: 'Campaña', accessor: (c) => c.campaign || '' },
+                { header: 'Módulo', accessor: (c) => (c.modulo ? 'Sí' : 'No') },
                 { header: 'Plataforma', accessor: (c) => c.plataforma },
                 { header: 'Celular', accessor: (c) => c.celular },
                 { header: 'Email', accessor: (c) => c.email },
@@ -654,6 +658,9 @@ export default function AprobacionPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Campaña
                     </th>
+                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Módulo
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Contacto
                     </th>
@@ -710,6 +717,9 @@ export default function AprobacionPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{contrato.campaign || '—'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <ModuloBadge modulo={contrato.modulo} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{contrato.celular}</div>

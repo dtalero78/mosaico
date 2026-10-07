@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle, ChevronLeft, ChevronRight, Download, RefreshCw, AlertCircle } from 'lucide-react'
 import { exportToExcel } from '@/lib/export-excel'
+import ModuloBadge from '@/components/common/ModuloBadge'
 
 /**
  * Pestaña «Migración» del Centro de Aprobaciones.
@@ -38,6 +39,8 @@ interface Contrato {
   aprobacion: string | null
   firmado: boolean
   listo: boolean
+  /** Contrato "Módulo" (PEOPLE.modulo del titular). */
+  modulo?: boolean
   _createdDate: string
   beneficiarios: Beneficiario[]
 }
@@ -372,7 +375,7 @@ export default function MigracionTab({ onCount }: { onCount?: (n: number) => voi
                       title="Marcar todos los visibles con estos filtros" aria-label="Marcar todos los visibles"
                       className="h-4 w-4 text-primary-600 rounded border-gray-300" />
                   </th>
-                  {['Titular', 'Contrato', 'Campaña', 'Curso · Salón', 'Firma', 'Listo', 'Fecha'].map(h => (
+                  {['Titular', 'Contrato', 'Campaña', 'Módulo', 'Curso · Salón', 'Firma', 'Listo', 'Fecha'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -398,6 +401,7 @@ export default function MigracionTab({ onCount }: { onCount?: (n: number) => voi
                         <div className="text-xs text-gray-500">{c.plataforma}</div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{campanasDe(c).join(', ') || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap"><ModuloBadge modulo={c.modulo} /></td>
                       <td className="px-4 py-3 text-sm text-gray-900">
                         {c.beneficiarios.length === 0 ? <span className="text-gray-400">Sin alumnos</span> : (
                           <div className="flex flex-col gap-0.5">

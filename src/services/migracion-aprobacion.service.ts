@@ -67,6 +67,8 @@ export interface ContratoMigracion {
   aprobacion: string | null;
   firmado: boolean;
   listo: boolean;
+  /** Contrato "Módulo" (vigencia fija de 3 meses). */
+  modulo: boolean;
   _createdDate: string;
   beneficiarios: BeneficiarioMigracion[];
 }
@@ -78,7 +80,8 @@ export async function listarMigracion() {
     `SELECT p."_id", p."primerNombre", p."primerApellido", p."segundoApellido", p."numeroId",
             p."contrato", p."plataforma", p."celular", p."email", p."aprobacion", p."_createdDate",
             (COALESCE(p."hashConsentimiento", '') <> '') AS firmado,
-            COALESCE(p."gestionContratoListo", false) AS listo
+            COALESCE(p."gestionContratoListo", false) AS listo,
+            COALESCE(p."modulo", false) AS modulo
        FROM "PEOPLE" p
       WHERE p."tipoUsuario" = 'TITULAR'
         AND p."altaMigracion" = true

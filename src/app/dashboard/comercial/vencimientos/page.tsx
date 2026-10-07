@@ -6,6 +6,7 @@ import { PermissionGuard } from '@/components/permissions'
 import { ComercialPermission } from '@/types/permissions'
 import { addMonths, campaignNameToDate, hoyEnChile } from '@/lib/cursos-campaign'
 import { exportToExcel } from '@/lib/export-excel'
+import ModuloBadge from '@/components/common/ModuloBadge'
 import { ArrowDownTrayIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
 
 interface Fila {
@@ -258,11 +259,7 @@ function VencimientosContent() {
                 <td className="px-4 py-3 text-gray-700">{r.email || '—'}</td>
                 <td className="whitespace-nowrap px-4 py-3 tabular-nums text-gray-700">{r.celular || '—'}</td>
                 <td className="px-4 py-3 text-center">
-                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                    r.modulo ? 'bg-primary-100 text-primary-800' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {r.modulo ? 'Sí' : 'No'}
-                  </span>
+                  <ModuloBadge modulo={r.modulo} />
                 </td>
                 <td className="px-4 py-3 text-gray-700">
                   <div className="text-xs">{r.campanias || '—'}</div>
