@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { XMarkIcon, UserIcon, CalendarIcon, ClockIcon, UsersIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, UserIcon, CalendarIcon, ClockIcon, UsersIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
+import { PermissionGuard } from '@/components/permissions/PermissionGuard'
+import { MantenimientoPermission } from '@/types/permissions'
 import Link from 'next/link'
 import { formatEventTimeRange } from '@/lib/event-duration'
 
@@ -456,12 +458,28 @@ export default function EventDetailModal({ event, isOpen, onClose, advisors, adv
             </Link>
           )}
           {!advisorId && <div></div>}
-          <button
-            onClick={onClose}
-            className="btn btn-secondary"
-          >
-            Cerrar
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Abre Envío de Mensajes en modo "Por evento" con este evento ya elegido. */}
+            {event && (
+              <PermissionGuard permission={MantenimientoPermission.ENVIO_MENSAJES}>
+                <a
+                  href={`/admin/envio-mensajes?evento=${encodeURIComponent(event._id)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn inline-flex items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  <ChatBubbleLeftRightIcon className="h-5 w-5" />
+                  Enviar mensaje a inscritos
+                </a>
+              </PermissionGuard>
+            )}
+            <button
+              onClick={onClose}
+              className="btn btn-secondary"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -21,6 +21,35 @@ import {
 import toast from 'react-hot-toast'
 import { fillTemplate } from '@/lib/message-template-filler'
 import { normalizeNumeroId } from '@/lib/numeroid-normalize'
+import { getLocalToday } from '@/lib/fecha-local'
+import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
+import { CalendarDaysIcon } from '@heroicons/react/24/outline'
+
+/** Tipos de evento del calendario que se pueden elegir en el modo "Por evento". */
+const TIPOS_EVENTO: Array<{ value: string; label: string }> = [
+  { value: 'WELCOME', label: 'Welcome' },
+  { value: 'SESSION', label: 'Sesión' },
+  { value: 'CLUB', label: 'Taller' },
+  { value: 'NIVELACION', label: 'Nivelación' },
+  { value: 'OLIMPIADA', label: 'Olimpiada' },
+  { value: 'RECUPERACION', label: 'Recuperación' },
+  { value: 'ENTRENAMIENTO', label: 'Entrenamiento' },
+  { value: 'EVALUACION', label: 'Evaluación' },
+]
+
+interface EventoDia {
+  _id: string
+  tipo: string
+  hora: string
+  tituloONivel: string | null
+  nombreEvento: string | null
+  guia: string | null
+  inscritos: number
+}
+
+const tzNavegador = () => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch { return '' }
+}
 
 interface Template {
   _id: string
@@ -54,6 +83,8 @@ interface LookupItem {
   curso?: string | null
   salon?: string | null
   esApoderado?: boolean
+  /** Modo "Por evento": si el inscrito tiene la asistencia marcada. */
+  asistio?: boolean
 }
 
 interface CursoRow {
@@ -85,7 +116,7 @@ function mediaKindFromFile(f: File): 'image' | 'video' | 'document' {
   return 'document'
 }
 
-type Mode = 'individual' | 'masivo' | 'apoderados-csv' | 'apoderados-filtro'
+type Mode = 'individual' | 'masivo' | 'apoderados-csv' | 'apoderados-filtro' | 'evento'
 
 /** Parsea un CSV de apoderados: columnas contrato + numeroId (con aliases). El teléfono se ignora. */
 function parseCsvApoderados(text: string): { contrato: string; numeroId: string }[] {
@@ -148,6 +179,14 @@ export default function EnvioMensajesPage() {
   const [filtroCurso, setFiltroCurso] = useState('')
   const [filtroSalon, setFiltroSalon] = useState('')
   const [filtroExcede, setFiltroExcede] = useState<number | null>(null)
+
+  // Por evento: día + tipo → evento → inscritos (con filtro de asistencia)
+  const [eventoFecha, setEventoFecha] = useState(() => getLocalToday())
+  const [eventoTipo, setEventoTipo] = useState('')
+  const [eventos, setEventos] = useState<EventoDia[] | null>(null)
+  const [eventosLoading, setEventosLoading] = useState(false)
+  const [eventoId, setEventoId] = useState('')
+  const [eventoAsistencia, setEventoAsistencia] = useState<'todos' | 'asistieron' | 'no-asistieron'>('todos')
 
   // Lookup results
   const [lookupItems, setLookupItems] = useState<LookupItem[]>([])
@@ -330,6 +369,65 @@ export default function EnvioMensajesPage() {
     finally { setLookupLoading(false) }
   }
 
+  // ── Por evento ──
+  const cargarEventos = async (fecha: string, tipo: string) => {
+    setEventosLoading(true); setEventoId('')
+    try {
+      const qs = new URLSearchParams({ fecha, tz: tzNavegador() })
+      if (tipo) qs.set('tipo', tipo)
+      const r = await fetch(`/api/admin/envio-mensajes/eventos?${qs}`, { cache: 'no-store' })
+      const j = await r.json()
+      if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
+      setEventos(j.eventos as EventoDia[])
+      return j.eventos as EventoDia[]
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudieron cargar los eventos')
+      setEventos([])
+      return []
+    } finally { setEventosLoading(false) }
+  }
+
+  const handleEventoLookup = async () => {
+    if (!eventoId) { toast.error('Elige un evento'); return }
+    setLookupLoading(true); setResults(null)
+    try {
+      const r = await fetch('/api/admin/envio-mensajes/lookup-evento', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventoId, asistencia: eventoAsistencia }),
+      })
+      const j = await r.json()
+      if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
+      const items = (j.items || []) as LookupItem[]
+      setLookupItems(items)
+      setSelectedNumeroIds(new Set(items.filter(i => i.valido).map(i => i.numeroId)))
+      if (items.length === 0) {
+        toast(eventoAsistencia === 'todos' ? 'Ese evento no tiene inscritos.' : 'Nadie en ese evento cumple el filtro de asistencia.')
+      }
+    } catch (e: any) { toast.error(e?.message || 'Error en lookup') }
+    finally { setLookupLoading(false) }
+  }
+
+  // Enlace desde el calendario (?evento=<id>): abre el modo con el evento ya elegido.
+  useEffect(() => {
+    let id = ''
+    try { id = new URLSearchParams(window.location.search).get('evento') || '' } catch { /* noop */ }
+    if (!id) return
+    setMode('evento')
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/admin/envio-mensajes/eventos?eventoId=${encodeURIComponent(id)}&tz=${encodeURIComponent(tzNavegador())}`, { cache: 'no-store' })
+        const j = await r.json()
+        if (!r.ok || !j.success) throw new Error(j?.error || 'No se encontró el evento')
+        const ev = j.evento
+        setEventoFecha(ev.fecha)
+        setEventoTipo(ev.tipo || '')
+        await cargarEventos(ev.fecha, ev.tipo || '')
+        setEventoId(ev._id)
+      } catch (e: any) { toast.error(e?.message || 'No se pudo abrir el evento') }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ─────────────────────── Edición celular ───────────────────────
 
   const openEditCelular = (item: LookupItem) => {
@@ -440,6 +538,7 @@ export default function EnvioMensajesPage() {
     setResults(null)
     setAttachFile(null)
     setFiltroCampaign(''); setFiltroCurso(''); setFiltroSalon(''); setFiltroExcede(null)
+    setEventoFecha(getLocalToday()); setEventoTipo(''); setEventos(null); setEventoId(''); setEventoAsistencia('todos')
   }
 
   const itemsToShow = useMemo(
@@ -543,6 +642,17 @@ export default function EnvioMensajesPage() {
                   <UsersIcon className="h-8 w-8 text-purple-600 mb-2" />
                   <h3 className="font-semibold text-gray-900 mb-1">Apoderados por campaña/curso/salón</h3>
                   <p className="text-sm text-gray-500">Elige campaña, curso y salón (o "todos"). Envía a los apoderados del alcance.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('evento')}
+                  className="text-left p-5 border-2 border-gray-200 rounded-2xl hover:border-emerald-400 hover:bg-emerald-50 transition-colors md:col-span-2"
+                >
+                  <CalendarDaysIcon className="h-8 w-8 text-emerald-600 mb-2" />
+                  <h3 className="font-semibold text-gray-900 mb-1">Por evento</h3>
+                  <p className="text-sm text-gray-500">
+                    Elige el día y el evento (Welcome, sesión, taller, nivelación…). Envía sólo a sus inscritos: al apoderado en los cursos de niños, al alumno en los demás.
+                  </p>
                 </button>
               </div>
             </div>
@@ -795,6 +905,95 @@ export default function EnvioMensajesPage() {
             </div>
           )}
 
+          {/* Paso 3e: Por evento — día + tipo → evento → inscritos */}
+          {mode === 'evento' && lookupItems.length === 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Evento — sólo sus inscritos</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  En los cursos de niños el mensaje va al apoderado; en los demás, al alumno. Los agendamientos cancelados no se cuentan.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label htmlFor="ev-fecha" className="block text-xs font-medium text-gray-500 mb-1">Fecha</label>
+                  <input id="ev-fecha" type="date" value={eventoFecha}
+                    onChange={e => { setEventoFecha(e.target.value); setEventos(null); setEventoId('') }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label htmlFor="ev-tipo" className="block text-xs font-medium text-gray-500 mb-1">Tipo de evento</label>
+                  <select id="ev-tipo" value={eventoTipo}
+                    onChange={e => { setEventoTipo(e.target.value); setEventos(null); setEventoId('') }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="">Todos los tipos</option>
+                    {TIPOS_EVENTO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button type="button" onClick={() => cargarEventos(eventoFecha, eventoTipo)}
+                    disabled={!eventoFecha || eventosLoading}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 text-sm font-semibold">
+                    <MagnifyingGlassIcon className="h-4 w-4" />
+                    {eventosLoading ? 'Buscando…' : 'Ver eventos del día'}
+                  </button>
+                </div>
+              </div>
+
+              {eventos && (
+                eventos.length === 0 ? (
+                  <p className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    No hay eventos {eventoTipo ? `de tipo ${etiquetaTipoEvento(eventoTipo)} ` : ''}ese día.
+                  </p>
+                ) : (
+                  <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-72 overflow-y-auto">
+                    {eventos.map(ev => (
+                      <label key={ev._id}
+                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer text-sm ${eventoId === ev._id ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}>
+                        <input type="radio" name="evento" checked={eventoId === ev._id}
+                          onChange={() => setEventoId(ev._id)} className="text-emerald-600" />
+                        <span className="font-mono text-xs text-gray-600 w-12 shrink-0 tabular-nums">{ev.hora}</span>
+                        <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 shrink-0">
+                          {etiquetaTipoEvento(ev.tipo)}
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-gray-900 truncate">{ev.tituloONivel || ev.nombreEvento || '—'}</span>
+                          {ev.guia && <span className="block text-xs text-gray-400 truncate">Guía: {ev.guia}</span>}
+                        </span>
+                        <span className="text-xs text-gray-500 shrink-0 tabular-nums">{ev.inscritos} inscrito(s)</span>
+                      </label>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {eventoId && (
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label htmlFor="ev-asist" className="block text-xs font-medium text-gray-500 mb-1">Asistencia</label>
+                    <select id="ev-asist" value={eventoAsistencia}
+                      onChange={e => setEventoAsistencia(e.target.value as any)}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                      <option value="todos">Todos los inscritos</option>
+                      <option value="asistieron">Sólo los que asistieron</option>
+                      <option value="no-asistieron">Sólo los que no asistieron</option>
+                    </select>
+                  </div>
+                  <button type="button" onClick={handleEventoLookup} disabled={lookupLoading}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 text-sm font-semibold">
+                    <UsersIcon className="h-4 w-4" />
+                    {lookupLoading ? 'Buscando…' : 'Buscar destinatarios'}
+                  </button>
+                  {eventoAsistencia !== 'todos' && (
+                    <p className="text-xs text-gray-500 basis-full">
+                      La asistencia es la que marcó el guía; en un evento que todavía no ocurre, nadie figura como asistente.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Paso 4: Lista de destinatarios */}
           {lookupItems.length > 0 && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -864,14 +1063,22 @@ export default function EnvioMensajesPage() {
                           </td>
                           <td className="px-3 py-2 text-gray-900">
                             {fullName}
-                            {it.esApoderado && (it.campaign || it.curso || it.salon) && (
+                            {(it.esApoderado || mode === 'evento') && (it.campaign || it.curso || it.salon) && (
                               <div className="text-[10px] text-gray-400">{[it.campaign, it.curso, it.salon && `Salón ${it.salon}`].filter(Boolean).join(' · ')}</div>
+                            )}
+                            {mode === 'evento' && (
+                              <div className={`text-[10px] font-medium ${it.asistio ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                {it.asistio ? 'Asistió' : 'Sin asistencia marcada'}
+                              </div>
                             )}
                           </td>
                           <td className="px-3 py-2 font-mono text-xs text-gray-700">
                             {it.celular || <em className="text-red-600">—</em>}
-                            {it.esApoderado && it.apoderado && (
-                              <div className="text-[10px] text-gray-400 font-sans">apod: {it.apoderado}</div>
+                            {it.esApoderado && (
+                              <div className="text-[10px] text-gray-400 font-sans">apod{it.apoderado ? `: ${it.apoderado}` : 'erado'}</div>
+                            )}
+                            {mode === 'evento' && !it.esApoderado && it.celular && (
+                              <div className="text-[10px] text-gray-400 font-sans">alumno</div>
                             )}
                           </td>
                           <td className="px-3 py-2 text-xs text-gray-700">{it.plataforma || '—'}</td>
@@ -887,8 +1094,10 @@ export default function EnvioMensajesPage() {
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {/* Botón editar celular solo si tenemos al menos academicaId */}
-                            {it.academicaId && (
+                            {/* Botón editar celular solo si tenemos al menos academicaId.
+                                No en filas de apoderado: guardaría el número como
+                                celular del ALUMNO, no del apoderado. */}
+                            {it.academicaId && !it.esApoderado && (
                               <button
                                 type="button"
                                 onClick={() => openEditCelular(it)}
