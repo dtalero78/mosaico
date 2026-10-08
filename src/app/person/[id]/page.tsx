@@ -106,7 +106,13 @@ async function PersonContent({ personId, initialTab, soloGeneral }: { personId: 
       campaign: person.campaign,
       existeEnAcademica: person.existeEnAcademica,
       academicaId: person.academicaId || null,
-      estadoInactivo: person.estadoInactivo || false
+      estadoInactivo: person.estadoInactivo || false,
+      // Sin estos tres la tarjeta no sabe que el cupo está suelto ni cómo salió el
+      // alumno: mostraba "Cupo asignado" con "Liberar cupo" deshabilitado (nunca
+      // "Asignar cupo") y ofrecía "Activar" a quien salió por REEMPLAZO.
+      cupoLiberado: person.cupoLiberado === true,
+      suspenddata: person.suspenddata || null,
+      fechaOnHold: person.fechaOnHold || null
     }))
 
     const suspendida = isAdminSuspended(personData.person)
