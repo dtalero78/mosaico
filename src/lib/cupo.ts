@@ -58,7 +58,10 @@ import { ESTADOS_LIBERAN_CUPO } from './cupo-estados';
 export const RESERVA_CUPO_MIN = 60;
 
 export function cupoOcupadoSql(alias: string): string {
-  return `((${alias}."cupoConfirmado" IS TRUE OR ${alias}."cupoReservadoHasta" > NOW())
+  // Un contrato de PRUEBA (`PRB-`) nunca ocupa una silla real: se usa para ensayar
+  // el flujo comercial, y marcarlo "listo" le quitaría el asiento a un alumno.
+  return `(COALESCE(${alias}."contrato", '') NOT LIKE 'PRB-%'
+    AND (${alias}."cupoConfirmado" IS TRUE OR ${alias}."cupoReservadoHasta" > NOW())
     AND ${alias}."fechaOnHold" IS NULL
     AND ${alias}."cupoLiberado" IS NOT TRUE
     AND NOT (${alias}."estadoInactivo" IS TRUE AND COALESCE(${alias}."suspenddata"->>'accion', '') = 'INACTIVACION')
