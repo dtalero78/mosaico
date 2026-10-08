@@ -48,7 +48,7 @@ export const POST = handlerWithAuth(async (
 
   // ─── TITULAR: aprobación en cascada (titular + beneficiarios) ───
   if (person.tipoUsuario === 'TITULAR' && contrato) {
-    const { mainResult, beneficiaryResults, skippedBeneficiaries } = await approveContract(personId);
+    const { mainResult, beneficiaryResults, skippedBeneficiaries, clasesCompletadas } = await approveContract(personId);
     return successResponse({
       message: skippedBeneficiaries.length
         ? `Titular aprobado. ${beneficiaryResults.length} beneficiario(s) aprobado(s); ${skippedBeneficiaries.length} sin aprobar por no tener salón.`
@@ -69,6 +69,8 @@ export const POST = handlerWithAuth(async (
       // Beneficiarios NO aprobados a propósito (sin salón): ni aprobación ni WhatsApp.
       skippedBeneficiaries,
       skippedCount: skippedBeneficiaries.length,
+      // Hijos ya aprobados a los que se les completaron las clases futuras.
+      clasesCompletadas,
     });
   }
 

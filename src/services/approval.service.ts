@@ -349,6 +349,8 @@ export interface ApproveContractResult {
   beneficiaryResults: ApproveResult[];
   /** Beneficiarios NO aprobados a propósito (sin salón). No reciben WhatsApp. */
   skippedBeneficiaries: Array<{ personId: string; nombre: string; motivo: string }>;
+  /** Hijos que YA estaban aprobados y a los que se les crearon clases futuras que faltaban. */
+  clasesCompletadas: Array<{ personId: string; nombre: string; creadas: number }>;
 }
 
 /**
@@ -414,5 +416,65 @@ export async function approveContract(
     }
   }
 
-  return { mainResult, beneficiaryResults, skippedBeneficiaries };
+  const clasesCompletadas = contrato
+    ? await completarClasesYaAprobados(contrato, beneficiaryResults.map(r => r.personId), opts)
+    : [];
+
+  return { mainResult, beneficiaryResults, skippedBeneficiaries, clasesCompletadas };
+}
+
+/**
+ * Hijos del contrato que YA estaban aprobados: la cascada los salta (ya no hay
+ * nada que aprobar), pero pueden haberse quedado sin clases. Pasa cuando se les
+ * devolvió el cupo con «Asignar cupo» mientras el contrato estaba en Pendiente —
+ * ahí no se generan, porque el contrato no está aprobado — y después se aprueba
+ * el contrato: sin esto quedaban activos, con salón y con cero clases, y el
+ * resultado dependía del orden en que se hicieran los dos pasos.
+ *
+ * Sólo FUTURAS (crear las ya dictadas lo dejaría ausente en clases donde no
+ * estuvo) y sólo a quien hoy ocupa su asiento: activo, sin OnHold, sin el cupo
+ * liberado y con curso. Idempotente: `generarBookingsBeneficiario` no duplica.
+ * Best-effort por alumno: un fallo no tumba la aprobación.
+ */
+async function completarClasesYaAprobados(
+  contrato: string,
+  excluir: string[],
+  opts: ApproveOpts
+): Promise<ApproveContractResult['clasesCompletadas']> {
+  const hijos = await queryMany(
+    `SELECT b."_id", b."numeroId", b."primerNombre", b."primerApellido", b."celular",
+            b."plataforma", b."campaign", b."tipoCurso", b."horarioCurso",
+            a."_id" AS "academicaId"
+       FROM "PEOPLE" b
+       JOIN LATERAL (SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = b."numeroId" LIMIT 1) a ON true
+      WHERE b."contrato" = $1
+        AND b."tipoUsuario" = 'BENEFICIARIO'
+        AND b."aprobacion" = 'Aprobado'
+        AND b."estadoInactivo" IS NOT TRUE
+        AND b."cupoLiberado" IS NOT TRUE
+        AND b."fechaOnHold" IS NULL
+        AND b."campaign" IS NOT NULL AND b."tipoCurso" IS NOT NULL AND b."horarioCurso" IS NOT NULL
+        AND b."_id" <> ALL($2::text[])`,
+    [contrato, excluir]
+  );
+
+  const completados: ApproveContractResult['clasesCompletadas'] = [];
+  for (const h of hijos) {
+    try {
+      const creadas = await generarBookingsBeneficiario(h.academicaId, h, {
+        soloFuturos: true,
+        agendadoPor: opts.agendadoPor || 'Aprobación del contrato (clases faltantes)',
+      });
+      if (creadas > 0) {
+        completados.push({
+          personId: h._id,
+          nombre: `${h.primerNombre || ''} ${h.primerApellido || ''}`.trim(),
+          creadas,
+        });
+      }
+    } catch (err: any) {
+      console.warn(`⚠️ [Approve] No se pudieron completar las clases de ${h._id}:`, err?.message || err);
+    }
+  }
+  return completados;
 }

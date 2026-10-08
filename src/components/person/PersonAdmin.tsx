@@ -571,8 +571,16 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                 return approved ? { ...ben, estado: 'Aprobado', aprobacion: 'Aprobado' } : ben
               })
             )
-          } else if (data.beneficiariesCount === 0 && !data.skippedCount) {
+          } else if (data.beneficiariesCount === 0 && !data.skippedCount && !data.clasesCompletadas?.length) {
             lines.push('\nNo hay beneficiarios pendientes por aprobar.')
+          }
+
+          // Hijos que ya estaban aprobados pero sin clases futuras: se completaron.
+          if (data.clasesCompletadas && data.clasesCompletadas.length > 0) {
+            lines.push(`\n📅 Clases futuras completadas (ya estaban aprobados):`)
+            for (const c of data.clasesCompletadas) {
+              lines.push(`  • ${c.nombre} — ${c.creadas} clase(s)`)
+            }
           }
 
           // Saltados a propósito: sin salón no se aprueban ni reciben WhatsApp.
