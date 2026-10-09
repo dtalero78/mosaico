@@ -23,6 +23,14 @@ export const TIPOS_FUERA_DE_CASOS = [
   'CLUB', 'NIVELACION', 'COMPLEMENTARIA', 'WELCOME', 'OLIMPIADA', 'RECUPERACION',
 ] as const;
 
+/**
+ * Tipos de TALLER (evento CLUB) de MOSAICO. Un taller es del CURSO y no de una
+ * lección: se elige uno de estos tipos y no se pide Lección. (Antes el "Tipo"
+ * salía de NIVELES.clubs, un catálogo por lección heredado de LGS con sólo
+ * BASICO/AVANZADO.)
+ */
+export const TIPOS_TALLER = ['BASICO', 'INTERMEDIO', 'AVANZADO'] as const;
+
 /** Los tipos anteriores, listos para un `NOT IN (...)` de SQL. */
 export const TIPOS_FUERA_DE_CASOS_SQL = TIPOS_FUERA_DE_CASOS.map(t => `'${t}'`).join(',');
 

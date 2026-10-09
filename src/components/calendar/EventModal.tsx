@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { MAX_CURSOS_COMPARTIDOS, claveCursoCompartido, extractClubPrefix } from '@/lib/evento-compartido'
 import { extractStepNumber } from '@/lib/motor-academico'
+import { TIPOS_TALLER } from '@/lib/tipos-sesion'
 
 interface CalendarEvent {
   _id: string
@@ -142,11 +143,16 @@ export default function EventModal({
   // OLIMPIADA usa la MISMA estructura que TALLER (curso + "Tipo" del catálogo de
   // clubs + Lección con "Todas"); sólo cambia el tipo guardado y el color.
   const esTaller = formData.evento === 'CLUB' || formData.evento === 'OLIMPIADA'
+  // El TALLER no lleva lección: su Tipo es BASICO / INTERMEDIO / AVANZADO
+  // (TIPOS_TALLER). La OLIMPIADA conserva el catálogo de clubs + Lección.
+  const tallerSinLeccion = formData.evento === 'CLUB'
   const cursoClubs = clubsByCurso[cursoModulos] || { clubsPorLeccion: {}, clubsCurso: [] }
   const todasLeccionesCurso = Array.from(new Set(currentModulos.flatMap(m => m.steps)))
-  const tipoClubsOpciones = (formData.nombreEvento && formData.nombreEvento !== TODOS)
-    ? (cursoClubs.clubsPorLeccion[formData.nombreEvento] || [])
-    : cursoClubs.clubsCurso
+  const tipoClubsOpciones: string[] = tallerSinLeccion
+    ? [...TIPOS_TALLER]
+    : (formData.nombreEvento && formData.nombreEvento !== TODOS)
+      ? (cursoClubs.clubsPorLeccion[formData.nombreEvento] || [])
+      : cursoClubs.clubsCurso
 
   // Carga (idempotente) de módulos al caché. No limpia nada: solo agrega/actualiza la clave
   // del curso. Re-llamarla con el mismo curso es inocuo.
@@ -722,8 +728,10 @@ export default function EventModal({
       // Validaciones básicas (cascada MOSAICO: Campaña→Curso→Salón→Módulo→Lección)
       if (!formData.fecha || !formData.hora || !formData.advisor ||
           !formData.campaign || !formData.curso || !formData.salon ||
-          !formData.tituloONivel || !formData.nombreEvento) {
-        setError('Completa todos los campos obligatorios (Campaña, Curso, Salón, Módulo, Lección, Guía).')
+          !formData.tituloONivel || (!tallerSinLeccion && !formData.nombreEvento)) {
+        setError(tallerSinLeccion
+          ? 'Completa todos los campos obligatorios (Campaña, Curso, Salón, Tipo, Guía).'
+          : 'Completa todos los campos obligatorios (Campaña, Curso, Salón, Módulo, Lección, Guía).')
         return
       }
 
@@ -750,7 +758,7 @@ export default function EventModal({
         }
         compartidoConPayload = compartidoCon.map(c => ({
           campaign: c.campaign, curso: c.curso, salon: c.salon,
-          modulo: c.modulo, leccion: c.leccion,
+          modulo: c.modulo, leccion: tallerSinLeccion ? '' : c.leccion,
         }))
       }
 
@@ -782,7 +790,7 @@ export default function EventModal({
       // tituloONivel="Curso - Tipo". (Lección='Todos' → todo el curso accede.)
       if (esTaller) {
         eventData.club = formData.tituloONivel || undefined
-        eventData.leccion = formData.nombreEvento || undefined
+        eventData.leccion = tallerSinLeccion ? undefined : (formData.nombreEvento || undefined)
         // Evitar que el backend interprete tituloONivel/nombreEvento del form
         // (que aquí significan Tipo/Lección) como nivel/step.
         eventData.tituloONivel = undefined
@@ -1095,7 +1103,7 @@ export default function EventModal({
                 {esTaller ? (
                   <select
                     value={formData.tituloONivel}
-                    disabled={!formData.curso || formData.curso === TODOS}
+                    disabled={!formData.curso || (!tallerSinLeccion && formData.curso === TODOS)}
                     onChange={(e) => setFormData(prev => ({ ...prev, tituloONivel: e.target.value }))}
                     className="input w-full" required
                   >
@@ -1121,7 +1129,8 @@ export default function EventModal({
                   </select>
                 )}
               </div>
-              {/* Lección */}
+              {/* Lección — el Taller no la lleva (es del curso, no de una lección) */}
+              {!tallerSinLeccion && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Lección *</label>
                 {esTaller ? (
@@ -1156,6 +1165,7 @@ export default function EventModal({
                 </select>
                 )}
               </div>
+              )}
               {/* Duración de la nivelación. Son 30 minutos por defecto; la
                   casilla la amplía a una hora. No aplica a los demás tipos,
                   que derivan su duración del horario del curso. */}
@@ -1278,6 +1288,7 @@ export default function EventModal({
                                 </select>
                               </div>
                             )}
+                            {!tallerSinLeccion && (
                             <div>
                               <label className="block text-xs text-gray-600 mb-1">Lección</label>
                               <select value={c.leccion} onChange={e => actualizarCursoCompartido(idx, { leccion: e.target.value })}
@@ -1287,6 +1298,7 @@ export default function EventModal({
                                 {lecciones.map(le => <option key={le} value={le}>{le}</option>)}
                               </select>
                             </div>
+                            )}
                           </div>
                           {destinosUsados.size < compartidoCon.length + 1 && (
                             <p className="text-[11px] text-red-600 mt-1">Este destino ya está en el grupo — cambia curso o salón.</p>
