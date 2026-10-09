@@ -2,12 +2,14 @@
  * Feriados de Chile — para NO agendar clases en días festivos.
  *
  * Estrategia (unión):
- *   1. CALCULADOS por código: los feriados de FECHA FIJA (irrenunciables y demás)
- *      + Semana Santa (Viernes y Sábado Santo, base Pascua). Son exactos para
- *      CUALQUIER año → cubren 2028+ sin mantenimiento anual.
- *   2. JSON curado (`src/data/festivos.json`, entradas `c:'CL'`): aporta los
- *      feriados MOVIBLES/de traslado (Encuentro de Dos Mundos, San Pedro y San
- *      Pablo, Día de los Pueblos Indígenas, feriado bancario) en los años cargados.
+ *   1. CALCULADOS por código: los feriados de FECHA FIJA (irrenunciables y demás),
+ *      Semana Santa (Viernes y Sábado Santo, base Pascua) y los de TRASLADO legal
+ *      (San Pedro y San Pablo, Encuentro de Dos Mundos — Ley 19.668 —; Iglesias
+ *      Evangélicas — Ley 20.299). Exactos para CUALQUIER año, sin mantenimiento.
+ *   2. JSON curado (`src/data/festivos.json`, entradas `c:'CL'`): aporta lo que no
+ *      sale de una regla (Día de los Pueblos Indígenas = solsticio, feriado
+ *      bancario). ⚠ Como el JSON SUMA, una fecha CL equivocada ahí crea un feriado
+ *      falso aunque el cálculo esté bien: mantenerlo alineado con las reglas.
  *
  * `esFestivoChile(fecha)` = fijo/Semana-Santa calculado  OR  entrada CL en el JSON.
  * El JSON solo AGREGA (no anula) — así ningún feriado fijo se pierde aunque el
@@ -46,7 +48,37 @@ function addDaysISO(iso: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d) + n * 86400000).toISOString().slice(0, 10)
 }
 
-/** Feriados de FECHA FIJA de Chile + Semana Santa, para un año. */
+/** Día de la semana (0=domingo … 6=sábado) de una fecha civil, sin depender de la zona. */
+function diaSemana(y: number, m: number, d: number): number {
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+}
+
+/**
+ * Ley 19.668 — San Pedro y San Pablo (29-jun) y Encuentro de Dos Mundos (12-oct):
+ * si caen martes, miércoles o jueves se corren al LUNES de esa misma semana; si
+ * caen viernes, al lunes SIGUIENTE; sábado, domingo o lunes se quedan donde están.
+ */
+function trasladoLey19668(y: number, m: number, d: number): string {
+  const iso = ymd(y, m, d)
+  const dow = diaSemana(y, m, d)
+  if (dow >= 2 && dow <= 4) return addDaysISO(iso, -(dow - 1)) // mar/mié/jue → lunes anterior
+  if (dow === 5) return addDaysISO(iso, 3)                        // viernes → lunes siguiente
+  return iso
+}
+
+/**
+ * Ley 20.299 — Día de las Iglesias Evangélicas y Protestantes (31-oct): si cae
+ * martes se corre al viernes ANTERIOR; si cae miércoles, al viernes SIGUIENTE.
+ */
+function trasladoIglesiasEvangelicas(y: number): string {
+  const iso = ymd(y, 10, 31)
+  const dow = diaSemana(y, 10, 31)
+  if (dow === 2) return addDaysISO(iso, -4) // martes → viernes anterior
+  if (dow === 3) return addDaysISO(iso, 2)  // miércoles → viernes siguiente
+  return iso
+}
+
+/** Feriados de Chile que se CALCULAN por regla (fijos, Semana Santa y los de traslado legal), para un año. */
 export function feriadosFijosChile(year: number): Set<string> {
   const s = new Set<string>()
   // Fijos (fecha inamovible)
@@ -68,6 +100,10 @@ export function feriadosFijosChile(year: number): Set<string> {
   const domingo = ymd(year, p.m, p.d)
   s.add(addDaysISO(domingo, -2)) // Viernes Santo
   s.add(addDaysISO(domingo, -1)) // Sábado Santo
+  // Traslados por ley (el Jueves Santo NO es feriado en Chile)
+  s.add(trasladoLey19668(year, 6, 29))   // San Pedro y San Pablo
+  s.add(trasladoLey19668(year, 10, 12))  // Encuentro de Dos Mundos
+  s.add(trasladoIglesiasEvangelicas(year))
   return s
 }
 

@@ -23,7 +23,7 @@ const BASE = {
 test.describe('Calendario IMPULSA y los festivos', () => {
   test('el 18 de septiembre es feriado legal en Chile (control del dato)', () => {
     expect(esFestivoChile('2026-09-18')).toBe(true);
-    expect(esFestivoChile('2026-10-19')).toBe(true);
+    expect(esFestivoChile('2026-10-12')).toBe(true);
   });
 
   test('dicta clase en feriado legal: no se salta el 18 de septiembre', () => {
