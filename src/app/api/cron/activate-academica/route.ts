@@ -44,6 +44,14 @@ export async function GET(request: NextRequest) {
             AND a."inicioCurso" IS NOT NULL
             AND (a."inicioCurso"::date - INTERVAL '10 days') <= CURRENT_DATE
             AND p."aprobacion" = 'Aprobado'
+            -- Sólo quien está ACTIVO en PEOPLE. La aprobación deja a PEOPLE activo,
+            -- así que el alumno que espera su activación entra igual; lo que queda
+            -- fuera es quien está inactivo a propósito: lo inactivó un admin, está
+            -- en OnHold o su contrato se anuló. Sin esto, como el filtro de fecha
+            -- también toma cursos YA empezados, cada noche se le reabría el acceso
+            -- a todo alumno inactivado (pasó con 49 de 55, oct-2026).
+            AND p."estadoInactivo" IS NOT TRUE
+            AND p."fechaOnHold" IS NULL
           ORDER BY a."inicioCurso" ASC`
       )
 
