@@ -19,9 +19,9 @@ import { query, queryOne } from '@/lib/postgres'
  * crea el evento de la nivelación, sin necesitar el permiso general de crear
  * eventos del calendario.
  *
- * El agendamiento es best-effort respecto del evento: si el evento se crea y
- * el agendamiento falla, se informa el evento creado para que se pueda
- * completar a mano en vez de perderlo.
+ * Es TODO O NADA: si el agendamiento falla (un alumno inactivo, o con una clase
+ * que se cruza con el horario), el evento recién creado se borra y se responde
+ * el motivo como error; el grupo queda intacto en Agrupaciones para corregirlo.
  */
 const MAX_ALUMNOS = 60
 
@@ -73,8 +73,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       throw new ValidationError('Esa nivelación ya se dictó: elige una futura o crea un grupo nuevo.')
     }
 
+    // Un fallo se responde como ERROR: antes volvía como éxito y la pantalla lo
+    // mostraba en un aviso verde, como si se hubiera sumado a alguien.
     let sumados = 0
-    let sumarError: string | null = null
     try {
       const res = await enrollStudents({
         eventId: ev._id,
@@ -89,17 +90,14 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       })
       sumados = res.enrolled
     } catch (e: any) {
-      sumarError = e?.message || 'Error al agendar a los estudiantes'
+      throw new ValidationError(`No se pudo sumar a la nivelación: ${e?.message || 'error al agendar a los estudiantes'}`)
     }
-    if (!sumarError) await limpiarGrupoBorrador(academicaIds)
+    await limpiarGrupoBorrador(academicaIds)
 
     return successResponse({
       event: ev,
       enrolled: sumados,
-      enrollError: sumarError,
-      message: sumarError
-        ? `No se pudo sumar a la nivelación: ${sumarError}`
-        : `${sumados} usuario(s) sumado(s) a la nivelación ya agendada`,
+      message: `${sumados} usuario(s) sumado(s) a la nivelación ya agendada`,
     })
   }
 
@@ -154,8 +152,12 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     salon: salon || undefined,
   })
 
+  // TODO O NADA. `enrollStudents` rechaza el lote ENTERO si un alumno no se puede
+  // agendar (inactivo, o con una clase que se cruza con este horario). Antes el
+  // evento quedaba creado y vacío: el grupo seguía en Agrupaciones como si nada y
+  // los alumnos no veían ninguna sesión (pasó el 9-oct con DANSHI L11). Ahora el
+  // evento recién creado —que aún no tiene a nadie— se borra y se informa el motivo.
   let enrolled = 0
-  let enrollError: string | null = null
   try {
     const res = await enrollStudents({
       eventId: event._id,
@@ -168,17 +170,22 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       masivo: true,
     })
     enrolled = res.enrolled
-    await limpiarGrupoBorrador(academicaIds)
   } catch (e: any) {
-    enrollError = e?.message || 'Error al agendar a los estudiantes'
+    await query(
+      `DELETE FROM "CALENDARIO" c WHERE c."_id" = $1
+         AND NOT EXISTS (SELECT 1 FROM "ACADEMICA_BOOKINGS" b WHERE b."eventoId" = c."_id" OR b."idEvento" = c."_id")`,
+      [event._id]
+    ).catch(() => {})
+    throw new ValidationError(
+      `No se creó la nivelación: ${e?.message || 'no se pudo agendar a los estudiantes'}. ` +
+      'El grupo sigue en Agrupaciones para corregirlo.'
+    )
   }
+  await limpiarGrupoBorrador(academicaIds)
 
   return successResponse({
     event,
     enrolled,
-    enrollError,
-    message: enrollError
-      ? `Nivelación creada, pero el agendamiento falló: ${enrollError}`
-      : `Nivelación creada y ${enrolled} estudiante(s) agendado(s)`,
+    message: `Nivelación creada y ${enrolled} estudiante(s) agendado(s)`,
   })
 })

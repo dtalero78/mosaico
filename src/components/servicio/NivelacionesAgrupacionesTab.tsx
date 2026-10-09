@@ -721,9 +721,10 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
           salon: primero?.salon || null,
         }),
       }).then(x => x.json())
+      // Si un alumno no se puede agendar, el servidor NO crea la nivelación y
+      // responde el motivo: el modal queda abierto para corregir (p.ej. la hora).
       if (r.error) throw new Error(r.error)
-      if (r.enrollError) toast.error(r.message)
-      else toast.success(r.message || 'Nivelación creada')
+      toast.success(r.message || 'Nivelación creada')
       onDone()
     } catch (e: any) {
       toast.error(e?.message || 'Error al crear la nivelación')
