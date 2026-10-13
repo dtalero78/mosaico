@@ -6,6 +6,7 @@ import { NotFoundError, ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { BookingRepository } from '@/repositories/booking.repository';
 import { puedeAgendarOtroWelcome } from '@/lib/welcome-intentos';
+import { motivoWelcomePendiente } from '@/lib/welcome-pendiente';
 
 // One-time migration: ensure columns exist (idempotent, runs once per server start)
 let migrationDone = false;
@@ -147,6 +148,9 @@ export const GET = handler(async (
     hasWelcomeBooking,
     alreadyRegistered,
     welcomeModule, // 'MOSAICO' | 'IMPULSA' — módulo de las sesiones WELCOME ofrecidas
+    // Sigue en el curso puente: si completa el perfil sin agendar, queda en la
+    // cola "Pendientes de agendar" de Servicio (el mensaje final se lo dice).
+    enWelcome: String((student as any).curso || '').toUpperCase() === 'WELCOME',
   });
 });
 
@@ -167,9 +171,14 @@ export const POST = handler(async (
   const body = await request.json();
 
   const {
-    detallesPersonales, hobbies, email, clave, foto, welcomeEventId,
+    detallesPersonales, hobbies, email, clave, foto,
     domicilio, ciudad, fechaNacimiento,
   } = body;
+  // "Prefiero que Servicio me contacte": se registra el perfil SIN agendar, aunque
+  // llegue una sesión elegida (el formulario la desactiva, pero no se confía en él).
+  const omitirWelcome = body?.omitirWelcome === true;
+  const soloPerfil = body?.soloPerfil === true;
+  const welcomeEventId = omitirWelcome ? null : (body?.welcomeEventId || null);
 
   // Validate required fields
   if (!detallesPersonales?.trim()) throw new ValidationError('Detalles personales es requerido');
@@ -428,6 +437,33 @@ export const POST = handler(async (
         console.log(`✅ [NuevoUsuario] Booking WELCOME creado: ${bookingId}`);
       }
     }
+  }
+
+  // Bienvenida pendiente de agendar: si el alumno queda SIN ninguna bienvenida
+  // agendada, se registra por qué (lo ve Servicio en "Pendientes de agendar"). Si
+  // tiene alguna, se limpia el motivo. Quién está en la cola NO depende de esto —
+  // se calcula al leer—; es sólo la etiqueta. Best-effort: no tumba el registro.
+  try {
+    const agendadas = await BookingRepository.contarWelcomeAgendados(academicId);
+    if (agendadas === 0) {
+      const motivo = motivoWelcomePendiente({ omitirWelcome, soloPerfil, eligioSesion: !!welcomeEventId });
+      await query(
+        `UPDATE "ACADEMICA"
+            SET "welcomePendienteMotivo" = $1,
+                "welcomePendienteDesde"  = COALESCE("welcomePendienteDesde", NOW())
+          WHERE "_id" = $2`,
+        [motivo, academicId]
+      );
+      console.log(`ℹ️ [NuevoUsuario] Bienvenida pendiente de agendar (${motivo})`);
+    } else {
+      await query(
+        `UPDATE "ACADEMICA" SET "welcomePendienteMotivo" = NULL, "welcomePendienteDesde" = NULL
+          WHERE "_id" = $1 AND "welcomePendienteMotivo" IS NOT NULL`,
+        [academicId]
+      );
+    }
+  } catch (err: any) {
+    console.error('⚠️ [NuevoUsuario] No se pudo registrar el motivo de bienvenida pendiente:', err.message);
   }
 
   return successResponse({

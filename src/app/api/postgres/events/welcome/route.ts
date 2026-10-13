@@ -10,6 +10,7 @@ import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
  *   - ?mode=bookings (default)   Agendamientos por alumno — la bandeja principal.
  *   - ?mode=events               Eventos del calendario, con conteo opcional.
  *   - ?mode=reagendamientos      Los que NO asistieron, para la bandeja de reagendar.
+ *   - ?mode=pendientes           Perfil creado y SIN ninguna bienvenida agendada.
  *   - ?mode=futuros&curso=YOJI   Sesiones futuras del MÓDULO de ese curso, con cupo.
  */
 export const GET = handlerWithAuth(async (request) => {
@@ -32,6 +33,11 @@ export const GET = handlerWithAuth(async (request) => {
 
   if (mode === 'reagendamientos') {
     const events = await BookingRepository.findWelcomeInasistentes(startDate, endDate);
+    return successResponse({ events, count: events.length, tipo: 'WELCOME' });
+  }
+
+  if (mode === 'pendientes') {
+    const events = await BookingRepository.findWelcomePendientesAgendar();
     return successResponse({ events, count: events.length, tipo: 'WELCOME' });
   }
 

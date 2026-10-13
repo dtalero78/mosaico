@@ -60,6 +60,12 @@ export default function NuevoUsuarioPage() {
   const [welcomeAgotado, setWelcomeAgotado] = useState(false)
   // Módulo de las sesiones WELCOME ('MOSAICO' | 'IMPULSA'); si viene, se ofrece agendar.
   const [welcomeModule, setWelcomeModule] = useState<string | null>(null)
+  // Sigue en el curso puente WELCOME (si no agenda, queda pendiente para Servicio).
+  const [enWelcome, setEnWelcome] = useState(false)
+  // "Prefiero que Servicio me contacte": crea el perfil sin agendar la bienvenida.
+  const [omitirWelcome, setOmitirWelcome] = useState(false)
+  // Respuesta del registro: decide el mensaje final.
+  const [resultado, setResultado] = useState<{ bookingCreated: boolean; welcomeAgotado: boolean } | null>(null)
 
   // Form fields
   const [detallesPersonales, setDetallesPersonales] = useState('')
@@ -79,6 +85,9 @@ export default function NuevoUsuarioPage() {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
 
+  // Se ofrece agendar la bienvenida (el mismo caso en que se muestra el desplegable).
+  const ofreceAgendar = !noWelcome && !!welcomeModule && !hasWelcomeBooking && !welcomeAgotado
+
   const loadData = useCallback(async () => {
     try {
       setPageState('LOADING')
@@ -96,6 +105,7 @@ export default function NuevoUsuarioPage() {
       setHasWelcomeBooking(data.hasWelcomeBooking)
       setWelcomeAgotado(data.welcomeAgotado === true)
       setWelcomeModule(data.welcomeModule || null)
+      setEnWelcome(data.enWelcome === true)
 
       if (data.student.email) setEmail(data.student.email)
       if (data.student.foto) {
@@ -177,9 +187,9 @@ export default function NuevoUsuarioPage() {
       return
     }
 
-    // If nivel is WELCOME and no event selected and events are available (skip if noWelcome)
-    if (!noWelcome && !!welcomeModule && !hasWelcomeBooking && !welcomeAgotado && welcomeEvents.length > 0 && !selectedEvent) {
-      setFormError('Por favor selecciona una fecha para tu sesión Welcome')
+    // Hay sesiones disponibles: o elige una, o marca que Servicio lo contacte.
+    if (ofreceAgendar && welcomeEvents.length > 0 && !selectedEvent && !omitirWelcome) {
+      setFormError('Selecciona una fecha para tu sesión Welcome, o marca que prefieres que te contactemos para agendarla')
       return
     }
 
@@ -197,12 +207,15 @@ export default function NuevoUsuarioPage() {
           domicilio:          domicilio.trim() || null,
           ciudad:             ciudad.trim() || null,
           fechaNacimiento:    fechaNacimiento || null,
-          welcomeEventId:     selectedEvent || null,
+          welcomeEventId:     omitirWelcome ? null : (selectedEvent || null),
+          omitirWelcome,
+          soloPerfil:         noWelcome,
         }),
       })
 
       const data = await res.json()
       if (res.ok && data.success) {
+        setResultado({ bookingCreated: data.bookingCreated === true, welcomeAgotado: data.welcomeAgotado === true })
         setPageState('SUCCESS')
       } else {
         setFormError(data.error || 'Error al completar el registro')
@@ -276,7 +289,13 @@ export default function NuevoUsuarioPage() {
             ¡Registro completado!
           </h2>
           <p className="text-gray-600 mb-4">
-            {student?.primerNombre}, te esperamos en tu sesión Welcome.
+            {resultado?.bookingCreated || hasWelcomeBooking
+              ? `${student?.primerNombre}, te esperamos en tu sesión Welcome.`
+              : enWelcome && (resultado?.welcomeAgotado || welcomeAgotado)
+              ? `${student?.primerNombre}, el equipo de Servicio te enviará el video de bienvenida por WhatsApp.`
+              : enWelcome
+              ? `${student?.primerNombre}, el equipo de Servicio te contactará por WhatsApp para agendar tu sesión de bienvenida.`
+              : `${student?.primerNombre}, tu perfil quedó creado.`}
           </p>
           {student?.userLogin && (
             <div className="rounded-lg border border-primary-200 bg-primary-50 p-3 mb-4 text-left">
@@ -497,16 +516,19 @@ export default function NuevoUsuarioPage() {
             </div>
           )}
 
-          {!noWelcome && !!welcomeModule && !hasWelcomeBooking && !welcomeAgotado && (
+          {ofreceAgendar && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="nu-welcome" className="block text-sm font-medium text-gray-700 mb-1">
                 Agenda tu sesión Welcome
               </label>
               {welcomeEvents.length > 0 ? (
+                <>
                 <select
-                  value={selectedEvent}
+                  id="nu-welcome"
+                  value={omitirWelcome ? '' : selectedEvent}
                   onChange={e => setSelectedEvent(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  disabled={omitirWelcome}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecciona una fecha...</option>
                   {welcomeEvents.map(event => (
@@ -519,9 +541,24 @@ export default function NuevoUsuarioPage() {
                     </option>
                   ))}
                 </select>
+                <label className="mt-3 flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={omitirWelcome}
+                    onChange={e => {
+                      setOmitirWelcome(e.target.checked)
+                      if (e.target.checked) { setSelectedEvent(''); setFormError('') }
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>
+                    Ninguna fecha me sirve: prefiero que el equipo de Servicio me contacte para agendar mi bienvenida.
+                  </span>
+                </label>
+                </>
               ) : (
                 <p className="text-sm text-gray-500 italic">
-                  No hay sesiones Welcome disponibles en este momento.
+                  No hay sesiones Welcome disponibles en este momento. El equipo de Servicio te contactará para agendarla.
                 </p>
               )}
             </div>

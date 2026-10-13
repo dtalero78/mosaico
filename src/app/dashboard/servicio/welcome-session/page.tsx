@@ -11,6 +11,7 @@ import { estadoWelcome, pasaFiltroAsistencia, ESTADO_WELCOME_META, type FiltroAs
 import { coincidePersona } from '@/lib/busqueda-persona'
 import WelcomeReagendamientosTab from '@/components/servicio/WelcomeReagendamientosTab'
 import WelcomeVideoTab from '@/components/servicio/WelcomeVideoTab'
+import WelcomePendientesAgendarTab from '@/components/servicio/WelcomePendientesAgendarTab'
 import { usePermissions } from '@/hooks/usePermissions'
 
 interface WelcomeEvent {
@@ -36,7 +37,7 @@ interface WelcomeEvent {
   totalSesionesWelcome?: number
 }
 
-type Tab = 'eventos' | 'reagendamientos' | 'video'
+type Tab = 'eventos' | 'reagendamientos' | 'pendientes' | 'video'
 
 /** Valor del desplegable de campaña: el conjunto "actuales" o una campaña concreta. */
 const CAMPANA_ACTUALES = '__actuales__'
@@ -217,6 +218,7 @@ export default function WelcomeSessionPage() {
               ...(verEventos ? [
                 { id: 'eventos' as Tab, label: 'Eventos WELCOME' },
                 { id: 'reagendamientos' as Tab, label: 'Gestión de Reagendamientos' },
+                { id: 'pendientes' as Tab, label: 'Pendientes de agendar' },
               ] : []),
               ...(verVideo ? [{ id: 'video' as Tab, label: 'Video Welcome' }] : []),
             ]).map((t) => (
@@ -239,6 +241,8 @@ export default function WelcomeSessionPage() {
           <WelcomeVideoTab estadosCampana={estadosCampana} actuales={actuales} />
         ) : tab === 'reagendamientos' ? (
           <WelcomeReagendamientosTab estadosCampana={estadosCampana} actuales={actuales} />
+        ) : tab === 'pendientes' ? (
+          <WelcomePendientesAgendarTab estadosCampana={estadosCampana} actuales={actuales} />
         ) : (
         <div className="card">
           <div className="card-header pb-6">

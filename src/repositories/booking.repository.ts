@@ -649,6 +649,64 @@ class BookingRepositoryClass extends BaseRepository {
   }
 
   /**
+   * Alumnos con la bienvenida PENDIENTE DE AGENDAR: siguen en el curso puente
+   * WELCOME, ya crearon su perfil en /nuevo-usuario y no tienen NINGUNA bienvenida
+   * agendada (no cancelada), ni pasada ni futura.
+   *
+   * La pertenencia se DERIVA, no se guarda: al agendarle una sesión sale solo de la
+   * cola. Así entran los tres caminos que dejan el perfil sin bienvenida —la
+   * casilla "prefiero que me contacten", el enlace de sólo perfil y que no hubiera
+   * sesiones—. `welcomePendienteMotivo` es sólo la etiqueta de por qué.
+   *
+   * Quien faltó a una bienvenida tiene agendamiento, así que no entra aquí: está en
+   * Reagendamientos (o en Video Welcome). Sólo alumnos que ocupan cupo (la misma
+   * regla de los salones): un contrato anulado, en hold o de prueba no se agenda.
+   */
+  async findWelcomePendientesAgendar() {
+    return queryMany(
+      `SELECT a."_id" AS "academicaId",
+              COALESCE(p."primerNombre", a."primerNombre", '') AS "primerNombre",
+              COALESCE(p."primerApellido", a."primerApellido", '') AS "primerApellido",
+              COALESCE(p."numeroId", a."numeroId", '') AS "numeroId",
+              COALESCE(p."contrato", a."contrato", '') AS "contrato",
+              COALESCE(p."celular", a."celular", '') AS "celular",
+              COALESCE(p."campaign", '') AS "campaign",
+              COALESCE(p."tipoCurso", '') AS "tipoCurso",
+              COALESCE(p."apoderado", '') AS "apoderado",
+              COALESCE(p."apoderadoTelefono", '') AS "apoderadoTelefono",
+              a."welcomePendienteMotivo" AS "motivo",
+              COALESCE(a."welcomePendienteDesde", ur."perfilActualizado") AS "pendienteDesde"
+         FROM "ACADEMICA" a
+         JOIN LATERAL (
+           SELECT * FROM "PEOPLE" pp
+            WHERE pp."numeroId" = a."numeroId"
+              AND pp."tipoUsuario" IN ('BENEFICIARIO', 'BENEFICIARIA')
+            ORDER BY pp."_updatedDate" DESC NULLS LAST
+            LIMIT 1
+         ) p ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT u."perfilActualizado" FROM "USUARIOS_ROLES" u
+            WHERE a."userLogin" IS NOT NULL AND LOWER(TRIM(u."userLogin")) = LOWER(TRIM(a."userLogin"))
+            LIMIT 1
+         ) ur ON TRUE
+        WHERE UPPER(COALESCE(a."curso", '')) = 'WELCOME'
+          AND NULLIF(TRIM(COALESCE(a."detallesPersonales", '')), '') IS NOT NULL
+          AND ${cupoOcupadoSql('p')}
+          AND NOT EXISTS (
+            SELECT 1
+              FROM "ACADEMICA_BOOKINGS" bw
+              LEFT JOIN "CALENDARIO" cw ON (cw."_id" = bw."eventoId" OR cw."_id" = bw."idEvento")
+             WHERE (bw."studentId" = a."_id" OR bw."idEstudiante" = a."_id")
+               AND (bw."cancelo" IS NULL OR bw."cancelo" = false)
+               AND ${esWelcomeSql('bw', 'cw')}
+          )
+        ORDER BY COALESCE(a."welcomePendienteDesde", ur."perfilActualizado") ASC NULLS FIRST,
+                 COALESCE(p."primerApellido", a."primerApellido") ASC`,
+      []
+    );
+  }
+
+  /**
    * Sesiones WELCOME FUTURAS de un módulo, con su ocupación — las opciones que se
    * le pueden ofrecer a un alumno al reagendarlo.
    *
