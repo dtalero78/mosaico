@@ -267,52 +267,42 @@ export async function executeBloqueo(personIds: string[]): Promise<BloqueoExecut
 
       // ACADEMICA / USUARIOS_ROLES son una sola fila por persona física.
       // Si la misma persona figura también como BENEFICIARIO activo (extensión
-      // vigente, otro contrato, etc.), NO debemos inactivar sus tablas compartidas.
-      // Verificamos antes de cada UPDATE.
-      if (p.numeroId) {
-        const otro = await queryMany(
-          `SELECT 1 FROM "PEOPLE"
-           WHERE "numeroId" = $1 AND "tipoUsuario" = 'BENEFICIARIO'
-             AND ("estadoInactivo" IS NULL OR "estadoInactivo" = false)
-             AND "_id" <> $2
-           LIMIT 1`,
-          [p.numeroId, p._id]
-        );
-        if (otro.length === 0) {
-          await query(
-            `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW()
-             WHERE "numeroId" = $1`,
-            [p.numeroId]
-          ).catch(() => {});
-        }
+      // vigente, otro contrato, etc.), NO se inactivan su ficha ni su acceso.
+      const sigueActivaEnOtroLado = p.numeroId
+        ? (await queryMany(
+            `SELECT 1 FROM "PEOPLE"
+             WHERE "numeroId" = $1 AND "tipoUsuario" = 'BENEFICIARIO'
+               AND ("estadoInactivo" IS NULL OR "estadoInactivo" = false)
+               AND "_id" <> $2
+             LIMIT 1`,
+            [p.numeroId, p._id]
+          )).length > 0
+        : false;
+
+      if (p.numeroId && !sigueActivaEnOtroLado) {
+        await query(
+          `UPDATE "ACADEMICA" SET "estadoInactivo" = true, "_updatedDate" = NOW()
+           WHERE "numeroId" = $1`,
+          [p.numeroId]
+        ).catch(() => {});
       }
 
-      // Bloquear el ACCESO (login). En MOSAICO el login es por `userLogin` (los
-      // hermanos comparten el email del apoderado), así que bloqueamos la cuenta
-      // POR userLogin — preciso por alumno, sin afectar a los demás. Fallback a
-      // email (legacy) con guarda de email compartido para cuentas sin userLogin.
-      if (p.userLogin) {
+      // Bloquear el ACCESO (login) por IDENTIDAD, nunca por correo: los hermanos
+      // comparten el del apoderado, y el titular —que no tiene cuenta— lo tiene
+      // casi siempre, así que bloquear por correo le cortaba el acceso a los hijos.
+      // La cuenta es la del userLogin de su ficha académica o de PEOPLE (pueden
+      // diferir), o la de su documento. Sólo cuentas ESTUDIANTE: un titular puede
+      // ser del personal (un guía), y su documento coincidiría con su cuenta de trabajo.
+      if (!sigueActivaEnOtroLado) {
         await query(
           `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-           WHERE "userLogin" = $1`,
-          [p.userLogin]
+            WHERE "rol" = 'ESTUDIANTE'
+              AND ("userLogin" IN (SELECT "userLogin" FROM "ACADEMICA"
+                                    WHERE $1 <> '' AND "numeroId" = $1 AND "userLogin" IS NOT NULL
+                                   UNION SELECT $2::text WHERE $2::text <> '')
+                   OR ($1 <> '' AND UPPER(TRIM("numberid")) = UPPER(TRIM($1))))`,
+          [p.numeroId || '', p.userLogin || '']
         ).catch(() => {});
-      } else if (p.email) {
-        const otroLogin = await queryMany(
-          `SELECT 1 FROM "PEOPLE"
-           WHERE LOWER("email") = LOWER($1) AND "tipoUsuario" = 'BENEFICIARIO'
-             AND ("estadoInactivo" IS NULL OR "estadoInactivo" = false)
-             AND "_id" <> $2
-           LIMIT 1`,
-          [p.email, p._id]
-        );
-        if (otroLogin.length === 0) {
-          await query(
-            `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-             WHERE LOWER("email") = LOWER($1)`,
-            [p.email]
-          ).catch(() => {});
-        }
       }
 
       details.push({

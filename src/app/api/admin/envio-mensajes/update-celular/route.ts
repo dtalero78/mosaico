@@ -4,7 +4,7 @@
  * Actualiza el celular de un estudiante en 3 tablas sincronizadas:
  *   - PEOPLE      (por numeroId)
  *   - ACADEMICA   (por numeroId)
- *   - USUARIOS_ROLES (por email del usuario académico)
+ *   - USUARIOS_ROLES (por userLogin de la ficha o documento; nunca por correo)
  *
  * Body: { numeroId: string, celular: string }
  *
@@ -61,16 +61,19 @@ export const PATCH = handlerWithAuth(async (request, _ctx, session) => {
     [celularClean, numeroIdNorm],
   );
 
-  // USUARIOS_ROLES por email del académico (si existe)
-  let updateUsuariosRoles = { rowCount: 0 };
-  if (aca.email) {
-    updateUsuariosRoles = await query(
-      `UPDATE "USUARIOS_ROLES"
-         SET "celular" = $1, "_updatedDate" = NOW()
-       WHERE LOWER("email") = LOWER($2)`,
-      [celularClean, aca.email],
-    ) as any;
-  }
+  // USUARIOS_ROLES por IDENTIDAD —el userLogin de su ficha académica o su
+  // documento—, nunca por correo: los hermanos comparten el del apoderado y el
+  // celular de uno quedaba en la cuenta del otro. Sólo cuentas de estudiante.
+  const updateUsuariosRoles = await query(
+    `UPDATE "USUARIOS_ROLES"
+       SET "celular" = $1, "_updatedDate" = NOW()
+     WHERE "rol" = 'ESTUDIANTE'
+       AND ("userLogin" IN (SELECT "userLogin" FROM "ACADEMICA"
+                             WHERE UPPER(REGEXP_REPLACE(COALESCE("numeroId",''), '[.\\s\\-_]', '', 'g')) = $2
+                               AND "userLogin" IS NOT NULL)
+            OR UPPER(REGEXP_REPLACE(COALESCE("numberid",''), '[.\\s\\-_]', '', 'g')) = $2)`,
+    [celularClean, numeroIdNorm],
+  );
 
   return successResponse({
     celular: celularClean,

@@ -84,8 +84,9 @@ export async function extendByDays(input: ExtendByDaysInput) {
   if (person.numeroId) {
     await query(
       `UPDATE "USUARIOS_ROLES" SET "activo" = true, "_updatedDate" = NOW()
-        WHERE "userLogin" IN (SELECT "userLogin" FROM "ACADEMICA" WHERE "numeroId" = $1 AND "userLogin" IS NOT NULL)
-           OR UPPER(TRIM("numberid")) = UPPER(TRIM($1))`,
+        WHERE "rol" = 'ESTUDIANTE'
+          AND ("userLogin" IN (SELECT "userLogin" FROM "ACADEMICA" WHERE "numeroId" = $1 AND "userLogin" IS NOT NULL)
+               OR UPPER(TRIM("numberid")) = UPPER(TRIM($1)))`,
       [person.numeroId]
     );
   }
@@ -217,9 +218,10 @@ export async function activateOnHold(input: ActivateOnHoldInput) {
       // Antes el relleno para "sin usuario" era un carácter NULO, que Postgres
       // rechaza: la consulta entera fallaba y el login nunca se bloqueaba.
       `UPDATE "USUARIOS_ROLES" SET "activo" = false, "_updatedDate" = NOW()
-        WHERE "userLogin" IN (SELECT "userLogin" FROM "ACADEMICA" WHERE "numeroId" = $1 AND "userLogin" IS NOT NULL
-                               UNION SELECT $2::text WHERE $2::text <> '')
-           OR ($1 <> '' AND UPPER(TRIM("numberid")) = UPPER(TRIM($1)))`,
+        WHERE "rol" = 'ESTUDIANTE'
+          AND ("userLogin" IN (SELECT "userLogin" FROM "ACADEMICA" WHERE "numeroId" = $1 AND "userLogin" IS NOT NULL
+                                UNION SELECT $2::text WHERE $2::text <> '')
+               OR ($1 <> '' AND UPPER(TRIM("numberid")) = UPPER(TRIM($1))))`,
       [person.numeroId || '', person.userLogin || '']
     );
   } catch (err) {
@@ -347,8 +349,9 @@ export async function deactivateOnHold(
     try {
       const r = await query(
         `UPDATE "USUARIOS_ROLES" SET "activo" = true, "_updatedDate" = NOW()
-          WHERE "userLogin" IN (SELECT "userLogin" FROM "ACADEMICA" WHERE "numeroId" = $1 AND "userLogin" IS NOT NULL)
-             OR UPPER(TRIM("numberid")) = UPPER(TRIM($1))`,
+          WHERE "rol" = 'ESTUDIANTE'
+            AND ("userLogin" IN (SELECT "userLogin" FROM "ACADEMICA" WHERE "numeroId" = $1 AND "userLogin" IS NOT NULL)
+                 OR UPPER(TRIM("numberid")) = UPPER(TRIM($1)))`,
         [person.numeroId]
       );
       loginReactivado = (r.rowCount ?? 0) > 0;
