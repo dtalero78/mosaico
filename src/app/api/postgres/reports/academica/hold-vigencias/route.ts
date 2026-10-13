@@ -81,7 +81,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
            "fechaOnHold"::date AS "fechaOnHold", "fechaFinOnHold"::date AS "fechaFinOnHold",
            (CURRENT_DATE - "fechaFinOnHold"::date) AS "diasVencido"
     FROM "PEOPLE"
-    WHERE "estadoInactivo" = true AND "fechaFinOnHold" IS NOT NULL AND "fechaFinOnHold"::date <= CURRENT_DATE
+    WHERE "fechaOnHold" IS NOT NULL AND "fechaFinOnHold" IS NOT NULL AND "fechaFinOnHold"::date <= CURRENT_DATE
       AND COALESCE("contrato",'') NOT LIKE 'PRB-%'
     ORDER BY "fechaFinOnHold" ASC`)
   const vigRows = await query<any>(`

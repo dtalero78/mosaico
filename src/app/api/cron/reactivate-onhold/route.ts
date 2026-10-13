@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/postgres'
 import { recordCronRun } from '@/lib/cron-runs'
+import { hoyEnChile } from '@/lib/cursos-campaign'
+import { deactivateOnHold } from '@/services/contract.service'
 
 const CRON_SECRET = process.env.CRON_SECRET
 
@@ -14,11 +16,9 @@ const CRON_SECRET = process.env.CRON_SECRET
  * endpoint /api/cron/health-check expone la última ejecución para detectar
  * si el cron lleva mucho sin correr.
  *
- * Por cada estudiante con OnHold vencido:
- *   - Extiende finalContrato por los días pausados
- *   - Marca estadoInactivo=false y limpia fechaOnHold
- *   - Incrementa extensionCount y agrega entrada a extensionHistory
- *   - Sincroniza ACADEMICA.estadoInactivo=false (por numeroId)
+ * Por cada estudiante con OnHold vencido llama a `deactivateOnHold` (la misma
+ * reactivación del botón de la ficha). El alumno vuelve SIN salón —lo soltó al
+ * pausarse— y aparece en Servicio › Reactivados sin salón para asignárselo.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -32,12 +32,15 @@ export async function GET(request: NextRequest) {
     const result = await recordCronRun('reactivate-onhold', async () => {
       console.log('Cron reactivate-onhold: [PostgreSQL] Iniciando proceso de reactivación automática')
 
+      // El OnHold lo define tener fechaOnHold (no estadoInactivo). El día se mide
+      // en Chile, como el resto de la reactivación.
       const expiredResult = await query(
-        `SELECT * FROM "PEOPLE"
-         WHERE "estadoInactivo" = true
+        `SELECT "_id", "primerNombre", "primerApellido" FROM "PEOPLE"
+         WHERE "fechaOnHold" IS NOT NULL
            AND "fechaFinOnHold" IS NOT NULL
-           AND "fechaFinOnHold"::date <= CURRENT_DATE
-         ORDER BY "fechaFinOnHold" ASC`
+           AND "fechaFinOnHold"::date <= $1::date
+         ORDER BY "fechaFinOnHold" ASC`,
+        [hoyEnChile()]
       )
 
       const students = expiredResult.rows
@@ -65,57 +68,16 @@ export async function GET(request: NextRequest) {
         try {
           console.log(`Cron reactivate-onhold: Reactivando estudiante ${student._id} - ${student.primerNombre} ${student.primerApellido}`)
 
-          // Las fechas son días puros ('YYYY-MM-DD'): la cuenta va en UTC para que
-          // no dependa de la zona del servidor.
-          const fechaOnHold = new Date(String(student.fechaOnHold).slice(0, 10) + 'T00:00:00Z')
-          const fechaFinOnHold = new Date(String(student.fechaFinOnHold).slice(0, 10) + 'T00:00:00Z')
-          const diasPausados = Math.ceil((fechaFinOnHold.getTime() - fechaOnHold.getTime()) / (1000 * 60 * 60 * 24))
-
-          let newFinalContrato = student.finalContrato
-          if (student.finalContrato) {
-            const finalDate = new Date(String(student.finalContrato).slice(0, 10) + 'T00:00:00Z')
-            finalDate.setUTCDate(finalDate.getUTCDate() + diasPausados)
-            newFinalContrato = finalDate.toISOString().split('T')[0]
-          }
-
-          await query(
-            `UPDATE "PEOPLE" SET
-              "estadoInactivo" = false,
-              "fechaOnHold" = NULL,
-              "fechaFinOnHold" = NULL,
-              "finalContrato" = $2,
-              "extensionCount" = COALESCE("extensionCount", 0) + 1,
-              "extensionHistory" = COALESCE("extensionHistory", '[]'::jsonb) || $3::jsonb,
-              "_updatedDate" = NOW()
-            WHERE "_id" = $1`,
-            [
-              student._id,
-              newFinalContrato,
-              JSON.stringify({
-                numero: (student.extensionCount || 0) + 1,
-                fechaEjecucion: new Date().toISOString(),
-                vigenciaAnterior: student.finalContrato,
-                vigenciaNueva: newFinalContrato,
-                diasExtendidos: diasPausados,
-                motivo: `Extensión automática por OnHold (${diasPausados} días pausados desde ${student.fechaOnHold} hasta ${student.fechaFinOnHold}) - Cron Job`
-              })
-            ]
-          )
-
-          // Sync ACADEMICA.estadoInactivo (por numeroId).
-          if (student.numeroId) {
-            await query(
-              `UPDATE "ACADEMICA" SET "estadoInactivo" = false, "_updatedDate" = NOW() WHERE "numeroId" = $1`,
-              [student.numeroId]
-            ).catch(err => console.warn(`Cron reactivate-onhold: ACADEMICA sync failed for ${student.numeroId}:`, err))
-          }
+          // La MISMA reactivación que el botón de la ficha: login por identidad,
+          // estado ACTIVA, extensión por los días pausados y SIN contar extensión.
+          const r = await deactivateOnHold(student._id, { modo: 'AUTOMATICO', actor: 'cron' })
 
           console.log(`Cron reactivate-onhold: Estudiante ${student._id} reactivado exitosamente`)
           details.push({
             studentId: student._id,
             nombre: `${student.primerNombre} ${student.primerApellido}`,
             success: true,
-            diasExtendidos: diasPausados
+            diasExtendidos: r.extension.daysPaused,
           })
         } catch (studentError) {
           console.error(`Cron reactivate-onhold: Error procesando estudiante ${student._id}:`, studentError)

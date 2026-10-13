@@ -70,11 +70,16 @@ export const POST = handlerWithAuth(async (request, context, session) => {
     movido = await cambiarCursoAcademico(
       body.academicaId,
       { campaign, tipoCurso, horarioCurso, salon, motivo: 'Reactivación desde OnHold' } as any,
-      { email: session.user?.email ?? null, nombre: session.user?.name ?? null }
+      { email: session.user?.email ?? null, nombre: session.user?.name ?? null },
+      { confirmarCupo: true }
     );
   }
 
-  const result = await deactivateOnHold(body.studentId);
+  // Se puede adelantar: la vigencia se extiende sólo por los días realmente pausados.
+  const result = await deactivateOnHold(body.studentId, {
+    modo: 'MANUAL',
+    actor: session.user?.email || session.user?.name || undefined,
+  });
 
   // Las clases del curso nuevo se generan AQUÍ, con el alumno ya reactivado.
   // El movimiento ocurre antes —para que un destino sin cupo lo deje en OnHold en
@@ -97,11 +102,15 @@ export const POST = handlerWithAuth(async (request, context, session) => {
     }
   }
 
+  const ext = result.extension;
+  const extTexto = ext.diasProgramados !== ext.daysPaused
+    ? `contrato extendido ${ext.daysPaused} día(s) (estuvo pausado ${ext.daysPaused} de ${ext.diasProgramados} programados)`
+    : `contrato extendido ${ext.daysPaused} día(s)`;
   return successResponse({
     student: result.student,
     message: destino
-      ? `OnHold desactivado: movido al curso destino${clasesCreadas ? ` con ${clasesCreadas} clase(s)` : ''} y contrato extendido.`
-      : 'OnHold desactivado y contrato extendido automáticamente',
+      ? `OnHold desactivado: movido al curso destino${clasesCreadas ? ` con ${clasesCreadas} clase(s)` : ''}, ${extTexto}.`
+      : `OnHold desactivado, ${extTexto}.`,
     extension: result.extension,
     movido,
     clasesCreadas,

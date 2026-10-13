@@ -228,6 +228,10 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/servicio/casos-atencion': [
     'SERVICIO.CASOS_ATENCION.VER' as Permission,
   ],
+  // Mismo permiso que pausar/reactivar el OnHold.
+  '/dashboard/servicio/reactivados-sin-salon': [
+    'STUDENT.CONTRATO.ACTIVAR_HOLD' as Permission,
+  ],
 
   // Comercial - Crear Contrato
   '/dashboard/comercial/crear-contrato': [

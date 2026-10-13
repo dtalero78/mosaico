@@ -64,7 +64,17 @@ export async function leccionActualCurso(cursoId: string, tipoCurso: string): Pr
   return { modulo: first?.code || null, leccion: first?.step || null };
 }
 
-export async function cambiarCursoAcademico(academicaId: string, input: CambioAcademicoInput, actor: Actor) {
+/**
+ * `confirmarCupo`: deja el asiento CONFIRMADO en el salón destino (PEOPLE.cupoConfirmado),
+ * dentro de la misma transacción y después de comprobar el cupo con el salón
+ * bloqueado. Lo usa el regreso desde OnHold: sin la marca el alumno no ocupa silla
+ * y no figura en la lista de su guía. Un cambio académico normal no la necesita —el
+ * alumno conserva la que ya tenía.
+ */
+export async function cambiarCursoAcademico(
+  academicaId: string, input: CambioAcademicoInput, actor: Actor,
+  opts: { confirmarCupo?: boolean } = {}
+) {
   const campaign = (input.campaign || '').trim();
   const tipoCurso = (input.tipoCurso || '').trim();
   const horarioCurso = (input.horarioCurso || '').trim();
@@ -137,6 +147,12 @@ export async function cambiarCursoAcademico(academicaId: string, input: CambioAc
       excluir: per._id ? [per._id] : [],
       contexto: 'para mover a otro salón hay que ampliarlo en Académico › Campañas',
     });
+    if (opts.confirmarCupo) {
+      await client.query(
+        `UPDATE "PEOPLE" SET "cupoConfirmado" = true, "cupoConfirmadoPor" = $2, "cupoConfirmadoEn" = NOW(), "_updatedDate" = NOW()
+          WHERE "_id" = $1 AND "cupoConfirmado" IS NOT TRUE`,
+        [per._id, actor.email || actor.nombre || 'Sistema']);
+    }
 
     // 2) Cupos: −1 viejo, +1 nuevo
     if (oldCursoId) {

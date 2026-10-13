@@ -35,7 +35,7 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
 
   const reactivatePending = await queryOne<{ n: number }>(
     `SELECT COUNT(*)::int AS n FROM "PEOPLE"
-     WHERE "estadoInactivo" = true
+     WHERE "fechaOnHold" IS NOT NULL
        AND "fechaFinOnHold" IS NOT NULL
        AND "fechaFinOnHold"::date <= CURRENT_DATE`,
   ).catch(() => null)

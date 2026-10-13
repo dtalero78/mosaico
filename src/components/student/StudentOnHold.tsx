@@ -1,21 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { OnHoldHistoryEntry } from '@/types'
 import { api, ApiError } from '@/hooks/use-api'
 import { usePermissions } from '@/hooks/usePermissions'
 import { StudentPermission } from '@/types/permissions'
-import { compararHorarios } from '@/lib/cursos-campaign'
 import UploadDocButton from './UploadDocButton'
-
-interface CursoRow {
-  campaign: string
-  tipoCurso: string
-  horarioCurso: string
-  salon: string | null
-  numeroUsuarios: number
-  usuInscritos: number
-}
+import SalonDestinoSelector, { type SalonDestino } from './SalonDestinoSelector'
 
 interface StudentOnHoldProps {
   studentId: string          // ACADEMICA._id
@@ -61,37 +52,9 @@ export default function StudentOnHold({
   const [motivoOnHold, setMotivoOnHold] = useState('')
   const [isTogglingOnHold, setIsTogglingOnHold] = useState(false)
 
-  // Reactivación: cascada Campaña → Curso → Salón (destino, con cupo)
+  // Reactivación: destino (campaña/curso/salón con cupo) elegido en el selector compartido.
   const [showReactivar, setShowReactivar] = useState(false)
-  const [cursoRows, setCursoRows] = useState<CursoRow[]>([])
-  const [rcCampaign, setRcCampaign] = useState('')
-  const [rcTipoCurso, setRcTipoCurso] = useState('')
-  const [rcRowKey, setRcRowKey] = useState('') // `${horarioCurso}||${salon}`
-
-  useEffect(() => {
-    if (!showReactivar) return
-    fetch('/api/postgres/cursos-campaign', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(d => setCursoRows(((d.data || d).rows || []) as CursoRow[]))
-      .catch(() => setCursoRows([]))
-    // Prellenar con el curso actual del alumno
-    setRcCampaign(currentCampaign || '')
-    setRcTipoCurso(currentCurso || '')
-    setRcRowKey(currentHorario ? `${currentHorario}||${currentSalon || ''}` : '')
-  }, [showReactivar, currentCampaign, currentCurso, currentHorario, currentSalon])
-
-  const rcCampanias = useMemo(() => Array.from(new Set(cursoRows.map(r => r.campaign))).sort().reverse(), [cursoRows])
-  const rcTipos = useMemo(() => Array.from(new Set(cursoRows.filter(r => r.campaign === rcCampaign).map(r => r.tipoCurso))), [cursoRows, rcCampaign])
-  // Por día de la semana y hora del horario (lunes primero); el salón desempata.
-  const rcSalones = useMemo(
-    () => cursoRows.filter(r => r.campaign === rcCampaign && r.tipoCurso === rcTipoCurso)
-                   .sort((a, b) => compararHorarios(a.horarioCurso, b.horarioCurso) || String(a.salon).localeCompare(String(b.salon))),
-    [cursoRows, rcCampaign, rcTipoCurso])
-  const rcSelected = useMemo(
-    () => rcSalones.find(r => `${r.horarioCurso}||${r.salon || ''}` === rcRowKey) || null,
-    [rcSalones, rcRowKey])
-  const rcFull = rcSelected ? (rcSelected.numeroUsuarios > 0 && (rcSelected.usuInscritos ?? 0) >= rcSelected.numeroUsuarios) : false
-  const rcCanConfirm = !!rcCampaign && !!rcTipoCurso && !!rcSelected && !rcFull
+  const [destino, setDestino] = useState<SalonDestino | null>(null)
 
   // Sincronizar con el prop inicial
   useEffect(() => {
@@ -125,16 +88,15 @@ export default function StudentOnHold({
   }
 
   const handleReactivarConfirm = async () => {
-    if (!rcSelected) { alert('⚠️ Selecciona campaña, curso y salón destino'); return }
-    if (rcFull) { alert('⚠️ El curso destino está lleno. Elige otro con cupo.'); return }
-    await executeOnHoldToggle(false, '', '', undefined, {
-      campaign: rcSelected.campaign,
-      tipoCurso: rcSelected.tipoCurso,
-      horarioCurso: rcSelected.horarioCurso,
-      salon: rcSelected.salon || '',
-    })
+    if (!destino) { alert('⚠️ Selecciona campaña, curso y un salón con cupo'); return }
+    await executeOnHoldToggle(false, '', '', undefined, destino)
     setShowReactivar(false)
   }
+
+  // ¿Se está adelantando el desbloqueo? Entonces sólo se devuelven los días pausados hasta hoy.
+  const hoyLocal = new Date().toLocaleDateString('en-CA')
+  const finProgramado = currentFechaFinOnHold ? String(currentFechaFinOnHold).slice(0, 10) : ''
+  const adelantado = !!finProgramado && hoyLocal < finProgramado
 
   const handleModalConfirm = async () => {
     // Validar fechas
@@ -369,55 +331,27 @@ export default function StudentOnHold({
             <div className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-1">▶️ Reactivar Estudiante</h3>
               <p className="text-sm text-gray-500 mb-4">
-                Al reactivar se reanuda el contrato (se extiende por los días pausados). Elige la
-                <strong> campaña, curso y salón</strong> a los que ingresará (debe tener cupo).
+                Al reactivar se reanuda el contrato y se extiende por los <strong>días que estuvo pausado</strong>.
+                Elige la <strong>campaña, curso y salón</strong> a los que ingresará (debe tener cupo).
               </p>
+              {adelantado && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800">
+                  Estás adelantando el desbloqueo (la pausa terminaba el {finProgramado}). El contrato se
+                  extenderá sólo por los días pausados hasta hoy, no por el período completo.
+                </div>
+              )}
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Campaña</label>
-                  <select value={rcCampaign} onChange={e => { setRcCampaign(e.target.value); setRcTipoCurso(''); setRcRowKey('') }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
-                    <option value="">-- Selecciona campaña --</option>
-                    {rcCampanias.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Curso</label>
-                  <select value={rcTipoCurso} disabled={!rcCampaign} onChange={e => { setRcTipoCurso(e.target.value); setRcRowKey('') }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm disabled:bg-gray-100">
-                    <option value="">-- Selecciona curso --</option>
-                    {rcTipos.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Salón / Horario (cupo)</label>
-                  <select value={rcRowKey} disabled={!rcTipoCurso} onChange={e => setRcRowKey(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm disabled:bg-gray-100">
-                    <option value="">-- Selecciona salón --</option>
-                    {rcSalones.map(r => {
-                      const full = r.numeroUsuarios > 0 && (r.usuInscritos ?? 0) >= r.numeroUsuarios
-                      return (
-                        <option key={`${r.horarioCurso}||${r.salon || ''}`} value={`${r.horarioCurso}||${r.salon || ''}`} disabled={full}>
-                          {r.salon || '—'} · {r.horarioCurso} · {r.usuInscritos ?? 0}/{r.numeroUsuarios ?? 0}{full ? ' (LLENO)' : ''}
-                        </option>
-                      )
-                    })}
-                  </select>
-                  {rcSelected && (
-                    <p className={`text-xs mt-1 ${rcFull ? 'text-red-600' : 'text-green-600'}`}>
-                      {rcFull ? 'Este salón está lleno — elige otro.' : `Cupo disponible: ${(rcSelected.numeroUsuarios - (rcSelected.usuInscritos ?? 0))} libre(s).`}
-                    </p>
-                  )}
-                </div>
-              </div>
+              <SalonDestinoSelector
+                inicial={{ campaign: currentCampaign || '', tipoCurso: currentCurso || '', horarioCurso: currentHorario || '', salon: currentSalon || '' }}
+                onChange={setDestino}
+              />
 
               <div className="flex justify-end gap-3 mt-6">
                 <button onClick={() => setShowReactivar(false)} disabled={isTogglingOnHold}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
                   Cancelar
                 </button>
-                <button onClick={handleReactivarConfirm} disabled={!rcCanConfirm || isTogglingOnHold}
+                <button onClick={handleReactivarConfirm} disabled={!destino || isTogglingOnHold}
                   className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
                   {isTogglingOnHold ? 'Reactivando…' : 'Reactivar en este curso'}
                 </button>

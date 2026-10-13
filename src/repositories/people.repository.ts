@@ -283,21 +283,29 @@ class PeopleRepositoryClass extends BaseRepository {
    */
   async deactivateOnHold(
     id: string,
-    newFinalContrato: string,
-    newVigencia: number,
+    newFinalContrato: string | null,
+    newVigencia: number | null,
+    nota: Record<string, unknown>,
   ) {
+    // La reactivación se anota en la ÚLTIMA entrada de onHoldHistory (la pausa
+    // que se cierra), en la misma sentencia para no perder una escritura paralela.
     const row = await queryOne(
       `UPDATE "PEOPLE"
        SET "estadoInactivo" = false,
            "estado" = 'ACTIVA',
            "fechaOnHold" = NULL,
            "fechaFinOnHold" = NULL,
-           "finalContrato" = $1::timestamp with time zone,
-           "vigencia" = $2,
+           "finalContrato" = COALESCE($1::date, "finalContrato"),
+           "vigencia" = COALESCE($2::text, "vigencia"),
+           "onHoldHistory" = CASE
+             WHEN jsonb_typeof("onHoldHistory") = 'array' AND jsonb_array_length("onHoldHistory") > 0
+             THEN jsonb_set("onHoldHistory", ARRAY[(jsonb_array_length("onHoldHistory") - 1)::text],
+                            ("onHoldHistory" -> -1) || $4::jsonb)
+             ELSE "onHoldHistory" END,
            "_updatedDate" = NOW()
        WHERE "_id" = $3
        RETURNING *`,
-      [newFinalContrato, newVigencia, id]
+      [newFinalContrato, newVigencia == null ? null : String(newVigencia), id, JSON.stringify(nota)]
     );
     return this.parse(row);
   }

@@ -23,6 +23,9 @@ import { generateReport } from '@/services/progress.service';
 import { getEffectiveStepNumber } from '@/services/student-booking.service';
 import { isContractExpired } from '@/lib/contract-expiry';
 import { inicioProximaSemanaUTC } from '@/lib/semana';
+import { hoyEnChile } from '@/lib/cursos-campaign';
+import { fechaISO } from '@/lib/onhold';
+import { deactivateOnHold } from '@/services/contract.service';
 
 // One-time migration: ensure fechaInicioESS column exists in ACADEMICA and PEOPLE
 let essMigrationDone = false;
@@ -133,100 +136,23 @@ export async function resolveStudentFromSession(session: Session) {
     : 0;
   const effectiveStep = effectiveStepNum > 0 ? `Step ${effectiveStepNum}` : step;
 
-  // Check OnHold auto-reactivation: if fechaFinOnHold < today, deactivate OnHold + extend contract
-  const fechaFinOnHold = (base as any).fechaFinOnHold;
-  const fechaOnHold = (base as any).fechaOnHold;
-  if (fechaFinOnHold && fechaOnHold && (base as any).estadoInactivo) {
-    const endOnHold = new Date(fechaFinOnHold);
-    const todayOnHold = new Date();
-    todayOnHold.setHours(0, 0, 0, 0);
-    endOnHold.setHours(0, 0, 0, 0);
-
-    if (endOnHold < todayOnHold) {
-      console.log(`🟢 [Panel Estudiante] OnHold expirado (${fechaFinOnHold}). Reactivando estudiante y extendiendo contrato.`);
-
-      // Calculate paused days
-      const startOnHold = new Date(fechaOnHold);
-      const daysPaused = Math.ceil(
-        (endOnHold.getTime() - startOnHold.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      // Extend contract by paused days
-      const currentFinal = (base as any).finalContrato ? new Date((base as any).finalContrato) : null;
-      let newFinalStr: string | null = null;
-      let newVigencia = 0;
-
-      if (currentFinal) {
-        const newFinal = new Date(currentFinal);
-        newFinal.setDate(newFinal.getDate() + daysPaused);
-        newFinalStr = newFinal.toISOString().split('T')[0];
-        newVigencia = Math.ceil((newFinal.getTime() - todayOnHold.getTime()) / (1000 * 60 * 60 * 24));
-
-        // OnHold y Extensión son procesos independientes con contadores
-        // separados. La auto-reactivación al login extiende finalContrato
-        // por los días pausados pero NO toca extensionCount ni
-        // extensionHistory (la traza queda en onHoldHistory).
-        await query(
-          `UPDATE "PEOPLE"
-           SET "estadoInactivo" = false,
-               "estado" = 'ACTIVA',
-               "fechaOnHold" = NULL,
-               "fechaFinOnHold" = NULL,
-               "finalContrato" = $1::date,
-               "vigencia" = $2,
-               "_updatedDate" = NOW()
-           WHERE "_id" = $3`,
-          [newFinalStr, newVigencia, (base as any)._id]
-        );
-      } else {
-        // No contract date — just clear OnHold fields
-        await query(
-          `UPDATE "PEOPLE"
-           SET "estadoInactivo" = false,
-               "fechaOnHold" = NULL,
-               "fechaFinOnHold" = NULL,
-               "_updatedDate" = NOW()
-           WHERE "_id" = $1`,
-          [(base as any)._id]
-        );
-      }
-
+  // OnHold vencido: se reactiva con la MISMA función que el cron y el botón de la
+  // ficha. En la práctica casi nunca llega aquí —en OnHold el login está bloqueado—,
+  // pero si el alumno entra (p. ej. el cron aún no corrió) queda igual de bien.
+  const finOnHold = fechaISO((base as any).fechaFinOnHold);
+  if ((base as any).fechaOnHold && finOnHold && finOnHold <= hoyEnChile()) {
+    console.log(`🟢 [Panel Estudiante] OnHold vencido (${finOnHold}). Reactivando.`);
+    try {
+      const r = await deactivateOnHold((base as any)._id, { modo: 'AUTOMATICO', actor: 'login' });
       (base as any).estadoInactivo = false;
       (base as any).fechaOnHold = null;
       (base as any).fechaFinOnHold = null;
-      if (newFinalStr) {
-        (base as any).finalContrato = newFinalStr;
-        (base as any).vigencia = newVigencia;
+      if (r.extension.newFinalContrato) {
+        (base as any).finalContrato = r.extension.newFinalContrato;
+        (base as any).vigencia = r.extension.newVigencia;
       }
-
-      // Restore login access in USUARIOS_ROLES — key by the student's OWN account
-      // (_id / userLogin), NOT by email (shared among siblings in Fase 2).
-      if (urId || userLogin) {
-        try {
-          await query(
-            `UPDATE "USUARIOS_ROLES" SET "activo" = true, "_updatedDate" = NOW()
-             WHERE ($1::text IS NOT NULL AND "_id" = $1)
-                OR ($2::text <> '' AND "userLogin" = $2)`,
-            [urId, userLogin ?? '']
-          );
-        } catch (err) {
-          console.warn('⚠️ Could not sync USUARIOS_ROLES on OnHold auto-reactivation:', err);
-        }
-      }
-
-      // Sync ACADEMICA.estadoInactivo (por numeroId). Sin esto el estudiante
-      // puede loguear (USUARIOS_ROLES.activo=true) pero NO agendar (la
-      // validación de booking bloquea cuando ACADEMICA.estadoInactivo=true).
-      if ((base as any).numeroId) {
-        try {
-          await query(
-            `UPDATE "ACADEMICA" SET "estadoInactivo" = false, "_updatedDate" = NOW() WHERE "numeroId" = $1`,
-            [(base as any).numeroId]
-          );
-        } catch (err) {
-          console.warn('⚠️ Could not sync ACADEMICA on OnHold auto-reactivation:', err);
-        }
-      }
+    } catch (err) {
+      console.warn('⚠️ No se pudo reactivar el OnHold vencido al cargar el panel:', err);
     }
   }
 

@@ -24,7 +24,7 @@ import {
 import { cn } from '@/lib/utils'
 import SearchBar from '@/components/search/SearchBar'
 import { usePermissions } from '@/hooks/usePermissions'
-import { ServicioPermission, AcademicoPermission, InformesPermission, ComercialPermission, AprobacionPermission, MantenimientoPermission, RecaudosPermission, Permission } from '@/types/permissions'
+import { ServicioPermission, AcademicoPermission, InformesPermission, ComercialPermission, AprobacionPermission, MantenimientoPermission, RecaudosPermission, StudentPermission, Permission } from '@/types/permissions'
 
 const getNavigation = (userEmail: string, userRole: string) => [
   {
@@ -95,6 +95,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Usuarios sin perfil creado', href: '/dashboard/servicio/sin-registro' },
       { name: 'Nivelaciones', href: '/dashboard/servicio/nivelaciones', newTab: true },
       { name: 'Casos Atención', href: '/dashboard/servicio/casos-atencion', newTab: true },
+      { name: 'Reactivados sin salón', href: '/dashboard/servicio/reactivados-sin-salon' },
     ],
   },
   {
@@ -401,6 +402,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/servicio/casos-atencion': [
       ServicioPermission.CASOS_ATENCION_VER,
     ],
+    // Mismo permiso que pausar/reactivar: quien decide el regreso decide el salón.
+    '/dashboard/servicio/reactivados-sin-salon': [
+      StudentPermission.ACTIVAR_HOLD,
+    ],
 
     // Comercial
     '/dashboard/comercial/crear-contrato': [
@@ -553,6 +558,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ServicioPermission.WELCOME_VIDEO_VER,
       ServicioPermission.NIVELACIONES_VER,
       ServicioPermission.CASOS_ATENCION_VER,
+      StudentPermission.ACTIVAR_HOLD,
     ],
     'Comercial': [
       // COMERCIAL.CONTRATO.*
