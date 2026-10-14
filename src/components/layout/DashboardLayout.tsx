@@ -95,6 +95,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Usuarios sin perfil creado', href: '/dashboard/servicio/sin-registro' },
       { name: 'Nivelaciones', href: '/dashboard/servicio/nivelaciones', newTab: true },
       { name: 'Casos Atención', href: '/dashboard/servicio/casos-atencion', newTab: true },
+      { name: 'Gestión Justificación', href: '/dashboard/servicio/gestion-justificacion', newTab: true },
       { name: 'Reactivados sin salón', href: '/dashboard/servicio/reactivados-sin-salon' },
     ],
   },
@@ -402,6 +403,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/servicio/casos-atencion': [
       ServicioPermission.CASOS_ATENCION_VER,
     ],
+    '/dashboard/servicio/gestion-justificacion': [
+      ServicioPermission.JUSTIFICACION_VER,
+    ],
     // Mismo permiso que pausar/reactivar: quien decide el regreso decide el salón.
     '/dashboard/servicio/reactivados-sin-salon': [
       StudentPermission.ACTIVAR_HOLD,
@@ -558,6 +562,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ServicioPermission.WELCOME_VIDEO_VER,
       ServicioPermission.NIVELACIONES_VER,
       ServicioPermission.CASOS_ATENCION_VER,
+      ServicioPermission.JUSTIFICACION_VER,
       StudentPermission.ACTIVAR_HOLD,
     ],
     'Comercial': [

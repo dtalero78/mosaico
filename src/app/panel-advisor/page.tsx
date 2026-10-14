@@ -23,7 +23,8 @@ import { es } from 'date-fns/locale'
 import HolidayBadge from '@/components/common/HolidayBadge'
 import { formatEventTimeRange } from '@/lib/event-duration'
 import { usePermissions } from '@/hooks/usePermissions'
-import { AcademicoPermission } from '@/types/permissions'
+import { AcademicoPermission, ServicioPermission } from '@/types/permissions'
+import GestionJustificacion from '@/components/servicio/GestionJustificacion'
 
 interface Advisor {
   _id: string
@@ -87,7 +88,7 @@ function PanelAdvisorContent() {
   // en vez de dejar al guía buscándolo en el calendario. Una sola vez.
   const adminEventPendiente = useRef<string | null>(searchParams.get('adminEvent'))
   // Pestaña activa del panel: calendario | cursos asignados | control de horas
-  const [activeTab, setActiveTab] = useState<'calendario' | 'cursos' | 'horas'>('calendario')
+  const [activeTab, setActiveTab] = useState<'calendario' | 'cursos' | 'horas' | 'justificaciones'>('calendario')
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<CalendarioEvent | null>(null)
   const [showEventDetailModal, setShowEventDetailModal] = useState(false)
@@ -111,6 +112,8 @@ function PanelAdvisorContent() {
   // El dropdown sólo aparece para roles NO-ADVISOR con el permiso.
   const { hasPermission } = usePermissions()
   const canPickOtherAdvisor = hasPermission(AcademicoPermission.ADVISOR_VER_ENLACE) && userRole !== 'GUIA'
+  // Pestaña "Justificaciones": los ausentes de los cursos del guía del panel.
+  const canVerJustificaciones = hasPermission(ServicioPermission.JUSTIFICACION_VER as any)
 
   // Get email from URL params; fall back to session email for logged-in ADVISORs
   const advisorEmail = searchParams.get('email') || (
@@ -492,8 +495,23 @@ function PanelAdvisorContent() {
             >
               Control de Horas
             </button>
+            {canVerJustificaciones && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('justificaciones')}
+                className={`py-2 px-1 border-b-2 text-sm font-medium ${activeTab === 'justificaciones' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+              >
+                Justificaciones
+              </button>
+            )}
           </nav>
         </div>
+
+        {/* Pestaña Justificaciones: ausentes de los cursos del guía del panel.
+            El servidor además fuerza al propio guía cuando el rol es GUIA. */}
+        {activeTab === 'justificaciones' && advisor && canVerJustificaciones && (
+          <GestionJustificacion key={advisor._id} guiaId={advisor._id} embedded />
+        )}
 
         {/* Pestaña Cursos asignados */}
         {activeTab === 'cursos' && advisor && (

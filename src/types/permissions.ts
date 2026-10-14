@@ -383,6 +383,12 @@ export enum ServicioPermission {
   CASOS_ATENCION_VER      = 'SERVICIO.CASOS_ATENCION.VER',
   CASOS_ATENCION_GESTION  = 'SERVICIO.CASOS_ATENCION.GESTION',  // marcar Resuelto
   CASOS_ATENCION_EXPORTAR = 'SERVICIO.CASOS_ATENCION.EXPORTAR', // descargar CSV
+
+  // Gestión Justificación — inasistencias del último mes y su justificación.
+  // Con el rol GUIA se ven sólo los ausentes de los cursos del propio guía.
+  JUSTIFICACION_VER       = 'SERVICIO.JUSTIFICACION.VER',
+  JUSTIFICACION_JUSTIFICAR = 'SERVICIO.JUSTIFICACION.JUSTIFICAR', // justificar / quitar
+  JUSTIFICACION_EXPORTAR  = 'SERVICIO.JUSTIFICACION.EXPORTAR',   // descargar CSV
 }
 
 /**

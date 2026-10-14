@@ -1042,6 +1042,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Exportar CSV',
     description: 'Muestra el botón "Exportar CSV" para descargar el reporte de Casos de Atención.',
   },
+  {
+    code: ServicioPermission.JUSTIFICACION_VER,
+    module: Module.SERVICIO,
+    section: 'Gestión Justificación',
+    name: 'Página "Gestión Justificación" y pestaña "Justificaciones" del Panel Guía',
+    description: 'Inasistencias a sesiones del curso (por defecto el último mes) con su estado de justificación. Con el rol GUIA sólo se ven los ausentes de los cursos del propio guía; los demás roles eligen el guía.',
+  },
+  {
+    code: ServicioPermission.JUSTIFICACION_JUSTIFICAR,
+    module: Module.SERVICIO,
+    section: 'Gestión Justificación',
+    name: '↳ Justificar / quitar justificación',
+    description: 'Marca la inasistencia como falta justificada (motivo obligatorio) o quita la marca. La falta SIGUE contando como ausencia; en IMPULSA cumple la lección.',
+  },
+  {
+    code: ServicioPermission.JUSTIFICACION_EXPORTAR,
+    module: Module.SERVICIO,
+    section: 'Gestión Justificación',
+    name: '↳ Exportar CSV',
+    description: 'Muestra el botón "Exportar CSV" de Gestión Justificación.',
+  },
 
   // ========== COMERCIAL MODULE ==========
   // -- Página: Contrato Detalle (/dashboard/comercial/contrato/[id]) --
