@@ -25,6 +25,8 @@ export interface EventFilters {
    */
   cursoAlumno?: string;
   salonAlumno?: string;
+  /** SU campaña (mismo comodín). Ver `lib/alcance-evento`: misma regla al agendar. */
+  campaignAlumno?: string;
   step?: string;
   limit?: number;
   includeBookingCounts?: boolean;
@@ -109,6 +111,13 @@ class CalendarioRepositoryClass extends BaseRepository {
         OR UPPER($${idx}) = ANY(string_to_array(UPPER(REPLACE(c."salon", ' ', '')), ','))
       )`);
       params.push(filters.salonAlumno);
+      idx++;
+    }
+    // La campaña también: "KODOMO · Salón 06" existe en varias campañas, y sin
+    // este filtro un taller creado para AGOSTO le aparecía a un alumno de JUNIO.
+    if (filters.campaignAlumno) {
+      conditions.push(`(UPPER(TRIM(COALESCE(c."campaign", ''))) IN ('TODOS', '') OR UPPER(TRIM(c."campaign")) = UPPER(TRIM($${idx})))`);
+      params.push(filters.campaignAlumno);
       idx++;
     }
     if (filters.step) {

@@ -39,7 +39,14 @@ export const POST = handlerWithAuth(async (request, context, session) => {
       step: student.step,
       plataforma: (student as any).plataforma || '',
     },
-    eventId
+    eventId,
+    // Alcance del alumno, de SU ficha (nunca del body): el servidor verifica que
+    // el evento sea de su campaña, curso y salón.
+    {
+      campaign: (student as any).campaign || '',
+      curso: (student as any).tipoCurso || (student as any).curso || '',
+      salon: (student as any).salon || '',
+    }
   );
 
   return successResponse({ booking }, 201);

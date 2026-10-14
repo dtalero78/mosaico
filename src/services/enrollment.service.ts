@@ -72,18 +72,21 @@ export async function enrollStudents(input: EnrollInput) {
   // Y se mira cuántos lugares QUEDAN frente a cuántos se van a agendar. Antes la
   // pregunta era "¿queda al menos uno?" y se hacía UNA vez para todo el grupo:
   // con 12 de 13 ocupados, agendar 5 pasaba el control y dejaba 17.
+  //
+  // El conteo se hace DENTRO de la transacción que inserta, con el evento
+  // bloqueado (`verificarCupo`, más abajo): contado aquí afuera, dos personas que
+  // agendan a la vez el último lugar lo leían libre las dos. Aquí sólo se
+  // adelanta el aviso (sin bloquear) para no cargar alumnos si ya no cabe.
   const limite = Number(event.limiteUsuarios) || 0;
-  if (limite > 0) {
-    const ocupados = await CalendarioRepository.countActiveEnrollments(input.eventId);
-    if (ocupados + input.studentIds.length > limite) {
-      // Los agendamientos MASIVOS que crean su propio evento conservan el
-      // comportamiento de siempre: el límite lo acaba de elegir quien agenda.
-      const bypassMasivo = input.masivo && ROLES_SIN_LIMITE_CAPACIDAD.includes(input.agendadoPorRol || '');
-      if (!bypassMasivo && !input.autorizarSobrecupo) {
-        throw new SobrecupoError(limite, ocupados, input.studentIds.length);
-      }
+  // Los agendamientos MASIVOS que crean su propio evento conservan el
+  // comportamiento de siempre: el límite lo acaba de elegir quien agenda.
+  const bypassMasivo = input.masivo && ROLES_SIN_LIMITE_CAPACIDAD.includes(input.agendadoPorRol || '');
+  const verificarCupo = (ocupados: number) => {
+    if (limite > 0 && ocupados + input.studentIds.length > limite && !bypassMasivo && !input.autorizarSobrecupo) {
+      throw new SobrecupoError(limite, ocupados, input.studentIds.length);
     }
-  }
+  };
+  if (limite > 0) verificarCupo(await CalendarioRepository.countActiveEnrollments(input.eventId));
 
   // Fetch all students - try PEOPLE first with JOIN to ACADEMICA to get canonical ACADEMICA _id.
   // Using ACADEMICA _id is critical: historical bookings use ACADEMICA _id, not PEOPLE _id.
@@ -173,6 +176,16 @@ export async function enrollStudents(input: EnrollInput) {
   const bookings: any[] = [];
 
   await transaction(async (client) => {
+    // Cupo con el evento BLOQUEADO: quien llegue a la vez espera aquí y cuenta
+    // después, ya con estos agendamientos dentro.
+    if (limite > 0) {
+      await client.query(`SELECT 1 FROM "CALENDARIO" WHERE "_id" = $1 FOR UPDATE`, [input.eventId]);
+      const { rows: [cnt] } = await client.query(
+        `SELECT COUNT(*)::int AS n FROM "ACADEMICA_BOOKINGS"
+          WHERE ("eventoId" = $1 OR "idEvento" = $1) AND "cancelo" = false`, [input.eventId]
+      );
+      verificarCupo(Number(cnt?.n || 0));
+    }
     for (const student of students) {
       // Check duplicate inside transaction using the transaction client
       const dupCheck = await client.query(

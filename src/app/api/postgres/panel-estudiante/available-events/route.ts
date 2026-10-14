@@ -24,7 +24,9 @@ export const GET = handlerWithAuth(async (request, context, session) => {
   const salon = (student as any).salon || '';
 
   const bookingId = student.academicaId || student._id;
-  const events = await getAvailableEvents(bookingId, nivel, date, tipo, tzOffset, curso, salon);
+  // Campaña: el mismo curso y salón existen en varias campañas (lib/alcance-evento).
+  const campaign = (student as any).campaign || '';
+  const events = await getAvailableEvents(bookingId, nivel, date, tipo, tzOffset, curso, salon, campaign);
   // Nombre del alumno: el aviso de cruce de horario lo nombra ("coincide con la
   // sesión de …"), porque quien agenda el taller suele ser el apoderado.
   const alumno = [(student as any).primerNombre, (student as any).primerApellido]

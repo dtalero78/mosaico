@@ -26,8 +26,9 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { StepOverridesRepository } from '@/repositories/niveles.repository';
 import { ValidationError, ConflictError, NotFoundError, ForbiddenError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
-import { queryMany, queryOne } from '@/lib/postgres';
+import { queryMany, queryOne, transaction } from '@/lib/postgres';
 import { eventEndDate, agendamientoSeCruza, crucePermitido } from '@/lib/event-duration';
+import { TIPOS_AGENDABLES_PANEL, motivoFueraDeAlcance, type AlumnoAlcance } from '@/lib/alcance-evento';
 import { extractStepNumber, isExitosa as isExitosaBooking, aproboElJump as aproboElJumpBooking, getClassType as getClassTypeBooking, esTrainingClub } from '@/lib/motor-academico';
 
 // --- Helpers (mirrors progress.service.ts logic) ---
@@ -126,12 +127,19 @@ const PASADO_MAX_MIN = 60;
  * El comodín 'Todos' (curso y/o salón) abre el evento al resto. La Nivelación
  * no lleva salón: la asigna Servicio, alumno por alumno. El resto va por módulo.
  */
-function alcanceDelAlumno(nivel: string, tipo?: string, curso?: string, salon?: string) {
+function alcanceDelAlumno(nivel: string, tipo?: string, curso?: string, salon?: string, campaign?: string) {
   const tipoUp = String(tipo || '').toUpperCase();
   const esTaller = tipoUp === 'CLUB' || tipoUp === 'OLIMPIADA';
   const esPorCurso = esTaller || tipoUp === 'NIVELACION';
+  // Talleres y Olimpiadas: curso + salón + CAMPAÑA (misma regla que valida
+  // `bookEvent`, en lib/alcance-evento). La Nivelación sólo por curso: la arma
+  // Servicio juntando alumnos que pueden ser de campañas distintas.
   return (esPorCurso && curso)
-    ? { tipo, cursoAlumno: curso, salonAlumno: esTaller ? (salon || undefined) : undefined }
+    ? {
+        tipo, cursoAlumno: curso,
+        salonAlumno: esTaller ? (salon || undefined) : undefined,
+        campaignAlumno: esTaller ? (campaign || undefined) : undefined,
+      }
     : { nivel, tipo };
 }
 
@@ -163,11 +171,12 @@ export async function getDiasConEventos(
   tipo?: string,
   tzOffset: number = 0,
   curso?: string,
-  salon?: string
+  salon?: string,
+  campaign?: string
 ): Promise<string[]> {
   const events = await CalendarioRepository.findEvents({
     ...ventanaUTC(desde, hasta, tzOffset),
-    ...alcanceDelAlumno(nivel, tipo, curso, salon),
+    ...alcanceDelAlumno(nivel, tipo, curso, salon, campaign),
   });
   const offsetMs = tzOffset * 60 * 1000;
   const now = Date.now();
@@ -195,14 +204,15 @@ export async function getAvailableEvents(
   tipo?: string,
   tzOffset: number = 0,
   curso?: string,
-  salon?: string
+  salon?: string,
+  campaign?: string
 ) {
   // Ventana del día elegido en la zona horaria LOCAL del alumno.
   const { startDate, endDate } = ventanaUTC(date, date, tzOffset);
 
   const events = await CalendarioRepository.findEvents({
     startDate, endDate,
-    ...alcanceDelAlumno(nivel, tipo, curso, salon),
+    ...alcanceDelAlumno(nivel, tipo, curso, salon, campaign),
   });
 
   // Get student's upcoming bookings to check for duplicates
@@ -314,7 +324,9 @@ export async function bookEvent(
     step?: string;
     plataforma?: string;
   },
-  eventId: string
+  eventId: string,
+  /** Campaña, curso y salón del alumno (de su ficha, resueltos en el servidor). */
+  alcance: AlumnoAlcance = {}
 ) {
   // 0. Verify student is not blocked (defensa en profundidad — la sesión
   //    JWT puede seguir activa después de inactivar al estudiante).
@@ -337,6 +349,23 @@ export async function bookEvent(
   const event = await CalendarioRepository.findByIdWithAdvisor(eventId);
   if (!event) throw new NotFoundError('Evento', eventId);
 
+  // 1b. Alcance — se valida AQUÍ y no sólo al armar la lista: la lista filtra lo
+  //     que se OFRECE, pero quien envía el id de otro evento se saltaba el filtro.
+  //     Desde el panel sólo se agendan Talleres y Olimpiadas (lo demás llega
+  //     precargado o lo agenda el personal), y sólo los de SU campaña, curso y
+  //     salón — la misma regla que usa la consulta de la lista.
+  const tipoEvento = String(event.tipo || event.evento || '').toUpperCase();
+  if (!(TIPOS_AGENDABLES_PANEL as readonly string[]).includes(tipoEvento)) {
+    throw new ForbiddenError('Desde el panel sólo se pueden agendar talleres y olimpiadas.');
+  }
+  const fuera = motivoFueraDeAlcance(
+    { campaign: event.campaign, curso: event.curso, salon: event.salon },
+    alcance
+  );
+  if (fuera) {
+    throw new ForbiddenError(`Este evento no es para tu grupo (${fuera}). Consulta con el Área Académica.`);
+  }
+
   // 2. Validate future date + 30 min advance
   const eventDate = eventDiaToUTC(event.dia);
   const now = new Date();
@@ -348,15 +377,10 @@ export async function bookEvent(
     throw new ValidationError(`Debes agendar con al menos ${BOOKING_MIN_ADVANCE_MINUTES} minutos de anticipación`);
   }
 
-  // 3. Check capacity using real active enrollment count
-  const activeCount = await CalendarioRepository.countActiveEnrollments(eventId);
-  if (event.limiteUsuarios && event.limiteUsuarios > 0 && activeCount >= event.limiteUsuarios) {
-    throw new ConflictError('El evento está lleno');
-  }
-
-  // 4. Check not already enrolled
-  const alreadyEnrolled = await BookingRepository.existsByStudentAndEvent(studentId, eventId);
-  if (alreadyEnrolled) {
+  // 3-4. Cupo e inscripción previa: se comprueban DENTRO de la transacción que
+  //      inserta, con el evento bloqueado (más abajo). Aquí sólo se adelanta el
+  //      aviso para no hacer esperar a quien ya está inscrito.
+  if (await BookingRepository.existsByStudentAndEvent(studentId, eventId)) {
     throw new ConflictError('Ya estás inscrito en este evento');
   }
 
@@ -421,12 +445,40 @@ export async function bookEvent(
     origen: 'PANEL_EST',
   };
 
-  const booking = await BookingRepository.createEnrollment(bookingData);
+  // 7. Cupo + duplicado + alta + contador, ATÓMICOS. El evento se bloquea
+  //    (FOR UPDATE) antes de contar: sin el bloqueo, dos alumnos que toman el
+  //    último lugar en el mismo instante lo leen libre los dos y entran ambos.
+  return transaction(async (client) => {
+    await client.query(`SELECT 1 FROM "CALENDARIO" WHERE "_id" = $1 FOR UPDATE`, [eventId]);
+    const { rows: [cnt] } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM "ACADEMICA_BOOKINGS"
+        WHERE ("eventoId" = $1 OR "idEvento" = $1) AND "cancelo" = false`, [eventId]
+    );
+    const limite = Number(event.limiteUsuarios) || 0;
+    if (limite > 0 && Number(cnt?.n || 0) >= limite) {
+      throw new ConflictError('El evento está lleno');
+    }
+    const { rows: dup } = await client.query(
+      `SELECT 1 FROM "ACADEMICA_BOOKINGS"
+        WHERE ("idEstudiante" = $1 OR "studentId" = $1)
+          AND ("eventoId" = $2 OR "idEvento" = $2) AND "cancelo" = false LIMIT 1`,
+      [studentId, eventId]
+    );
+    if (dup.length) throw new ConflictError('Ya estás inscrito en este evento');
 
-  // 7. Increment inscritos
-  await CalendarioRepository.incrementInscritos(eventId);
-
-  return booking;
+    const columns = Object.keys(bookingData);
+    const { rows: [booking] } = await client.query(
+      `INSERT INTO "ACADEMICA_BOOKINGS" (${columns.map((c) => `"${c}"`).join(', ')}, "_createdDate", "_updatedDate")
+       VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')}, NOW(), NOW())
+       RETURNING *`,
+      Object.values(bookingData)
+    );
+    await client.query(
+      `UPDATE "CALENDARIO" SET "inscritos" = COALESCE("inscritos", 0) + 1, "_updatedDate" = NOW() WHERE "_id" = $1`,
+      [eventId]
+    );
+    return booking;
+  });
 }
 
 /**

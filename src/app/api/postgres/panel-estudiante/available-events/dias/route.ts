@@ -35,6 +35,7 @@ export const GET = handlerWithAuth(async (request, _context, session) => {
   const curso = (student as any).tipoCurso || (student as any).curso || '';
   const salon = (student as any).salon || '';
 
-  const fechas = await getDiasConEventos(nivel, desde, hasta, tipo, Number.isFinite(tzOffset) ? tzOffset : 0, curso, salon);
+  const campaign = (student as any).campaign || '';
+  const fechas = await getDiasConEventos(nivel, desde, hasta, tipo, Number.isFinite(tzOffset) ? tzOffset : 0, curso, salon, campaign);
   return successResponse({ dias: fechas });
 });
