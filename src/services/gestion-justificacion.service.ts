@@ -78,8 +78,12 @@ export async function listarInasistencias(session: any, f: FiltrosJustificacion)
   if (alcanceSinResultados(alcance)) return vacio
 
   const def = rangoUltimoMes()
-  const desde = f.startDate && ISO.test(f.startDate) ? f.startDate : def.desde
-  const hasta = f.endDate && ISO.test(f.endDate) ? f.endDate : def.hasta
+  // Nunca después de HOY (Chile): una sesión futura no es una inasistencia. La
+  // consulta ya exige que la sesión haya ocurrido; esto evita además que la
+  // pantalla muestre un rango que promete algo que no puede traer.
+  const tope = (d: string) => (d > def.hasta ? def.hasta : d)
+  const desde = tope(f.startDate && ISO.test(f.startDate) ? f.startDate : def.desde)
+  const hasta = tope(f.endDate && ISO.test(f.endDate) ? f.endDate : def.hasta)
 
   const where = [...BASE_WHERE]
   const params: any[] = []

@@ -85,8 +85,9 @@ interface ClassRecord {
   acPermanencia?: boolean
   acRespeto?: boolean
   acDisposicion?: boolean
-  /** La rúbrica ya se guardó con el alumno presente: sus valores son los del guía. */
-  rubricaEvaluada?: boolean
+  /** true = rúbrica guardada con el alumno presente; false = guardado ausente;
+   *  null = nunca se guardó desde el panel. */
+  rubricaEvaluada?: boolean | null
   nivel?: string
   step?: string
   /** Ausencia justificada + su motivo. La falta sigue contando como ausencia. */
@@ -225,7 +226,9 @@ export default function SesionPage() {
               acPermanencia: booking.acPermanencia ?? false,
               acRespeto: booking.acRespeto ?? false,
               acDisposicion: booking.acDisposicion ?? false,
-              rubricaEvaluada: booking.rubricaEvaluada === true,
+              // Tri-estado: null = nunca se guardó desde el panel (aplica el valor
+              // por defecto); false = se guardó con el alumno AUSENTE.
+              rubricaEvaluada: booking.rubricaEvaluada ?? null,
               nivel: booking.nivel,
               step: booking.step,
               escusa: booking.escusa ?? false,
@@ -484,6 +487,9 @@ export default function SesionPage() {
                   onStudentSelect={setSelectedStudent}
                   onDataUpdate={loadStudents}
                   canMarkAttendance={windowState.canMarkAttendance && !sesionCerrada}
+                  // Las 9 casillas vienen marcadas sólo mientras la sesión está por
+                  // empezar o abierta: cerrada o vencida se muestra lo guardado.
+                  aplicarPorDefecto={!sesionCerrada && !windowState.isExpired}
                   attendanceLockedReason={
                     sesionCerrada
                       ? 'La sesión ya está cerrada — los registros son de solo lectura.'

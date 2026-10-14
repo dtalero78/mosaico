@@ -110,6 +110,8 @@ export default function GestionJustificacion({ guiaId: guiaFijo, embedded = fals
   const visibles = useMemo(() => rows.slice((page - 1) * PAGE, page * PAGE), [rows, page])
   const paginas = Math.max(1, Math.ceil(rows.length / PAGE))
   const mostrarGuia = !embedded && !meta.soloPropios
+  // Sólo sesiones ya ocurridas: las fechas no pasan de hoy (Chile).
+  const hoy = rangoUltimoMes().hasta
   const guias: Guia[] = meta.guias || []
 
   const abrir = (row: Row, modo: 'justificar' | 'quitar') => {
@@ -207,11 +209,11 @@ export default function GestionJustificacion({ guiaId: guiaFijo, embedded = fals
           )}
           <div>
             <label className={label} htmlFor="gj-desde">Fecha inicial</label>
-            <input id="gj-desde" type="date" className={input} value={f.startDate} onChange={e => setF({ ...f, startDate: e.target.value })} />
+            <input id="gj-desde" type="date" className={input} value={f.startDate} max={hoy} onChange={e => setF({ ...f, startDate: e.target.value })} />
           </div>
           <div>
             <label className={label} htmlFor="gj-hasta">Fecha final</label>
-            <input id="gj-hasta" type="date" className={input} value={f.endDate} onChange={e => setF({ ...f, endDate: e.target.value })} />
+            <input id="gj-hasta" type="date" className={input} value={f.endDate} max={hoy} onChange={e => setF({ ...f, endDate: e.target.value })} />
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
