@@ -61,6 +61,9 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Reporte Académico', href: '/dashboard/academic/reporte-academico', newTab: true },
           { name: 'Evaluaciones', href: '/dashboard/academic/evaluaciones', newTab: true },
           { name: 'Entrenamientos', href: '/dashboard/academic/entrenamientos', newTab: true },
+          // El CONTENIDO de los cuestionarios del curso, como lo ve el alumno.
+          { name: 'Ver Evaluación', href: '/dashboard/academic/ver-evaluacion', newTab: true },
+          { name: 'Ver Entrenamiento', href: '/dashboard/academic/ver-entrenamiento', newTab: true },
           { name: 'Casos Usuarios', href: '/dashboard/academic/casos-usuarios', newTab: true },
         ],
       },
@@ -344,6 +347,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/academic/evaluaciones': [
       AcademicoPermission.EVALUACIONES_VER,
     ],
+    '/dashboard/academic/ver-evaluacion': [
+      AcademicoPermission.VER_EVALUACION,
+    ],
+    '/dashboard/academic/ver-entrenamiento': [
+      AcademicoPermission.VER_ENTRENAMIENTO,
+    ],
     '/dashboard/academic/entrenamientos': [
       AcademicoPermission.ENTRENAMIENTOS_VER,
     ],
@@ -542,6 +551,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       AcademicoPermission.ESTADISTICA,
       // ACADEMICO.MATERIAL.*
       AcademicoPermission.ACTUALIZAR_MATERIAL,
+      // Páginas con permiso propio: con sólo una de ellas el grupo debe verse.
+      AcademicoPermission.VER_EVALUACION,
+      AcademicoPermission.VER_ENTRENAMIENTO,
     ],
     // El grupo Informes se muestra si el usuario tiene CUALQUIER permiso de
     // Informes (el abuelo VER, un ítem de informe o un botón). Las secciones

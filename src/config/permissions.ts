@@ -700,6 +700,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/academic/entrenamientos. Misma pantalla que Evaluaciones pero sobre los módulos "Entrenamiento NN": por estudiante, mejor nota, intentos, el resultado del último intento y el análisis de preguntas más erradas/acertadas.',
   },
   {
+    code: AcademicoPermission.VER_EVALUACION,
+    module: Module.ACADEMICO,
+    section: 'Ver Evaluación',
+    name: 'Página "Ver Evaluación"',
+    description: 'Acceso a /dashboard/academic/ver-evaluacion. Elige un curso y muestra TODAS sus evaluaciones (módulos "Evaluación NN"); al abrir una se ven sus cuestionarios como los ve el alumno, con opción de mostrar las respuestas correctas. Sólo lectura: no registra intentos.',
+  },
+  {
+    code: AcademicoPermission.VER_ENTRENAMIENTO,
+    module: Module.ACADEMICO,
+    section: 'Ver Entrenamiento',
+    name: 'Página "Ver Entrenamiento"',
+    description: 'Acceso a /dashboard/academic/ver-entrenamiento. Igual que "Ver Evaluación" pero con los módulos "Entrenamiento NN" del curso.',
+  },
+  {
     code: AcademicoPermission.REPORTE_ACADEMICO_VER,
     module: Module.ACADEMICO,
     section: 'Reporte Académico',

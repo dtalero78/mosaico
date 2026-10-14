@@ -236,6 +236,12 @@ export enum AcademicoPermission {
   // "Entrenamiento NN". Permiso aparte para poder darle uno sin el otro.
   ENTRENAMIENTOS_VER = 'ACADEMICO.ENTRENAMIENTOS.VER',
 
+  // Ver Evaluación / Ver Entrenamiento — el CONTENIDO de los cuestionarios de un
+  // curso, tal como lo ve el alumno (con opción de mostrar las respuestas).
+  // Aparte de los de resultados: ver el examen no es ver las notas.
+  VER_EVALUACION = 'ACADEMICO.VER_EVALUACION.VER',
+  VER_ENTRENAMIENTO = 'ACADEMICO.VER_ENTRENAMIENTO.VER',
+
   // Reporte Académico — consolidado semanal de métricas por salón (Académico › Guías)
   REPORTE_ACADEMICO_VER = 'ACADEMICO.REPORTE_ACADEMICO.VER',
   REPORTE_ACADEMICO_PDF = 'ACADEMICO.REPORTE_ACADEMICO.PDF',             // imprimir / generar PDF del salón
