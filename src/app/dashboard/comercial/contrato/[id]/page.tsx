@@ -699,7 +699,7 @@ export default function ContratoDetailPage() {
                   title={editing
                     ? 'Termina o cancela la edición del contrato primero'
                     : 'Volver a capturar la información financiera y regenerar el contrato en Drive'}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-900 border border-amber-300 rounded-md hover:bg-amber-200 text-sm font-medium disabled:opacity-50"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm font-medium disabled:opacity-50"
                 >
                   <BanknotesIcon className="h-4 w-4" />
                   InfoFinanciera
