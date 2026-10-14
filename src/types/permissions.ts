@@ -403,6 +403,8 @@ export enum ComercialPermission {
   APROBACION_AUTONOMA = 'COMERCIAL.CONTRATO.APROBACION_AUTONOMA',
   /** Subir / reemplazar el recibo de inscripción del contrato (se lee con IA al subirlo). */
   SUBIR_RECIBO_INSCRIPCION = 'COMERCIAL.CONTRATO.SUBIR_RECIBO',
+  /** Botón «InfoFinanciera» del detalle: re-captura el paso 6 y regenera el PDF en Drive. */
+  INFO_FINANCIERA = 'COMERCIAL.CONTRATO.INFO_FINANCIERA',
 
   // Prospectos
   VER_PROSPECTOS = 'COMERCIAL.PROSPECTOS.VER',

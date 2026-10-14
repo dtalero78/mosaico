@@ -1095,6 +1095,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Sube o reemplaza el recibo de inscripción del contrato. Al subirlo, la IA lo lee (medio de pago, fecha, monto, referencia, banco) y lo deja adjunto a la cuota de inscripción para Recaudos. Ver el recibo no requiere este permiso',
   },
   {
+    code: ComercialPermission.INFO_FINANCIERA,
+    module: Module.COMERCIAL,
+    section: 'Detalle Contrato',
+    name: 'Botón "InfoFinanciera"',
+    description: 'Vuelve a capturar la información financiera (paso 6 de Crear Contrato) y la guarda en FINANCIEROS, el titular y la cuota de inscripción; luego regenera el contrato en Drive. No cambia la vigencia de un contrato aprobado ni una inscripción ya verificada por Recaudos.',
+  },
+  {
     code: ComercialPermission.APROBACION_AUTONOMA,
     module: Module.COMERCIAL,
     section: 'Detalle Contrato',

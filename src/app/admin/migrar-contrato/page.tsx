@@ -9,6 +9,7 @@ import { cursosVisiblesContrato } from '@/lib/cursos-campaign'
 import { generateUserLogin } from '@/lib/user-login'
 import { normalizeNumeroId } from '@/lib/numeroid-normalize'
 import { normalizeTelefono } from '@/lib/telefono-normalize'
+import { mediosPagoContrato } from '@/lib/medios-pago'
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -37,13 +38,6 @@ const COUNTRY_PREFIXES = [
   { country: 'Venezuela',          prefix: '+58'    },
   { country: 'Otro',               prefix: ''       },
 ]
-
-const PAYMENT_OPTIONS: Record<string, { label: string; value: string }[]> = {
-  Colombia:  [{ label: 'Transferencia', value: 'Transferencia' }, { label: 'Epayco', value: 'Epayco' }, { label: 'Paypal', value: 'Paypal' }],
-  Ecuador:   [{ label: 'Transferencia', value: 'Transferencia' }, { label: 'Datafast', value: 'Datafast' }, { label: 'Paypal', value: 'Paypal' }],
-  Chile:     [{ label: 'Transferencia', value: 'Transferencia' }, { label: 'Webpay', value: 'Webpay' }, { label: 'Paypal', value: 'Paypal' }],
-  Perú:      [{ label: 'Transferencia', value: 'Transferencia' }, { label: 'Niubiz', value: 'Niubiz' }],
-}
 
 const PLATAFORMAS = ['Colombia', 'Chile', 'Ecuador', 'Perú']
 
@@ -191,7 +185,8 @@ export default function MigrarContratoPage() {
     return (found?.prefix || '').replace(/\+/g, '').replace(/\s/g, '')
   }
 
-  const getPaymentOptions = () => PAYMENT_OPTIONS[plataforma] || PAYMENT_OPTIONS['Colombia']
+  // Catálogo compartido con Crear Contrato y el botón «InfoFinanciera» (lib/medios-pago).
+  const getPaymentOptions = () => mediosPagoContrato(plataforma)
 
   const recalcFinancial = (updates: Partial<typeof financial>) => {
     const merged = { ...financial, ...updates }

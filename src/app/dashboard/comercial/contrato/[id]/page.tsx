@@ -31,6 +31,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { isContratoPrueba } from '@/components/common/ContratoPruebaBadge'
 import { marcaPruebaCss, marcaPruebaHtml } from '@/lib/contrato-prueba'
 import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
+import InfoFinancieraModal from '@/components/contract/InfoFinancieraModal'
 
 // ── Field definitions ──
 
@@ -92,6 +93,9 @@ const CAMPOS_FINANCIERO: FieldDef[] = [
   { campo: 'pagoInscripcion', label: 'Pago Inscripcion' },
   { campo: 'saldo', label: 'Saldo' },
   { campo: 'numeroCuotas', label: 'Numero de Cuotas' },
+  // El tipo de plan se cambia con el botón «InfoFinanciera» (lista cerrada), no
+  // como texto libre en la edición inline.
+  { campo: 'plan', label: 'Tipo de Plan', tipo: 'readonly' },
   { campo: 'valorCuota', label: 'Valor Cuota' },
   { campo: 'formaPago', label: 'Forma de Pago' },
   { campo: 'fechaPago', label: 'Fecha de Pago', tipo: 'date' },
@@ -263,6 +267,7 @@ export default function ContratoDetailPage() {
 
   // Documentación
   const [showDocsModal, setShowDocsModal] = useState(false)
+  const [showInfoFinanciera, setShowInfoFinanciera] = useState(false)
   const [docsCount, setDocsCount] = useState(0)
   const [tieneRecibo, setTieneRecibo] = useState(false)
 
@@ -686,6 +691,20 @@ export default function ContratoDetailPage() {
                 <PaperClipIcon className="h-4 w-4" />
                 Documentación y recibo
               </button>
+              <PermissionGuard permission={ComercialPermission.INFO_FINANCIERA}>
+                <button
+                  type="button"
+                  onClick={() => setShowInfoFinanciera(true)}
+                  disabled={editing}
+                  title={editing
+                    ? 'Termina o cancela la edición del contrato primero'
+                    : 'Volver a capturar la información financiera y regenerar el contrato en Drive'}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-900 border border-amber-300 rounded-md hover:bg-amber-200 text-sm font-medium disabled:opacity-50"
+                >
+                  <BanknotesIcon className="h-4 w-4" />
+                  InfoFinanciera
+                </button>
+              </PermissionGuard>
               {!editing ? (
                 <button
                   onClick={startEditing}
@@ -968,7 +987,8 @@ export default function ContratoDetailPage() {
                     <FieldDisplay
                       key={field.campo}
                       field={field}
-                      value={financial[field.campo]}
+                      // El tipo de plan de contratos viejos puede estar sólo en el titular.
+                      value={field.campo === 'plan' ? (financial.plan || titular.plan) : financial[field.campo]}
                       editing={editing}
                       editValue={editFinancial[field.campo]}
                       onEditChange={(campo, val) => setEditFinancial(prev => ({ ...prev, [campo]: val }))}
@@ -1203,6 +1223,15 @@ export default function ContratoDetailPage() {
           onClose={() => setShowDocsModal(false)}
           onChange={({ documentos, tieneRecibo: r }) => { setDocsCount(documentos); setTieneRecibo(r) }}
         />
+
+        {/* ── InfoFinanciera: el paso 6 de Crear Contrato, guarda y regenera el PDF ── */}
+        {showInfoFinanciera && (
+          <InfoFinancieraModal
+            titularId={titularId}
+            onClose={() => setShowInfoFinanciera(false)}
+            onSaved={() => { loadData() }}
+          />
+        )}
       </PermissionGuard>
 
       {/* ── Contrato Para Aprobación — modal de confirmación con checklist ── */}
