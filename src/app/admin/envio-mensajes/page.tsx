@@ -103,9 +103,14 @@ interface SendResult {
 }
 
 const MAX_RECIPIENTS = 300
-// Con adjunto (imagen/video/documento) el tope baja a 30 para no arriesgar el
-// bloqueo de la línea (WhatsApp marca los envíos masivos con media muy agresivamente).
-const MAX_RECIPIENTS_MEDIA = 30
+// Con adjunto (imagen/video/documento) el tope baja para no arriesgar el bloqueo
+// de la línea (WhatsApp marca los envíos masivos con media muy agresivamente).
+// Se envía en lotes de 30 —el máximo que acepta /send por llamada— con una pausa
+// entre lotes, hasta 90 en total. Los lotes van uno tras otro desde el navegador:
+// cada llamada al servidor es igual de corta que antes.
+const MAX_RECIPIENTS_MEDIA = 90
+const LOTE_MEDIA = 30
+const PAUSA_ENTRE_LOTES_S = 30
 const MAX_FILE_MB = 16
 
 /** Deriva el tipo de media Whapi del archivo. */
@@ -202,8 +207,10 @@ export default function EnvioMensajesPage() {
   // Send
   const [sending, setSending] = useState(false)
   const [results, setResults] = useState<SendResult[] | null>(null)
+  // Avance del envío por lotes (sólo con adjunto y más de un lote).
+  const [loteProgreso, setLoteProgreso] = useState<{ actual: number; total: number; pausa: number } | null>(null)
 
-  // Adjunto opcional (imagen/video/documento) — con tope de 30 destinatarios.
+  // Adjunto opcional (imagen/video/documento) — hasta 90 destinatarios, en lotes de 30.
   const [attachFile, setAttachFile] = useState<File | null>(null)
   const [attachUploading, setAttachUploading] = useState(false)
 
@@ -510,20 +517,58 @@ export default function EnvioMensajesPage() {
         media = { key: pj.key, kind: mediaKindFromFile(attachFile), filename: attachFile.name }
         setAttachUploading(false)
       }
-      const r = await fetch('/api/admin/envio-mensajes/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plantillaId: selectedTemplate._id, destinatarios, media }),
-      })
-      const j = await r.json()
-      if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
-      toast.success(`${j.enviados} mensajes enviados${j.fallidos > 0 ? ` · ${j.fallidos} fallaron` : ''}`)
-      setResults(j.resultados as SendResult[])
+      // Sin adjunto: una sola llamada (hasta 300). Con adjunto: lotes de 30, el
+      // adjunto ya subido se reutiliza en todos.
+      const tamLote = media ? LOTE_MEDIA : destinatarios.length
+      const lotes: typeof destinatarios[] = []
+      for (let i = 0; i < destinatarios.length; i += tamLote) lotes.push(destinatarios.slice(i, i + tamLote))
+
+      const acumulados: SendResult[] = []
+      let errorLote: string | null = null
+      for (let n = 0; n < lotes.length; n++) {
+        if (n > 0) {
+          for (let s = PAUSA_ENTRE_LOTES_S; s > 0; s--) {
+            setLoteProgreso({ actual: n + 1, total: lotes.length, pausa: s })
+            await new Promise(res => setTimeout(res, 1000))
+          }
+        }
+        if (lotes.length > 1) setLoteProgreso({ actual: n + 1, total: lotes.length, pausa: 0 })
+        try {
+          const r = await fetch('/api/admin/envio-mensajes/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plantillaId: selectedTemplate._id, destinatarios: lotes[n], media }),
+          })
+          const j = await r.json()
+          if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
+          acumulados.push(...(j.resultados as SendResult[]))
+        } catch (e: any) {
+          // Un lote que falla entero (red, servidor) detiene los siguientes: lo ya
+          // enviado queda en el resumen y lo pendiente se marca como no enviado.
+          errorLote = e?.message || 'Error en envío'
+          for (const d of lotes.slice(n).flat()) {
+            acumulados.push({
+              numeroId: d.numeroId,
+              nombre: `${d.nombre || ''} ${d.primerApellido || ''}`.trim() || '(sin nombre)',
+              celular: d.celular,
+              ok: false,
+              error: `No enviado (lote ${n + 1} de ${lotes.length}): ${errorLote}`,
+            })
+          }
+          break
+        }
+      }
+      const enviados = acumulados.filter(x => x.ok).length
+      const fallidos = acumulados.length - enviados
+      if (errorLote) toast.error(`Envío interrumpido: ${errorLote}. Enviados ${enviados} de ${acumulados.length}.`)
+      else toast.success(`${enviados} mensajes enviados${fallidos > 0 ? ` · ${fallidos} fallaron` : ''}`)
+      setResults(acumulados)
     } catch (e: any) {
       toast.error(e?.message || 'Error en envío')
     } finally {
       setSending(false)
       setAttachUploading(false)
+      setLoteProgreso(null)
     }
   }
 
@@ -732,7 +777,7 @@ export default function EnvioMensajesPage() {
               )}
               {attachFile && (
                 <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 space-y-1">
-                  <p>⚠️ <b>Con adjunto el envío se limita a {MAX_RECIPIENTS_MEDIA} destinatarios</b> para no arriesgar el bloqueo de la línea de WhatsApp.</p>
+                  <p>⚠️ <b>Con adjunto el envío se limita a {MAX_RECIPIENTS_MEDIA} destinatarios</b>, en lotes de {LOTE_MEDIA} con una pausa de {PAUSA_ENTRE_LOTES_S} s entre lotes, para no arriesgar el bloqueo de la línea de WhatsApp. No cierres la página mientras envía.</p>
                   <p>El texto de la plantilla se envía como <b>descripción (caption)</b> del archivo. Tamaño máximo {MAX_FILE_MB} MB — los <b>videos</b> grandes pueden fallar; usa archivos livianos.</p>
                 </div>
               )}
@@ -1135,6 +1180,18 @@ export default function EnvioMensajesPage() {
                     Con adjunto solo se envía a {MAX_RECIPIENTS_MEDIA}. Deselecciona {selectedNumeroIds.size - MAX_RECIPIENTS_MEDIA} destinatario(s).
                   </p>
                 )}
+                {!!attachFile && !overMediaCap && selectedNumeroIds.size > LOTE_MEDIA && !sending && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    Se enviará en {Math.ceil(selectedNumeroIds.size / LOTE_MEDIA)} lotes de hasta {LOTE_MEDIA}, con {PAUSA_ENTRE_LOTES_S} s de pausa entre lotes.
+                  </p>
+                )}
+                {loteProgreso && (
+                  <p className="text-xs text-emerald-700 mt-1 font-medium">
+                    {loteProgreso.pausa > 0
+                      ? `Pausa: el lote ${loteProgreso.actual} de ${loteProgreso.total} sale en ${loteProgreso.pausa} s — no cierres la página.`
+                      : `Enviando lote ${loteProgreso.actual} de ${loteProgreso.total}…`}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -1143,7 +1200,7 @@ export default function EnvioMensajesPage() {
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
               >
                 <PaperAirplaneIcon className="h-5 w-5" />
-                {attachUploading ? 'Subiendo adjunto…' : sending ? 'Enviando…' : `Enviar ${selectedNumeroIds.size} mensajes`}
+                {attachUploading ? 'Subiendo adjunto…' : sending ? (loteProgreso ? `Lote ${loteProgreso.actual}/${loteProgreso.total}…` : 'Enviando…') : `Enviar ${selectedNumeroIds.size} mensajes`}
               </button>
             </div>
             )
