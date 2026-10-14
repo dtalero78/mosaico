@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { Student } from '@/types'
 import { formatDate } from '@/lib/utils'
 import { MessageCircle, Loader2, Check, AlertCircle } from 'lucide-react'
-import { ArrowUpTrayIcon, DocumentTextIcon, SpeakerWaveIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, DocumentTextIcon, SpeakerWaveIcon, UserCircleIcon } from '@heroicons/react/24/outline'
+import PerfilEstudianteModal from './PerfilEstudianteModal'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission, StudentPermission } from '@/types/permissions'
 import { api, handleApiError } from '@/hooks/use-api'
@@ -25,6 +26,7 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
   const [sendingProfileOnly, setSendingProfileOnly] = useState(false)
   const [profileOnlySent, setProfileOnlySent] = useState(false)
   const [showDocuments, setShowDocuments] = useState(false)
+  const [showPerfil, setShowPerfil] = useState(false)
   const [uploadingFiles, setUploadingFiles] = useState<string[]>([])
   const [editingPassword, setEditingPassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -228,6 +230,19 @@ export default function StudentGeneral({ student, isSuspendida }: StudentGeneral
             <span>{uploadingFiles.length > 0 ? `Subiendo (${uploadingFiles.length})...` : 'Agregar Documentación'}</span>
           </button>
         </PermissionGuard>
+        {/* Perfil: el mismo del panel del alumno, editable y con foto. */}
+        <PermissionGuard permission={StudentPermission.EDITAR_PERFIL}>
+          <button
+            onClick={() => setShowPerfil(true)}
+            className="btn-secondary flex items-center space-x-2"
+          >
+            <UserCircleIcon className="h-4 w-4" />
+            <span>Perfil</span>
+          </button>
+        </PermissionGuard>
+        {showPerfil && (
+          <PerfilEstudianteModal academicaId={student._id} onClose={() => setShowPerfil(false)} />
+        )}
         <SuspendidaBadge
           show={!!isSuspendida}
           suspenddata={(student as any).suspenddata ?? null}

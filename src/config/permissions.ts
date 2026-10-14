@@ -249,6 +249,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Enviar mensaje WhatsApp al estudiante (plantillas y personalizado)',
   },
   {
+    code: StudentPermission.EDITAR_PERFIL,
+    module: Module.STUDENT,
+    section: 'Tab General',
+    name: 'Botón "Perfil" (editar datos y foto)',
+    description: 'Abre el perfil del alumno (el mismo del panel del estudiante) con los campos editables: nombres, correo, celular, fecha de nacimiento, domicilio, ciudad y foto. El documento no se edita (es la llave del alumno).',
+  },
+  {
     code: StudentPermission.GUARDAR_PLANTILLA,
     module: Module.STUDENT,
     section: 'Tab General',
