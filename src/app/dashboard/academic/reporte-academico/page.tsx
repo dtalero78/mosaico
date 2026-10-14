@@ -119,6 +119,23 @@ export default function ReporteAcademicoPage() {
   const aplicar = () => setApplied({ ...f })
   const semanaActual = () => { const n = { ...f, startDate: '', endDate: '' }; setF(n); setApplied(n) }
 
+  /**
+   * Estado VIGENTE de un criterio: lo marcado a mano en el reporte (aunque aún
+   * no se haya guardado) y, si no, el resumen de la rúbrica de las sesiones.
+   */
+  const estadoCriterio = (r: any, key: string): string =>
+    criterios[r.academicaId]?.[key] || r.derivados?.[key] || 'none'
+  const esManual = (r: any, key: string) => !!criterios[r.academicaId]?.[key]
+
+  /** Métricas con lo que se ve en pantalla (incluye marcas sin guardar). */
+  const metricasVigentes = (r: any) => {
+    const out: Record<string, any> = { ...(r.metricas || {}) }
+    for (const m of METRIC_COLS) {
+      if (m.manual) out[m.key] = { ...(out[m.key] || {}), estado: estadoCriterio(r, m.key) }
+    }
+    return out
+  }
+
   const generarIA = async (r: any, silent = false) => {
     setGenIA(r.academicaId)
     try {
@@ -126,7 +143,7 @@ export default function ReporteAcademicoPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           academicaId: r.academicaId, numeroId: r.numeroId, salon: data.salon, curso: data.curso,
-          semanaInicio: data.semanaInicio, nombre: r.nombre, sesSemana: r.sesSemana, metricas: r.metricas,
+          semanaInicio: data.semanaInicio, nombre: r.nombre, sesSemana: r.sesSemana, metricas: metricasVigentes(r),
           asistenciaCursoPct: r.asistenciaCursoPct, progresoPct: r.progresoPct, comentariosSemana: r.comentariosSemana,
         }),
       }).then(x => x.json())
@@ -153,13 +170,17 @@ export default function ReporteAcademicoPage() {
     } catch (e: any) { if (!silent) toast.error(e?.message || 'Error al guardar'); throw e } finally { setSavingNota(null) }
   }
 
-  // Clic en un óvalo manual: avanza al siguiente estado del ciclo. Siempre editable,
-  // haya o no sesiones esa semana (es la valoración del Guía, no un derivado).
-  const ciclarCriterio = (academicaId: string, key: string) => {
+  // Clic en un óvalo: avanza al siguiente estado del ciclo partiendo de lo que se
+  // VE. Si las sesiones ya dan un valor, "sin marcar" se salta (hay dato), y al
+  // volver a ese valor se quita la marca manual: el óvalo sigue a las sesiones.
+  const ciclarCriterio = (r: any, key: string) => {
+    const academicaId = r.academicaId
+    const derivado = r.derivados?.[key] || 'none'
     setCriterios(prev => {
       const fila = { ...(prev[academicaId] || {}) }
-      const next = siguienteEstado(fila[key])
-      if (next === 'none') delete fila[key]; else fila[key] = next
+      let next: string = siguienteEstado(fila[key] || derivado)
+      if (next === 'none' && derivado !== 'none') next = siguienteEstado('none')
+      if (next === derivado) delete fila[key]; else fila[key] = next
       return { ...prev, [academicaId]: fila }
     })
     setDirty(true)
@@ -312,7 +333,7 @@ export default function ReporteAcademicoPage() {
               <button onClick={() => window.print()} className="px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">🖨 Imprimir / PDF</button>
             </PermissionGuard>
           </div>
-          <p className="text-gray-500 mb-4 text-sm no-print">Consolidado semanal por salón. <b>Asistió</b> se calcula con la asistencia de las sesiones de la semana; los demás criterios los marca el Guía con clic (cumplió todas → algunas → no cumplió). Recuerda <b>Guardar informe</b>. No aplica a IMPULSA.</p>
+          <p className="text-gray-500 mb-4 text-sm no-print">Consolidado semanal por salón. <b>Asistió</b> se calcula con la asistencia de las sesiones de la semana; los demás criterios salen de la <b>Evaluación de la Sesión</b> que el Guía marca en cada clase, y se pueden corregir con clic (cumplió todas → algunas → no cumplió); el punto morado indica una corrección a mano. Recuerda <b>Guardar informe</b>. No aplica a IMPULSA.</p>
 
           {/* Filtros */}
           <div className="no-print flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
@@ -500,24 +521,31 @@ export default function ReporteAcademicoPage() {
                             <span className={`oval ${r.metricas[m.key]?.estado || 'none'}`} title={`${r.metricas[m.key]?.cumplidas || 0}/${r.sesSemana} sesiones asistidas`}></span>
                           </td>
                         )
-                        // Los 8 restantes los marca SIEMPRE el Guía, haya o no
-                        // sesiones registradas esa semana: es su valoración, no un
-                        // derivado de la asistencia.
-                        const estado = criterios[r.academicaId]?.[m.key] || 'none'
+                        // Los 8 restantes salen de la rúbrica de las sesiones; el
+                        // Guía puede corregirlos con clic y su marca manda. El
+                        // punto bajo el óvalo indica que se corrigió a mano.
+                        const estado = estadoCriterio(r, m.key)
+                        const manual = esManual(r, m.key)
+                        const ev = r.sesionesEvaluadas || 0
+                        const cump = r.metricas?.[m.key]?.cumplidas || 0
+                        const fuente = manual
+                          ? 'marcado a mano en el reporte'
+                          : ev ? `de las sesiones: ${cump}/${ev} evaluadas` : 'sin sesiones evaluadas'
                         return (
                           <td key={m.key} className="text-center py-3 border-b border-gray-100">
                             <button
                               type="button"
                               disabled={!puedeEditar}
-                              onClick={() => ciclarCriterio(r.academicaId, m.key)}
+                              onClick={() => ciclarCriterio(r, m.key)}
                               title={puedeEditar
-                                ? `${m.label}: ${TITULO_ESTADO[estado]} — clic para cambiar`
-                                : `${m.label}: ${TITULO_ESTADO[estado]} (informe cerrado)`}
-                              aria-label={`${m.label} de ${r.nombre}: ${TITULO_ESTADO[estado]}`}
+                                ? `${m.label}: ${TITULO_ESTADO[estado]} (${fuente}) — clic para cambiar`
+                                : `${m.label}: ${TITULO_ESTADO[estado]} (${fuente}) — informe cerrado`}
+                              aria-label={`${m.label} de ${r.nombre}: ${TITULO_ESTADO[estado]}, ${fuente}`}
                               className={`oval-btn ${puedeEditar ? '' : 'is-locked'}`}
                             >
                               <span className={`oval ${estado}`}></span>
                             </button>
+                            {manual && <span className="block mx-auto mt-0.5 w-1 h-1 rounded-full bg-purple-500" aria-hidden />}
                           </td>
                         )
                       })}
@@ -659,7 +687,11 @@ export default function ReporteAcademicoPage() {
                     {METRIC_COLS.map(m => (
                       <div key={m.key} className="flex items-center justify-between px-3 py-2 text-sm">
                         <span className="text-gray-700">{m.ico} {m.label}</span>
-                        <span className="flex items-center gap-2"><span className={`oval ${ov.metricas[m.key]?.estado || 'none'}`}></span><span className="text-xs text-gray-500 tabular-nums">{ov.metricas[m.key]?.cumplidas || 0}/{ov.sesSemana}</span></span>
+                        <span className="flex items-center gap-2"><span className={`oval ${m.manual ? estadoCriterio(ov, m.key) : (ov.metricas[m.key]?.estado || 'none')}`}></span><span className="text-xs text-gray-500 tabular-nums">{
+                          !m.manual ? `${ov.metricas[m.key]?.cumplidas || 0}/${ov.sesSemana}`
+                            : esManual(ov, m.key) ? 'a mano'
+                            : `${ov.metricas[m.key]?.cumplidas || 0}/${ov.sesionesEvaluadas || 0}`
+                        }</span></span>
                       </div>
                     ))}
                   </div>

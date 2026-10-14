@@ -24,6 +24,10 @@ const UPDATABLE_FIELDS = [
   // (no toca 'asistio'/'asistencia'). Sólo es un dato aparte.
   'escusa', 'justificaescusa',
   ...CRITERIOS_EVAL,
+  // Marca que la rúbrica se evaluó (alumno presente). El Reporte Académico sólo
+  // cuenta las sesiones con esta marca: sin ella, una sesión en que nadie miró
+  // la rúbrica se leería como "no cumplió nada".
+  'rubricaEvaluada',
 ];
 
 /**
@@ -103,6 +107,17 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // asistencia = HE_ASISTENCIA y participacion = DA_PARTICIPACION se reusan arriba.
   for (const c of CRITERIOS_EVAL) {
     if (body[c] !== undefined) updateData[c] = !!body[c];
+  }
+  // La rúbrica sólo aplica a quien asistió. Si no asistió, los criterios se
+  // limpian y la sesión no cuenta como evaluada — se resuelve aquí y no sólo en
+  // el front, para que el Reporte Académico nunca reciba "llegó puntual" de un
+  // alumno ausente.
+  if (body.rubricaEvaluada !== undefined) {
+    updateData.rubricaEvaluada = !!body.rubricaEvaluada && asistencia === true;
+  }
+  if (asistencia === false) {
+    for (const c of CRITERIOS_EVAL) updateData[c] = false;
+    if (body.rubricaEvaluada !== undefined) updateData.rubricaEvaluada = false;
   }
   if (calificacion !== undefined && calificacion !== '') {
     const mapped = typeof calificacion === 'string' ? calificacionMap[calificacion] : undefined;

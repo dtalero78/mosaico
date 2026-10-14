@@ -10,6 +10,12 @@ import {
   DocumentTextIcon,
   ExclamationTriangleIcon,
   HandRaisedIcon,
+  ClockIcon,
+  ClipboardDocumentCheckIcon,
+  AcademicCapIcon,
+  TrophyIcon,
+  BoltIcon,
+  VideoCameraIcon,
 } from '@heroicons/react/24/outline'
 import ReportarCasoModal from './ReportarCasoModal'
 import { isJumpStep as esJumpStep } from '@/lib/motor-academico'
@@ -263,14 +269,19 @@ export default function SessionStudentsTab({
   const cursoUpper = String(evento?.nivel || (evento as any)?.curso || '').trim().toUpperCase()
   // Curso IMPULSA (cualquier salón): oculta la casilla de Nivelación.
   const esImpulsa = cursoUpper === 'IMPULSA'
-  // Cursos MOSAICO soroban: ocultan la casilla "Participó en la Sesión".
-  // IMPULSA la conserva. (La "Actividad Propuesta (IA)" ya no vive aquí: se
-  // movió al botón "Actividad IA" de la barra de pestañas, para todo el grupo.)
-  const esCursoMosaico = ['YOJI', 'OKINA', 'KODOMO', 'DANSHI', 'SENPAI'].includes(cursoUpper)
-  // Excepción: en un evento tipo NIVELACION el cierre EXIGE marcar asistencia Y
-  // participación (ver handleSaveClassRecord), así que ahí la casilla se mantiene
-  // aunque el curso sea MOSAICO — si no, la nivelación no se podría cerrar.
-  const mostrarParticipacion = !esCursoMosaico || esNivelacionEvent
+  // (La "Actividad Propuesta (IA)" ya no vive aquí: se movió al botón
+  // "Actividad IA" de la barra de pestañas, para todo el grupo.)
+  // La rúbrica completa (Hábitos / Desempeño / Actitudes) volvió al panel: es la
+  // que alimenta los criterios del Reporte Académico. "Participó activamente" es
+  // `participacion`, la misma casilla que exige el cierre de una nivelación.
+  /** Los 8 criterios sólo aplican a quien asistió. */
+  const rubricaBloqueada = isLocked || !asistencia
+  const limpiarRubrica = () => {
+    setParticipacion(false)
+    setHePuntualidad(false); setHeAsignacion(false)
+    setDaDominio(false); setDaDesafio(false)
+    setAcPermanencia(false); setAcRespeto(false); setAcDisposicion(false)
+  }
   const [showNivelComentario, setShowNivelComentario] = useState(false)
   const [nivelComentarioText, setNivelComentarioText] = useState('')
   const [showNivelReminder, setShowNivelReminder] = useState(false)
@@ -439,6 +450,9 @@ export default function SessionStudentsTab({
           acPermanencia,
           acRespeto,
           acDisposicion,
+          // Guardar desde este panel ES evaluar la rúbrica (las casillas están a
+          // la vista). El endpoint la anula si el alumno no asistió.
+          rubricaEvaluada: asistencia,
           // `calificacion` NO se envía: se retiró del panel porque MOSAICO no la
           // usa. El endpoint sólo la toca si viene, así que lo ya guardado en
           // bookings antiguos se conserva.
@@ -642,30 +656,57 @@ export default function SessionStudentsTab({
             {/* Asistencia y Participación */}
             <div>
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Asistencia</h3>
+                <h3 className="font-semibold text-gray-900 mb-4">Evaluación de la Sesión</h3>
                 <div className="space-y-5">
-                  <div className="space-y-3">
-                    <CritRow
-                      Icon={CheckCircleIcon}
-                      checked={asistencia}
-                      onChange={(v) => {
-                        setAsistencia(v)
-                        // Si asistió no hay ausencia que justificar: se limpia la marca
-                        // y su motivo para no dejar un dato que se contradice.
-                        if (v) { setEscusa(false); setJustificaescusa(''); setEscusaModal(null) }
-                      }}
-                      disabled={isLocked}
-                      label="Asistió a la sesión"
-                    />
-                    {mostrarParticipacion && (
-                      <CritRow Icon={HandRaisedIcon} checked={participacion} onChange={setParticipacion} disabled={isLocked} label="Participó en la Sesión" />
-                    )}
+                  {/* Rúbrica: alimenta los criterios del Reporte Académico. Los 8
+                      criterios se habilitan al marcar "Asistió" (no aplican a un
+                      ausente) y se limpian si se desmarca. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Hábitos</p>
+                      <div className="space-y-3">
+                        <CritRow
+                          Icon={CheckCircleIcon}
+                          checked={asistencia}
+                          onChange={(v) => {
+                            setAsistencia(v)
+                            // Si asistió no hay ausencia que justificar: se limpia la marca
+                            // y su motivo para no dejar un dato que se contradice.
+                            if (v) { setEscusa(false); setJustificaescusa(''); setEscusaModal(null) }
+                            else limpiarRubrica()
+                          }}
+                          disabled={isLocked}
+                          label="Asistió a la clase"
+                        />
+                        <CritRow Icon={ClockIcon} checked={hePuntualidad} onChange={setHePuntualidad} disabled={rubricaBloqueada} label="Llegó puntual" />
+                        <CritRow Icon={ClipboardDocumentCheckIcon} checked={heAsignacion} onChange={setHeAsignacion} disabled={rubricaBloqueada} label="Cumplió la asignación anterior" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Desempeño</p>
+                      <div className="space-y-3">
+                        <CritRow Icon={AcademicCapIcon} checked={daDominio} onChange={setDaDominio} disabled={rubricaBloqueada} label="Demostró dominio del tema" />
+                        <CritRow Icon={HandRaisedIcon} checked={participacion} onChange={setParticipacion} disabled={rubricaBloqueada} label="Participó activamente" />
+                        <CritRow Icon={TrophyIcon} checked={daDesafio} onChange={setDaDesafio} disabled={rubricaBloqueada} label="Completó el Desafío Mosaico" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Actitudes</p>
+                      <div className="space-y-3">
+                        <CritRow Icon={BoltIcon} checked={acPermanencia} onChange={setAcPermanencia} disabled={rubricaBloqueada} label="Permaneció activo toda la sesión" />
+                        <CritRow Icon={UserGroupIcon} checked={acRespeto} onChange={setAcRespeto} disabled={rubricaBloqueada} label="Respetó turnos y a sus compañeros" />
+                        <CritRow Icon={VideoCameraIcon} checked={acDisposicion} onChange={setAcDisposicion} disabled={rubricaBloqueada} label="Uso adecuado de cámara y micrófono" />
+                      </div>
+                    </div>
                   </div>
+                  {!asistencia && !isLocked && (
+                    <p className="-mt-2 text-xs text-gray-400">Marca «Asistió a la clase» para evaluar los demás criterios.</p>
+                  )}
                   {/* Falta justificada — la ausencia se explica, pero SIGUE
                       contando como ausencia (no toca la asistencia). El motivo
                       se pide en un modal: sin justificación la marca no dice
                       nada, así que no se puede dejar vacía. */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-4 border-t border-gray-100">
                     <CritRow
                       Icon={DocumentTextIcon}
                       checked={escusa}
@@ -1109,7 +1150,7 @@ export default function SessionStudentsTab({
             <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">⚠️ Asistencia incompleta</h3>
             <p className="text-sm text-gray-700 mb-4">
               La asistencia de la Nivelación requiere marcar <strong>ambas</strong> opciones:
-              <strong> Asistió a la sesión</strong> y <strong>Participó en la Sesión</strong>.
+              <strong> Asistió a la clase</strong> y <strong>Participó activamente</strong>.
               Si el estudiante no asistió, deja las dos sin marcar.
             </p>
             <div className="flex justify-end">

@@ -72,22 +72,26 @@ export const METRICA_ASISTIO = {
 } as const;
 
 /**
- * Los 8 criterios restantes se capturan A MANO en este reporte y se guardan en
- * REPORTE_ACADEMICO_NOTAS."criterios" (JSONB) por (estudiante, salón, semana).
- * Antes salían de ACADEMICA_BOOKINGS, pero esos campos se retiraron del panel de
- * /sesion/[id], así que ya no tienen quien los alimente.
- * Estados: 'full' (cumplió todas) | 'half' (algunas) | 'empty' (no cumplió);
- * clave ausente = sin marcar.
+ * Los 8 criterios restantes tienen DOS fuentes:
+ *  1. La rúbrica que el Guía marca en cada sesión (/sesion/[id], columna `col`
+ *     del agendamiento). Se resume por semana sobre las sesiones a las que el
+ *     alumno ASISTIÓ y cuya rúbrica se evaluó (`rubricaEvaluada`): todas →
+ *     'full', algunas → 'half', ninguna → 'empty'. Sin sesiones evaluadas → 'none'.
+ *  2. Lo que el Guía marca A MANO en este reporte, guardado en
+ *     REPORTE_ACADEMICO_NOTAS."criterios" (JSONB) por (estudiante, salón, semana).
+ * Manda la 2: si el Guía tocó el óvalo en el reporte, ese valor reemplaza al de
+ * las sesiones (así se conservan las valoraciones hechas antes de que la
+ * rúbrica volviera al panel). Clave ausente = se usa lo de las sesiones.
  */
 export const METRICAS_MANUALES = [
-  { key: 'puntual', label: 'Puntual', grupo: 'HÁBITOS' },
-  { key: 'asignacion', label: 'Asignación', grupo: 'HÁBITOS' },
-  { key: 'dominio', label: 'Dominio', grupo: 'DESEMPEÑO' },
-  { key: 'participo', label: 'Participó', grupo: 'DESEMPEÑO' },
-  { key: 'desafio', label: 'Desafío', grupo: 'DESEMPEÑO' },
-  { key: 'activo', label: 'Activo', grupo: 'ACTITUDES' },
-  { key: 'respeto', label: 'Respeto', grupo: 'ACTITUDES' },
-  { key: 'camara', label: 'Cámara', grupo: 'ACTITUDES' },
+  { key: 'puntual', label: 'Puntual', grupo: 'HÁBITOS', col: 'hePuntualidad' },
+  { key: 'asignacion', label: 'Asignación', grupo: 'HÁBITOS', col: 'heAsignacion' },
+  { key: 'dominio', label: 'Dominio', grupo: 'DESEMPEÑO', col: 'daDominio' },
+  { key: 'participo', label: 'Participó', grupo: 'DESEMPEÑO', col: 'participacion' },
+  { key: 'desafio', label: 'Desafío', grupo: 'DESEMPEÑO', col: 'daDesafio' },
+  { key: 'activo', label: 'Activo', grupo: 'ACTITUDES', col: 'acPermanencia' },
+  { key: 'respeto', label: 'Respeto', grupo: 'ACTITUDES', col: 'acRespeto' },
+  { key: 'camara', label: 'Cámara', grupo: 'ACTITUDES', col: 'acDisposicion' },
 ] as const;
 
 /** Orden de las columnas en la tabla (3 grupos de 3). */
@@ -288,9 +292,15 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
     };
   }
 
-  // Único agregado desde las sesiones: la asistencia. Los otros 8 criterios son
-  // manuales y se leen de REPORTE_ACADEMICO_NOTAS."criterios".
-  const metricAgg = `COUNT(*) FILTER (WHERE ${METRICA_ASISTIO.expr}) AS "c_asistio"`;
+  // Desde las sesiones: la asistencia y la rúbrica de los 8 criterios. La rúbrica
+  // sólo cuenta en sesiones asistidas y evaluadas (`rubricaEvaluada`); lo que el
+  // Guía marque a mano en REPORTE_ACADEMICO_NOTAS."criterios" la reemplaza.
+  const evaluada = `${METRICA_ASISTIO.expr} AND b."rubricaEvaluada" IS TRUE`;
+  const metricAgg = [
+    `COUNT(*) FILTER (WHERE ${METRICA_ASISTIO.expr}) AS "c_asistio"`,
+    `COUNT(*) FILTER (WHERE ${evaluada}) AS "c_evaluadas"`,
+    ...METRICAS_MANUALES.map(m => `COUNT(*) FILTER (WHERE ${evaluada} AND b."${m.col}" IS TRUE) AS "c_${m.key}"`),
+  ].join(',\n             ');
 
   const sql = `
     SELECT
@@ -298,8 +308,7 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
       TRIM(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido")) AS "nombre",
       p."plataforma", p."apoderado", p."apoderadoTelefono",
       acad."academicaId", acad."nivel", acad."step",
-      sem."sesSemana", sem."c_asistio",
-      sem."comentariosSemana",
+      sem.*,
       cur."totalCurso", cur."asistidasCurso",
       prog."ordenActual", prog."ordenMax",
       nota."comentarioIA", nota."notaGuia", nota."criterios"
@@ -346,19 +355,28 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
 
   const out = rows.map((r) => {
     const ses = Number(r.sesSemana) || 0;
-    const metricas: Record<string, { cumplidas: number; sesiones: number; estado: string }> = {};
+    const metricas: Record<string, { cumplidas: number; sesiones: number; estado: string; origen?: 'manual' | 'sesion' | 'none' }> = {};
 
     // Asistió: automático, según las sesiones asistidas de la semana.
     const cAsistio = Number(r.c_asistio) || 0;
     metricas.asistio = { cumplidas: cAsistio, sesiones: ses, estado: ovalo(cAsistio, ses) };
 
-    // Los 8 restantes: lo que el Guía guardó a mano. Sin marcar → 'none' (igual
-    // que "sin sesión" a la vista, pero editable mientras haya sesiones).
+    // Los 8 restantes: lo marcado a mano en el reporte manda; si no, el resumen
+    // de la rúbrica de las sesiones evaluadas de la semana.
     const criterios = sanitizeCriterios(
       typeof r.criterios === 'string' ? (() => { try { return JSON.parse(r.criterios); } catch { return {}; } })() : r.criterios
     );
+    const evaluadas = Number(r.c_evaluadas) || 0;
+    const derivados: Record<string, string> = {};
     for (const m of METRICAS_MANUALES) {
-      metricas[m.key] = { cumplidas: 0, sesiones: ses, estado: criterios[m.key] || 'none' };
+      const cumplidas = Number(r[`c_${m.key}`]) || 0;
+      derivados[m.key] = ovalo(cumplidas, evaluadas);
+      const manual = criterios[m.key];
+      metricas[m.key] = {
+        cumplidas, sesiones: evaluadas,
+        estado: manual || derivados[m.key],
+        origen: manual ? 'manual' : (evaluadas ? 'sesion' : 'none'),
+      };
     }
     const totalCurso = Number(r.totalCurso) || 0;
     const asistidasCurso = Number(r.asistidasCurso) || 0;
@@ -369,7 +387,7 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
       nombre: r.nombre || '(sin nombre)', plataforma: r.plataforma || '',
       apoderado: r.apoderado || '', apoderadoTelefono: r.apoderadoTelefono || '',
       nivel: r.nivel || '', step: r.step || '',
-      sesSemana: ses, metricas, criterios,
+      sesSemana: ses, metricas, criterios, derivados, sesionesEvaluadas: evaluadas,
       asistidasCurso, totalCurso,
       asistenciaCursoPct: totalCurso ? Math.round((asistidasCurso / totalCurso) * 100) : 0,
       progresoPct: ordenMax ? Math.round((ordenActual / ordenMax) * 100) : 0,
