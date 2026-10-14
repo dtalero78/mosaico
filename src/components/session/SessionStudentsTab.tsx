@@ -276,12 +276,18 @@ export default function SessionStudentsTab({
   // `participacion`, la misma casilla que exige el cierre de una nivelación.
   /** Los 8 criterios sólo aplican a quien asistió. */
   const rubricaBloqueada = isLocked || !asistencia
-  const limpiarRubrica = () => {
-    setParticipacion(false)
-    setHePuntualidad(false); setHeAsignacion(false)
-    setDaDominio(false); setDaDesafio(false)
-    setAcPermanencia(false); setAcRespeto(false); setAcDisposicion(false)
+  /** Pone los 8 criterios en un mismo valor. */
+  const fijarRubrica = (v: boolean) => {
+    setParticipacion(v)
+    setHePuntualidad(v); setHeAsignacion(v)
+    setDaDominio(v); setDaDesafio(v)
+    setAcPermanencia(v); setAcRespeto(v); setAcDisposicion(v)
   }
+  const limpiarRubrica = () => fijarRubrica(false)
+  // Por defecto los 8 criterios vienen MARCADOS: al marcar "Asistió" el guía sólo
+  // desmarca lo que el alumno no cumplió. "Asistió" en sí NO viene marcado —
+  // marcarlo por defecto registraría como presente a todo alumno que el guía no
+  // tocara.
   const [showNivelComentario, setShowNivelComentario] = useState(false)
   const [nivelComentarioText, setNivelComentarioText] = useState('')
   const [showNivelReminder, setShowNivelReminder] = useState(false)
@@ -393,6 +399,10 @@ export default function SessionStudentsTab({
       setAcPermanencia(cr.acPermanencia || false)
       setAcRespeto(cr.acRespeto || false)
       setAcDisposicion(cr.acDisposicion || false)
+      // Asistencia ya marcada pero rúbrica nunca evaluada (guardada antes de que
+      // volviera la rúbrica): se ofrece con el valor por defecto, todo marcado.
+      // Si ya se evaluó, se respeta lo que guardó el guía.
+      if (selectedStudent.classRecord.asistencia && !cr.rubricaEvaluada) fijarRubrica(true)
     } else {
       resetForm()
     }
@@ -672,7 +682,7 @@ export default function SessionStudentsTab({
                             setAsistencia(v)
                             // Si asistió no hay ausencia que justificar: se limpia la marca
                             // y su motivo para no dejar un dato que se contradice.
-                            if (v) { setEscusa(false); setJustificaescusa(''); setEscusaModal(null) }
+                            if (v) { setEscusa(false); setJustificaescusa(''); setEscusaModal(null); fijarRubrica(true) }
                             else limpiarRubrica()
                           }}
                           disabled={isLocked}

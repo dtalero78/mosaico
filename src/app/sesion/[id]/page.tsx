@@ -85,6 +85,8 @@ interface ClassRecord {
   acPermanencia?: boolean
   acRespeto?: boolean
   acDisposicion?: boolean
+  /** La rúbrica ya se guardó con el alumno presente: sus valores son los del guía. */
+  rubricaEvaluada?: boolean
   nivel?: string
   step?: string
   /** Ausencia justificada + su motivo. La falta sigue contando como ausencia. */
@@ -223,6 +225,7 @@ export default function SesionPage() {
               acPermanencia: booking.acPermanencia ?? false,
               acRespeto: booking.acRespeto ?? false,
               acDisposicion: booking.acDisposicion ?? false,
+              rubricaEvaluada: booking.rubricaEvaluada === true,
               nivel: booking.nivel,
               step: booking.step,
               escusa: booking.escusa ?? false,
