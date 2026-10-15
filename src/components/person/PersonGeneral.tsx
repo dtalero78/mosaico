@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Person } from '@/types'
 import { formatDate } from '@/lib/utils'
-import { ArrowDownTrayIcon, PaperClipIcon } from '@heroicons/react/24/outline'
+import { ArrowDownTrayIcon, PaperClipIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
 import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import PersonContractViewer from './PersonContractViewer'
@@ -39,6 +39,20 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
     <div className="space-y-8">
       {/* Action Buttons + Suspendida badge */}
       <div className="flex items-center flex-wrap gap-3">
+        {/* Resumen de la matrícula (misma vista de LGS). Acepta el _id del titular
+            o de un beneficiario: el endpoint resuelve al titular del contrato. */}
+        <PermissionGuard permission={PersonPermission.RESUMEN}>
+          <a
+            href={`/dashboard/comercial/matriculas/${person._id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium"
+            title="Ver el resumen de la matrícula"
+          >
+            <ClipboardDocumentListIcon className="h-4 w-4" />
+            Resumen
+          </a>
+        </PermissionGuard>
         <PermissionGuard permission={PersonPermission.VER_CONTRATO}>
           <PersonContractViewer person={person as any} />
         </PermissionGuard>

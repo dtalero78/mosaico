@@ -410,6 +410,14 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
  * Rutas genéricas que tienen acceso basado en permisos amplios
  */
 export const GENERIC_ROUTE_ACCESS: Record<string, Permission[]> = {
+  // Resumen de Matrícula (/dashboard/comercial/matriculas/[id]): lo abre el botón
+  // "Resumen" de la ficha /person. Va ANTES de '/dashboard/comercial' porque se
+  // recorre en orden y el primer prefijo que coincide decide: si no, exigiría los
+  // permisos COMERCIAL.* y un rol con sólo PERSON.INFO.RESUMEN quedaría fuera.
+  '/dashboard/comercial/matriculas/': [
+    'PERSON.INFO.RESUMEN' as Permission,
+  ],
+
   '/dashboard/academic': [
     // Cualquier permiso ACADEMICO.* da acceso a la sección
     'ACADEMICO.AGENDA.VER_CALENDARIO' as Permission,

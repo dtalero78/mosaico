@@ -40,6 +40,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Botón que abre un modal con la plantilla del contrato completamente llenada (solo lectura, sin opciones de impresión/firma/envío PDF)',
   },
   {
+    code: PersonPermission.RESUMEN,
+    module: Module.PERSON,
+    section: 'Información General',
+    name: 'Botón "Resumen"',
+    description: 'Botón de la ficha /person que abre el Resumen de Matrícula (/dashboard/comercial/matriculas/[id]): tarjeta del titular con el estado del contrato y una tarjeta por beneficiario con su curso, salón, horario, cupo, apoderado y perfil académico. Funciona desde la ficha del titular o de cualquier beneficiario.',
+  },
+  {
     code: PersonPermission.ASIGNAR_GESTOR_RECAUDO,
     module: Module.PERSON,
     section: 'Financiera',
