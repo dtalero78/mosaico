@@ -136,8 +136,22 @@ export default function StudentAcademic({ student, classes: initialClasses, view
     }
   }, [student.nivel, student._id])
 
+  // Tarjetas de la Tabla de Asistencia (conteos del servidor, sobre TODO el
+  // historial: la tabla puede venir recortada a pasadas + semana siguiente).
+  const [resumen, setResumen] = useState<{
+    sesiones: number; nivelaciones: number; talleres: number
+    evaluacionesAprobadas: number; evaluacionesPresentadas: number; entrenamientosRealizados: number
+  } | null>(null)
+  const cargarResumen = async () => {
+    try {
+      const r = await fetch(`/api/postgres/students/${student._id}/resumen-actividad`, { cache: 'no-store' }).then(x => x.json())
+      if (r.success) setResumen(r)
+    } catch { /* las tarjetas son informativas: sin ellas la tabla sigue */ }
+  }
+
   // Función para recargar datos frescos
   const refreshStudentData = async () => {
+    cargarResumen()
     try {
       console.log('🔄 Recargando datos del estudiante...')
       const response = await fetch(`/api/postgres/students/${student._id}/academic?_t=${Date.now()}${verFuturas ? '&futuras=1' : ''}`)
@@ -823,6 +837,26 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const renderAttendanceTable = () => (
     <div>
       <h3 className="text-lg font-medium text-gray-900 mb-4">Tabla de Asistencia</h3>
+
+      {/* Resumen de la actividad del alumno */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+        {[
+          { label: 'Sesiones asistidas', valor: resumen?.sesiones, cls: 'bg-blue-50 border-blue-200 text-blue-700' },
+          { label: 'Nivelaciones asistidas', valor: resumen?.nivelaciones, cls: 'bg-amber-50 border-amber-200 text-amber-700' },
+          { label: 'Talleres asistidos', valor: resumen?.talleres, cls: 'bg-green-50 border-green-200 text-green-700' },
+          {
+            label: 'Evaluaciones aprobadas', valor: resumen?.evaluacionesAprobadas, cls: 'bg-rose-50 border-rose-200 text-rose-700',
+            extra: resumen ? `de ${resumen.evaluacionesPresentadas} presentada(s)` : undefined,
+          },
+          { label: 'Entrenamientos realizados', valor: resumen?.entrenamientosRealizados, cls: 'bg-sky-50 border-sky-200 text-sky-700' },
+        ].map(t => (
+          <div key={t.label} className={`rounded-lg border px-4 py-3 ${t.cls}`}>
+            <div className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{t.label}</div>
+            <div className="text-2xl font-bold mt-0.5">{t.valor ?? '—'}</div>
+            {t.extra && <div className="text-[11px] opacity-80">{t.extra}</div>}
+          </div>
+        ))}
+      </div>
 
       {/* Filters */}
       <div className="bg-gray-50 rounded-lg p-4 mb-4">

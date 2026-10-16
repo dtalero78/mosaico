@@ -9,10 +9,18 @@
  * REPORTE_ACADEMICO_NOTAS."criterios" se agrega `microfono` con el valor de
  * `camara` donde exista (y no se pisa un `microfono` que ya esté).
  *
- * Idempotente. Con `lock_timeout` para no encolar a producción.
+ * Con `lock_timeout` para no encolar a producción.
  *
- * Uso: node scripts/split-camara-microfono.js [--apply]
+ * ⚠ YA APLICADO (16-oct-2026, antes y después del deploy d844db9). NO volver a
+ * correrlo: con el código nuevo un Guía puede dejar micrófono sin marcar a
+ * propósito, y esta copia se lo pisaría. Por eso exige --ya-se-que-esta-aplicado.
+ *
+ * Uso: node scripts/split-camara-microfono.js [--apply --ya-se-que-esta-aplicado]
  */
+if (process.argv.includes('--apply') && !process.argv.includes('--ya-se-que-esta-aplicado')) {
+  console.error('❌ Este script ya se aplicó. Re-correrlo pisaría micrófonos desmarcados a propósito (ver cabecera).');
+  process.exit(1);
+}
 const { Pool } = require('pg');
 require('dotenv').config({ path: '.env.local' });
 
