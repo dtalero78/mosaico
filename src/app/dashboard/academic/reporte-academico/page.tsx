@@ -9,7 +9,8 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { MENSAJE_FUERA_DE_VENTANA } from '@/lib/reporte-academico-ventana'
 
 // `manual: false` = "Asistió", que se calcula solo con la asistencia marcada en
-// cada sesión de la semana. Los otros 8 los marca el Guía aquí mismo.
+// cada sesión de la semana. Los otros 9 salen de la rúbrica de las sesiones y
+// sólo los corrige quien revisa (el Guía los ve en solo lectura).
 const METRIC_COLS = [
   { key: 'asistio', label: 'Asistió', ico: '✅', grupo: 'HÁBITOS', manual: false },
   { key: 'puntual', label: 'Puntual', ico: '⏰', grupo: 'HÁBITOS', manual: true },
@@ -20,6 +21,7 @@ const METRIC_COLS = [
   { key: 'activo', label: 'Activo', ico: '⚡', grupo: 'ACTITUDES', manual: true },
   { key: 'respeto', label: 'Respeto', ico: '🤝', grupo: 'ACTITUDES', manual: true },
   { key: 'camara', label: 'Cámara', ico: '🎥', grupo: 'ACTITUDES', manual: true },
+  { key: 'microfono', label: 'Micrófono', ico: '🎙', grupo: 'ACTITUDES', manual: true },
 ]
 
 // Ciclo del óvalo al hacer clic: sin marcar → cumplió todas → algunas → no cumplió → sin marcar.
@@ -71,7 +73,9 @@ export default function ReporteAcademicoPage() {
   const esGuia = isRole(Role.ADVISOR) // Role.ADVISOR = 'GUIA'
   const puedeEnviar = !permLoading && !esGuia
   const puedeRevisar = hasPermission(AcademicoPermission.REPORTE_ACADEMICO_REVISAR as any)
-  const esSuperAdmin = isRole(Role.SUPER_ADMIN)
+  // Quien revisa (Coordinación / admin): corrige los criterios, cierra en
+  // definitivo con «Guardar informe» y envía al apoderado. Nunca un Guía.
+  const esRevisor = !permLoading && !esGuia && puedeRevisar
 
   // Selección (individual/masivo) + estado de la acción en bloque.
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
@@ -198,7 +202,9 @@ export default function ReporteAcademicoPage() {
           salon: data.salon, semanaInicio: data.semanaInicio,
           items: rows.map((r: any) => ({
             academicaId: r.academicaId, numeroId: r.numeroId, curso: data.curso, campaign: data.campaign || undefined,
-            criterios: criterios[r.academicaId] || {},
+            // Los criterios sólo los manda quien revisa: el servidor descarta los
+            // de un Guía.
+            ...(esRevisor ? { criterios: criterios[r.academicaId] || {} } : {}),
             comentarioIA: comentIA[r.academicaId] || '',
             notaGuia: notas[r.academicaId] || '',
           })),
@@ -218,7 +224,9 @@ export default function ReporteAcademicoPage() {
     try {
       const res = await fetch('/api/postgres/reports/academico/reporte-academico/enviar-whatsapp', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ academicaId: r.academicaId, curso: data.curso, salon: data.salon, guia: applied.guia || undefined, startDate: applied.startDate || undefined, endDate: applied.endDate || undefined }),
+        // La campaña va siempre: el mismo salón existe en varias campañas y, sin
+        // ella, el servidor armaría el informe de la campaña más reciente.
+        body: JSON.stringify({ academicaId: r.academicaId, curso: data.curso, salon: data.salon, campaign: data.campaign || undefined, guia: applied.guia || undefined, startDate: applied.startDate || undefined, endDate: applied.endDate || undefined }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
       if (!silent) toast.success(`Enviado al apoderado (${res.to})`)
@@ -229,9 +237,9 @@ export default function ReporteAcademicoPage() {
 
   // Estado del informe del salón. El backend valida lo mismo: esto sólo evita
   // mostrar controles que igualmente serían rechazados.
-  //   BORRADOR     → el Guía edita y guarda las veces que quiera.
+  //   BORRADOR     → el Guía escribe comentario y actividad; quien revisa, todo.
   //   CERRADO_GUIA → sólo quien tenga el permiso de revisar.
-  //   DEFINITIVO   → sólo SUPER_ADMIN.
+  //   DEFINITIVO   → nadie; es el único estado en que se envía al apoderado.
   const estadoCierre: 'BORRADOR' | 'CERRADO_GUIA' | 'DEFINITIVO' = data?.cierre?.estado || 'BORRADOR'
   // El Guía sólo gestiona de miércoles a domingo (hora de CHILE, que la manda el
   // servidor: el reloj del navegador puede estar en otro huso). Fuera de esos
@@ -242,16 +250,24 @@ export default function ReporteAcademicoPage() {
     fueraDeVentana ? false
       : estadoCierre === 'BORRADOR' ? true
         : estadoCierre === 'CERRADO_GUIA' ? puedeRevisar
-          : esSuperAdmin
-  const puedeCerrarGuia = !fueraDeVentana && estadoCierre === 'BORRADOR' && rows.length > 0
-  const puedeCerrarDefinitivo = estadoCierre === 'CERRADO_GUIA' && puedeRevisar && rows.length > 0
+          : false
+  // Los óvalos se alimentan de las sesiones: sólo quien revisa los corrige.
+  const puedeEditarCriterios = puedeEditar && esRevisor
+  const puedeCerrarGuia = !esRevisor && !fueraDeVentana && estadoCierre === 'BORRADOR' && rows.length > 0
+  // «Guardar informe» de quien revisa: guarda y cierra en definitivo, también si
+  // el Guía no lo envió (Coordinación cerrando en su lugar).
+  const puedeCerrarDefinitivo = esRevisor && estadoCierre !== 'DEFINITIVO' && rows.length > 0
+  const puedeEnviarApoderado = puedeEnviar && estadoCierre === 'DEFINITIVO'
+  const motivoNoEnvio = estadoCierre === 'DEFINITIVO' ? '' : 'Primero hay que cerrar el informe con «Guardar informe»'
 
   const cerrarInforme = async (accion: 'GUIA' | 'DEFINITIVO') => {
     if (!data?.curso || !data?.salon || !data?.campaign || !data?.semanaInicio) return
     setCerrando(accion)
     try {
       // Lo que esté sin guardar se guarda antes de cerrar, para no perder marcas.
-      if (dirty) await guardarInforme(true)
+      // El cierre definitivo ES «Guardar informe»: guarda siempre (también los
+      // textos, que no marcan `dirty`) y después cierra.
+      if (dirty || accion === 'DEFINITIVO') await guardarInforme(true)
       const res = await fetch('/api/postgres/reports/academico/reporte-academico/cerrar', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -260,7 +276,7 @@ export default function ReporteAcademicoPage() {
         }),
       }).then(x => x.json())
       if (res.error) throw new Error(res.error)
-      toast.success(accion === 'GUIA' ? 'Informe cerrado y enviado a revisión' : 'Cierre definitivo aplicado')
+      toast.success(accion === 'GUIA' ? 'Informe cerrado y enviado a revisión' : 'Informe guardado y cerrado: ya se puede enviar a los apoderados')
       setConfirmarCierre(null)
       fetchData(applied)
     } catch (e: any) {
@@ -333,7 +349,9 @@ export default function ReporteAcademicoPage() {
               <button onClick={() => window.print()} className="px-3 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">🖨 Imprimir / PDF</button>
             </PermissionGuard>
           </div>
-          <p className="text-gray-500 mb-4 text-sm no-print">Consolidado semanal por salón. <b>Asistió</b> se calcula con la asistencia de las sesiones de la semana; los demás criterios salen de la <b>Evaluación de la Sesión</b> que el Guía marca en cada clase, y se pueden corregir con clic (cumplió todas → algunas → no cumplió); el punto morado indica una corrección a mano. Recuerda <b>Guardar informe</b>. No aplica a IMPULSA.</p>
+          <p className="text-gray-500 mb-4 text-sm no-print">Consolidado semanal por salón. <b>Asistió</b> se calcula con la asistencia de las sesiones de la semana; los demás criterios salen de la <b>Evaluación de la Sesión</b> que el Guía marca en cada clase. {esRevisor
+            ? <>Como revisor puedes corregirlos con clic (cumplió todas → algunas → no cumplió); el punto morado indica una corrección a mano. <b>Guardar informe</b> lo cierra en definitivo y habilita el envío a los apoderados.</>
+            : <>El Guía escribe el comentario y la actividad individual y lo envía a revisión; Coordinación lo cierra y lo envía a los apoderados.</>} No aplica a IMPULSA.</p>
 
           {/* Filtros */}
           <div className="no-print flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
@@ -454,7 +472,9 @@ export default function ReporteAcademicoPage() {
                   </span>
                 )}
                 {estadoCierre === 'BORRADOR' && (
-                  <span className="text-xs text-gray-500">Asistió es automático; los demás se marcan con clic</span>
+                  <span className="text-xs text-gray-500">
+                    {esRevisor ? 'Los criterios salen de las sesiones; puedes corregirlos con clic' : 'Los criterios salen de las sesiones (solo lectura)'}
+                  </span>
                 )}
                 {dirty && <span className="no-print text-xs font-semibold text-amber-600">● Cambios sin guardar</span>}
 
@@ -463,7 +483,7 @@ export default function ReporteAcademicoPage() {
                     type="button" onClick={() => guardarInforme()} disabled={guardandoInforme || rows.length === 0}
                     className="no-print px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-40"
                   >
-                    {guardandoInforme ? 'Guardando…' : '💾 Guardar informe'}
+                    {guardandoInforme ? 'Guardando…' : (esRevisor ? '💾 Guardar cambios' : '💾 Guardar')}
                   </button>
                 )}
                 {puedeCerrarGuia && (
@@ -478,10 +498,10 @@ export default function ReporteAcademicoPage() {
                 {puedeCerrarDefinitivo && (
                   <button
                     type="button" onClick={() => setConfirmarCierre('DEFINITIVO')} disabled={!!cerrando}
-                    title="Cierre definitivo: después nadie podrá modificarlo"
+                    title="Guarda y cierra en definitivo: después nadie podrá modificarlo y se podrá enviar a los apoderados"
                     className="no-print px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
                   >
-                    ✅ Guardar definitivo
+                    ✅ Guardar informe
                   </button>
                 )}
               </div>
@@ -493,7 +513,7 @@ export default function ReporteAcademicoPage() {
                     <th rowSpan={2} className="sticky left-0 bg-white text-left text-xs font-semibold text-gray-600 px-4 pb-3 pt-2 align-bottom border-b border-gray-200 min-w-[160px]">Estudiante</th>
                     <th colSpan={3} className="text-[10px] uppercase tracking-wide text-purple-700 font-bold text-center pt-2 pb-1 border-b border-gray-100">Hábitos</th>
                     <th colSpan={3} className="text-[10px] uppercase tracking-wide text-fuchsia-600 font-bold text-center pt-2 pb-1 border-b border-gray-100">Desempeño</th>
-                    <th colSpan={3} className="text-[10px] uppercase tracking-wide text-cyan-700 font-bold text-center pt-2 pb-1 border-b border-gray-100">Actitudes</th>
+                    <th colSpan={4} className="text-[10px] uppercase tracking-wide text-cyan-700 font-bold text-center pt-2 pb-1 border-b border-gray-100">Actitudes</th>
                     <th rowSpan={2} className="text-xs font-semibold text-gray-600 text-center px-2 pb-3 pt-2 align-bottom border-b border-gray-200">Sesiones</th>
                   </tr>
                   <tr>
@@ -506,9 +526,9 @@ export default function ReporteAcademicoPage() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={11} className="text-center text-sm text-gray-400 py-10">Cargando…</td></tr>
+                    <tr><td colSpan={12} className="text-center text-sm text-gray-400 py-10">Cargando…</td></tr>
                   ) : rows.length === 0 ? (
-                    <tr><td colSpan={11} className="text-center text-sm text-gray-400 py-10">{data?.sinCurso ? 'Selecciona curso y salón.' : 'Sin estudiantes en este salón / semana.'}</td></tr>
+                    <tr><td colSpan={12} className="text-center text-sm text-gray-400 py-10">{data?.sinCurso ? 'Selecciona curso y salón.' : 'Sin estudiantes en este salón / semana.'}</td></tr>
                   ) : rows.map((r: any) => (
                     <tr key={r.academicaId} className="hover:bg-purple-50/40">
                       <td className="sticky left-0 bg-white px-4 py-3 border-b border-gray-100">
@@ -521,8 +541,8 @@ export default function ReporteAcademicoPage() {
                             <span className={`oval ${r.metricas[m.key]?.estado || 'none'}`} title={`${r.metricas[m.key]?.cumplidas || 0}/${r.sesSemana} sesiones asistidas`}></span>
                           </td>
                         )
-                        // Los 8 restantes salen de la rúbrica de las sesiones; el
-                        // Guía puede corregirlos con clic y su marca manda. El
+                        // Los 9 restantes salen de la rúbrica de las sesiones; sólo
+                        // quien revisa los corrige con clic, y su marca manda. El
                         // punto bajo el óvalo indica que se corrigió a mano.
                         const estado = estadoCriterio(r, m.key)
                         const manual = esManual(r, m.key)
@@ -535,13 +555,13 @@ export default function ReporteAcademicoPage() {
                           <td key={m.key} className="text-center py-3 border-b border-gray-100">
                             <button
                               type="button"
-                              disabled={!puedeEditar}
+                              disabled={!puedeEditarCriterios}
                               onClick={() => ciclarCriterio(r, m.key)}
-                              title={puedeEditar
+                              title={puedeEditarCriterios
                                 ? `${m.label}: ${TITULO_ESTADO[estado]} (${fuente}) — clic para cambiar`
-                                : `${m.label}: ${TITULO_ESTADO[estado]} (${fuente}) — informe cerrado`}
+                                : `${m.label}: ${TITULO_ESTADO[estado]} (${fuente}) — ${!esRevisor ? 'sale de las sesiones; lo corrige Coordinación' : 'informe cerrado'}`}
                               aria-label={`${m.label} de ${r.nombre}: ${TITULO_ESTADO[estado]}, ${fuente}`}
-                              className={`oval-btn ${puedeEditar ? '' : 'is-locked'}`}
+                              className={`oval-btn ${puedeEditarCriterios ? '' : 'is-locked'}`}
                             >
                               <span className={`oval ${estado}`}></span>
                             </button>
@@ -579,7 +599,8 @@ export default function ReporteAcademicoPage() {
                   <button type="button" onClick={() => correrMasivo('Guardar', guardarNota)} disabled={!puedeEditar || !!bulk || seleccion.size === 0}
                     className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-40">Guardar valoración</button>
                   {puedeEnviar && (
-                    <button type="button" onClick={() => correrMasivo('Enviar', enviarWhatsapp)} disabled={!!bulk || seleccion.size === 0}
+                    <button type="button" onClick={() => correrMasivo('Enviar', enviarWhatsapp)} disabled={!puedeEnviarApoderado || !!bulk || seleccion.size === 0}
+                      title={motivoNoEnvio || 'Envía el PDF del informe al apoderado de cada seleccionado'}
                       className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-40">📲 Enviar</button>
                   )}
                   {bulk && <span className="text-xs text-purple-700 font-medium">{bulk.tipo}: {bulk.done}/{bulk.total}…</span>}
@@ -638,7 +659,7 @@ export default function ReporteAcademicoPage() {
             <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 no-print" onClick={() => !cerrando && setConfirmarCierre(null)}>
               <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                  {confirmarCierre === 'GUIA' ? 'Cerrar informe y enviar a revisión' : 'Aplicar cierre definitivo'}
+                  {confirmarCierre === 'GUIA' ? 'Cerrar informe y enviar a revisión' : 'Guardar informe (cierre definitivo)'}
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
                   {data?.curso} · Salón {data?.salon} · {data?.campaign} · semana del {data?.semanaInicio ? fmtFecha(data.semanaInicio) : ''}
@@ -649,7 +670,7 @@ export default function ReporteAcademicoPage() {
                   {confirmarCierre === 'GUIA' ? (
                     <>Después de cerrarlo <b>ya no podrás modificar</b> el informe de esta semana. Quedará a la espera de la revisión.</>
                   ) : (
-                    <>Este es el <b>cierre definitivo</b>. Después nadie podrá modificar el informe de esta semana.</>
+                    <>Se guardan los cambios y el informe queda <b>cerrado en definitivo</b>: después nadie podrá modificarlo y se podrá enviar a los apoderados.{estadoCierre === 'BORRADOR' && <span className="block mt-1">El Guía aún no lo envió a revisión: quedará como cerrado por Coordinación.</span>}</>
                   )}
                   {dirty && <span className="block mt-1">Los cambios sin guardar se guardarán antes de cerrar.</span>}
                 </div>
@@ -660,7 +681,7 @@ export default function ReporteAcademicoPage() {
                     className={`px-4 py-2 text-sm text-white rounded-lg disabled:opacity-50 font-medium ${
                       confirmarCierre === 'GUIA' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
                     }`}>
-                    {cerrando ? 'Cerrando…' : confirmarCierre === 'GUIA' ? 'Cerrar informe' : 'Cerrar definitivo'}
+                    {cerrando ? 'Cerrando…' : confirmarCierre === 'GUIA' ? 'Cerrar informe' : 'Guardar y cerrar'}
                   </button>
                 </div>
               </div>
@@ -708,14 +729,15 @@ export default function ReporteAcademicoPage() {
                   </div>
                   {puedeEnviar && (
                     <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
-                      {ov.apoderadoTelefono ? <>Se enviará el PDF de este informe al apoderado <b>{ov.apoderado || ''}</b> (••••{String(ov.apoderadoTelefono).slice(-4)}).</> : <>⚠ El apoderado no tiene teléfono registrado; no se puede enviar por WhatsApp.</>}
+                      {motivoNoEnvio ? <>⚠ {motivoNoEnvio}: el informe enviado al apoderado ya no debe cambiar.</> : ov.apoderadoTelefono ? <>Se enviará el PDF de este informe al apoderado <b>{ov.apoderado || ''}</b> (••••{String(ov.apoderadoTelefono).slice(-4)}).</> : <>⚠ El apoderado no tiene teléfono registrado; no se puede enviar por WhatsApp.</>}
                     </div>
                   )}
                 </div>
                 <div className="flex justify-end gap-3 px-5 py-3 border-t border-gray-100">
                   <button onClick={() => setIndividual(null)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">Cerrar</button>
                   {puedeEnviar && (
-                    <button onClick={() => enviarWhatsapp(ov)} disabled={enviando || !ov.apoderadoTelefono}
+                    <button onClick={() => enviarWhatsapp(ov)} disabled={!puedeEnviarApoderado || enviando || !ov.apoderadoTelefono}
+                      title={motivoNoEnvio || undefined}
                       className="px-5 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50">
                       {enviando ? 'Enviando…' : '📲 Enviar por WhatsApp'}
                     </button>

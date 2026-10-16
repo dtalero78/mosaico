@@ -13,7 +13,9 @@ import { guiaIdDeSesion } from '@/services/guia-sesion.service';
 const CRITERIOS_EVAL = [
   'hePuntualidad', 'heAsignacion',                 // Hábitos
   'daDominio', 'daDesafio',                          // Desempeño
-  'acPermanencia', 'acRespeto', 'acDisposicion',     // Actitudes
+  // acDisposicion = «Uso adecuado de cámara»; acMicrofono = «… de micrófono»
+  // (hasta oct-2026 eran un solo criterio, en acDisposicion).
+  'acPermanencia', 'acRespeto', 'acDisposicion', 'acMicrofono', // Actitudes
 ];
 
 const UPDATABLE_FIELDS = [

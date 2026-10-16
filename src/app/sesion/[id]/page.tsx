@@ -84,7 +84,8 @@ interface ClassRecord {
   daDesafio?: boolean
   acPermanencia?: boolean
   acRespeto?: boolean
-  acDisposicion?: boolean
+  acDisposicion?: boolean   // uso adecuado de cámara
+  acMicrofono?: boolean     // uso adecuado de micrófono
   /** true = rúbrica guardada con el alumno presente; false = guardado ausente;
    *  null = nunca se guardó desde el panel. */
   rubricaEvaluada?: boolean | null
@@ -226,6 +227,7 @@ export default function SesionPage() {
               acPermanencia: booking.acPermanencia ?? false,
               acRespeto: booking.acRespeto ?? false,
               acDisposicion: booking.acDisposicion ?? false,
+              acMicrofono: booking.acMicrofono ?? false,
               // Tri-estado: null = nunca se guardó desde el panel (aplica el valor
               // por defecto); false = se guardó con el alumno AUSENTE.
               rubricaEvaluada: booking.rubricaEvaluada ?? null,

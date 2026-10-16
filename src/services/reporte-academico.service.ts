@@ -1,5 +1,6 @@
 import 'server-only';
 import { cupoOcupadoSql } from '@/lib/cupo';
+import { TZ_OPERACION } from '@/lib/cursos-campaign';
 import { query, queryOne } from '@/lib/postgres';
 import { ForbiddenError } from '@/lib/errors';
 import {
@@ -91,10 +92,13 @@ export const METRICAS_MANUALES = [
   { key: 'desafio', label: 'Desafío', grupo: 'DESEMPEÑO', col: 'daDesafio' },
   { key: 'activo', label: 'Activo', grupo: 'ACTITUDES', col: 'acPermanencia' },
   { key: 'respeto', label: 'Respeto', grupo: 'ACTITUDES', col: 'acRespeto' },
+  // Hasta oct-2026 «cámara y micrófono» era UN criterio (acDisposicion); al
+  // separarlo, lo guardado se copió a los dos (scripts/split-camara-microfono.js).
   { key: 'camara', label: 'Cámara', grupo: 'ACTITUDES', col: 'acDisposicion' },
+  { key: 'microfono', label: 'Micrófono', grupo: 'ACTITUDES', col: 'acMicrofono' },
 ] as const;
 
-/** Orden de las columnas en la tabla (3 grupos de 3). */
+/** Orden de las columnas en la tabla (Hábitos 3 · Desempeño 3 · Actitudes 4). */
 export const METRICAS = [METRICA_ASISTIO, ...METRICAS_MANUALES] as const;
 
 export const ESTADOS_CRITERIO = ['full', 'half', 'empty'] as const;
@@ -133,11 +137,19 @@ export function ovalo(cumplidas: number, sesiones: number): 'full' | 'half' | 'e
 
 /**
  * Estado del informe semanal de un SALÓN (REPORTE_ACADEMICO_CIERRE).
- *  - BORRADOR     : sin fila; el Guía edita y guarda libremente.
- *  - CERRADO_GUIA : el Guía ya lo cerró; sólo lo modifica quien tenga el permiso
- *                   ACADEMICO.REPORTE_ACADEMICO.REVISAR.
- *  - DEFINITIVO   : cerrado tras la revisión; sólo SUPER_ADMIN.
+ *  - BORRADOR     : sin fila; el Guía escribe el comentario y la actividad
+ *                   (los criterios los corrige SÓLO quien revisa).
+ *  - CERRADO_GUIA : el Guía ya lo envió a revisión; sólo lo modifica quien tenga
+ *                   el permiso ACADEMICO.REPORTE_ACADEMICO.REVISAR.
+ *  - DEFINITIVO   : quien revisa pulsó «Guardar informe». Ya NO lo modifica nadie
+ *                   (tampoco SUPER_ADMIN) y es el único estado en que se puede
+ *                   enviar al apoderado.
  */
+
+/** ¿Se puede enviar el informe al apoderado? Sólo cerrado en definitivo. */
+export function puedeEnviarseAlApoderado(estado: EstadoCierre): boolean {
+  return estado === 'DEFINITIVO';
+}
 export type EstadoCierre = 'BORRADOR' | 'CERRADO_GUIA' | 'DEFINITIVO';
 
 export interface CierreInfo {
@@ -324,7 +336,11 @@ export async function getReporteAcademico(filtros: ReporteFiltros, session: any)
              string_agg(NULLIF(TRIM(b."comentarios"),''), ' | ') AS "comentariosSemana"
       FROM "ACADEMICA_BOOKINGS" b
       WHERE b."idEstudiante" = acad."academicaId"
-        AND b."fechaEvento" >= $2 AND b."fechaEvento" < $3
+        -- La semana es de lunes 00:00 a domingo 24:00 en hora de CHILE: comparar
+        -- contra la fecha suelta la cortaría a medianoche UTC (21:00 de Chile), y
+        -- una sesión del domingo por la noche caería en la semana siguiente.
+        AND b."fechaEvento" >= ($2::date::timestamp AT TIME ZONE '${TZ_OPERACION}')
+        AND b."fechaEvento" <  ($3::date::timestamp AT TIME ZONE '${TZ_OPERACION}')
         AND COALESCE(b."cancelo",false)=false AND ${NO_SESION}
     ) sem ON true
     LEFT JOIN LATERAL (

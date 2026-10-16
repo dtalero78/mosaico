@@ -155,7 +155,7 @@ class BookingRepositoryClass extends BaseRepository {
               ab."advisor", ab."nivel", ab."step", ab."asistencia", ab."asistio",
               ab."participacion", ab."noAprobo", ab."cancelo", ab."calificacion",
               ab."hePuntualidad", ab."heAsignacion", ab."daDominio", ab."daDesafio",
-              ab."acPermanencia", ab."acRespeto", ab."acDisposicion",
+              ab."acPermanencia", ab."acRespeto", ab."acDisposicion", ab."acMicrofono",
               ab."anotaciones", ab."comentarios", ab."advisorAnotaciones", ab."actividadPropuesta",
               ${enlaceClaseSql('ge', `COALESCE(ce."linkZoom", ab."linkZoom")`)} AS "linkZoom",
               ab."asignadoPor", ab."origen", ab."agendadoPor",

@@ -16,6 +16,7 @@ import {
   TrophyIcon,
   BoltIcon,
   VideoCameraIcon,
+  MicrophoneIcon,
 } from '@heroicons/react/24/outline'
 import ReportarCasoModal from './ReportarCasoModal'
 import { isJumpStep as esJumpStep } from '@/lib/motor-academico'
@@ -57,7 +58,8 @@ interface ClassRecord {
   daDesafio?: boolean
   acPermanencia?: boolean
   acRespeto?: boolean
-  acDisposicion?: boolean
+  acDisposicion?: boolean   // uso adecuado de cámara
+  acMicrofono?: boolean     // uso adecuado de micrófono
   nivel?: string
   step?: string
   noAprobo?: boolean
@@ -227,7 +229,8 @@ export default function SessionStudentsTab({
   const [daDesafio, setDaDesafio] = useState(false)
   const [acPermanencia, setAcPermanencia] = useState(false)
   const [acRespeto, setAcRespeto] = useState(false)
-  const [acDisposicion, setAcDisposicion] = useState(false)
+  const [acDisposicion, setAcDisposicion] = useState(false) // cámara
+  const [acMicrofono, setAcMicrofono] = useState(false)
   const [comentarios, setComentarios] = useState('')
   // Modal de "Reportar caso": ÚNICO origen de un Caso de Atención. El textarea
   // que había aquí se retiró — el reporte alimenta el módulo de Casos y también
@@ -285,7 +288,7 @@ export default function SessionStudentsTab({
     setParticipacion(v)
     setHePuntualidad(v); setHeAsignacion(v)
     setDaDominio(v); setDaDesafio(v)
-    setAcPermanencia(v); setAcRespeto(v); setAcDisposicion(v)
+    setAcPermanencia(v); setAcRespeto(v); setAcDisposicion(v); setAcMicrofono(v)
   }
   const limpiarRubrica = () => fijarRubrica(false)
   // Por defecto las 9 casillas vienen MARCADAS (decisión del usuario, 14-oct-2026):
@@ -403,6 +406,7 @@ export default function SessionStudentsTab({
       setAcPermanencia(cr.acPermanencia || false)
       setAcRespeto(cr.acRespeto || false)
       setAcDisposicion(cr.acDisposicion || false)
+      setAcMicrofono(cr.acMicrofono || false)
       // Valor por defecto (sólo en sesiones por empezar o abiertas; cerrada o
       // vencida se muestra lo guardado):
       //  - Nunca guardado desde el panel (rubricaEvaluada null) y sin falta
@@ -439,6 +443,7 @@ export default function SessionStudentsTab({
     setAcPermanencia(false)
     setAcRespeto(false)
     setAcDisposicion(false)
+    setAcMicrofono(false)
   }
 
   // La regla del jump vive en lib/motor-academico. Aqui habia una lista literal
@@ -475,6 +480,7 @@ export default function SessionStudentsTab({
           acPermanencia,
           acRespeto,
           acDisposicion,
+          acMicrofono,
           // Guardar desde este panel ES evaluar la rúbrica (las casillas están a
           // la vista). El endpoint la anula si el alumno no asistió.
           rubricaEvaluada: asistencia,
@@ -548,7 +554,7 @@ export default function SessionStudentsTab({
     // de "no marcaste nada".
     const vacio = !asistencia && !participacion && !noAprobo && !escusa
       && !hePuntualidad && !heAsignacion && !daDominio && !daDesafio
-      && !acPermanencia && !acRespeto && !acDisposicion
+      && !acPermanencia && !acRespeto && !acDisposicion && !acMicrofono
       && !comentarios.trim()
       && !actividadPropuesta.trim()
     if (vacio) { setShowEmptyWarn(true); return }
@@ -720,7 +726,8 @@ export default function SessionStudentsTab({
                       <div className="space-y-3">
                         <CritRow Icon={BoltIcon} checked={acPermanencia} onChange={setAcPermanencia} disabled={rubricaBloqueada} label="Permaneció activo toda la sesión" />
                         <CritRow Icon={UserGroupIcon} checked={acRespeto} onChange={setAcRespeto} disabled={rubricaBloqueada} label="Respetó turnos y a sus compañeros" />
-                        <CritRow Icon={VideoCameraIcon} checked={acDisposicion} onChange={setAcDisposicion} disabled={rubricaBloqueada} label="Uso adecuado de cámara y micrófono" />
+                        <CritRow Icon={VideoCameraIcon} checked={acDisposicion} onChange={setAcDisposicion} disabled={rubricaBloqueada} label="Uso adecuado de cámara" />
+                        <CritRow Icon={MicrophoneIcon} checked={acMicrofono} onChange={setAcMicrofono} disabled={rubricaBloqueada} label="Uso adecuado de micrófono" />
                       </div>
                     </div>
                   </div>

@@ -5,7 +5,7 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, ForbiddenError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
-import { getCierre, assertVentanaGuia } from '@/services/reporte-academico.service';
+import { getCierre, assertVentanaGuia, esRolGuia } from '@/services/reporte-academico.service';
 import { marcarAutorizacionUsada } from '@/services/autorizacion-gestion.service';
 import { refReporte } from '@/lib/autorizacion-gestion';
 
@@ -15,9 +15,12 @@ import { refReporte } from '@/lib/autorizacion-gestion';
  *
  * Cierra el informe semanal de un SALÓN (el cierre es por salón, no por alumno):
  *   accion='GUIA'       → BORRADOR ⇒ CERRADO_GUIA. El Guía ya no puede modificarlo.
- *   accion='DEFINITIVO' → CERRADO_GUIA ⇒ DEFINITIVO. Requiere el permiso
- *                         ACADEMICO.REPORTE_ACADEMICO.REVISAR; después sólo
- *                         SUPER_ADMIN puede tocar el informe.
+ *   accion='DEFINITIVO' → BORRADOR o CERRADO_GUIA ⇒ DEFINITIVO («Guardar informe»
+ *                         de quien revisa). Requiere ACADEMICO.REPORTE_ACADEMICO.REVISAR.
+ *                         Desde BORRADOR es Coordinación cerrando lo que el Guía no
+ *                         envió (cuenta en Gestión Coordinación, como siempre).
+ *                         Después ya no lo modifica nadie y se puede enviar al
+ *                         apoderado.
  *
  * Las transiciones se validan contra el estado REAL en base de datos, no contra lo
  * que mande el cliente.
@@ -46,22 +49,17 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const autorizacion = await assertVentanaGuia(session, { curso, salon, campaign, semanaInicio });
 
   const email = (session as any)?.user?.email || 'desconocido';
-  const rol = String((session as any)?.user?.role || '');
   const { estado } = await getCierre(curso, salon, campaign, semanaInicio);
 
-  if (estado === 'DEFINITIVO' && rol !== 'SUPER_ADMIN') {
+  if (estado === 'DEFINITIVO') {
     throw new ForbiddenError('El informe ya tiene cierre definitivo.');
   }
 
   if (accion === 'GUIA') {
-    // El estado sólo avanza: BORRADOR → CERRADO_GUIA → DEFINITIVO. Sin esta guarda,
-    // un SUPER_ADMIN podía reenviar la acción y DEGRADAR un informe ya definitivo.
+    // El estado sólo avanza: BORRADOR → CERRADO_GUIA → DEFINITIVO (el definitivo
+    // ya se rechazó arriba).
     if (estado !== 'BORRADOR') {
-      throw new ValidationError(
-        estado === 'DEFINITIVO'
-          ? 'El informe ya tiene cierre definitivo.'
-          : 'El informe ya fue cerrado por el Guía.'
-      );
+      throw new ValidationError('El informe ya fue cerrado por el Guía.');
     }
     await query(
       `INSERT INTO "REPORTE_ACADEMICO_CIERRE"
@@ -90,9 +88,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   // DEFINITIVO — sólo quien revisa (requirePermission deja pasar a SUPER_ADMIN/ADMIN).
   await requirePermission(session, AcademicoPermission.REPORTE_ACADEMICO_REVISAR);
-  if (estado === 'BORRADOR') {
-    throw new ValidationError('El informe aún no ha sido cerrado por el Guía.');
-  }
+  // Un Guía no llega aquí aunque tenga el permiso: el cierre definitivo es de
+  // quien revisa, que es quien envía al apoderado.
+  if (esRolGuia(session)) throw new ForbiddenError('El cierre definitivo lo hace quien revisa el informe.');
   await query(
     `INSERT INTO "REPORTE_ACADEMICO_CIERRE"
        ("_id","curso","salon","campaign","semanaInicio","estado","cerradoAdminPor","cerradoAdminEn")

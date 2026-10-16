@@ -3,7 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, ForbiddenError } from '@/lib/errors';
-import { getReporteAcademico, sanitizeCriterios, getCierre, assertVentanaGuia } from '@/services/reporte-academico.service';
+import { getReporteAcademico, sanitizeCriterios, getCierre, assertVentanaGuia, esRolGuia } from '@/services/reporte-academico.service';
 import { query } from '@/lib/postgres';
 import { generateId } from '@/lib/id-generator';
 
@@ -34,11 +34,14 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
  * actualiza SÓLO si viene en el body, para que guardar los criterios no borre el
  * comentario IA ni la actividad individual (y viceversa).
  */
-async function guardarFila(item: any, salon: string, semanaInicio: string, email: string) {
+async function guardarFila(item: any, salon: string, semanaInicio: string, email: string, esGuia: boolean) {
   const academicaId = String(item?.academicaId || '').trim();
   if (!academicaId) throw new ValidationError('Falta academicaId.');
 
-  const tieneCriterios = item?.criterios !== undefined;
+  // Los criterios salen de las sesiones y sólo los corrige quien revisa: lo que
+  // mande un Guía se descarta (la pantalla ni se los ofrece). Se descarta en vez
+  // de rechazar para que su comentario y su actividad se guarden igual.
+  const tieneCriterios = !esGuia && item?.criterios !== undefined;
   const tieneNota = item?.notaGuia !== undefined;
   const tieneIA = item?.comentarioIA !== undefined;
 
@@ -70,7 +73,7 @@ async function guardarFila(item: any, salon: string, semanaInicio: string, email
  * Es la validación REAL (el front sólo oculta botones):
  *   BORRADOR     → cualquiera con acceso al reporte.
  *   CERRADO_GUIA → sólo con ACADEMICO.REPORTE_ACADEMICO.REVISAR (o admin).
- *   DEFINITIVO   → sólo SUPER_ADMIN.
+ *   DEFINITIVO   → nadie: «Guardar informe» lo cierra para siempre.
  */
 async function assertPuedeEscribir(session: any, curso: string, salon: string, campaign: string, semanaInicio: string) {
   // El Guía sólo gestiona la semana en curso de miércoles a domingo (hora de
@@ -82,13 +85,9 @@ async function assertPuedeEscribir(session: any, curso: string, salon: string, c
 
   if (!curso || !campaign) return; // sin curso/campaña no hay cierre que consultar
   const { estado } = await getCierre(curso, salon, campaign, semanaInicio);
-  const rol = String((session as any)?.user?.role || '');
 
   if (estado === 'DEFINITIVO') {
-    if (rol !== 'SUPER_ADMIN') {
-      throw new ForbiddenError('El informe de esta semana ya tiene cierre definitivo y no se puede modificar.');
-    }
-    return;
+    throw new ForbiddenError('El informe de esta semana ya tiene cierre definitivo y no se puede modificar.');
   }
   if (estado === 'CERRADO_GUIA') {
     // requirePermission ya deja pasar a SUPER_ADMIN/ADMIN.
@@ -103,6 +102,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const semanaInicio = String(b?.semanaInicio || '').trim();
   if (!salon || !semanaInicio) throw new ValidationError('Falta salon o semanaInicio.');
   const email = (session as any)?.user?.email || 'desconocido';
+  const esGuia = esRolGuia(session);
 
   // El informe cerrado no se puede seguir editando.
   const cursoBody = String(b?.curso || b?.items?.[0]?.curso || '').trim();
@@ -112,11 +112,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // Guardado del informe completo: un solo POST con todas las filas del salón.
   if (Array.isArray(b?.items)) {
     if (!b.items.length) throw new ValidationError('No hay filas para guardar.');
-    for (const item of b.items) await guardarFila(item, salon, semanaInicio, email);
+    for (const item of b.items) await guardarFila(item, salon, semanaInicio, email, esGuia);
     return successResponse({ ok: true, guardados: b.items.length });
   }
 
   // Guardado de un solo estudiante (compatibilidad con los botones por fila).
-  await guardarFila(b, salon, semanaInicio, email);
+  await guardarFila(b, salon, semanaInicio, email, esGuia);
   return successResponse({ ok: true, guardados: 1 });
 });

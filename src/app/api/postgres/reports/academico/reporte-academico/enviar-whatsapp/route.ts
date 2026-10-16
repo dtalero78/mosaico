@@ -3,7 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ForbiddenError } from '@/lib/errors';
-import { getReporteAcademico } from '@/services/reporte-academico.service';
+import { getReporteAcademico, puedeEnviarseAlApoderado, type EstadoCierre } from '@/services/reporte-academico.service';
 import { buildReporteIndividualHtml } from '@/lib/reporte-academico-pdf';
 import { htmlToPdfBuffer } from '@/lib/pdf';
 import { formatPhoneNumber } from '@/lib/whatsapp';
@@ -31,6 +31,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     guia: b?.guia || undefined, curso: b?.curso || undefined, salon: b?.salon || undefined,
     campaign: b?.campaign || undefined, startDate: b?.startDate || undefined, endDate: b?.endDate || undefined,
   }, session);
+  // Sólo se envía el informe CERRADO en definitivo: lo que llega al apoderado ya
+  // no puede cambiar después. Se mira el estado real, no lo que diga la pantalla.
+  if (!puedeEnviarseAlApoderado(((data as any).cierre?.estado || 'BORRADOR') as EstadoCierre)) {
+    throw new ValidationError('El informe debe estar cerrado (Guardar informe) antes de enviarlo al apoderado.');
+  }
   const row = (data.rows || []).find((r: any) => r.academicaId === academicaId);
   if (!row) throw new NotFoundError('No se encontró el estudiante en el reporte.');
 
