@@ -265,6 +265,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/comercial/vencimientos': [
     'COMERCIAL.VENCIMIENTOS.VER' as Permission,
   ],
+  '/dashboard/comercial/matriculas': [
+    'COMERCIAL.MATRICULAS.VER' as Permission,
+  ],
 
   // Comercial - Subir Lote de Personas (CSV)
   '/subir-lote': [
@@ -416,6 +419,7 @@ export const GENERIC_ROUTE_ACCESS: Record<string, Permission[]> = {
   // permisos COMERCIAL.* y un rol con sólo PERSON.INFO.RESUMEN quedaría fuera.
   '/dashboard/comercial/matriculas/': [
     'PERSON.INFO.RESUMEN' as Permission,
+    'COMERCIAL.MATRICULAS.DETALLE' as Permission,
   ],
 
   '/dashboard/academic': [

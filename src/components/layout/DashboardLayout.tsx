@@ -110,6 +110,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Gestión Contrato', href: '/dashboard/comercial/gestion-contrato', newTab: true },
       { name: 'Consulta cursos', href: '/dashboard/comercial/consulta-cursos', newTab: true },
       { name: 'Vencimientos', href: '/dashboard/comercial/vencimientos', newTab: true },
+      { name: 'Matrículas', href: '/dashboard/comercial/matriculas', newTab: true },
       { name: 'Subir Lote', href: '/subir-lote' },
     ],
   },
@@ -436,6 +437,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/comercial/vencimientos': [
       ComercialPermission.VENCIMIENTOS,
     ],
+    '/dashboard/comercial/matriculas': [
+      ComercialPermission.MATRICULAS_VER,
+    ],
     '/subir-lote': [
       ComercialPermission.SUBIR_LOTE,
     ],
@@ -590,6 +594,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ComercialPermission.GESTION_CONTRATO,
       ComercialPermission.CONSULTA_CURSOS,
       ComercialPermission.VENCIMIENTOS,
+      ComercialPermission.MATRICULAS_VER,
     ],
     'Aprobación': [
       // Acceso por ítem (MOSAICO)

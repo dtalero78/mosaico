@@ -1183,6 +1183,28 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Página "Vencimientos"',
     description: 'Consulta de contratos aprobados por vencer (titular, correo, teléfono, Módulo sí/no), con filtros de campaña, curso, asesor comercial y fechas, y descarga CSV. Un líder comercial ve sólo los contratos de su equipo.',
   },
+  // -- Página: Matrículas (/dashboard/comercial/matriculas) --
+  {
+    code: ComercialPermission.MATRICULAS_VER,
+    module: Module.COMERCIAL,
+    section: 'Matrículas',
+    name: 'Página "Matrículas"',
+    description: 'Acceso a /dashboard/comercial/matriculas: consulta de todos los contratos con filtros (nombre, asesor, número, estado, plataforma, campaña, fechas) y exportación a Excel. Un líder comercial ve sólo los contratos de su equipo.',
+  },
+  {
+    code: ComercialPermission.MATRICULAS_DETALLE,
+    module: Module.COMERCIAL,
+    section: 'Matrículas',
+    name: 'Resumen de una matrícula',
+    description: 'Abrir el Resumen de Matrícula (/dashboard/comercial/matriculas/[id]) desde la lista: tarjeta del titular con el estado del contrato y tarjetas de beneficiarios con curso, cupo, apoderado y perfil académico. Equivale al botón "Resumen" de la ficha (PERSON.INFO.RESUMEN).',
+  },
+  {
+    code: ComercialPermission.MATRICULAS_BORRAR,
+    module: Module.COMERCIAL,
+    section: 'Matrículas',
+    name: 'Botón "Borrar matrícula"',
+    description: 'Borra en cascada contratos SIN FIRMAR (sin consentimiento ni decisión de aprobación, y no marcados listos): titular, beneficiarios, ficha académica, clases, financiero, pagos y accesos. Motivo obligatorio; queda copia completa en PURGE_LOG.',
+  },
   {
     code: ComercialPermission.CONTRATO_LISTO_APROBACION,
     module: Module.COMERCIAL,

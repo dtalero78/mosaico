@@ -438,6 +438,11 @@ export enum ComercialPermission {
   // Comercial › Vencimientos: contratos aprobados que vencen pronto (titular,
   // contacto, módulo sí/no). Incluye descargar el CSV.
   VENCIMIENTOS = 'COMERCIAL.VENCIMIENTOS.VER',
+  // Comercial › Matrículas (traída de LGS): consulta de todos los contratos,
+  // el resumen de cada uno y el borrado de los que están SIN FIRMAR.
+  MATRICULAS_VER = 'COMERCIAL.MATRICULAS.VER',
+  MATRICULAS_DETALLE = 'COMERCIAL.MATRICULAS.DETALLE',
+  MATRICULAS_BORRAR = 'COMERCIAL.MATRICULAS.BORRAR',
 }
 
 /**

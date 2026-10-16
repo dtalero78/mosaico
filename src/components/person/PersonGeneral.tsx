@@ -5,7 +5,8 @@ import { Person } from '@/types'
 import { formatDate } from '@/lib/utils'
 import { ArrowDownTrayIcon, PaperClipIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
 import { PermissionGuard } from '@/components/permissions'
-import { PersonPermission } from '@/types/permissions'
+import { ComercialPermission, PersonPermission } from '@/types/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
 import PersonContractViewer from './PersonContractViewer'
 import SuspendidaBadge from '@/components/common/SuspendidaBadge'
 import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
@@ -17,6 +18,7 @@ interface PersonGeneralProps {
 }
 
 export default function PersonGeneral({ person, isSuspendida }: PersonGeneralProps) {
+  const { hasPermission } = usePermissions()
   // "Documentación y recibo": el mismo modal del detalle del contrato. Reemplaza
   // los dos botones que había ("Ver Documentación" y "Agregar Documentación").
   const [showDocumentos, setShowDocumentos] = useState(false)
@@ -41,7 +43,8 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
       <div className="flex items-center flex-wrap gap-3">
         {/* Resumen de la matrícula (misma vista de LGS). Acepta el _id del titular
             o de un beneficiario: el endpoint resuelve al titular del contrato. */}
-        <PermissionGuard permission={PersonPermission.RESUMEN}>
+        {(hasPermission(PersonPermission.RESUMEN) ||
+          (hasPermission(ComercialPermission.MATRICULAS_VER) && hasPermission(ComercialPermission.MATRICULAS_DETALLE))) && (
           <a
             href={`/dashboard/comercial/matriculas/${person._id}`}
             target="_blank"
@@ -52,7 +55,7 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
             <ClipboardDocumentListIcon className="h-4 w-4" />
             Resumen
           </a>
-        </PermissionGuard>
+        )}
         <PermissionGuard permission={PersonPermission.VER_CONTRATO}>
           <PersonContractViewer person={person as any} />
         </PermissionGuard>

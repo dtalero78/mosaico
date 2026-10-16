@@ -1,7 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { requirePermission } from '@/lib/api-permissions';
-import { PersonPermission } from '@/types/permissions';
+import { requireAnyPermission } from '@/lib/api-permissions';
+import { ComercialPermission, PersonPermission } from '@/types/permissions';
 import { query, queryOne } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { estadoContratoTitular } from '@/lib/estado-contrato';
@@ -22,7 +22,9 @@ import { estadoContratoTitular } from '@/lib/estado-contrato';
  * ficha equivocada.
  */
 export const GET = handlerWithAuth(async (_req, ctx, session) => {
-  await requirePermission(session, PersonPermission.RESUMEN);
+  // Botón "Resumen" de la ficha (PERSON.INFO.RESUMEN) o la lista de Matrículas
+  // (COMERCIAL.MATRICULAS.DETALLE): cualquiera de los dos abre el resumen.
+  await requireAnyPermission(session, [PersonPermission.RESUMEN, ComercialPermission.MATRICULAS_DETALLE]);
 
   let id = String((ctx as any)?.params?.id || '').trim();
   if (!id) throw new ValidationError('Falta el id de la persona.');
