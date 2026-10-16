@@ -34,6 +34,9 @@ interface Row {
   /** Devuelta desde Agrupaciones: ya estuvo aprobada y se deshizo. */
   devueltaEn: string | null
   devueltaPor: string | null
+  /** Recuperada desde el Histórico: el cron la había cancelado sin confirmar. */
+  recuperadaEn: string | null
+  recuperadaPor: string | null
 }
 interface Guia { id: string; nombre: string }
 
@@ -124,6 +127,7 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
       { header: 'Conteo', accessor: r => (r.conteo ?? '') },
       { header: 'Confirmación', accessor: r => (r.confirmadoEn ? (r.confirmadoPor === 'SERVICIO' ? 'Confirmada (Servicio)' : 'Confirmada') : 'Sin confirmar') },
       { header: 'Devuelta de Agrupaciones', accessor: r => (r.devueltaEn ? `${new Date(r.devueltaEn).toLocaleDateString('es-CL')}${r.devueltaPor ? ` · ${r.devueltaPor}` : ''}` : '') },
+      { header: 'Recuperada del Histórico', accessor: r => (r.recuperadaEn ? `${new Date(r.recuperadaEn).toLocaleDateString('es-CL')}${r.recuperadaPor ? ` · ${r.recuperadaPor}` : ''}` : '') },
     ], 'nivelaciones')
   }
 
@@ -252,6 +256,12 @@ function SolicitudesTab({ onCount, onMoved, refreshKey = 0 }: {
                       <span className="block mt-0.5 text-amber-700 font-medium"
                         title={`Devuelta desde Agrupaciones${r.devueltaPor ? ` por ${r.devueltaPor}` : ''} el ${new Date(r.devueltaEn).toLocaleDateString('es-CL')}`}>
                         ↩ Devuelta
+                      </span>
+                    )}
+                    {r.recuperadaEn && (
+                      <span className="block mt-0.5 text-sky-700 font-medium"
+                        title={`Recuperada desde el Histórico${r.recuperadaPor ? ` por ${r.recuperadaPor}` : ''} el ${new Date(r.recuperadaEn).toLocaleDateString('es-CL')} (la había cancelado el sistema por falta de confirmación)`}>
+                        ↺ Recuperada
                       </span>
                     )}
                   </td>
@@ -384,7 +394,7 @@ function NivelacionesContent() {
         </div>
       )}
       <div className={tab === 'historial' ? '' : 'hidden'}>
-        <NivelacionesHistorialTab refreshKey={refreshKey} />
+        <NivelacionesHistorialTab refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
       </div>
     </div>
   )

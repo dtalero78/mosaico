@@ -88,7 +88,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             -- Devuelta desde Agrupaciones (ver nivelaciones/retirar): sin esto la
             -- solicitud reaparecería aquí, con su fecha vieja, sin explicación.
             (a."detalleNivelacion"->>'devueltaEn') AS "devueltaEn",
-            (a."detalleNivelacion"->>'devueltaPor') AS "devueltaPor"
+            (a."detalleNivelacion"->>'devueltaPor') AS "devueltaPor",
+            -- Recuperada desde el Histórico tras cancelarla el cron (nivelaciones/recuperar).
+            (a."detalleNivelacion"->>'recuperadaEn') AS "recuperadaEn",
+            (a."detalleNivelacion"->>'recuperadaPor') AS "recuperadaPor"
        FROM "ACADEMICA" a
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
        LEFT JOIN "CURSOS_CAMPAIGN" cc

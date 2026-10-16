@@ -98,9 +98,17 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
               h->>'leccion' AS leccion,
               COALESCE((h->>'conteo')::int, 0) AS conteo,
               h->>'comentario' AS comentario,
-              h->>'marcadoPor' AS "marcadoPor"
+              h->>'marcadoPor' AS "marcadoPor",
+              -- Recuperación (nivelaciones/recuperar): la llave de la entrada es su
+              -- fecha cruda, y sólo la ÚLTIMA de un alumno sin otra nivelación viva
+              -- se puede recuperar. El servidor lo vuelve a validar al recuperar.
+              h->>'fecha' AS "entradaFecha",
+              h->>'recuperadaEn' AS "recuperadaEn",
+              h->>'recuperadaPor' AS "recuperadaPor",
+              (h_ord = jsonb_array_length(a."NivelacionHistory")) AS "esUltima",
+              (a."nivelacion" IS TRUE OR a."aprobadoNivelacion" IS TRUE) AS "tieneViva"
          ${JOINS}
-         CROSS JOIN LATERAL jsonb_array_elements(a."NivelacionHistory") AS h
+         CROSS JOIN LATERAL jsonb_array_elements(a."NivelacionHistory") WITH ORDINALITY AS t(h, h_ord)
         WHERE ${NO_PRB} AND jsonb_typeof(a."NivelacionHistory") = 'array'
 
      )

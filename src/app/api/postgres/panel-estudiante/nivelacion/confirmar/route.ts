@@ -4,7 +4,7 @@ import { ids } from '@/lib/id-generator';
 import { resolveStudentFromSession } from '@/services/panel-estudiante.service';
 import { query, queryOne } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
-import { puedeConfirmarAlumno, corteConfirmacion, MENSAJE_CONFIRMACION_VENCIDA } from '@/lib/nivelacion-confirmacion';
+import { puedeConfirmarAlumno, corteConfirmacion, fechaCicloConfirmacion, MENSAJE_CONFIRMACION_VENCIDA } from '@/lib/nivelacion-confirmacion';
 import { agendamientoDeNivelacionActualDe } from '@/services/nivelacion-agendada.service';
 
 /**
@@ -87,5 +87,5 @@ export const POST = handlerWithAuth(async (_request, _ctx, session) => {
     console.warn('[nivelacion/confirmar] no se pudo arrastrar el caso:', e);
   }
 
-  return successResponse({ confirmadoEn, confirmadoPor: 'ESTUDIANTE', corte: corteConfirmacion(det.fecha), casoActualizado });
+  return successResponse({ confirmadoEn, confirmadoPor: 'ESTUDIANTE', corte: corteConfirmacion(fechaCicloConfirmacion(det)), casoActualizado });
 });

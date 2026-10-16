@@ -3,7 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { resolveStudentFromSession } from '@/services/panel-estudiante.service';
 import { queryOne, query } from '@/lib/postgres';
 import { getPresignedVideoUrl } from '@/lib/spaces';
-import { corteConfirmacion, estadoConfirmacion } from '@/lib/nivelacion-confirmacion';
+import { corteConfirmacion, estadoConfirmacion, fechaCicloConfirmacion } from '@/lib/nivelacion-confirmacion';
 import { agendamientoDeNivelacionActualDe } from '@/services/nivelacion-agendada.service';
 
 export const GET = handlerWithAuth(async (request, context, session) => {
@@ -117,7 +117,7 @@ export const GET = handlerWithAuth(async (request, context, session) => {
         leccion: det.leccion ?? null,
         confirmadoEn: det.confirmadoEn ?? null,
         confirmadoPor: det.confirmadoPor ?? null,
-        corte: corteConfirmacion(det.fecha),
+        corte: corteConfirmacion(fechaCicloConfirmacion(det)),
         estado: estadoConfirmacion(det, new Date(), ag?.eventoDia ?? null),
       };
     }

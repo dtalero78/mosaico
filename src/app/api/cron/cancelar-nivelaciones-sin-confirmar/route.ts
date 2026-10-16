@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/postgres'
 import { recordCronRun } from '@/lib/cron-runs'
-import { debeCancelarse, corteCancelacion } from '@/lib/nivelacion-confirmacion'
+import { debeCancelarse, corteCancelacion, fechaCicloConfirmacion } from '@/lib/nivelacion-confirmacion'
 import { agendamientosDeNivelacionActual } from '@/services/nivelacion-agendada.service'
 
 const CRON_SECRET = process.env.CRON_SECRET
@@ -82,8 +82,12 @@ export async function GET(request: NextRequest) {
             confirmadoEn: null,
             confirmadoPor: null,
             resultado: 'CANCELADA_SIN_CONFIRMAR',
-            comentario: `Cancelada automáticamente: nadie confirmó antes del ${corteCancelacion(det.fecha)} (hora de Chile).`,
+            comentario: `Cancelada automáticamente: nadie confirmó antes del ${corteCancelacion(fechaCicloConfirmacion(det))} (hora de Chile).`,
             marcadoPor: 'cron@lgs-plataforma.com',
+            // La solicitud COMPLETA (hora, duración, motivo, guía): `detalleNivelacion`
+            // se borra aquí, y sin esta copia una recuperación desde el Histórico
+            // volvería sólo con módulo y lección (lib/nivelacion-recuperacion).
+            solicitud: det,
           }
           const hist = Array.isArray(r.historial) ? r.historial : []
           await query(

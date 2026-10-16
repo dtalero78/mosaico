@@ -116,6 +116,18 @@ export interface DetalleNivelacion {
   confirmadoEn?: string | null;
   confirmadoPor?: QuienConfirma | null;
   confirmadoPorNombre?: string | null;
+  /** La recuperó Servicio desde el Histórico tras cancelarla el cron (ISO). */
+  recuperadaEn?: string | null;
+  recuperadaPor?: string | null;
+}
+
+/**
+ * Desde cuándo corre el ciclo de confirmación: la recuperación si la hubo, si no
+ * la solicitud. Con la fecha original, una nivelación recuperada se volvería a
+ * cancelar en la siguiente corrida del cron, porque su corte ya pasó.
+ */
+export function fechaCicloConfirmacion(det: DetalleNivelacion | null | undefined): string | null {
+  return det?.recuperadaEn || det?.fecha || null;
 }
 
 /** Suma días a una fecha `YYYY-MM-DD` en UTC (el huso del proceso no interviene). */
@@ -213,7 +225,7 @@ export function puedeConfirmarAlumno(
 /** ¿Ya se debe cancelar por falta de confirmación? (jueves 22:00 cumplido) */
 export function debeCancelarse(det: DetalleNivelacion | null | undefined, now: Date = new Date()): boolean {
   if (!det?.fecha || det.confirmadoEn) return false;
-  const corte = corteCancelacion(det.fecha);
+  const corte = corteCancelacion(fechaCicloConfirmacion(det));
   return !!corte && ahoraEnChile(now) >= corte;
 }
 

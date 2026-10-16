@@ -7,6 +7,8 @@ import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
 import { metaResultadoNivelacion } from '@/lib/nivelacion-resultados'
+import { usePermissions } from '@/hooks/usePermissions'
+import { MAX_RECUPERACION } from '@/lib/nivelacion-recuperacion'
 
 interface Row {
   academicaId: string
@@ -28,15 +30,40 @@ interface Row {
   conteo: number
   comentario: string | null
   marcadoPor: string | null
+  /** Fecha cruda de la entrada: es su llave al recuperarla. */
+  entradaFecha: string | null
+  recuperadaEn: string | null
+  recuperadaPor: string | null
+  /** ¿Es la última entrada del alumno? Sólo esa se puede recuperar. */
+  esUltima: boolean
+  /** ¿El alumno ya tiene otra nivelación en curso? */
+  tieneViva: boolean
 }
 interface Guia { id: string; nombre: string }
 
 const fmtDia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('es-CL') : '—'
 
-export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
+/** Llave de una fila para la selección. */
+const llave = (r: Row) => `${r.academicaId}|${r.entradaFecha || ''}`
+
+/**
+ * ¿Se ofrece la casilla? Es la misma regla de `motivoNoRecuperable` del
+ * servidor, que la vuelve a validar con las filas bloqueadas.
+ */
+const esRecuperable = (r: Row) =>
+  r.estado === 'CANCELADA_SIN_CONFIRMAR' && !r.recuperadaEn && r.esUltima && !r.tieneViva && !!r.entradaFecha
+
+export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
   /** Cambia cuando otra pestaña cierra una nivelación: hay que recargar. */
   refreshKey?: number
+  /** Una nivelación volvió a Solicitudes: las demás pestañas deben recargar. */
+  onMoved?: () => void
 } = {}) {
+  const { hasPermission } = usePermissions()
+  const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION as any)
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
+  const [confirmar, setConfirmar] = useState(false)
+  const [recuperando, setRecuperando] = useState(false)
   const [guia, setGuia] = useState('')
   const [curso, setCurso] = useState('')
   const [usuario, setUsuario] = useState('')
@@ -58,6 +85,7 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
       const r = await fetch(`/api/postgres/reports/servicio/nivelaciones/historial?${qs}`, { cache: 'no-store' }).then(x => x.json())
       if (r.error) throw new Error(r.error)
       setRows(r.rows || [])
+      setSeleccion(new Set())
       setCursos(r.cursos || []); setGuias(r.guias || [])
       setSoloPropios(!!r.soloPropios)
     } catch (e: any) {
@@ -88,6 +116,41 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
     return Array.from(map.entries())
   }, [rows])
 
+  const recuperables = useMemo(() => rows.filter(esRecuperable), [rows])
+  const seleccionadas = useMemo(() => recuperables.filter(r => seleccion.has(llave(r))), [recuperables, seleccion])
+  const todasMarcadas = recuperables.length > 0 && seleccionadas.length === recuperables.length
+
+  const alternar = (r: Row) => setSeleccion(prev => {
+    const s = new Set(prev)
+    const k = llave(r)
+    if (s.has(k)) s.delete(k); else s.add(k)
+    return s
+  })
+  const alternarTodas = () =>
+    setSeleccion(todasMarcadas ? new Set() : new Set(recuperables.map(llave)))
+
+  const recuperar = async () => {
+    setRecuperando(true)
+    try {
+      const r = await fetch('/api/postgres/reports/servicio/nivelaciones/recuperar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: seleccionadas.map(x => ({ academicaId: x.academicaId, fecha: x.entradaFecha })),
+        }),
+      }).then(x => x.json())
+      if (!r.success) throw new Error(r.error || 'No se pudo recuperar')
+      toast.success(`${r.recuperadas} nivelación(es) recuperada(s): volvieron a Solicitudes`)
+      setConfirmar(false)
+      await fetchData({ guia, curso, usuario, startDate, endDate })
+      onMoved?.()
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo recuperar', { duration: 8000 })
+    } finally {
+      setRecuperando(false)
+    }
+  }
+
   const aplicar = () => fetchData({ guia, curso, usuario, startDate, endDate })
   const borrar = () => { setGuia(''); setCurso(''); setUsuario(''); setStartDate(''); setEndDate(''); fetchData() }
   const exportar = () => {
@@ -106,6 +169,7 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
       { header: 'Comentario', accessor: r => r.comentario || '' },
       { header: 'Registrado por', accessor: r => r.marcadoPor || '' },
       { header: 'Fecha de cierre', accessor: r => (r.fecha ? new Date(r.fecha).toLocaleDateString('es-CL') : '') },
+      { header: 'Recuperada', accessor: r => (r.recuperadaEn ? `${new Date(r.recuperadaEn).toLocaleDateString('es-CL')}${r.recuperadaPor ? ` · ${r.recuperadaPor}` : ''}` : '') },
     ], 'nivelaciones-historial')
   }
 
@@ -158,6 +222,28 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
         </div>
       </div>
 
+      {canGestion && !loading && recuperables.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 mb-4">
+          <label className="inline-flex items-center gap-2 text-sm text-sky-900 cursor-pointer">
+            <input type="checkbox" checked={todasMarcadas} onChange={alternarTodas}
+              className="rounded border-sky-400 text-sky-600" />
+            Marcar todas las recuperables ({recuperables.length})
+          </label>
+          <span className="text-xs text-sky-700">
+            Sólo las «Cancelada (sin confirmar)» vuelven a Solicitudes.
+          </span>
+          <button type="button"
+            onClick={() => setConfirmar(true)}
+            disabled={!seleccionadas.length || seleccionadas.length > MAX_RECUPERACION}
+            className="ml-auto px-4 py-2 text-sm font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-700 disabled:opacity-50">
+            ↺ Recuperar a Solicitudes ({seleccionadas.length})
+          </button>
+          {seleccionadas.length > MAX_RECUPERACION && (
+            <span className="w-full text-xs text-red-600">Máximo {MAX_RECUPERACION} por operación.</span>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">Cargando…</div>
       ) : grupos.length === 0 ? (
@@ -176,6 +262,7 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
                 <table className="w-full text-sm">
                   <thead className="bg-white border-b border-gray-100">
                     <tr>
+                      {canGestion && <th className="px-3 py-2 w-8" aria-label="Recuperar" />}
                       {['Fecha solicitud', 'Nombre', 'Salón', 'Guía', 'Módulo · Lección', 'Conteo', 'Confirmación', 'Estado', 'Comentario', 'Fecha asignada'].map(h => (
                         <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
@@ -188,7 +275,18 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
                       // pidió dejar a la vista, y sirve igual para los demás cierres.
                       const cierre = [r.marcadoPor, r.fecha ? fmtDia(r.fecha) : null].filter(Boolean).join(' · ')
                       return (
-                        <tr key={`${r.academicaId}-${r.fecha}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50">
+                        <tr key={`${r.academicaId}-${r.fecha}-${idx}`}
+                          className={`border-b border-gray-100 hover:bg-gray-50 ${seleccion.has(llave(r)) ? 'bg-sky-50' : ''}`}>
+                          {canGestion && (
+                            <td className="px-3 py-2">
+                              {esRecuperable(r) && (
+                                <input type="checkbox" checked={seleccion.has(llave(r))} onChange={() => alternar(r)}
+                                  title="Marcar para recuperar a Solicitudes"
+                                  aria-label={`Recuperar la nivelación de ${r.nombre}`}
+                                  className="rounded border-gray-300 text-sky-600" />
+                              )}
+                            </td>
+                          )}
                           <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
                             {fmtDia(r.fechaSolicitud)}
                           </td>
@@ -224,6 +322,12 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
                             {r.estado === 'REMOVIDA' && cierre && (
                               <span className="block text-xs text-gray-400 mt-0.5 whitespace-nowrap">{cierre}</span>
                             )}
+                            {r.recuperadaEn && (
+                              <span className="block text-xs text-sky-700 font-medium mt-0.5 whitespace-nowrap"
+                                title={`Recuperada a Solicitudes${r.recuperadaPor ? ` por ${r.recuperadaPor}` : ''}`}>
+                                ↺ Recuperada · {fmtDia(r.recuperadaEn)}
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-gray-500 max-w-xs truncate" title={r.comentario || ''}>{r.comentario || '—'}</td>
                           <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{fmtDia(r.fechaEvento)}</td>
@@ -235,6 +339,44 @@ export default function NivelacionesHistorialTab({ refreshKey = 0 }: {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {confirmar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Recuperar a Solicitudes</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              {seleccionadas.length === 1 ? 'Esta nivelación vuelve' : `Estas ${seleccionadas.length} nivelaciones vuelven`} a
+              Solicitudes como pedidas y sin aprobar:
+            </p>
+            <ul className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 mb-3">
+              {seleccionadas.map(r => (
+                <li key={llave(r)} className="px-3 py-1.5 text-sm flex justify-between gap-3">
+                  <span className="font-medium text-gray-800">{r.nombre}</span>
+                  <span className="text-gray-500 text-xs whitespace-nowrap">
+                    {[r.modulo, r.leccion].filter(Boolean).join(' · ') || '—'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <ul className="text-xs text-gray-600 space-y-1 mb-4 list-disc pl-4">
+              <li>El conteo de nivelaciones de cada usuario sube 1 (se repone el que quitó la cancelación).</li>
+              <li>El plazo para confirmar empieza de nuevo desde hoy.</li>
+              <li>Hay que volver a aprobarlas en Solicitudes.</li>
+              <li>La entrada del Histórico se conserva marcada «Recuperada».</li>
+            </ul>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmar(false)} disabled={recuperando}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={recuperar} disabled={recuperando}
+                className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-700 disabled:opacity-50">
+                {recuperando ? 'Recuperando…' : `Recuperar (${seleccionadas.length})`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
