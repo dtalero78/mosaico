@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { MantenimientoPermission } from '@/types/permissions'
@@ -11,9 +11,45 @@ import {
   TrashIcon,
   ArrowPathIcon,
   XMarkIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
-import { AVAILABLE_PLACEHOLDERS } from '@/lib/message-template-filler'
+import {
+  AVAILABLE_PLACEHOLDERS,
+  extractPlaceholders,
+  fillTemplate,
+  type RecipientContext,
+} from '@/lib/message-template-filler'
+
+/** Datos de ejemplo para la vista previa: así se ve el mensaje con un destinatario real. */
+const EJEMPLO_DESTINATARIO: RecipientContext = {
+  nombre: 'Sofía',
+  primerApellido: 'González',
+  nivel: 'Modulo 01',
+  step: 'Leccion 03',
+  plataforma: 'Chile',
+  contrato: '01-M5-09000-26',
+  numeroId: '12345678K',
+  academicaId: 'acd_ejemplo',
+}
+
+/**
+ * Formato de WhatsApp: *negrita*, _cursiva_, ~tachado~. Devuelve nodos React
+ * (nunca HTML crudo) para que el texto de la plantilla no pueda inyectar marcado.
+ */
+function formatoWhatsApp(texto: string): ReactNode[] {
+  const rx = /(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~)/g
+  return texto.split(rx).map((parte, i) => {
+    if (parte.length > 2) {
+      const inner = parte.slice(1, -1)
+      if (parte.startsWith('*') && parte.endsWith('*')) return <strong key={i}>{inner}</strong>
+      if (parte.startsWith('_') && parte.endsWith('_')) return <em key={i}>{inner}</em>
+      if (parte.startsWith('~') && parte.endsWith('~')) return <s key={i}>{inner}</s>
+    }
+    return <span key={i}>{parte}</span>
+  })
+}
 
 interface Template {
   _id: string
@@ -40,6 +76,7 @@ export default function GestionPlantillasPage() {
   const [editing, setEditing] = useState<Partial<Template>>({})
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<Template | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   const load = async (withInactive = includeInactive) => {
     setLoading(true); setError(null)
@@ -59,11 +96,13 @@ export default function GestionPlantillasPage() {
 
   const openCreate = () => {
     setEditing({ slug: '', nombre: '', descripcion: '', contenido: '', activo: true })
+    setShowPreview(false)
     setEditorMode('create')
   }
 
   const openEdit = (t: Template) => {
     setEditing({ ...t })
+    setShowPreview(false)
     setEditorMode('edit')
   }
 
@@ -71,7 +110,13 @@ export default function GestionPlantillasPage() {
     if (saving) return
     setEditorMode(null)
     setEditing({})
+    setShowPreview(false)
   }
+
+  // Placeholders que el envío no conoce: se reemplazan por vacío, así que se avisan.
+  const placeholdersDesconocidos = extractPlaceholders(editing.contenido || '')
+    .filter(p => !(AVAILABLE_PLACEHOLDERS as readonly string[]).includes(p))
+  const mensajePreview = fillTemplate(editing.contenido || '', EJEMPLO_DESTINATARIO)
 
   const handleSave = async () => {
     if (!editing.nombre?.trim() || !editing.contenido?.trim()) {
@@ -349,6 +394,37 @@ export default function GestionPlantillasPage() {
                   </div>
                 </div>
 
+                {showPreview && (
+                  <div className="rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                      <p className="text-xs font-medium text-gray-700">Vista previa del mensaje</p>
+                      <p className="text-[11px] text-gray-500">
+                        Con datos de ejemplo: {EJEMPLO_DESTINATARIO.nombre} {EJEMPLO_DESTINATARIO.primerApellido}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-[#efeae2] max-h-80 overflow-y-auto">
+                      {mensajePreview.trim() ? (
+                        <div className="ml-auto max-w-[85%] bg-[#d9fdd3] rounded-lg rounded-tr-none px-3 py-2 shadow-sm">
+                          <p className="text-sm text-gray-900 whitespace-pre-wrap break-words">
+                            {formatoWhatsApp(mensajePreview)}
+                          </p>
+                          <p className="text-[10px] text-gray-500 text-right mt-1">
+                            {new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })} ✓✓
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-center text-xs text-gray-500">Escribe el contenido para ver cómo queda.</p>
+                      )}
+                    </div>
+                    {placeholdersDesconocidos.length > 0 && (
+                      <div className="px-3 py-2 bg-amber-50 border-t border-amber-200 text-xs text-amber-800">
+                        ⚠ No reconocidos (saldrán vacíos al enviar):{' '}
+                        {placeholdersDesconocidos.map(p => `{{${p}}}`).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {editorMode === 'edit' && (
                   <label className="flex items-center gap-2 text-sm text-gray-700">
                     <input
@@ -362,7 +438,15 @@ export default function GestionPlantillasPage() {
                 )}
               </div>
 
-              <div className="mt-5 flex justify-end gap-2 pt-3 border-t border-gray-100">
+              <div className="mt-5 flex items-center gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(v => !v)}
+                  className="mr-auto inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100"
+                >
+                  {showPreview ? <EyeSlashIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                  {showPreview ? 'Ocultar vista previa' : 'Vista previa'}
+                </button>
                 <button
                   type="button"
                   onClick={closeEditor}
