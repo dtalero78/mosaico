@@ -13,6 +13,13 @@
  *                       (`/nuevo-usuario/<ACADEMICA._id>?noWelcome=1`, el mismo del
  *                       botón "Crear solo perfil": no ofrece agendar la bienvenida).
  *                       Lo resuelve el servidor por el documento.
+ *   - nombreApoderado → nombre del apoderado del alumno (vacío si no tiene)
+ *   - nombreAlumno    → nombre del alumno (primerNombre + primerApellido)
+ *   - curso           → curso del alumno (YOJI, KODOMO…)
+ *   - fechaTaller     → fecha del taller en hora de Chile ("viernes 16-10-2026")
+ *   - horaTaller      → hora del taller en hora de Chile ("18:00")
+ *                       Los de taller sólo se llenan al enviar desde Servicio ›
+ *                       Talleres; en Envío de Mensajes salen vacíos.
  *
  * Cualquier placeholder no soportado se reemplaza por cadena vacía (no
  * rompe el envío). El regex coincide con `{{ key }}` con espacios opcionales.
@@ -32,6 +39,13 @@ export interface RecipientContext {
   academicaId?: string | null;
   /** Dominio de la plataforma para {{linkPerfil}}. */
   baseUrl?: string | null;
+  /** Nombre del apoderado para {{nombreApoderado}}. */
+  apoderado?: string | null;
+  /** Curso del alumno para {{curso}}. */
+  curso?: string | null;
+  /** Fecha y hora del taller ya formateadas (Servicio › Talleres). */
+  fechaTaller?: string | null;
+  horaTaller?: string | null;
 }
 
 export const BASE_URL_PLATAFORMA = 'https://mosaicosorobanplataforma.com';
@@ -62,6 +76,11 @@ export const AVAILABLE_PLACEHOLDERS = [
   'contrato',
   'numeroId',
   'linkPerfil',
+  'nombreApoderado',
+  'nombreAlumno',
+  'curso',
+  'fechaTaller',
+  'horaTaller',
 ] as const;
 
 export type PlaceholderKey = typeof AVAILABLE_PLACEHOLDERS[number];
@@ -76,6 +95,11 @@ function valueFor(ctx: RecipientContext, key: string): string {
     case 'contrato':       return (ctx.contrato ?? '').trim();
     case 'numeroId':       return (ctx.numeroId ?? '').trim();
     case 'linkPerfil':     return linkPerfil(ctx.academicaId, ctx.baseUrl);
+    case 'nombreApoderado': return (ctx.apoderado ?? '').trim();
+    case 'nombreAlumno':   return [ctx.nombre, ctx.primerApellido].filter(Boolean).join(' ').trim();
+    case 'curso':          return (ctx.curso ?? '').trim();
+    case 'fechaTaller':    return (ctx.fechaTaller ?? '').trim();
+    case 'horaTaller':     return (ctx.horaTaller ?? '').trim();
     default:               return ''; // placeholder desconocido → vacío
   }
 }

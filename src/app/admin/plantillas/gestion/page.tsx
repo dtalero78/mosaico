@@ -32,6 +32,10 @@ const EJEMPLO_DESTINATARIO: RecipientContext = {
   contrato: '01-M5-09000-26',
   numeroId: '12345678K',
   academicaId: 'acd_ejemplo',
+  apoderado: 'Carolina Rojas',
+  curso: 'KODOMO',
+  fechaTaller: 'viernes 16-10-2026',
+  horaTaller: '18:00',
 }
 
 /**

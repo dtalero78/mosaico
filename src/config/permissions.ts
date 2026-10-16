@@ -1091,6 +1091,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Exportar CSV',
     description: 'Muestra el botón "Exportar CSV" de Gestión Justificación.',
   },
+  {
+    code: ServicioPermission.TALLERES_VER,
+    module: Module.SERVICIO,
+    section: 'Talleres',
+    name: 'Página "Talleres" (Próximos e Histórico)',
+    description: 'Talleres por curso con sus inscritos: los próximos (con quién se inscribió desde el panel y quién fue agendado) y el histórico con asistencia.',
+  },
+  {
+    code: ServicioPermission.TALLERES_ENVIAR,
+    module: Module.SERVICIO,
+    section: 'Talleres',
+    name: '↳ Enviar recordatorio por WhatsApp',
+    description: 'Envía la plantilla "Recordatorio Taller" a los inscritos marcados (al apoderado en los cursos de menores). Queda registrado quién, cuándo y a qué número.',
+  },
+  {
+    code: ServicioPermission.TALLERES_EXPORTAR,
+    module: Module.SERVICIO,
+    section: 'Talleres',
+    name: '↳ Exportar CSV',
+    description: 'Muestra el botón "Exportar CSV" de Talleres.',
+  },
 
   // ========== COMERCIAL MODULE ==========
   // -- Página: Contrato Detalle (/dashboard/comercial/contrato/[id]) --

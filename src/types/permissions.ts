@@ -398,6 +398,11 @@ export enum ServicioPermission {
   JUSTIFICACION_VER       = 'SERVICIO.JUSTIFICACION.VER',
   JUSTIFICACION_JUSTIFICAR = 'SERVICIO.JUSTIFICACION.JUSTIFICAR', // justificar / quitar
   JUSTIFICACION_EXPORTAR  = 'SERVICIO.JUSTIFICACION.EXPORTAR',   // descargar CSV
+
+  // Talleres — próximos (con recordatorio por WhatsApp) e histórico con asistencia.
+  TALLERES_VER      = 'SERVICIO.TALLERES.VER',
+  TALLERES_ENVIAR   = 'SERVICIO.TALLERES.ENVIAR',   // enviar el recordatorio
+  TALLERES_EXPORTAR = 'SERVICIO.TALLERES.EXPORTAR', // descargar CSV
 }
 
 /**
