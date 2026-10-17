@@ -139,10 +139,10 @@ function ReciboCelda({ recibo, valor, onAbrir }: { recibo: ReciboInscripcion | n
       </span>
     )
   }
-  if (!onAbrir) return <div className="max-w-[140px]">{linea}</div>
+  if (!onAbrir) return <div className="min-w-0">{linea}</div>
   return (
     <button type="button" onClick={onAbrir} title={recibo ? 'Ver y revisar el recibo' : 'Subir el recibo de inscripción'}
-      className="block w-full max-w-[140px] text-left rounded px-1 -mx-1 py-0.5 hover:bg-emerald-50">
+      className="block w-full min-w-0 text-left rounded px-1 -mx-1 py-0.5 hover:bg-emerald-50">
       {linea}
     </button>
   )
@@ -658,19 +658,22 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
               siempre dice "Insc.", # Ref. suele venir vacía) y deja huecos en
               medio mientras Acciones se sale del borde derecho. Fijándolos, el
               espacio sobrante se lo queda Titular, que es el que lo aprovecha.
+              En Verificación Inscripción no va Cuota (siempre sería "Insc.") y
+              entra Recibo: los anchos se ajustan para que Titular no quede
+              aplastado (con la suma anterior le quedaban ~80px).
             */}
             <table className="w-full min-w-[1080px] table-fixed text-sm">
               <colgroup>
                 {showSelect && <col style={{ width: 36 }} />}
                 <col />{/* Titular — absorbe el sobrante */}
-                <col style={{ width: 150 }} />
+                <col style={{ width: 132 }} />
                 <col style={{ width: 92 }} />
-                <col style={{ width: 104 }} />
-                <col style={{ width: 64 }} />
-                <col style={{ width: 92 }} />
-                {esInscripcion && <col style={{ width: 150 }} />}
+                <col style={{ width: 96 }} />
+                {!esInscripcion && <col style={{ width: 64 }} />}
+                <col style={{ width: 96 }} />
+                {esInscripcion && <col style={{ width: 160 }} />}
                 <col style={{ width: 168 }} />
-                <col style={{ width: 236 }} />
+                <col style={{ width: esInscripcion ? 196 : 236 }} />
               </colgroup>
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr className="whitespace-nowrap text-xs uppercase tracking-wide">
@@ -686,7 +689,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                   <th className="px-2 py-2 text-left font-medium text-gray-600">Contrato</th>
                   <th className="px-2 py-2 text-left font-medium text-gray-600">Fecha</th>
                   <th className="px-2 py-2 text-right font-medium text-gray-600">Valor</th>
-                  <th className="px-2 py-2 text-center font-medium text-gray-600">Cuota</th>
+                  {!esInscripcion && <th className="px-2 py-2 text-center font-medium text-gray-600">Cuota</th>}
                   <th className="px-2 py-2 text-left font-medium text-gray-600"># Ref.</th>
                   {esInscripcion && <th className="px-2 py-2 text-left font-medium text-gray-600">Recibo</th>}
                   <th className="px-2 py-2 text-left font-medium text-gray-600">{lateralLabel}</th>
@@ -733,9 +736,11 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                       </td>
                       <td className="px-2 py-2 text-gray-900 align-top whitespace-nowrap">{fmtDate(p.fechaPago)}</td>
                       <td className="px-2 py-2 text-right text-gray-900 font-medium align-top whitespace-nowrap">{p.valorPagado ? formatCurrency(p.valorPagado) : '—'}</td>
-                      <td className="px-2 py-2 text-center text-gray-900 font-medium align-top whitespace-nowrap">{p.numCuota === 0 ? 'Insc.' : (p.numCuota ?? '—')}</td>
+                      {!esInscripcion && (
+                        <td className="px-2 py-2 text-center text-gray-900 font-medium align-top whitespace-nowrap">{p.numCuota === 0 ? 'Insc.' : (p.numCuota ?? '—')}</td>
+                      )}
                       <td className="px-2 py-2 text-gray-700 text-xs align-top">
-                        <span className="block max-w-[90px] truncate" title={p.numeroReferencia || ''}>{p.numeroReferencia || '—'}</span>
+                        <span className="block truncate" title={p.numeroReferencia || ''}>{p.numeroReferencia || '—'}</span>
                       </td>
                       {esInscripcion && (
                         <td className="px-2 py-2 align-top">
@@ -748,14 +753,14 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                           g ? (
                             <div className="flex items-start gap-1">
                               <span className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 shrink-0">{ROLE_LABEL[g.rol] || g.rol}</span>
-                              <span className="text-xs max-w-[110px] truncate" title={g.nombre}>{g.nombre}</span>
+                              <span className="text-xs min-w-0 truncate" title={g.nombre}>{g.nombre}</span>
                             </div>
                           ) : p.titular_asesorNombre && p.titular_asesorNombre.trim() ? (
                             // Inscripciones: el gestor guardado es el asesor (email) que creó
                             // el contrato → mostramos su NOMBRE (PEOPLE.asesorCreadorContrato).
                             <div className="flex items-start gap-1">
                               <span className="inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-800 shrink-0">Comercial</span>
-                              <span className="text-xs max-w-[110px] truncate" title={`${p.titular_asesorNombre}${p.gestorRecaudo ? ` · ${p.gestorRecaudo}` : ''}`}>{p.titular_asesorNombre}</span>
+                              <span className="text-xs min-w-0 truncate" title={`${p.titular_asesorNombre}${p.gestorRecaudo ? ` · ${p.gestorRecaudo}` : ''}`}>{p.titular_asesorNombre}</span>
                             </div>
                           ) : <span className="text-xs text-gray-400 italic">{p.gestorRecaudo || '—'}</span>
                         ) : (
