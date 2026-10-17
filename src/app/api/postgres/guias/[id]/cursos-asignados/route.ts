@@ -13,7 +13,7 @@ import { cupoOcupadoSql } from '@/lib/cupo';
  */
 export const GET = handlerWithAuth(async (_req, { params }) => {
   const result = await query(
-    `SELECT "campaign", "tipoCurso", "horarioCurso", "salon",
+    `SELECT "_id", "campaign", "tipoCurso", "horarioCurso", "salon",
             "inicioCurso"::text  AS "inicioCurso",
             -- Inicio de la CAMPAÑA = su primer curso. Los demás sólo se reúnen
             -- otro día de la semana (LUN-MIÉ, MAR-JUE, SÁB); la semana de
