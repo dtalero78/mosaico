@@ -39,6 +39,26 @@ class AdvisorRepositoryClass extends BaseRepository {
   }
 
   /**
+   * Guías activos que dictan al menos un curso VIGENTE (curso de campaña activo
+   * que no ha terminado, en hora de Chile). Es la lista que tiene sentido para
+   * elegir un panel de alumnos: un guía sin cursos vigentes no tiene qué mostrar.
+   * `activo = true` estricto (un NULL no cuenta como activo).
+   */
+  async findActivosConCursosVigentes() {
+    return queryMany(
+      `SELECT ${ADVISOR_COLUMNS}
+         FROM "GUIAS" g
+        WHERE g."activo" = true
+          AND EXISTS (
+            SELECT 1 FROM "CURSOS_CAMPAIGN" cc
+             WHERE cc."guia" = g."_id" AND cc."activa" = true
+               AND (cc."finalCurso" IS NULL OR cc."finalCurso" >= (NOW() AT TIME ZONE 'America/Santiago')::date)
+          )
+        ORDER BY "nombreCompleto" ASC NULLS LAST`
+    );
+  }
+
+  /**
    * Find advisor by email
    */
   async findByEmail(email: string) {

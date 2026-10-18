@@ -19,6 +19,13 @@ export const GET = handler(async (request: Request) => {
     return successResponse({ advisor, guia: advisor });
   }
 
+  // ?conCursosVigentes=1 → sólo activos que dictan un curso vigente (selector de
+  // "Mis alumnos por curso").
+  if (searchParams.get('conCursosVigentes') === '1') {
+    const list = await AdvisorRepository.findActivosConCursosVigentes();
+    return successResponse({ guias: list, advisors: list, data: list, total: list.length });
+  }
+
   const includeInactive = searchParams.get('includeInactive') === 'true';
   const list = await AdvisorRepository.findAll(includeInactive);
 

@@ -56,7 +56,8 @@ function PanelAlumnos() {
         setGuiaId(id)
         return
       }
-      const lista: GuiaOpcion[] = await fetch('/api/postgres/guias', { cache: 'no-store' })
+      // Sólo guías activos con algún curso vigente: los demás no tienen alumnos que mostrar.
+      const lista: GuiaOpcion[] = await fetch('/api/postgres/guias?conCursosVigentes=1', { cache: 'no-store' })
         .then(r => r.json()).then(j => j.guias || []).catch(() => [])
       if (cancel) return
       setGuias(lista)
