@@ -35,3 +35,25 @@ export function resolverAlcancePorGuia(input: {
 
 /** Con este alcance, ¿hay que responder la lista vacía sin consultar? */
 export const alcanceSinResultados = (a: AlcancePorGuia): boolean => a.soloPropios && !a.guiaId
+
+/**
+ * ¿Puede esta sesión ver el panel de alumnos del guía `guiaPedido`?
+ *
+ *  - El rol GUIA, sólo el suyo, aunque su rol tuviera el permiso de ver todos.
+ *  - Los demás, cualquiera si tienen el permiso de ver todos; si no, sólo el
+ *    propio (un coordinador que además dicta cursos tiene ficha de guía).
+ *
+ * Nunca vale un pedido vacío: sin guía pedido no hay panel que mostrar.
+ */
+export function puedeVerPanelGuia(input: {
+  esGuia: boolean
+  verTodos: boolean
+  guiaDeSesion?: string | null
+  guiaPedido?: string | null
+}): boolean {
+  const pedido = String(input.guiaPedido || '').trim()
+  if (!pedido) return false
+  const propio = String(input.guiaDeSesion || '').trim()
+  if (input.esGuia) return !!propio && propio === pedido
+  return input.verTodos || (!!propio && propio === pedido)
+}

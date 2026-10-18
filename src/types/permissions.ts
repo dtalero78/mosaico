@@ -188,6 +188,12 @@ export enum AcademicoPermission {
   // no sólo el propio). SUPER_ADMIN/ADMIN lo tienen implícito.
   CONTROL_HORAS_VER_TODOS = 'ACADEMICO.CONTROL_HORAS.VER_TODOS',
 
+  // Panel del guía — "Mis alumnos por curso" (/panel-advisor/alumnos).
+  // VER: el guía ve sus propios cursos. VER_TODOS: elegir el panel de cualquier
+  // guía (Coordinación). SUPER_ADMIN/ADMIN lo tienen implícito.
+  PANEL_ALUMNOS_VER = 'ACADEMICO.PANEL_ALUMNOS.VER',
+  PANEL_ALUMNOS_VER_TODOS = 'ACADEMICO.PANEL_ALUMNOS.VER_TODOS',
+
   // Evaluaciones Jump (Bot Tutor) — revisar/aprobar reportes del bot
   JUMP_EVAL_REVISAR = 'ACADEMICO.JUMP_EVAL.REVISAR',
 

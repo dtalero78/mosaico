@@ -16,19 +16,22 @@ interface ExcelColumn<T> {
  * @param data - Array of objects to export
  * @param columns - Column definitions with headers and accessors
  * @param filename - Filename without extension (date will NOT be appended)
+ * @param opts.separator - ',' por defecto; ';' para el Excel en español, que usa
+ *   la coma como separador decimal y abre el ';' en columnas sin preguntar.
  */
 export function exportToExcel<T>(
   data: T[],
   columns: ExcelColumn<T>[],
-  filename: string
+  filename: string,
+  opts: { separator?: ',' | ';' } = {}
 ) {
   if (data.length === 0) return;
 
-  const separator = ',';
+  const separator = opts.separator ?? ',';
   const BOM = '\uFEFF'; // UTF-8 BOM for Excel
 
   // Header row
-  const headerRow = columns.map((col) => escapeCSV(col.header)).join(separator);
+  const headerRow = columns.map((col) => escapeCSV(col.header, separator)).join(separator);
 
   // Data rows
   const dataRows = data.map((row) =>
@@ -36,7 +39,7 @@ export function exportToExcel<T>(
       .map((col) => {
         const value = col.accessor(row);
         if (value === null || value === undefined) return '';
-        return escapeCSV(String(value));
+        return escapeCSV(String(value), separator);
       })
       .join(separator)
   );
@@ -55,8 +58,8 @@ export function exportToExcel<T>(
   URL.revokeObjectURL(url);
 }
 
-function escapeCSV(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+function escapeCSV(value: string, separator: string = ','): string {
+  if (value.includes(separator) || value.includes('"') || value.includes('\n')) {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;

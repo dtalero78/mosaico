@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { estadoCurso, ESTADO_CURSO_META, type EstadoCurso } from '@/lib/cursos-campaign'
+import { usePermissions } from '@/hooks/usePermissions'
+import { AcademicoPermission } from '@/types/permissions'
 
 type Row = {
   _id: string
@@ -35,6 +37,8 @@ const rowEstado = (r: Row): Estado => estadoCurso(r)
 const d = (x: string | null) => (x ? String(x).slice(0, 10) : '—')
 
 export default function CursosAsignadosGuia({ guiaId }: { guiaId: string }) {
+  const { hasPermission } = usePermissions()
+  const verPanelAlumnos = hasPermission(AcademicoPermission.PANEL_ALUMNOS_VER)
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -171,7 +175,16 @@ export default function CursosAsignadosGuia({ guiaId }: { guiaId: string }) {
                 return (
                   <tr key={i} className="border-b border-gray-100">
                     <td className="py-2 pr-4">
-                      <div className="font-medium text-gray-900">{r.tipoCurso} · Salón {r.salon}</div>
+                      {verPanelAlumnos ? (
+                        // Abre "Mis alumnos por curso" con este curso ya elegido.
+                        <a href={`/panel-advisor/alumnos?guia=${encodeURIComponent(guiaId)}&curso=${encodeURIComponent(r._id)}`}
+                          target="_blank" rel="noopener noreferrer" title="Ver alumnos del curso"
+                          className="font-medium text-primary-700 hover:underline">
+                          {r.tipoCurso} · Salón {r.salon}
+                        </a>
+                      ) : (
+                        <div className="font-medium text-gray-900">{r.tipoCurso} · Salón {r.salon}</div>
+                      )}
                       <div className="text-xs text-gray-400">{r.campaign}</div>
                     </td>
                     <td className="py-2 pr-4 text-gray-700">{r.horarioCurso}</td>

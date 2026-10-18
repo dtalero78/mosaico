@@ -616,6 +616,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Habilita el dropdown para seleccionar/consultar el Control de Horas de CUALQUIER advisor (no sólo el propio). Sin este permiso el usuario sólo ve su propia info. SUPER_ADMIN/ADMIN lo tienen implícito.',
   },
   {
+    code: AcademicoPermission.PANEL_ALUMNOS_VER,
+    module: Module.ACADEMICO,
+    section: 'Panel del guía · Alumnos',
+    name: 'Página "Mis alumnos por curso"',
+    description: 'Acceso a /panel-advisor/alumnos (clic en el nombre del curso en Cursos asignados): una fila por alumno con asistencia, lecciones, nivelaciones, casos, evaluaciones, criterios y alertas. El guía ve sólo sus propios cursos.',
+  },
+  {
+    code: AcademicoPermission.PANEL_ALUMNOS_VER_TODOS,
+    module: Module.ACADEMICO,
+    section: 'Panel del guía · Alumnos',
+    name: 'Selector de guía en "Mis alumnos por curso"',
+    description: 'Permite elegir y consultar el panel de alumnos de CUALQUIER guía (Coordinación). Al rol GUIA no le sirve: un guía sólo ve lo suyo. SUPER_ADMIN/ADMIN lo tienen implícito.',
+  },
+  {
     code: AcademicoPermission.JUMP_EVAL_REVISAR,
     module: Module.ACADEMICO,
     section: 'Evaluaciones Jump',

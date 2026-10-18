@@ -209,6 +209,10 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/panel-advisor': [
     'ACADEMICO.ADVISOR.VER_ENLACE' as Permission,
   ],
+  // Panel del guía › Mis alumnos por curso (el endpoint valida además el alcance).
+  '/panel-advisor/alumnos': [
+    'ACADEMICO.PANEL_ALUMNOS.VER' as Permission,
+  ],
 
   // Servicio - Welcome Session
   '/dashboard/servicio/welcome-session': [

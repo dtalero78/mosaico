@@ -10,6 +10,7 @@ import {
 import { esRolGuia, guiaIdDeSesion } from '@/services/guia-sesion.service';
 import { refReporte } from '@/lib/autorizacion-gestion';
 import { autorizacionDe, type AutorizacionInfo } from '@/services/autorizacion-gestion.service';
+import { METRICAS_MANUALES, sanitizeCriterios } from '@/lib/criterios-guia';
 
 // ¿La sesión es del rol GUIA? Los demás roles no tienen ni ventana ni semana
 // fija. La definición vive en `guia-sesion.service`; se re-exporta para no tocar
@@ -84,36 +85,13 @@ export const METRICA_ASISTIO = {
  * las sesiones (así se conservan las valoraciones hechas antes de que la
  * rúbrica volviera al panel). Clave ausente = se usa lo de las sesiones.
  */
-export const METRICAS_MANUALES = [
-  { key: 'puntual', label: 'Puntual', grupo: 'HÁBITOS', col: 'hePuntualidad' },
-  { key: 'asignacion', label: 'Asignación', grupo: 'HÁBITOS', col: 'heAsignacion' },
-  { key: 'dominio', label: 'Dominio', grupo: 'DESEMPEÑO', col: 'daDominio' },
-  { key: 'participo', label: 'Participó', grupo: 'DESEMPEÑO', col: 'participacion' },
-  { key: 'desafio', label: 'Desafío', grupo: 'DESEMPEÑO', col: 'daDesafio' },
-  { key: 'activo', label: 'Activo', grupo: 'ACTITUDES', col: 'acPermanencia' },
-  { key: 'respeto', label: 'Respeto', grupo: 'ACTITUDES', col: 'acRespeto' },
-  // Hasta oct-2026 «cámara y micrófono» era UN criterio (acDisposicion); al
-  // separarlo, lo guardado se copió a los dos (scripts/split-camara-microfono.js).
-  { key: 'camara', label: 'Cámara', grupo: 'ACTITUDES', col: 'acDisposicion' },
-  { key: 'microfono', label: 'Micrófono', grupo: 'ACTITUDES', col: 'acMicrofono' },
-] as const;
+// La lista vive en `lib/criterios-guia` (la usa también el Panel del guía, que
+// necesita el cálculo puro); se re-exporta para no cambiar a quien la importa de aquí.
+export { METRICAS_MANUALES, ESTADOS_CRITERIO, sanitizeCriterios } from '@/lib/criterios-guia';
+export type { EstadoCriterio } from '@/lib/criterios-guia';
 
 /** Orden de las columnas en la tabla (Hábitos 3 · Desempeño 3 · Actitudes 4). */
 export const METRICAS = [METRICA_ASISTIO, ...METRICAS_MANUALES] as const;
-
-export const ESTADOS_CRITERIO = ['full', 'half', 'empty'] as const;
-export type EstadoCriterio = typeof ESTADOS_CRITERIO[number];
-
-/** Deja sólo las claves conocidas con estado válido (defensa del JSONB). */
-export function sanitizeCriterios(input: any): Record<string, EstadoCriterio> {
-  const out: Record<string, EstadoCriterio> = {};
-  if (!input || typeof input !== 'object') return out;
-  for (const m of METRICAS_MANUALES) {
-    const v = input[m.key];
-    if (ESTADOS_CRITERIO.includes(v)) out[m.key] = v;
-  }
-  return out;
-}
 
 // Tipos que NO cuentan como "sesión" para las métricas semanales / asistencia del curso.
 const NO_SESION = `UPPER(COALESCE(b."tipo", b."tipoEvento", 'SESSION')) NOT IN ('CLUB','NIVELACION','COMPLEMENTARIA','WELCOME','OLIMPIADA')`;
