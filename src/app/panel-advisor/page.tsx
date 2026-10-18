@@ -7,6 +7,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import EventDetailModal from '@/components/academic/EventDetailModal'
 import AdminEventRegistrarModal from '@/components/admin-events/AdminEventRegistrarModal'
 import CursosAsignadosGuia from '@/components/advisor/CursosAsignadosGuia'
+import PanelAlumnosGuia from '@/components/panel-guia/PanelAlumnosGuia'
 import { ControlHorasContent } from '@/app/dashboard/academic/control-horas/page'
 import {
   CalendarIcon,
@@ -88,7 +89,7 @@ function PanelAdvisorContent() {
   // en vez de dejar al guía buscándolo en el calendario. Una sola vez.
   const adminEventPendiente = useRef<string | null>(searchParams.get('adminEvent'))
   // Pestaña activa del panel: calendario | cursos asignados | control de horas
-  const [activeTab, setActiveTab] = useState<'calendario' | 'cursos' | 'horas' | 'justificaciones'>('calendario')
+  const [activeTab, setActiveTab] = useState<'calendario' | 'cursos' | 'alumnos' | 'horas' | 'justificaciones'>('calendario')
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<CalendarioEvent | null>(null)
   const [showEventDetailModal, setShowEventDetailModal] = useState(false)
@@ -114,6 +115,8 @@ function PanelAdvisorContent() {
   const canPickOtherAdvisor = hasPermission(AcademicoPermission.ADVISOR_VER_ENLACE) && userRole !== 'GUIA'
   // Pestaña "Justificaciones": los ausentes de los cursos del guía del panel.
   const canVerJustificaciones = hasPermission(ServicioPermission.JUSTIFICACION_VER as any)
+  // Pestaña "Mis alumnos": el panel de alumnos por curso del guía del panel.
+  const canVerMisAlumnos = hasPermission(AcademicoPermission.PANEL_ALUMNOS_VER)
 
   // Get email from URL params; fall back to session email for logged-in ADVISORs
   const advisorEmail = searchParams.get('email') || (
@@ -488,6 +491,15 @@ function PanelAdvisorContent() {
             >
               Cursos asignados
             </button>
+            {canVerMisAlumnos && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('alumnos')}
+                className={`py-2 px-1 border-b-2 text-sm font-medium ${activeTab === 'alumnos' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+              >
+                Mis alumnos
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setActiveTab('horas')}
@@ -511,6 +523,12 @@ function PanelAdvisorContent() {
             El servidor además fuerza al propio guía cuando el rol es GUIA. */}
         {activeTab === 'justificaciones' && advisor && canVerJustificaciones && (
           <GestionJustificacion key={advisor._id} guiaId={advisor._id} embedded />
+        )}
+
+        {/* Pestaña Mis alumnos: la misma vista de /panel-advisor/alumnos, con el
+            guía del panel. El servidor fuerza al propio guía cuando el rol es GUIA. */}
+        {activeTab === 'alumnos' && advisor && canVerMisAlumnos && (
+          <PanelAlumnosGuia key={advisor._id} guiaId={advisor._id} embebido />
         )}
 
         {/* Pestaña Cursos asignados */}
