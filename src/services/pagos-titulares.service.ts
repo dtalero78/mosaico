@@ -18,6 +18,7 @@ import { PeopleRepository } from '@/repositories/people.repository';
 import { ids } from '@/lib/id-generator';
 import { query, queryOne } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
+import { FACTURA_ADMIN, esFacturaAdmin } from '@/lib/factura-admin';
 import { spacesClient, SPACES_BUCKET, SPACES_CDN } from '@/lib/spaces';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { computePlataformaScope, getSessionPlataforma, buildPlataformaWhereSql, type PlataformaScope } from '@/lib/recaudos-scope';
@@ -827,7 +828,8 @@ export const pagosTitularesService = {
    * Facturación EN BLOQUE: cada pago con SU número de factura (no se comparte).
    * Pasa por `facturar`, así cada uno cumple las mismas reglas que el botón de la
    * fila; uno que falle (ya no está verificado, se borró) no detiene a los demás.
-   * Repetir un número dentro del mismo lote se rechaza antes de tocar nada.
+   * Repetir un número dentro del mismo lote se rechaza antes de tocar nada,
+   * salvo "ADMIN" (lib/factura-admin): la factura sin número propio.
    */
   async facturarMasivo(
     items: { id: string; numeroFactura: string }[],
@@ -837,6 +839,8 @@ export const pagosTitularesService = {
     if (limpios.some(i => !i.numeroFactura)) throw new ValidationError('Cada pago necesita su número de factura.');
     const vistos = new Set<string>();
     for (const i of limpios) {
+      // "ADMIN" es la factura sin número propio: es el único valor que se repite.
+      if (esFacturaAdmin(i.numeroFactura)) { i.numeroFactura = FACTURA_ADMIN; continue; }
       const k = i.numeroFactura.toUpperCase();
       if (vistos.has(k)) throw new ValidationError(`El número de factura ${i.numeroFactura} está repetido en la selección.`);
       vistos.add(k);

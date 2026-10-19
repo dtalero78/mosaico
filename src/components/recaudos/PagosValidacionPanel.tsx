@@ -29,6 +29,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { exportToExcel } from '@/lib/export-excel'
 import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
 import { montoCoincide, type ReciboInscripcion } from '@/lib/recibo-inscripcion'
+import { FACTURA_ADMIN, esFacturaAdmin } from '@/lib/factura-admin'
 
 interface DocAdjunto { url: string; nombre?: string | null; tipo?: string | null; fechaSubida?: string | null }
 
@@ -429,15 +430,19 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
   const [bulkFactModal, setBulkFactModal] = useState(false)
   const [bulkFacturas, setBulkFacturas] = useState<Record<string, string>>({})
   const [bulkFacturando, setBulkFacturando] = useState(false)
+  // Casilla "Factura ADMIN": todos los pagos del lote salen con ese número, sin
+  // tener que escribir uno por uno. Es el único valor que puede repetirse.
+  const [bulkComoAdmin, setBulkComoAdmin] = useState(false)
   const filasAFacturar = pendientes.filter(p => selected.has(p._id))
-  const numerosLote = filasAFacturar.map(p => (bulkFacturas[p._id] || '').trim())
+  const numeroDe = (id: string) => (bulkComoAdmin ? FACTURA_ADMIN : (bulkFacturas[id] || '').trim())
+  const numerosLote = filasAFacturar.map(p => numeroDe(p._id))
   const faltanNumeros = numerosLote.filter(n => !n).length
   const repetidos = new Set(
-    numerosLote.filter(n => n).map(n => n.toUpperCase())
+    numerosLote.filter(n => n && !esFacturaAdmin(n)).map(n => n.toUpperCase())
       .filter((n, i, arr) => arr.indexOf(n) !== i)
   )
 
-  const abrirFacturarMasivo = () => { setBulkFacturas({}); setBulkFactModal(true) }
+  const abrirFacturarMasivo = () => { setBulkFacturas({}); setBulkComoAdmin(false); setBulkFactModal(true) }
 
   const handleBulkFacturar = async () => {
     if (!filasAFacturar.length || faltanNumeros || repetidos.size) return
@@ -445,7 +450,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
     try {
       const r = await api.post<{ ok: number; fail: number; errores: { id: string; error: string }[] }>(
         `/api/postgres/pagos-titulares/facturar-masivo`,
-        { items: filasAFacturar.map(p => ({ id: p._id, numeroFactura: (bulkFacturas[p._id] || '').trim() })) }
+        { items: filasAFacturar.map(p => ({ id: p._id, numeroFactura: numeroDe(p._id) })) }
       )
       if (r.fail) {
         const nombre = (id: string) => {
@@ -967,9 +972,17 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
             <p className="text-sm text-gray-600">
               Escribe el número de factura de cada pago. Cada uno lleva el suyo; al confirmar salen de la pestaña <strong>Facturación</strong>. El saldo no cambia.
             </p>
+            <label className={`flex items-start gap-2 text-sm rounded-lg border px-3 py-2 cursor-pointer ${bulkComoAdmin ? 'border-purple-300 bg-purple-50 text-purple-900' : 'border-gray-200 text-gray-700'}`}>
+              <input type="checkbox" className="mt-0.5" checked={bulkComoAdmin} disabled={bulkFacturando}
+                onChange={e => setBulkComoAdmin(e.target.checked)} />
+              <span>
+                <strong>Marcar todos como factura {FACTURA_ADMIN}</strong> — los {filasAFacturar.length} pago(s) quedan con
+                el número <strong>{FACTURA_ADMIN}</strong>, sin escribirlo uno por uno.
+              </span>
+            </label>
             <div className="overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
               {filasAFacturar.map((p, idx) => {
-                const valor = (bulkFacturas[p._id] || '').trim()
+                const valor = numeroDe(p._id)
                 const repetido = !!valor && repetidos.has(valor.toUpperCase())
                 return (
                   <div key={p._id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
@@ -980,11 +993,11 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                       </div>
                     </div>
                     <div className="w-44">
-                      <input type="text" value={bulkFacturas[p._id] || ''} autoFocus={idx === 0}
+                      <input type="text" value={bulkComoAdmin ? FACTURA_ADMIN : (bulkFacturas[p._id] || '')} autoFocus={idx === 0 && !bulkComoAdmin}
                         onChange={e => setBulkFacturas(prev => ({ ...prev, [p._id]: e.target.value }))}
                         placeholder="N.º de factura" aria-label={`Número de factura de ${p.titular_primerNombre}`}
-                        disabled={bulkFacturando}
-                        className={`w-full px-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${repetido ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+                        disabled={bulkFacturando || bulkComoAdmin}
+                        className={`w-full px-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-50 ${repetido ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
                       {repetido && <p className="text-[11px] text-red-600 mt-0.5">Número repetido</p>}
                     </div>
                   </div>
