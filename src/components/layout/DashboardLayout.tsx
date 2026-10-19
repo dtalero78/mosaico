@@ -77,9 +77,17 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Refuerzo Sesiones', href: '/dashboard/academic/solicitud-sesiones', newTab: true },
         ],
       },
-      { name: 'Mantenimiento Cursos', href: '/dashboard/academic/actualizar-material', newTab: true },
-      { name: 'Campañas', href: '/dashboard/academic/crear-campana', newTab: true },
-      { name: 'Horarios', href: '/dashboard/academic/horarios', newTab: true },
+      // Submenú Mantenimiento — lo que arma y ajusta los cursos. Como todo
+      // submenú, se muestra si al usuario le queda ≥1 ítem permitido: agrupar no
+      // le quita ni le da acceso a nadie.
+      {
+        name: 'Mantenimiento', isSubmenu: true, children: [
+          { name: 'Mantenimiento Cursos', href: '/dashboard/academic/actualizar-material', newTab: true },
+          { name: 'Campañas', href: '/dashboard/academic/crear-campana', newTab: true },
+          { name: 'Horarios', href: '/dashboard/academic/horarios', newTab: true },
+          { name: 'Ajuste masivo', href: '/dashboard/academic/ajuste-masivo', newTab: true },
+        ],
+      },
       { name: 'Tipos de Curso', href: '/dashboard/academic/tipos-curso', newTab: true },
       { name: 'Crear IMPULSA', href: '/dashboard/academic/crear-impulsa', newTab: true },
       // "Evaluaciones Jump" (/dashboard/academic/jump-evaluaciones) se retiró del
@@ -309,6 +317,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/dashboard/academic/horarios': [
       AcademicoPermission.HORARIOS_GESTION,
+    ],
+    '/dashboard/academic/ajuste-masivo': [
+      AcademicoPermission.AJUSTE_MASIVO,
     ],
     '/dashboard/academic/tipos-curso': [
       AcademicoPermission.TIPOS_CURSO_GESTION,
@@ -559,6 +570,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       AcademicoPermission.ESTADISTICA,
       // ACADEMICO.MATERIAL.*
       AcademicoPermission.ACTUALIZAR_MATERIAL,
+      // Submenú Mantenimiento: con sólo uno de sus ítems el grupo debe verse.
+      AcademicoPermission.CAMPANA_CREAR,
+      AcademicoPermission.HORARIOS_GESTION,
+      AcademicoPermission.AJUSTE_MASIVO,
       // Páginas con permiso propio: con sólo una de ellas el grupo debe verse.
       AcademicoPermission.VER_EVALUACION,
       AcademicoPermission.VER_ENTRENAMIENTO,

@@ -225,6 +225,9 @@ export enum AcademicoPermission {
   // desactivar. El catálogo sólo llena el desplegable de Campañas.
   HORARIOS_GESTION = 'ACADEMICO.HORARIOS.GESTION',
   TIPOS_CURSO_GESTION = 'ACADEMICO.TIPOS_CURSO.GESTION',
+  // Académico › Mantenimiento › Ajuste masivo: el Ajuste Lecciones de la ficha
+  // aplicado a todo un salón (sólo hacia adelante).
+  AJUSTE_MASIVO = 'ACADEMICO.AJUSTE_MASIVO.APLICAR',
 
   // Lista de Usuarios — reporte de estudiantes (Académico › Guías)
   LISTA_USUARIOS_VER      = 'ACADEMICO.LISTA_USUARIOS.VER',

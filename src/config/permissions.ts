@@ -597,8 +597,8 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   {
     code: AcademicoPermission.ACTUALIZAR_MATERIAL,
     module: Module.ACADEMICO,
-    section: 'Actualizar Material',
-    name: 'Página "Actualizar Material"',
+    section: 'Mantenimiento',
+    name: 'Página "Mantenimiento Cursos"',
     description: 'Gestionar material de Usuarios (materialUsuario) y Advisors (material) por nivel/step — incluye subir, reemplazar, borrar y descargar archivos',
   },
   {
@@ -842,14 +842,14 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   {
     code: AcademicoPermission.CAMPANA_CREAR,
     module: Module.ACADEMICO,
-    section: 'Crea Campaña',
-    name: 'Página "Crea Campaña" — crear campañas y cursos',
+    section: 'Mantenimiento',
+    name: 'Página "Campañas" — crear campañas y cursos',
     description: 'Acceso a /dashboard/academic/crear-campana. Crear campañas con sus cursos (tipo de curso, horario, fechas, cupos) en CURSOS_CAMPAIGN. Estos cursos alimentan los dropdowns del wizard de Crear Contrato. Pensado para SUPER_ADMIN / ADMIN / COORDINADOR_ACADEMICO.',
   },
   {
     code: AcademicoPermission.CAMPANA_AJUSTAR,
     module: Module.ACADEMICO,
-    section: 'Crea Campaña',
+    section: 'Mantenimiento',
     name: 'Ajuste Cursos — cerrar o ampliar un curso',
     description: 'Pestaña "Ajuste Cursos" de Campañas. Cierre: adelanta el final del curso y BORRA sus clases y agendamientos posteriores a esa fecha. Ampliación: extiende el final y agrega las clases nuevas con sus agendamientos. Un curso ajustado ya no se edita desde Gestión. Requiere además el acceso a Campañas.',
   },
@@ -857,9 +857,16 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   {
     code: AcademicoPermission.HORARIOS_GESTION,
     module: Module.ACADEMICO,
-    section: 'Horarios',
+    section: 'Mantenimiento',
     name: 'Página "Horarios" — catálogo de horarios por curso',
     description: 'Acceso a /dashboard/academic/horarios. Agregar y desactivar los horarios que se ofrecen al crear un curso de campaña. Desactivar NO afecta a los cursos ni alumnos que ya lo usan.',
+  },
+  {
+    code: AcademicoPermission.AJUSTE_MASIVO,
+    module: Module.ACADEMICO,
+    section: 'Mantenimiento',
+    name: 'Página "Ajuste masivo" — mover un salón completo de lección',
+    description: 'Acceso a /dashboard/academic/ajuste-masivo. Aplica el Ajuste Lecciones de la ficha del alumno a todos los alumnos de un salón a la vez: aprueba las lecciones anteriores al destino que falten. Sólo mueve hacia ADELANTE: quien ya va más adelante no se toca. Motivo obligatorio; cada alumno queda con su registro.',
   },
 
   {

@@ -126,7 +126,11 @@ export async function previewMovimiento(academicaId: string, targetModulo: strin
 /** Ejecuta el movimiento. */
 export async function ejecutarMovimiento(
   academicaId: string, targetModulo: string, targetLeccion: string,
-  actor: { email?: string | null; nombre?: string | null }, motivo?: string
+  actor: { email?: string | null; nombre?: string | null }, motivo?: string,
+  // `soloAdelante`: el Ajuste masivo nunca retrocede a nadie. La dirección se
+  // vuelve a calcular aquí, en el mismo momento de escribir, así que la vista
+  // previa vieja no puede colar un retroceso.
+  opts: { soloAdelante?: boolean; origen?: string } = {}
 ) {
   const { aca, bookings } = await cargar(academicaId);
   if (!aca.curso || aca.curso === 'WELCOME') {
@@ -139,6 +143,10 @@ export async function ejecutarMovimiento(
   if (p.direction === 'igual') {
     throw new ValidationError('El destino es la misma posición actual; no hay cambio que aplicar.');
   }
+  if (opts.soloAdelante && p.direction !== 'adelante') {
+    throw new ValidationError('El alumno ya va más adelante que la lección elegida; no se retrocede.');
+  }
+  const etiqueta = opts.origen || 'Movimiento Académico';
 
   // Snapshot del estado anterior de los bookings afectados (para revertir).
   const afectados = [...p._aAprobar, ...p._aDesaprobar];
@@ -170,6 +178,7 @@ export async function ejecutarMovimiento(
   const histEntry = JSON.stringify([{
     fecha: new Date().toISOString(),
     tipo: 'MOVIMIENTO_ACADEMICO',
+    ...(opts.origen ? { origen: opts.origen } : {}),
     de: `${aca.nivel} · ${aca.step}`,
     a: `${targetModulo} · ${targetLeccion}`,
     direccion: p.direction,
@@ -198,7 +207,7 @@ export async function ejecutarMovimiento(
   }
   // Comentario en PEOPLE (traza).
   if (aca.numeroId) {
-    const texto = `[Movimiento Académico] ${aca.nivel} · ${aca.step} → ${targetModulo} · ${targetLeccion} (${p.direction}; +${p.aprobar} aprobadas / -${p.perder} des-aprobadas).${motivo ? ' ' + motivo : ''} Por: ${actor?.nombre || actor?.email || 'system'}`;
+    const texto = `[${etiqueta}] ${aca.nivel} · ${aca.step} → ${targetModulo} · ${targetLeccion} (${p.direction}; +${p.aprobar} aprobadas / -${p.perder} des-aprobadas).${motivo ? ' ' + motivo : ''} Por: ${actor?.nombre || actor?.email || 'system'}`;
     await query(
       `UPDATE "PEOPLE" SET "comentarios" = COALESCE("comentarios",'[]'::jsonb) || $2::jsonb, "_updatedDate"=NOW()
         WHERE "numeroId"=$1 AND "tipoUsuario"='BENEFICIARIO'`,
