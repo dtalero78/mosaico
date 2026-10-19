@@ -10,7 +10,10 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
-import { estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel, origenLabel, esOrigenAdmin, ORIGENES_ADMIN } from '@/lib/casos-atencion-estados'
+import {
+  estadoLabel, estadoColor, ESTADO_ABIERTO, tipoCasoLabel, origenLabel, esOrigenAdmin, ORIGENES_ADMIN,
+  SIN_ASIGNAR_LABEL, CANAL_CONTACTO_LABEL, RESULTADO_CONTACTO_LABEL, RESULTADO_CONTACTO_COLOR,
+} from '@/lib/casos-atencion-estados'
 import NoContinuaCasilla from '@/components/casos/NoContinuaCasilla'
 import { hoyEnChile } from '@/lib/cursos-campaign'
 
@@ -259,6 +262,8 @@ interface Row {
   // Estado REAL del caso (viene de CASOS_ATENCION, no de la marca del booking)
   estado?: string | null
   codigoCaso?: string | null
+  /** Último intento de contacto POR CANAL, del más reciente al más antiguo (pestaña Casos). */
+  contactos?: ContactoCanal[]
   // Sólo en las pestañas de gestión
   casoId?: string
   acuerdo?: string | null
@@ -289,6 +294,35 @@ interface Grupo { campaign: string; curso: string; salon: string; sesiones: Sesi
 interface Guia { id: string; nombre: string }
 
 const fmtFecha = (f: string | null) => (f ? new Date(f).toLocaleDateString('es-CL') : '—')
+
+/** Estado de un caso de la pestaña Casos: abierto y sin área = "Sin asignar". */
+const estadoCasoTexto = (e?: string | null) =>
+  (e && e !== ESTADO_ABIERTO ? estadoLabel(e) : SIN_ASIGNAR_LABEL)
+
+interface ContactoCanal { canal: string; resultado: string; fecha: string; intentos: number }
+
+/** "Llamada · Sin respuesta" — el último intento de ese canal. */
+const contactoTexto = (c: ContactoCanal) =>
+  `${CANAL_CONTACTO_LABEL[c.canal] || c.canal} · ${RESULTADO_CONTACTO_LABEL[c.resultado] || c.resultado}`
+
+const fmtFechaHora = (f: string) => new Date(f).toLocaleString('es-CL', { timeZone: 'America/Santiago' })
+
+/** Un chip por canal con su último intento; nada si no hubo intentos. */
+function ContactosChips({ contactos, className = '' }: { contactos?: ContactoCanal[]; className?: string }) {
+  if (!contactos?.length) return null
+  return (
+    <span className={`flex flex-wrap gap-1 ${className}`}>
+      {contactos.map(c => (
+        <span key={c.canal}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${RESULTADO_CONTACTO_COLOR[c.resultado] || 'bg-gray-100 text-gray-600'}`}
+          title={`Último intento: ${fmtFechaHora(c.fecha)}${c.intentos > 1 ? ` · ${c.intentos} intentos por este canal` : ''}`}>
+          {contactoTexto(c)}
+          {c.intentos > 1 && <span className="opacity-70">({c.intentos})</span>}
+        </span>
+      ))}
+    </span>
+  )
+}
 
 // Las 2 últimas columnas de Asistencia van fijas a la derecha para que el botón de
 // enviar no quede fuera de pantalla. El ancho de la última se fija para que el
@@ -529,7 +563,15 @@ function CasosAtencionContent() {
     // tabla (…Guía · Fecha · Estado).
     cols.push({ header: 'Fecha', accessor: (r: Row) => fmtFecha(r.fecha) })
     if (tab === 'casos') {
-      cols.push({ header: 'Estado', accessor: (r: Row) => (r.estado && r.estado !== ESTADO_ABIERTO ? estadoLabel(r.estado) : 'Pendiente') })
+      cols.push(
+        { header: 'Estado', accessor: (r: Row) => estadoCasoTexto(r.estado) },
+        {
+          header: 'Contactos',
+          accessor: (r: Row) => (r.contactos || [])
+            .map(c => `${contactoTexto(c)} (${fmtFechaHora(c.fecha)}${c.intentos > 1 ? `, ${c.intentos} intentos` : ''})`)
+            .join(' | '),
+        },
+      )
     } else {
       cols.push(
         { header: 'Contactado apoderado', accessor: (r: Row) => (r.contactadoApoderado ? 'Sí' : 'No') },
@@ -1016,12 +1058,12 @@ function CasosAtencionContent() {
                   <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fmtFecha(r.fecha)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {/* Estado REAL del caso. Esta pestaña sólo lista los abiertos
-                        (los cerrados pasan al Histórico), así que en la práctica
-                        dice "Pendiente"; se lee del caso y no se escribe en duro
-                        para que un cambio hecho en la ficha del alumno se vea. */}
+                        y sin área (los asignados van a su bandeja, los cerrados al
+                        Histórico), así que en la práctica dice "Sin asignar"; se
+                        lee del caso para que un cambio en la ficha del alumno se vea. */}
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold mr-2 ${estadoColor(r.estado || ESTADO_ABIERTO)}`}
                       title={r.codigoCaso ? `Caso ${r.codigoCaso}` : undefined}>
-                      {r.estado && r.estado !== ESTADO_ABIERTO ? estadoLabel(r.estado) : 'Pendiente'}
+                      {estadoCasoTexto(r.estado)}
                     </span>
                     <button type="button" title="Asignar el caso a un área o cerrarlo"
                       onClick={() => { setResolver(r); setComentario(''); setDestino(undefined); setResolverConfirmado(false); setResolverNoContinua(false) }}
@@ -1029,6 +1071,9 @@ function CasosAtencionContent() {
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed">
                       <CheckCircleIcon className="h-4 w-4" /> Asignar
                     </button>
+                    {/* Aunque no tenga área, Servicio puede haber llamado ya al
+                        apoderado: se muestra el último intento para no repetirlo. */}
+                    <ContactosChips contactos={r.contactos} className="mt-1.5" />
                   </td>
                 </tr>
               )) : rows.map((r) => (
@@ -1126,9 +1171,15 @@ function CasosAtencionContent() {
                 <p className="text-sm text-gray-500 mb-4">
                   Estado actual:{' '}
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${estadoColor(resolver.estado || ESTADO_ABIERTO)}`}>
-                    {resolver.estado && resolver.estado !== ESTADO_ABIERTO ? estadoLabel(resolver.estado) : 'Pendiente'}
+                    {estadoCasoTexto(resolver.estado)}
                   </span>
                 </p>
+                {!!resolver.contactos?.length && (
+                  <div className="text-sm text-gray-500 mb-4 -mt-2">
+                    Contactos realizados:
+                    <ContactosChips contactos={resolver.contactos} className="mt-1" />
+                  </div>
+                )}
                 {resolver.caso && (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-sm text-gray-700">
                     <p className="text-xs font-semibold text-gray-500 mb-1">Último movimiento del caso:</p>

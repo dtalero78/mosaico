@@ -14,8 +14,15 @@ export type EstadoCaso =
   | 'REMITIDO_A_SERVICIO_ACADEMICO' | 'REMITIDO_A_NIVELACION' | 'REMITIDO_A_FINANZAS'
   | 'SALON_CAMBIADO' | 'HOLD_ACTIVADO' | 'NIVELACION_AGENDADA';
 
-/** El único estado que deja el caso ABIERTO. Es el "Pendiente" del informe. */
+/** El único estado que deja el caso ABIERTO. */
 export const ESTADO_ABIERTO: EstadoCaso = 'EN_GESTION';
+
+/**
+ * Cómo se lee un caso abierto que todavía no tiene área: la bandeja de Casos de
+ * Atención lista sólo esos, así que ahí el estado dice esto (antes "Pendiente",
+ * que se confundía con el "Pendiente" de un intento de contacto).
+ */
+export const SIN_ASIGNAR_LABEL = 'Sin asignar';
 
 /**
  * `CIERRA_PROGRAMA` se fusionó con `PROCESO_DE_CIERRE` bajo el nombre "Cierre
@@ -291,3 +298,34 @@ export const NO_CONTINUA_LABEL = 'Usuario NO continúa con el curso';
 export function conclusionConNoContinua(conclusion: string, noContinua: boolean): string {
   return noContinua ? `[${NO_CONTINUA_LABEL}] ${conclusion}` : conclusion;
 }
+
+// ── Intentos de contacto con el apoderado (CASOS_CONTACTOS) ──────────────────
+// Los usan la ficha del alumno (Gestión de contacto) y la bandeja de Casos de
+// Atención (último intento bajo el estado): una sola lista para que digan lo mismo.
+
+/**
+ * Intentos de contacto permitidos por canal (Llamada, WhatsApp, Email). Lo
+ * valida el servidor al registrar y la ficha esconde el "+" al llegar al tope.
+ */
+export const MAX_INTENTOS_POR_CANAL = 3;
+
+export const CANAL_CONTACTO_LABEL: Record<string, string> = {
+  LLAMADA: 'Llamada', WHATSAPP: 'WhatsApp', EMAIL: 'Email',
+};
+
+export const RESULTADO_CONTACTO_LABEL: Record<string, string> = {
+  CONTESTO: 'Contestó',
+  NO_CONTESTO: 'No contestó',
+  RESPONDIO: 'Respondió',
+  SIN_RESPUESTA: 'Sin respuesta',
+  PENDIENTE: 'Pendiente',
+};
+
+/** Verde = hubo respuesta; rojo/ámbar = no la hubo. */
+export const RESULTADO_CONTACTO_COLOR: Record<string, string> = {
+  CONTESTO: 'bg-emerald-100 text-emerald-700',
+  RESPONDIO: 'bg-emerald-100 text-emerald-700',
+  NO_CONTESTO: 'bg-red-100 text-red-700',
+  SIN_RESPUESTA: 'bg-amber-100 text-amber-700',
+  PENDIENTE: 'bg-gray-100 text-gray-600',
+};

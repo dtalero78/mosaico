@@ -36,6 +36,7 @@ import {
   ESTADOS_ACADEMICOS, ESTADOS_FINANCIEROS,
   cierraElCaso, TRASLADA_A_AREA,
   ORIGEN_DOCENTE, ORIGEN_LABEL, esOrigenAdmin, conclusionConNoContinua,
+  MAX_INTENTOS_POR_CANAL, CANAL_CONTACTO_LABEL,
 } from '@/lib/casos-atencion-estados';
 import type { EstadoCaso, OrigenCaso } from '@/lib/casos-atencion-estados';
 
@@ -415,6 +416,12 @@ export async function agregarContacto(
       [casoId, canal]
     );
     const intento = Number(rows[0].n);
+    if (intento > MAX_INTENTOS_POR_CANAL) {
+      throw new ValidationError(
+        `Ya se registraron los ${MAX_INTENTOS_POR_CANAL} intentos por ${CANAL_CONTACTO_LABEL[canal] || canal}. ` +
+        'Usa otro canal o deja una nota en el Seguimiento.'
+      );
+    }
     const id = ids.comment().replace(/^cmt_/, 'con_');
     await client.query(
       `INSERT INTO "CASOS_CONTACTOS"("_id","casoId","canal","intento","resultado","observacion","autorEmail","autorNombre")

@@ -18,7 +18,8 @@ import {
  * columnas y sólo cambia el conjunto de estados que miran; tres endpoints con la
  * misma consulta habrían divergido al primer ajuste.
  *
- *  - `historico`   → todos los estados de cierre (el último mes por defecto)
+ *  - `historico`   → todos los estados de cierre, en la ventana de fechas pedida
+ *                    (sin fechas = todo el histórico)
  *  - `academicos`  → Cambio Curso · Cambio de Nivel · Solicitud Congelamiento
  *  - `financieros` → Cierre financiero · Envío Pre-jurídico
  *  - `nivelaciones` → Nivelación
@@ -26,7 +27,9 @@ import {
  *
  * Académicos, Financieros y Coordinador **no llevan corte de tiempo por defecto**: son bandejas
  * de trabajo pendiente, y esconder lo de hace cinco semanas dejaría gestiones sin
- * hacer fuera de la vista. El Histórico sí lo lleva, porque es consulta.
+ * hacer fuera de la vista. El Histórico sí lo lleva —las dos últimas semanas—,
+ * pero lo pone la pantalla en los filtros, a la vista: el endpoint sólo aplica
+ * las fechas que recibe.
  *
  * El contexto administrativo (curso, salón, guía) se DERIVA en cada lectura desde
  * PEOPLE y CURSOS_CAMPAIGN, igual que en el resto del módulo: copiarlo al caso lo
@@ -79,9 +82,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const FECHA = `COALESCE(ca."cerradoEn", ca."_updatedDate", ca."_createdDate")`
   if (startDate) { where.push(`${FECHA} >= $${i++}::date`); params.push(startDate) }
   if (endDate)   { where.push(`${FECHA} < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
-  if (area === 'historico' && !startDate && !endDate) {
-    where.push(`${FECHA} >= NOW() - INTERVAL '1 month'`)
-  }
+  // Sin fechas no hay corte: la pantalla siempre manda las dos últimas semanas
+  // por defecto, así que llegar sin fechas es que el usuario las borró para ver
+  // TODO el histórico. (Antes caía a "el último mes" y escondía lo anterior.)
 
   if (campaign) { where.push(`p."campaign" = $${i++}`); params.push(campaign) }
   if (curso)   { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }

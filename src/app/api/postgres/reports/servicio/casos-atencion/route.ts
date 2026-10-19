@@ -82,6 +82,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             -- Quién lo levantó: parte la pestaña en Docentes / Admin. Sin caso
             -- enlazado (datos viejos) es del guía, que era la única vía.
             COALESCE(ca."origen", 'DOCENTE') AS origen,
+            -- Intentos de contacto con el apoderado: el caso sigue sin asignar,
+            -- pero Servicio ya puede haberlo llamado. Uno por CANAL (el último de
+            -- cada uno): con sólo el último en general, un WhatsApp "Pendiente"
+            -- escondería la llamada "Sin respuesta" de un minuto antes.
+            COALESCE(ct."porCanal", '[]'::json) AS contactos,
             COALESCE(c."dia", b."fechaEvento") AS fecha,
             COUNT(*) OVER (PARTITION BY a."_id")::int AS conteo
        FROM "ACADEMICA_BOOKINGS" b
@@ -96,11 +101,24 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        -- guía) y el estado vive en CASOS_ATENCION: sin este JOIN la columna
        -- decía siempre "Pendiente" aunque el caso ya estuviera cerrado.
        LEFT JOIN LATERAL (
-         SELECT x."estado", x."codigo", x."area", x."tema", x."origen" FROM "CASOS_ATENCION" x
+         SELECT x."_id", x."estado", x."codigo", x."area", x."tema", x."origen" FROM "CASOS_ATENCION" x
           WHERE x."academicaId" = a."_id"
             AND x."eventoOrigenId" = COALESCE(b."eventoId", b."idEvento")
           ORDER BY x."_createdDate" DESC LIMIT 1
        ) ca ON true
+       LEFT JOIN LATERAL (
+         SELECT json_agg(json_build_object(
+                  'canal', u.canal, 'resultado', u.resultado, 'fecha', u.fecha, 'intentos', u.intentos
+                ) ORDER BY u.fecha DESC) AS "porCanal"
+           FROM (
+             SELECT DISTINCT ON (k."canal")
+                    k."canal"::text AS canal, k."resultado"::text AS resultado, k."_createdDate" AS fecha,
+                    COUNT(*) OVER (PARTITION BY k."canal")::int AS intentos
+               FROM "CASOS_CONTACTOS" k
+              WHERE k."casoId" = ca."_id"
+              ORDER BY k."canal", k."_createdDate" DESC
+           ) u
+       ) ct ON true
        LEFT JOIN LATERAL (
          SELECT t."_id" FROM "PEOPLE" t
           WHERE t."contrato" = p."contrato" AND t."tipoUsuario" = 'TITULAR' LIMIT 1

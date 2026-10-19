@@ -6,6 +6,7 @@ import { TZ_OPERACION } from '@/lib/cursos-campaign'
 import {
   ESTADO_ABIERTO, ESTADO_LABEL, estadoLabel, cierraElCaso, tipoCasoLabel,
   ESTADOS_POR_AREA, AREA_PESTANA, AREA_COLOR,
+  CANAL_CONTACTO_LABEL, RESULTADO_CONTACTO_LABEL, RESULTADO_CONTACTO_COLOR, MAX_INTENTOS_POR_CANAL,
 } from '@/lib/casos-atencion-estados'
 import type { EstadoCaso, AreaCaso } from '@/lib/casos-atencion-estados'
 import NoContinuaCasilla from '@/components/casos/NoContinuaCasilla'
@@ -25,26 +26,11 @@ import NoContinuaCasilla from '@/components/casos/NoContinuaCasilla'
  * contacto) con las notas de gestión, que son lo único con columna propia.
  */
 
-const CANALES = [
-  { id: 'LLAMADA', label: 'Llamada' },
-  { id: 'WHATSAPP', label: 'WhatsApp' },
-  { id: 'EMAIL', label: 'Email' },
-]
-const RESULTADOS = [
-  { id: 'CONTESTO', label: 'Contestó' },
-  { id: 'NO_CONTESTO', label: 'No contestó' },
-  { id: 'RESPONDIO', label: 'Respondió' },
-  { id: 'SIN_RESPUESTA', label: 'Sin respuesta' },
-  { id: 'PENDIENTE', label: 'Pendiente' },
-]
-/** Verde = hubo respuesta; rojo/ámbar = no la hubo. */
-const RESULTADO_COLOR: Record<string, string> = {
-  CONTESTO: 'bg-emerald-100 text-emerald-700',
-  RESPONDIO: 'bg-emerald-100 text-emerald-700',
-  NO_CONTESTO: 'bg-red-100 text-red-700',
-  SIN_RESPUESTA: 'bg-amber-100 text-amber-700',
-  PENDIENTE: 'bg-gray-100 text-gray-600',
-}
+// Etiquetas y colores en lib/casos-atencion-estados: la bandeja de Casos de
+// Atención muestra el último intento con las mismas palabras.
+const CANALES = Object.entries(CANAL_CONTACTO_LABEL).map(([id, label]) => ({ id, label }))
+const RESULTADOS = Object.entries(RESULTADO_CONTACTO_LABEL).map(([id, label]) => ({ id, label }))
+const RESULTADO_COLOR = RESULTADO_CONTACTO_COLOR
 const REINCIDENCIA_COLOR: Record<string, string> = {
   BAJA: 'text-emerald-700', MEDIA: 'text-amber-700', ALTA: 'text-red-700',
 }
@@ -57,9 +43,7 @@ const MOV_META: Record<string, { label: string; punto: string; chip: string }> =
   NOTA:     { label: 'Nota',        punto: 'bg-gray-400',    chip: 'bg-gray-100 text-gray-600' },
 }
 
-const CANAL_LABEL: Record<string, string> = {
-  LLAMADA: 'Llamada', WHATSAPP: 'WhatsApp', EMAIL: 'Email',
-}
+const CANAL_LABEL = CANAL_CONTACTO_LABEL
 
 /** El titular de cada entrada de la bitácora, según de qué movimiento se trate. */
 function tituloMovimiento(m: any): string {
@@ -471,9 +455,19 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
                       )
                     })}
                     <td className="py-2">
-                      {abierto && (
+                      {abierto && items.length >= MAX_INTENTOS_POR_CANAL ? (
+                        <span className="text-xs text-gray-400 whitespace-nowrap"
+                          title={`Máximo ${MAX_INTENTOS_POR_CANAL} intentos por canal`}>
+                          {MAX_INTENTOS_POR_CANAL}/{MAX_INTENTOS_POR_CANAL} intentos
+                        </span>
+                      ) : abierto && (
                         agregando === k.id ? (
                           <div className="flex items-center gap-1">
+                            {/* Qué intento se está registrando: sin esto el desplegable
+                                parecía editar el intento ya guardado. */}
+                            <span className="text-xs font-medium text-gray-600 whitespace-nowrap mr-1">
+                              Intento {items.length + 1}:
+                            </span>
                             <select value={resultado} onChange={e => setResultado(e.target.value)}
                               className="px-2 py-1 border border-gray-300 rounded text-xs">
                               {RESULTADOS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
@@ -486,7 +480,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
                           </div>
                         ) : (
                           <button type="button" onClick={() => { setAgregando(k.id); setResultado('CONTESTO') }}
-                            title={`Registrar otro intento por ${k.label}`}
+                            title={`Registrar el intento ${items.length + 1} de ${MAX_INTENTOS_POR_CANAL} por ${k.label}`}
                             className="w-7 h-7 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-50 flex items-center justify-center">
                             <PlusIcon className="h-4 w-4" />
                           </button>
@@ -500,6 +494,7 @@ export default function StudentCasosAtencion({ studentId }: { studentId: string 
           </table>
         </div>
         <p className="text-xs text-gray-400 mt-3">
+          Hasta {MAX_INTENTOS_POR_CANAL} intentos por canal: con el + se registra el siguiente.
           Cada intento guarda usuario y hora. Almacenado en UTC, mostrado en {TZ}.
         </p>
       </section>
