@@ -85,10 +85,10 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Mantenimiento Cursos', href: '/dashboard/academic/actualizar-material', newTab: true },
           { name: 'Campañas', href: '/dashboard/academic/crear-campana', newTab: true },
           { name: 'Horarios', href: '/dashboard/academic/horarios', newTab: true },
+          { name: 'Tipos de Curso', href: '/dashboard/academic/tipos-curso', newTab: true },
           { name: 'Ajuste masivo', href: '/dashboard/academic/ajuste-masivo', newTab: true },
         ],
       },
-      { name: 'Tipos de Curso', href: '/dashboard/academic/tipos-curso', newTab: true },
       { name: 'Crear IMPULSA', href: '/dashboard/academic/crear-impulsa', newTab: true },
       // "Evaluaciones Jump" (/dashboard/academic/jump-evaluaciones) se retiró del
       // menú: es del motor de Jumps de LGS, que MOSAICO no usa (JUMP_EVALUATIONS
@@ -573,6 +573,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // Submenú Mantenimiento: con sólo uno de sus ítems el grupo debe verse.
       AcademicoPermission.CAMPANA_CREAR,
       AcademicoPermission.HORARIOS_GESTION,
+      AcademicoPermission.TIPOS_CURSO_GESTION,
       AcademicoPermission.AJUSTE_MASIVO,
       // Páginas con permiso propio: con sólo una de ellas el grupo debe verse.
       AcademicoPermission.VER_EVALUACION,

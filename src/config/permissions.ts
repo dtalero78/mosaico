@@ -872,7 +872,7 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   {
     code: AcademicoPermission.TIPOS_CURSO_GESTION,
     module: Module.ACADEMICO,
-    section: 'Tipos de Curso',
+    section: 'Mantenimiento',
     name: 'Página "Tipos de Curso" — catálogo de cursos',
     description: 'Acceso a /dashboard/academic/tipos-curso. Agregar un curso al catálogo para que se pueda seleccionar en Horarios, Crear Campaña, Crear Contrato y Mantenimiento Cursos, y marcar si es de menores y si sus mensajes van al apoderado. Desactivar NO afecta a los cursos ni alumnos que ya lo usan.',
   },
