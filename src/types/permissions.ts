@@ -81,6 +81,8 @@ export enum PersonPermission {
   PAGOS_ELIMINAR         = 'PERSON.FINANCIERA.PAGOS_ELIMINAR',
   PAGOS_RECIBO           = 'PERSON.FINANCIERA.PAGOS_RECIBO',
   PAGOS_FACTURAR         = 'PERSON.FINANCIERA.PAGOS_FACTURAR',
+  /** Facturar con el número "ADMIN" (sin número propio), en bloque o en la fila. */
+  PAGOS_FACTURAR_ADMIN   = 'PERSON.FINANCIERA.PAGOS_FACTURAR_ADMIN',
   /** "Leer recibo" en Verificación Inscripción: la IA lee el comprobante y el gestor corrige. */
   LEER_RECIBO            = 'PERSON.FINANCIERA.LEER_RECIBO',
 

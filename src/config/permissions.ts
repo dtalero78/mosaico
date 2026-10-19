@@ -131,6 +131,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Registra el número de factura de un pago ya verificado, desde la pestaña Facturación del Centro de Validación. El pago entra a esa cola al verificarlo (validado sin factura) y sale al facturarlo. Sin este permiso el botón no aparece',
   },
   {
+    code: PersonPermission.PAGOS_FACTURAR_ADMIN,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Casilla "Marcar todos como factura ADMIN"',
+    description: 'En la facturación en bloque, pone el número ADMIN a todos los pagos marcados sin escribir uno por uno. El servidor también rechaza el número ADMIN escrito a mano a quien no tenga este permiso. Requiere además el permiso "Facturar"',
+  },
+  {
     code: PersonPermission.LEER_RECIBO,
     module: Module.PERSON,
     section: 'Financiera',

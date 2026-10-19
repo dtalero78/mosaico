@@ -155,6 +155,8 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
   const canRecibo = hasPermission(PersonPermission.PAGOS_RECIBO)
   const canEditar = hasPermission(PersonPermission.PAGOS_EDITAR)
   const canFacturar = hasPermission(PersonPermission.PAGOS_FACTURAR)
+  // La casilla "factura ADMIN" del lote; el servidor también lo exige.
+  const canFacturarAdmin = hasPermission(PersonPermission.PAGOS_FACTURAR_ADMIN)
   // Ver documentos adjuntos — gateado para poder definir usuarios de solo consulta.
   const canVerDocs = hasPermission(PersonPermission.PAGOS_VER)
   // Aprobación EN BLOQUE — gateada por rol (permiso propio).
@@ -434,7 +436,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
   // tener que escribir uno por uno. Es el único valor que puede repetirse.
   const [bulkComoAdmin, setBulkComoAdmin] = useState(false)
   const filasAFacturar = pendientes.filter(p => selected.has(p._id))
-  const numeroDe = (id: string) => (bulkComoAdmin ? FACTURA_ADMIN : (bulkFacturas[id] || '').trim())
+  const numeroDe = (id: string) => (bulkComoAdmin && canFacturarAdmin ? FACTURA_ADMIN : (bulkFacturas[id] || '').trim())
   const numerosLote = filasAFacturar.map(p => numeroDe(p._id))
   const faltanNumeros = numerosLote.filter(n => !n).length
   const repetidos = new Set(
@@ -972,14 +974,16 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
             <p className="text-sm text-gray-600">
               Escribe el número de factura de cada pago. Cada uno lleva el suyo; al confirmar salen de la pestaña <strong>Facturación</strong>. El saldo no cambia.
             </p>
-            <label className={`flex items-start gap-2 text-sm rounded-lg border px-3 py-2 cursor-pointer ${bulkComoAdmin ? 'border-purple-300 bg-purple-50 text-purple-900' : 'border-gray-200 text-gray-700'}`}>
-              <input type="checkbox" className="mt-0.5" checked={bulkComoAdmin} disabled={bulkFacturando}
-                onChange={e => setBulkComoAdmin(e.target.checked)} />
-              <span>
-                <strong>Marcar todos como factura {FACTURA_ADMIN}</strong> — los {filasAFacturar.length} pago(s) quedan con
-                el número <strong>{FACTURA_ADMIN}</strong>, sin escribirlo uno por uno.
-              </span>
-            </label>
+            {canFacturarAdmin && (
+              <label className={`flex items-start gap-2 text-sm rounded-lg border px-3 py-2 cursor-pointer ${bulkComoAdmin ? 'border-purple-300 bg-purple-50 text-purple-900' : 'border-gray-200 text-gray-700'}`}>
+                <input type="checkbox" className="mt-0.5" checked={bulkComoAdmin} disabled={bulkFacturando}
+                  onChange={e => setBulkComoAdmin(e.target.checked)} />
+                <span>
+                  <strong>Marcar todos como factura {FACTURA_ADMIN}</strong> — los {filasAFacturar.length} pago(s) quedan con
+                  el número <strong>{FACTURA_ADMIN}</strong>, sin escribirlo uno por uno.
+                </span>
+              </label>
+            )}
             <div className="overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
               {filasAFacturar.map((p, idx) => {
                 const valor = numeroDe(p._id)
