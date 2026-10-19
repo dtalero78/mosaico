@@ -32,6 +32,27 @@ import { montoCoincide, type ReciboInscripcion } from '@/lib/recibo-inscripcion'
 import { FACTURA_ADMIN, esFacturaAdmin } from '@/lib/factura-admin'
 
 interface DocAdjunto { url: string; nombre?: string | null; tipo?: string | null; fechaSubida?: string | null }
+/** Lo que devuelve /leer-documento: el número con prefijo y los avisos contra el pago. */
+interface LecturaDoc { tipo: 'BOLETA' | 'FACTURA'; numeroFactura: string; monto: number | null; origen: 'TEXTO' | 'IA'; avisos: string[] }
+type LecturaEstado = { leyendo?: boolean; leido?: LecturaDoc; error?: string }
+
+/** Estado de la lectura bajo el campo del número: leyendo, lo leído y los avisos. */
+function LecturaInfo({ estado }: { estado: LecturaEstado | null | undefined }) {
+  if (!estado) return null
+  if (estado.leyendo) return <p className="text-[11px] text-gray-500 mt-1">Leyendo el documento…</p>
+  if (estado.error) return <p className="text-[11px] text-amber-700 mt-1">{estado.error} — escriba el número a mano.</p>
+  const l = estado.leido
+  if (!l) return null
+  return (
+    <div className="mt-1 space-y-0.5">
+      <p className="text-[11px] text-emerald-700">
+        ✓ {l.tipo === 'BOLETA' ? 'Boleta' : 'Factura'} {l.numeroFactura}
+        {l.monto !== null ? ` · ${formatCurrency(l.monto)}` : ''}{l.origen === 'IA' ? ' · leída con IA, revise' : ''}
+      </p>
+      {l.avisos.map((a, i) => <p key={i} className="text-[11px] text-amber-700">⚠ {a}</p>)}
+    </div>
+  )
+}
 
 interface PagoRow {
   _id: string
@@ -204,6 +225,8 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
   const [facturaFile, setFacturaFile] = useState<DocAdjunto | null>(null)
   const [subiendoFactura, setSubiendoFactura] = useState(false)
   const [facturando, setFacturando] = useState(false)
+  // Lectura de la boleta/factura adjuntada (precarga el número y avisa).
+  const [facturaLectura, setFacturaLectura] = useState<LecturaEstado | null>(null)
 
   // Edición de pago pendiente
   const [editModal, setEditModal] = useState<{ id: string; titular: string; numCuota: number | null } | null>(null)
@@ -292,31 +315,27 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
 
   // ── Facturar (pestaña Facturación): registra el # de factura + adjunta el archivo ──
   const openFacturar = (p: PagoRow) => {
-    setFacturaInput(''); setFacturaFile(null)
+    setFacturaInput(''); setFacturaFile(null); setFacturaLectura(null)
     setFacturarModal({ id: p._id, idPeople: p.idPeople, numCuota: p.numCuota, titular: `${p.titular_primerNombre} ${p.titular_primerApellido}`.trim() })
   }
-  // Sube el archivo de la factura a Spaces (mismo flujo que los documentos del pago).
-  const subirFacturaArchivo = async (file: File) => {
-    if (!facturarModal) return
-    setSubiendoFactura(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch(`/api/contracts/${facturarModal.idPeople}/upload-url`, { method: 'POST', body: fd })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({} as any))
-        throw new Error(err.details || err.error || `Error ${res.status}`)
-      }
-      const { publicUrl } = await res.json()
-      setFacturaFile({ url: publicUrl, nombre: file.name, tipo: file.type, fechaSubida: new Date().toISOString() })
-      toast.success('Archivo de factura adjuntado')
-    } catch (e: any) {
-      toast.error(`Error subiendo el archivo: ${e?.message || ''}`)
-    } finally {
-      setSubiendoFactura(false)
+
+  // Subir y leer la boleta/factura: lo usan el modal de una fila y el de la
+  // facturación en bloque (un archivo por pago).
+  const subirArchivoDePago = async (idPeople: string, file: File): Promise<DocAdjunto> => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`/api/contracts/${idPeople}/upload-url`, { method: 'POST', body: fd })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({} as any))
+      throw new Error(err.details || err.error || `Error ${res.status}`)
     }
+    const { publicUrl } = await res.json()
+    return { url: publicUrl, nombre: file.name, tipo: file.type, fechaSubida: new Date().toISOString() }
   }
-  const pickFacturaArchivo = () => {
+  /** Lee el número del documento (B-69351 / F-246) y los avisos contra el pago. */
+  const leerDocumentoDePago = (pagoId: string, url: string) =>
+    api.post<{ lectura: LecturaDoc }>(`/api/postgres/pagos-titulares/${pagoId}/leer-documento`, { url }).then(r => r.lectura)
+  const elegirArchivo = (onFile: (f: File) => void) => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/jpeg,image/jpg,image/png,image/webp,image/heic,application/pdf'
@@ -324,11 +343,35 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
     document.body.appendChild(input)
     input.addEventListener('change', () => {
       const f = input.files?.[0]
-      if (f) subirFacturaArchivo(f)
+      if (f) onFile(f)
       document.body.removeChild(input)
     })
     input.click()
   }
+
+  // Modal de una fila: sube, lee y precarga el número (editable).
+  const subirFacturaArchivo = async (file: File) => {
+    if (!facturarModal) return
+    const pagoId = facturarModal.id
+    setSubiendoFactura(true); setFacturaLectura(null)
+    try {
+      const doc = await subirArchivoDePago(facturarModal.idPeople, file)
+      setFacturaFile(doc)
+      setFacturaLectura({ leyendo: true })
+      try {
+        const l = await leerDocumentoDePago(pagoId, doc.url)
+        setFacturaInput(prev => (prev.trim() ? prev : l.numeroFactura))
+        setFacturaLectura({ leido: l })
+      } catch (e: any) {
+        setFacturaLectura({ error: e?.message || 'No se pudo leer el documento' })
+      }
+    } catch (e: any) {
+      toast.error(`Error subiendo el archivo: ${e?.message || ''}`)
+    } finally {
+      setSubiendoFactura(false)
+    }
+  }
+  const pickFacturaArchivo = () => elegirArchivo(subirFacturaArchivo)
   const handleFacturar = async () => {
     if (!facturarModal) return
     const factura = facturaInput.trim()
@@ -444,15 +487,60 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
       .filter((n, i, arr) => arr.indexOf(n) !== i)
   )
 
-  const abrirFacturarMasivo = () => { setBulkFacturas({}); setBulkComoAdmin(false); setBulkFactModal(true) }
+  // Un archivo (boleta o factura) por pago, leído al subirlo para precargar su número.
+  const [bulkDocs, setBulkDocs] = useState<Record<string, DocAdjunto>>({})
+  const [bulkLecturas, setBulkLecturas] = useState<Record<string, LecturaEstado>>({})
+  const [bulkSubiendo, setBulkSubiendo] = useState<Set<string>>(new Set())
+  const bulkLeyendo = Object.values(bulkLecturas).some(l => l.leyendo) || bulkSubiendo.size > 0
+
+  const abrirFacturarMasivo = () => {
+    setBulkFacturas({}); setBulkComoAdmin(false); setBulkDocs({}); setBulkLecturas({}); setBulkSubiendo(new Set())
+    setBulkFactModal(true)
+  }
+
+  const adjuntarEnLote = (p: PagoRow) => elegirArchivo(async (file) => {
+    const marcar = (on: boolean) => setBulkSubiendo(prev => { const n = new Set(prev); on ? n.add(p._id) : n.delete(p._id); return n })
+    marcar(true)
+    try {
+      const doc = await subirArchivoDePago(p.idPeople, file)
+      setBulkDocs(prev => ({ ...prev, [p._id]: doc }))
+      setBulkLecturas(prev => ({ ...prev, [p._id]: { leyendo: true } }))
+      marcar(false)
+      try {
+        const l = await leerDocumentoDePago(p._id, doc.url)
+        // No pisa un número que ya se escribió a mano.
+        setBulkFacturas(prev => ((prev[p._id] || '').trim() ? prev : { ...prev, [p._id]: l.numeroFactura }))
+        setBulkLecturas(prev => ({ ...prev, [p._id]: { leido: l } }))
+      } catch (e: any) {
+        setBulkLecturas(prev => ({ ...prev, [p._id]: { error: e?.message || 'No se pudo leer' } }))
+      }
+    } catch (e: any) {
+      toast.error(`Error subiendo el archivo de ${p.titular_primerNombre}: ${e?.message || ''}`)
+    } finally {
+      marcar(false)
+    }
+  })
+  const quitarDeLote = (id: string) => {
+    setBulkDocs(prev => { const n = { ...prev }; delete n[id]; return n })
+    setBulkLecturas(prev => { const n = { ...prev }; delete n[id]; return n })
+  }
 
   const handleBulkFacturar = async () => {
-    if (!filasAFacturar.length || faltanNumeros || repetidos.size) return
+    if (!filasAFacturar.length || faltanNumeros || repetidos.size || bulkLeyendo) return
     setBulkFacturando(true)
     try {
       const r = await api.post<{ ok: number; fail: number; errores: { id: string; error: string }[] }>(
         `/api/postgres/pagos-titulares/facturar-masivo`,
-        { items: filasAFacturar.map(p => ({ id: p._id, numeroFactura: numeroDe(p._id) })) }
+        {
+          items: filasAFacturar.map(p => {
+            const doc = bulkDocs[p._id]
+            const n = numeroDe(p._id)
+            return {
+              id: p._id, numeroFactura: n,
+              documento: doc ? { url: doc.url, nombre: `Factura ${n} — ${doc.nombre || ''}`.trim(), tipo: doc.tipo } : null,
+            }
+          }),
+        }
       )
       if (r.fail) {
         const nombre = (id: string) => {
@@ -867,11 +955,14 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
             </p>
             <div>
               <label htmlFor="facturar-input" className="block text-sm font-medium text-gray-700 mb-1"># Factura <span className="text-red-500">*</span></label>
-              <input id="facturar-input" type="text" value={facturaInput} onChange={e => setFacturaInput(e.target.value.replace(/[^A-Za-z0-9\-]/g, ''))} autoFocus placeholder="Alfanumérico" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500" />
+              <input id="facturar-input" type="text" value={facturaInput} onChange={e => setFacturaInput(e.target.value.replace(/[^A-Za-z0-9\-]/g, ''))} autoFocus placeholder="Ej. B-69351 o F-246" className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500" />
+              {facturaLectura
+                ? <LecturaInfo estado={facturaLectura} />
+                : <p className="text-[11px] text-gray-400 mt-1">Al adjuntar la boleta o factura se lee el número solo.</p>}
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-gray-700">Archivo de la factura <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <label className="block text-sm font-medium text-gray-700">Boleta o factura <span className="text-gray-400 font-normal">(opcional)</span></label>
                 <button type="button" onClick={pickFacturaArchivo} disabled={subiendoFactura || facturando}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-gray-600 rounded-md hover:bg-gray-700 disabled:opacity-50">
                   <PaperClipIcon className="h-4 w-4" /> {subiendoFactura ? 'Subiendo…' : 'Adjuntar'}
@@ -880,7 +971,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
               {facturaFile ? (
                 <div className="flex items-center justify-between gap-2 border border-gray-200 rounded-md px-2 py-1.5 bg-gray-50">
                   <span className="text-xs text-gray-700 truncate" title={facturaFile.nombre || ''}>📎 {facturaFile.nombre || 'archivo'}</span>
-                  <button type="button" onClick={() => setFacturaFile(null)} disabled={facturando} title="Quitar archivo" className="text-gray-400 hover:text-red-600"><XMarkIcon className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => { setFacturaFile(null); setFacturaLectura(null) }} disabled={facturando} title="Quitar archivo" className="text-gray-400 hover:text-red-600"><XMarkIcon className="h-4 w-4" /></button>
                 </div>
               ) : (
                 <p className="text-xs text-gray-400 italic">Sin archivo adjunto (JPG, PNG, WEBP, HEIC o PDF · máx 20MB).</p>
@@ -888,7 +979,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
             </div>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button type="button" onClick={() => { setFacturarModal(null); setFacturaInput(''); setFacturaFile(null) }} disabled={facturando} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
-              <button type="button" onClick={handleFacturar} disabled={facturando || subiendoFactura || !facturaInput.trim()} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">{facturando ? 'Registrando…' : 'Registrar Factura'}</button>
+              <button type="button" onClick={handleFacturar} disabled={facturando || subiendoFactura || !!facturaLectura?.leyendo || !facturaInput.trim()} className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">{facturando ? 'Registrando…' : 'Registrar Factura'}</button>
             </div>
           </div>
         </div>
@@ -972,7 +1063,8 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
               <button type="button" onClick={() => !bulkFacturando && setBulkFactModal(false)} title="Cerrar" className="text-gray-400 hover:text-gray-600"><XMarkIcon className="h-5 w-5" /></button>
             </div>
             <p className="text-sm text-gray-600">
-              Escribe el número de factura de cada pago. Cada uno lleva el suyo; al confirmar salen de la pestaña <strong>Facturación</strong>. El saldo no cambia.
+              Escribe el número de factura de cada pago, o adjunta su boleta o factura con 📎 y el número se lee solo.
+              Cada uno lleva el suyo; al confirmar salen de la pestaña <strong>Facturación</strong>. El saldo no cambia.
             </p>
             {canFacturarAdmin && (
               <label className={`flex items-start gap-2 text-sm rounded-lg border px-3 py-2 cursor-pointer ${bulkComoAdmin ? 'border-purple-300 bg-purple-50 text-purple-900' : 'border-gray-200 text-gray-700'}`}>
@@ -996,13 +1088,28 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
                         {p.titular_contrato || '—'} · {p.numCuota === 0 ? 'Insc.' : `Cuota ${p.numCuota ?? '—'}`} · {p.valorPagado ? formatCurrency(p.valorPagado) : '—'}
                       </div>
                     </div>
-                    <div className="w-44">
-                      <input type="text" value={bulkComoAdmin ? FACTURA_ADMIN : (bulkFacturas[p._id] || '')} autoFocus={idx === 0 && !bulkComoAdmin}
-                        onChange={e => setBulkFacturas(prev => ({ ...prev, [p._id]: e.target.value }))}
-                        placeholder="N.º de factura" aria-label={`Número de factura de ${p.titular_primerNombre}`}
-                        disabled={bulkFacturando || bulkComoAdmin}
-                        className={`w-full px-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-50 ${repetido ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+                    <div className="w-56">
+                      <div className="flex items-center gap-1.5">
+                        <input type="text" value={bulkComoAdmin ? FACTURA_ADMIN : (bulkFacturas[p._id] || '')} autoFocus={idx === 0 && !bulkComoAdmin}
+                          onChange={e => setBulkFacturas(prev => ({ ...prev, [p._id]: e.target.value.replace(/[^A-Za-z0-9\-]/g, '') }))}
+                          placeholder="N.º de factura" aria-label={`Número de factura de ${p.titular_primerNombre}`}
+                          disabled={bulkFacturando || bulkComoAdmin}
+                          className={`min-w-0 flex-1 px-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-50 ${repetido ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+                        <button type="button" onClick={() => adjuntarEnLote(p)} disabled={bulkFacturando || bulkSubiendo.has(p._id)}
+                          title={bulkDocs[p._id] ? 'Reemplazar la boleta o factura' : 'Adjuntar la boleta o factura (se lee el número)'}
+                          aria-label={`Adjuntar documento de ${p.titular_primerNombre}`}
+                          className={`shrink-0 p-1.5 rounded-md border disabled:opacity-50 ${bulkDocs[p._id] ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                          {bulkSubiendo.has(p._id) ? <ArrowPathIcon className="h-4 w-4 animate-spin" /> : <PaperClipIcon className="h-4 w-4" />}
+                        </button>
+                      </div>
                       {repetido && <p className="text-[11px] text-red-600 mt-0.5">Número repetido</p>}
+                      {bulkDocs[p._id] && (
+                        <div className="flex items-center justify-between gap-1 mt-1">
+                          <span className="text-[11px] text-gray-600 truncate" title={bulkDocs[p._id].nombre || ''}>📎 {bulkDocs[p._id].nombre || 'archivo'}</span>
+                          <button type="button" onClick={() => quitarDeLote(p._id)} disabled={bulkFacturando} title="Quitar archivo" className="text-gray-400 hover:text-red-600"><XMarkIcon className="h-3.5 w-3.5" /></button>
+                        </div>
+                      )}
+                      <LecturaInfo estado={bulkLecturas[p._id]} />
                     </div>
                   </div>
                 )
@@ -1018,7 +1125,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
             <div className="flex items-center justify-end gap-3 pt-1">
               <button type="button" onClick={() => setBulkFactModal(false)} disabled={bulkFacturando} className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
               <button type="button" onClick={handleBulkFacturar}
-                disabled={bulkFacturando || faltanNumeros > 0 || repetidos.size > 0 || filasAFacturar.length === 0}
+                disabled={bulkFacturando || bulkLeyendo || faltanNumeros > 0 || repetidos.size > 0 || filasAFacturar.length === 0}
                 className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
                 {bulkFacturando ? 'Facturando…' : `Facturar ${filasAFacturar.length}`}
               </button>

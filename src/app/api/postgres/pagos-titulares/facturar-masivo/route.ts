@@ -1,7 +1,7 @@
 /**
  * API: /api/postgres/pagos-titulares/facturar-masivo
  *
- * POST { items: [{ id, numeroFactura }] }
+ * POST { items: [{ id, numeroFactura, documento? }] }   (documento = { url, nombre?, tipo? } ya en Spaces)
  *   → registra la factura de varios pagos YA verificados (pestaña Facturación
  *     del Centro de Validación), cada uno con SU número. No toca el saldo.
  *   → Devuelve { ok, fail, errores[] }; un pago que falle no detiene al resto.
@@ -32,7 +32,10 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
   }
 
   const result = await pagosTitularesService.facturarMasivo(
-    items.map((i: any) => ({ id: i?.id, numeroFactura: i?.numeroFactura })),
+    items.map((i: any) => ({
+      id: i?.id, numeroFactura: i?.numeroFactura,
+      documento: i?.documento && typeof i.documento === 'object' ? i.documento : null,
+    })),
   );
   return successResponse(result);
 });

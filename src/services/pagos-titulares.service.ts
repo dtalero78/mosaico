@@ -832,9 +832,15 @@ export const pagosTitularesService = {
    * salvo "ADMIN" (lib/factura-admin): la factura sin número propio.
    */
   async facturarMasivo(
-    items: { id: string; numeroFactura: string }[],
+    items: { id: string; numeroFactura: string; documento?: { url?: string; nombre?: string; tipo?: string } | null }[],
   ): Promise<{ ok: number; fail: number; errores: { id: string; error: string }[] }> {
-    const limpios = items.map(i => ({ id: String(i.id || '').trim(), numeroFactura: String(i.numeroFactura || '').trim() }));
+    // Cada pago puede traer el archivo de SU boleta/factura (opcional), igual que
+    // el botón Facturar de la fila; `facturar` lo adjunta al pago.
+    const limpios = items.map(i => ({
+      id: String(i.id || '').trim(),
+      numeroFactura: String(i.numeroFactura || '').trim(),
+      documento: i.documento && typeof i.documento.url === 'string' && i.documento.url.trim() ? i.documento : null,
+    }));
     if (limpios.some(i => !i.id)) throw new ValidationError('Hay un pago sin identificar en la selección.');
     if (limpios.some(i => !i.numeroFactura)) throw new ValidationError('Cada pago necesita su número de factura.');
     const vistos = new Set<string>();
@@ -854,7 +860,7 @@ export const pagosTitularesService = {
         const actual = await PagosTitularesRepository.findById(i.id);
         const yaTiene = String(actual?.numeroFactura || '').trim();
         if (yaTiene) { errores.push({ id: i.id, error: `ya estaba facturado (${yaTiene})` }); continue; }
-        await this.facturar(i.id, i.numeroFactura, null);
+        await this.facturar(i.id, i.numeroFactura, i.documento);
         ok++;
       } catch (e: any) {
         errores.push({ id: i.id, error: e?.message || 'error' });

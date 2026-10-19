@@ -61,18 +61,22 @@ export function keyDeNuestroBucket(url: string): string | null {
   }
 }
 
-async function descargar(url: string): Promise<{ buf: Buffer; tipo: string }> {
+/**
+ * Descarga un archivo de NUESTRO bucket (nunca de una URL cualquiera). Lo usan el
+ * recibo de inscripción y la lectura de boletas/facturas del Centro de Validación.
+ */
+export async function descargarDeNuestroBucket(url: string): Promise<{ buf: Buffer; tipo: string }> {
   const key = keyDeNuestroBucket(url);
-  if (!key) throw new ValidationError('El recibo no está en el almacenamiento de MOSAICO.');
+  if (!key) throw new ValidationError('El archivo no está en el almacenamiento de MOSAICO.');
   const r = await spacesClient.send(new GetObjectCommand({ Bucket: SPACES_BUCKET, Key: key }));
   const bytes = await (r.Body as any)?.transformToByteArray?.();
-  if (!bytes) throw new ValidationError('No se pudo descargar el recibo.');
+  if (!bytes) throw new ValidationError('No se pudo descargar el archivo.');
   const buf = Buffer.from(bytes);
   if (buf.length === 0) {
     throw new ValidationError('El archivo está vacío (0 bytes): se subió mal y hay que volver a subirlo.');
   }
   if (buf.length > MAX_MB_RECIBO * 1024 * 1024) {
-    throw new ValidationError(`El recibo supera ${MAX_MB_RECIBO} MB.`);
+    throw new ValidationError(`El archivo supera ${MAX_MB_RECIBO} MB.`);
   }
   let tipo = String(r.ContentType || '').split(';')[0].trim().toLowerCase();
   if (!tipo || tipo === 'application/octet-stream') {
@@ -87,10 +91,17 @@ async function descargar(url: string): Promise<{ buf: Buffer; tipo: string }> {
 
 /** Descarga el recibo de nuestro bucket y lo lee con OpenAI (visión). */
 export async function leerRecibo(url: string): Promise<ReciboExtraido> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new ValidationError('La lectura de recibos no está configurada (falta OPENAI_API_KEY).');
+  const { buf, tipo } = await descargarDeNuestroBucket(url);
+  return normalizarExtraido(await extraerJsonConVision(buf, tipo, PROMPT));
+}
 
-  const { buf, tipo } = await descargar(url);
+/**
+ * Lee un PDF o una imagen con OpenAI (visión) y devuelve el JSON que pida el
+ * `prompt`. Compartido por el recibo de inscripción y la lectura de boletas.
+ */
+export async function extraerJsonConVision(buf: Buffer, tipo: string, prompt: string): Promise<any> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new ValidationError('La lectura de documentos no está configurada (falta OPENAI_API_KEY).');
   if (tipo !== 'application/pdf' && !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(tipo)) {
     throw new ValidationError(`Este tipo de archivo no se puede leer (${tipo}). Suba la foto en JPG/PNG o el PDF.`);
   }
@@ -112,7 +123,7 @@ export async function leerRecibo(url: string): Promise<ReciboExtraido> {
         max_tokens: 600,
         temperature: 0,
         response_format: { type: 'json_object' },
-        messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT }, archivo] as any }],
+        messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, archivo] as any }],
       });
       break;
     } catch (e: any) {
@@ -120,14 +131,12 @@ export async function leerRecibo(url: string): Promise<ReciboExtraido> {
         await new Promise(r => setTimeout(r, intento * 4000));
         continue;
       }
-      throw new ValidationError(`La lectura del recibo falló: ${e?.message || e}`);
+      throw new ValidationError(`La lectura del documento falló: ${e?.message || e}`);
     }
   }
   const texto = String(respuesta?.choices?.[0]?.message?.content ?? '')
     .trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
-  let json: any;
-  try { json = JSON.parse(texto); } catch { throw new ValidationError('La lectura no devolvió un resultado válido.'); }
-  return normalizarExtraido(json);
+  try { return JSON.parse(texto); } catch { throw new ValidationError('La lectura no devolvió un resultado válido.'); }
 }
 
 // ── Contexto del contrato ───────────────────────────────────────────────────
