@@ -17,6 +17,7 @@ interface Advisor {
   telefono?: string
   numeroId?: string
   zoom?: string
+  activo?: boolean | null
 }
 
 type TabType = 'list' | 'cursos'
@@ -32,11 +33,14 @@ export default function AdvisorsPage() {
   const [advisors, setAdvisors] = useState<Advisor[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Los inactivos se piden aparte: si no, un guía desactivado no se podría volver
+  // a abrir para reactivarlo.
+  const [verInactivos, setVerInactivos] = useState(false)
 
-  // Cargar advisors al montar el componente
   useEffect(() => {
     fetchAdvisors()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verInactivos])
 
   const fetchAdvisors = async () => {
     try {
@@ -48,7 +52,7 @@ export default function AdvisorsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({})
+        body: JSON.stringify({ includeInactive: verInactivos })
       })
 
       if (!response.ok) {
@@ -121,6 +125,12 @@ export default function AdvisorsPage() {
 
           {/* Tab Content */}
           {activeTab === 'list' && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 -mb-2">
+              <input type="checkbox" checked={verInactivos} onChange={e => setVerInactivos(e.target.checked)} />
+              Ver también los guías inactivos
+            </label>
+          )}
+          {activeTab === 'list' && (
             <AdvisorsList
               advisors={advisors}
               loading={loading}
@@ -131,7 +141,7 @@ export default function AdvisorsPage() {
           )}
 
           {activeTab === 'cursos' && (
-            <AdvisorsCursos advisors={advisors} />
+            <AdvisorsCursos advisors={advisors.filter(a => a.activo !== false)} />
           )}
         </div>
       </PermissionGuard>

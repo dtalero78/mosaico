@@ -599,6 +599,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Editar Guía (detalle)',
     description: 'Editar la info del guía al abrir su detalle (nombre, contacto, foto, etc.). Sin este permiso, el detalle se ve en solo lectura. Ver requiere "Lista de Advisors".',
   },
+  {
+    code: AcademicoPermission.GUIA_ACTIVAR,
+    module: Module.ACADEMICO,
+    section: 'Advisors',
+    name: 'Activar / desactivar Guía',
+    description: 'Botón en el detalle del guía. Desactivar lo saca de las listas de guías y bloquea su acceso (si su cuenta es de rol GUIA); sus cursos y clases futuras NO se reasignan solos — el aviso dice cuántos tiene. Activar lo devuelve y reabre el acceso.',
+  },
 
   // -- Página: Actualizar Material (/dashboard/academic/actualizar-material) --
   {

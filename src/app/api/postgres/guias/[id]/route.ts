@@ -26,7 +26,14 @@ export const GET = handlerWithAuth(async (_request, ctx: any, session) => {
             g."telefono", g."pais", g."domicilioadvisor" AS "domicilio", g."zoom",
             g."fechaNacimiento"::text AS "fechaNacimiento", g."fotoAdvisor",
             g."usuarioRolId", u."numberid" AS "numeroId",
-            COALESCE(u."password", g."clave") AS "clave"
+            COALESCE(u."password", g."clave") AS "clave",
+            COALESCE(g."activo", false) AS "activo",
+            -- Lo que tiene a su nombre: lo muestra el aviso de desactivar.
+            (SELECT COUNT(*)::int FROM "CURSOS_CAMPAIGN" cc
+              WHERE cc."guia" = g."_id" AND cc."activa" = true
+                AND (cc."finalCurso" IS NULL OR cc."finalCurso" >= (NOW() AT TIME ZONE 'America/Santiago')::date)) AS "cursosVigentes",
+            (SELECT COUNT(*)::int FROM "CALENDARIO" c
+              WHERE c."advisor" = g."_id" AND c."dia" >= NOW()) AS "clasesFuturas"
        FROM "GUIAS" g
        LEFT JOIN "USUARIOS_ROLES" u ON u."_id" = g."usuarioRolId"
       WHERE g."_id" = $1`,

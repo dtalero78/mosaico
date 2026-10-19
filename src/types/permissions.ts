@@ -180,6 +180,7 @@ export enum AcademicoPermission {
   AGREGAR = 'ACADEMICO.ADVISOR.AGREGAR',
   ESTADISTICA = 'ACADEMICO.ADVISOR.ESTADISTICA',
   GUIA_EDITAR = 'ACADEMICO.GUIA.EDITAR', // editar info del guía (ver = LISTA_ADVISORS_VER)
+  GUIA_ACTIVAR = 'ACADEMICO.GUIA.ACTIVAR', // activar / desactivar al guía (y su acceso)
 
   // Material
   ACTUALIZAR_MATERIAL = 'ACADEMICO.MATERIAL.ACTUALIZAR',

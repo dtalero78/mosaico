@@ -39,6 +39,7 @@ interface Advisor {
   numeroId?: string
   zoom?: string
   fotoAdvisor?: string | null
+  activo?: boolean | null
 }
 
 interface AdvisorsListProps {
@@ -175,8 +176,11 @@ export default function AdvisorsList({
                             />
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
                               {advisor.primerNombre} {advisor.primerApellido}
+                              {advisor.activo === false && (
+                                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">Inactivo</span>
+                              )}
                             </div>
                             <div className="text-sm text-gray-500">
                               ID: {advisor._id}

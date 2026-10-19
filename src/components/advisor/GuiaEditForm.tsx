@@ -34,6 +34,11 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
   const router = useRouter()
   const { hasPermission } = usePermissions()
   const canEdit = hasPermission(AcademicoPermission.GUIA_EDITAR) // SUPER_ADMIN/ADMIN bypassean
+  const canActivar = hasPermission(AcademicoPermission.GUIA_ACTIVAR)
+  // Estado del guía y lo que tiene a su nombre (lo muestra el aviso de desactivar).
+  const [estado, setEstado] = useState<{ activo: boolean; cursosVigentes: number; clasesFuturas: number } | null>(null)
+  const [confirmEstado, setConfirmEstado] = useState(false)
+  const [cambiandoEstado, setCambiandoEstado] = useState(false)
   const [form, setForm] = useState<Form>({
     primerNombre: '', primerApellido: '', numeroId: '', domicilio: '',
     email: '', clave: '', telefono: '', pais: '', zoom: '', fechaNacimiento: '', fotoAdvisor: null,
@@ -65,6 +70,7 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
           fechaNacimiento: g.fechaNacimiento ? String(g.fechaNacimiento).slice(0, 10) : '',
           fotoAdvisor: g.fotoAdvisor || null,
         })
+        setEstado({ activo: !!g.activo, cursosVigentes: g.cursosVigentes || 0, clasesFuturas: g.clasesFuturas || 0 })
         setLoading(false)
         // Cargar la foto actual (presigned)
         if (g.fotoAdvisor) {
@@ -147,6 +153,29 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
     }
   }
 
+  const cambiarEstado = async () => {
+    if (!estado) return
+    setCambiandoEstado(true)
+    try {
+      const r = await fetch(`/api/postgres/guias/${advisorId}/estado`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activo: !estado.activo }),
+      })
+      const d = await r.json()
+      if (!r.ok || !d.success) throw new Error(d.error || 'No se pudo cambiar el estado')
+      setEstado(e => (e ? { ...e, activo: d.activo } : e))
+      const acceso = d.acceso === 'cambiado'
+        ? (d.activo ? ' Su acceso a la plataforma quedó habilitado.' : ' Su acceso a la plataforma quedó bloqueado.')
+        : d.acceso === 'otro_rol' ? ' Su cuenta no es de rol Guía: su acceso no se tocó.' : ''
+      setMsg({ type: 'ok', text: `Guía ${d.activo ? 'activado' : 'desactivado'}.${acceso}` })
+      setConfirmEstado(false)
+    } catch (e: any) {
+      setMsg({ type: 'err', text: e?.message || 'Error al cambiar el estado' })
+    } finally {
+      setCambiandoEstado(false)
+    }
+  }
+
   if (loading) return <div className="card"><div className="animate-pulse h-40 bg-gray-100 rounded" /></div>
 
   const inputCls = (err?: string) => `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${err ? 'border-red-400' : 'border-gray-300'}`
@@ -157,10 +186,25 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
         <div className="bg-primary-600 px-6 py-4 text-white flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold">{canEdit ? 'Editar Guía' : 'Información del Guía'}</h2>
-            <p className="text-primary-200 text-sm">{form.primerNombre} {form.primerApellido}</p>
+            <p className="text-primary-200 text-sm flex items-center gap-2">
+              {form.primerNombre} {form.primerApellido}
+              {estado && (
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${estado.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                  {estado.activo ? 'Activo' : 'Inactivo'}
+                </span>
+              )}
+            </p>
           </div>
-          <button type="button" onClick={() => router.push('/dashboard/academic/advisors')}
-            className="text-primary-100 hover:text-white text-sm">← Volver</button>
+          <div className="flex items-center gap-3">
+            {canActivar && estado && (
+              <button type="button" onClick={() => setConfirmEstado(true)} disabled={cambiandoEstado}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50 ${estado.activo ? 'bg-white/15 text-white hover:bg-white/25 border border-white/40' : 'bg-emerald-500 text-white hover:bg-emerald-600'}`}>
+                {estado.activo ? 'Desactivar guía' : 'Activar guía'}
+              </button>
+            )}
+            <button type="button" onClick={() => router.push('/dashboard/academic/advisors')}
+              className="text-primary-100 hover:text-white text-sm">← Volver</button>
+          </div>
         </div>
 
         <div className="p-6 space-y-4">
@@ -252,6 +296,41 @@ export default function GuiaEditForm({ advisorId }: { advisorId: string }) {
           </div>
         </div>
       </div>
+
+      {/* Confirmación de activar / desactivar */}
+      {confirmEstado && estado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-3">
+            <h3 className="text-lg font-bold text-gray-900">
+              {estado.activo ? 'Desactivar' : 'Activar'} a {form.primerNombre} {form.primerApellido}
+            </h3>
+            {estado.activo ? (
+              <>
+                <p className="text-sm text-gray-600">
+                  Dejará de aparecer en las listas y selectores de guías, y se le bloqueará el acceso a la plataforma
+                  (si su cuenta es de rol Guía).
+                </p>
+                {(estado.cursosVigentes > 0 || estado.clasesFuturas > 0) && (
+                  <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    Tiene <strong>{estado.cursosVigentes} curso(s) vigente(s)</strong> y <strong>{estado.clasesFuturas} clase(s) futura(s)</strong> a
+                    su nombre. <strong>No se reasignan solos</strong>: hay que asignarles otro guía en Campañas.
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-gray-600">Volverá a las listas de guías y se le habilitará el acceso a la plataforma.</p>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setConfirmEstado(false)} disabled={cambiandoEstado}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={cambiarEstado} disabled={cambiandoEstado}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 ${estado.activo ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
+                {cambiandoEstado ? 'Guardando…' : estado.activo ? 'Desactivar' : 'Activar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de confirmación de cambios */}
       {showConfirm && (
