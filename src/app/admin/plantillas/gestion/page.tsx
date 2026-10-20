@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
+import EmojiPicker from '@/components/common/EmojiPicker'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { MantenimientoPermission } from '@/types/permissions'
 import {
@@ -178,9 +179,26 @@ export default function GestionPlantillasPage() {
     }
   }
 
-  const insertPlaceholder = (key: string) => {
-    setEditing(e => ({ ...e, contenido: (e.contenido || '') + `{{${key}}}` }))
+  const contenidoRef = useRef<HTMLTextAreaElement>(null)
+
+  /** Inserta texto donde está el cursor del contenido (al final si no hay foco). */
+  const insertAtCursor = (texto: string) => {
+    const el = contenidoRef.current
+    const actual = editing.contenido || ''
+    const ini = el ? el.selectionStart : actual.length
+    const fin = el ? el.selectionEnd : actual.length
+    const nuevo = (actual.slice(0, ini) + texto + actual.slice(fin))
+    if (nuevo.length > 1000) { toast.error('El contenido no puede superar 1000 caracteres'); return }
+    setEditing(e => ({ ...e, contenido: nuevo }))
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      const pos = ini + texto.length
+      el.setSelectionRange(pos, pos)
+    })
   }
+
+  const insertPlaceholder = (key: string) => insertAtCursor(`{{${key}}}`)
 
   return (
     <DashboardLayout>
@@ -373,6 +391,7 @@ export default function GestionPlantillasPage() {
                     Contenido <span className="text-red-600">*</span>
                   </label>
                   <textarea
+                    ref={contenidoRef}
                     id="contenido-input"
                     value={editing.contenido || ''}
                     onChange={e => setEditing(s => ({ ...s, contenido: e.target.value.slice(0, 1000) }))}
@@ -381,10 +400,11 @@ export default function GestionPlantillasPage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
                   />
                   <div className="flex justify-between items-center mt-1">
-                    <p className="text-[11px] text-gray-500">Click en un placeholder para insertarlo:</p>
+                    <p className="text-[11px] text-gray-500">Click en un placeholder o emoji para insertarlo donde está el cursor:</p>
                     <p className="text-[10px] text-gray-400">{(editing.contenido || '').length}/1000</p>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">
+                    <EmojiPicker onSelect={insertAtCursor} />
                     {AVAILABLE_PLACEHOLDERS.map(k => (
                       <button
                         key={k}
