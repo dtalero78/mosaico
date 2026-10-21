@@ -399,6 +399,7 @@ export enum ServicioPermission {
   NIVELACIONES_AGRUPACIONES_VER = 'SERVICIO.NIVELACIONES.AGRUPACIONES_VER', // pestaña Agrupaciones
   NIVELACIONES_PENDIENTES_VER   = 'SERVICIO.NIVELACIONES.PENDIENTES_VER',   // pestaña Pendientes
   NIVELACIONES_ADICIONAR        = 'SERVICIO.NIVELACIONES.ADICIONAR',        // botón "+ Adicionar Nivelación"
+  NIVELACIONES_DEVOLVER_PENDIENTE = 'SERVICIO.NIVELACIONES.DEVOLVER_PENDIENTE', // Histórico → devolver a Pendientes
 
   // Casos de Atención — bookings marcados por el guía (casoAtencion=true) para seguimiento
   CASOS_ATENCION_VER      = 'SERVICIO.CASOS_ATENCION.VER',

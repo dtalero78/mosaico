@@ -1085,6 +1085,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Permite adicionar una nivelación. Con el rol GUIA el guía queda fijo en el propio y sólo se ofrecen sus salones.',
   },
   {
+    code: ServicioPermission.NIVELACIONES_DEVOLVER_PENDIENTE,
+    module: Module.SERVICIO,
+    section: 'Nivelaciones',
+    name: '↳ Histórico: "Devolver a Pendientes"',
+    description: 'Permite devolver a Pendientes (con casilla, unitario o masivo) una nivelación cerrada como «No asistió» en el Histórico. Requiere además la gestión de nivelaciones.',
+  },
+  {
     code: ServicioPermission.CASOS_ATENCION_VER,
     module: Module.SERVICIO,
     section: 'Casos Atención',

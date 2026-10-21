@@ -9,6 +9,7 @@ import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
 import { metaResultadoNivelacion } from '@/lib/nivelacion-resultados'
 import { usePermissions } from '@/hooks/usePermissions'
 import { MAX_RECUPERACION } from '@/lib/nivelacion-recuperacion'
+import { MAX_DEVOLUCION, RESULTADOS_DEVOLVIBLES } from '@/lib/nivelacion-devolucion'
 
 interface Row {
   academicaId: string
@@ -34,6 +35,8 @@ interface Row {
   entradaFecha: string | null
   recuperadaEn: string | null
   recuperadaPor: string | null
+  devueltaPendienteEn: string | null
+  devueltaPendientePor: string | null
   /** ¿Es la última entrada del alumno? Sólo esa se puede recuperar. */
   esUltima: boolean
   /** ¿El alumno ya tiene otra nivelación en curso? */
@@ -53,6 +56,10 @@ const llave = (r: Row) => `${r.academicaId}|${r.entradaFecha || ''}`
 const esRecuperable = (r: Row) =>
   r.estado === 'CANCELADA_SIN_CONFIRMAR' && !r.recuperadaEn && r.esUltima && !r.tieneViva && !!r.entradaFecha
 
+/** Misma regla de `motivoNoDevolvible` del servidor, que la vuelve a validar. */
+const esDevolvible = (r: Row) =>
+  (RESULTADOS_DEVOLVIBLES as readonly string[]).includes(r.estado || '') && !r.devueltaPendienteEn && r.esUltima && !r.tieneViva && !!r.entradaFecha
+
 export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
   /** Cambia cuando otra pestaña cierra una nivelación: hay que recargar. */
   refreshKey?: number
@@ -61,6 +68,9 @@ export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
 } = {}) {
   const { hasPermission } = usePermissions()
   const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION as any)
+  const canDevolver = canGestion && hasPermission(ServicioPermission.NIVELACIONES_DEVOLVER_PENDIENTE as any)
+  const [confirmarDev, setConfirmarDev] = useState(false)
+  const [devolviendo, setDevolviendo] = useState(false)
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [confirmar, setConfirmar] = useState(false)
   const [recuperando, setRecuperando] = useState(false)
@@ -127,7 +137,43 @@ export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
     return s
   })
   const alternarTodas = () =>
-    setSeleccion(todasMarcadas ? new Set() : new Set(recuperables.map(llave)))
+    setSeleccion(prev => {
+      const s = new Set(prev)
+      recuperables.forEach(r => (todasMarcadas ? s.delete(llave(r)) : s.add(llave(r))))
+      return s
+    })
+
+  const devolvibles = useMemo(() => (canDevolver ? rows.filter(esDevolvible) : []), [rows, canDevolver])
+  const selDevueltas = useMemo(() => devolvibles.filter(r => seleccion.has(llave(r))), [devolvibles, seleccion])
+  const todasDevMarcadas = devolvibles.length > 0 && selDevueltas.length === devolvibles.length
+  const alternarTodasDev = () =>
+    setSeleccion(prev => {
+      const s = new Set(prev)
+      devolvibles.forEach(r => (todasDevMarcadas ? s.delete(llave(r)) : s.add(llave(r))))
+      return s
+    })
+
+  const devolver = async () => {
+    setDevolviendo(true)
+    try {
+      const r = await fetch('/api/postgres/reports/servicio/nivelaciones/devolver-pendiente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: selDevueltas.map(x => ({ academicaId: x.academicaId, fecha: x.entradaFecha })),
+        }),
+      }).then(x => x.json())
+      if (!r.success) throw new Error(r.error || 'No se pudo devolver')
+      toast.success(`${r.devueltas} nivelación(es) devuelta(s) a Pendientes`)
+      setConfirmarDev(false)
+      await fetchData({ guia, curso, usuario, startDate, endDate })
+      onMoved?.()
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo devolver', { duration: 8000 })
+    } finally {
+      setDevolviendo(false)
+    }
+  }
 
   const recuperar = async () => {
     setRecuperando(true)
@@ -244,6 +290,28 @@ export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
         </div>
       )}
 
+      {canDevolver && !loading && devolvibles.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 mb-4">
+          <label className="inline-flex items-center gap-2 text-sm text-violet-900 cursor-pointer">
+            <input type="checkbox" checked={todasDevMarcadas} onChange={alternarTodasDev}
+              className="rounded border-violet-400 text-violet-600" />
+            Marcar todas las devolvibles ({devolvibles.length})
+          </label>
+          <span className="text-xs text-violet-700">
+            Las cerradas como «No asistió» vuelven a Pendientes, con su evento.
+          </span>
+          <button type="button"
+            onClick={() => setConfirmarDev(true)}
+            disabled={!selDevueltas.length || selDevueltas.length > MAX_DEVOLUCION}
+            className="ml-auto px-4 py-2 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+            ↩ Devolver a Pendientes ({selDevueltas.length})
+          </button>
+          {selDevueltas.length > MAX_DEVOLUCION && (
+            <span className="w-full text-xs text-red-600">Máximo {MAX_DEVOLUCION} por operación.</span>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">Cargando…</div>
       ) : grupos.length === 0 ? (
@@ -262,7 +330,7 @@ export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
                 <table className="w-full text-sm">
                   <thead className="bg-white border-b border-gray-100">
                     <tr>
-                      {canGestion && <th className="px-3 py-2 w-8" aria-label="Recuperar" />}
+                      {(canGestion || canDevolver) && <th className="px-3 py-2 w-8" aria-label="Seleccionar" />}
                       {['Fecha solicitud', 'Nombre', 'Salón', 'Guía', 'Módulo · Lección', 'Conteo', 'Confirmación', 'Estado', 'Comentario', 'Fecha asignada'].map(h => (
                         <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
@@ -276,10 +344,16 @@ export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
                       const cierre = [r.marcadoPor, r.fecha ? fmtDia(r.fecha) : null].filter(Boolean).join(' · ')
                       return (
                         <tr key={`${r.academicaId}-${r.fecha}-${idx}`}
-                          className={`border-b border-gray-100 hover:bg-gray-50 ${seleccion.has(llave(r)) ? 'bg-sky-50' : ''}`}>
-                          {canGestion && (
+                          className={`border-b border-gray-100 hover:bg-gray-50 ${seleccion.has(llave(r)) ? (esDevolvible(r) ? 'bg-violet-50' : 'bg-sky-50') : ''}`}>
+                          {(canGestion || canDevolver) && (
                             <td className="px-3 py-2">
-                              {esRecuperable(r) && (
+                              {canDevolver && esDevolvible(r) && (
+                                <input type="checkbox" checked={seleccion.has(llave(r))} onChange={() => alternar(r)}
+                                  title="Marcar para devolver a Pendientes"
+                                  aria-label={`Devolver a Pendientes la nivelación de ${r.nombre}`}
+                                  className="rounded border-gray-300 text-violet-600" />
+                              )}
+                              {canGestion && esRecuperable(r) && (
                                 <input type="checkbox" checked={seleccion.has(llave(r))} onChange={() => alternar(r)}
                                   title="Marcar para recuperar a Solicitudes"
                                   aria-label={`Recuperar la nivelación de ${r.nombre}`}
@@ -322,6 +396,12 @@ export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
                             {r.estado === 'REMOVIDA' && cierre && (
                               <span className="block text-xs text-gray-400 mt-0.5 whitespace-nowrap">{cierre}</span>
                             )}
+                            {r.devueltaPendienteEn && (
+                              <span className="block text-xs text-violet-700 font-medium mt-0.5 whitespace-nowrap"
+                                title={`Devuelta a Pendientes${r.devueltaPendientePor ? ` por ${r.devueltaPendientePor}` : ''}`}>
+                                ↩ Devuelta a Pendientes · {fmtDia(r.devueltaPendienteEn)}
+                              </span>
+                            )}
                             {r.recuperadaEn && (
                               <span className="block text-xs text-sky-700 font-medium mt-0.5 whitespace-nowrap"
                                 title={`Recuperada a Solicitudes${r.recuperadaPor ? ` por ${r.recuperadaPor}` : ''}`}>
@@ -339,6 +419,43 @@ export default function NivelacionesHistorialTab({ refreshKey = 0, onMoved }: {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {confirmarDev && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Devolver a Pendientes</h3>
+            <p className="text-sm text-gray-600 mb-3">
+              {selDevueltas.length === 1 ? 'Esta nivelación vuelve' : `Estas ${selDevueltas.length} nivelaciones vuelven`} a
+              Pendientes, con su evento, esperando que se dicten:
+            </p>
+            <ul className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100 mb-3">
+              {selDevueltas.map(r => (
+                <li key={llave(r)} className="px-3 py-1.5 text-sm flex justify-between gap-3">
+                  <span className="font-medium text-gray-800">{r.nombre}</span>
+                  <span className="text-gray-500 text-xs whitespace-nowrap">
+                    {metaResultadoNivelacion(r.estado).label} · {fmtDia(r.fechaEvento)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <ul className="text-xs text-gray-600 space-y-1 mb-4 list-disc pl-4">
+              <li>El agendamiento del usuario no se toca: sigue inscrito en el evento.</li>
+              <li>El conteo sólo sube si el cierre lo había bajado (el «No asistió» del guía).</li>
+              <li>La entrada del Histórico se conserva marcada «Devuelta a Pendientes».</li>
+            </ul>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmarDev(false)} disabled={devolviendo}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={devolver} disabled={devolviendo}
+                className="px-4 py-2 text-sm font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50">
+                {devolviendo ? 'Devolviendo…' : `Devolver (${selDevueltas.length})`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

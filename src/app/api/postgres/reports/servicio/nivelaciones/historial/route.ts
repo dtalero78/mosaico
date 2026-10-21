@@ -105,6 +105,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
               h->>'fecha' AS "entradaFecha",
               h->>'recuperadaEn' AS "recuperadaEn",
               h->>'recuperadaPor' AS "recuperadaPor",
+              h->>'devueltaPendienteEn' AS "devueltaPendienteEn",
+              h->>'devueltaPendientePor' AS "devueltaPendientePor",
               (h_ord = jsonb_array_length(a."NivelacionHistory")) AS "esUltima",
               (a."nivelacion" IS TRUE OR a."aprobadoNivelacion" IS TRUE) AS "tieneViva"
          ${JOINS}
