@@ -112,6 +112,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
          ${JOINS}
          CROSS JOIN LATERAL jsonb_array_elements(a."NivelacionHistory") WITH ORDINALITY AS t(h, h_ord)
         WHERE ${NO_PRB} AND jsonb_typeof(a."NivelacionHistory") = 'array'
+          -- Las devueltas a Pendientes ya no son histórico: la entrada se conserva en el
+          -- dato (auditoría) pero no se lista mientras la nivelación vuelva a estar viva.
+          AND (h->>'devueltaPendienteEn') IS NULL
 
      )
      SELECT * FROM todas
