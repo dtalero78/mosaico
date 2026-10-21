@@ -24,7 +24,7 @@ LGS Admin Panel is a Next.js 14 administrative dashboard for "Let's Go Speak" la
 
 ### Autenticación y Acceso
 1. Login con email/contraseña (credenciales desde PostgreSQL USUARIOS_ROLES)
-2. Control de acceso basado en roles (RBAC) con 9 roles (SUPER_ADMIN, ADMIN, ADVISOR, COMERCIAL, APROBADOR, TALERO, FINANCIERO, SERVICIO, READONLY)
+2. Control de acceso basado en roles (RBAC) con 22 roles en `ROL_PERMISOS` (ver "Available Roles")
 3. Carga dinámica de permisos desde PostgreSQL con caché de 5 minutos
 4. Control de acceso por ruta (middleware con verificación de permisos)
 5. Gestión de sesiones con JWT (NextAuth.js)
@@ -202,7 +202,10 @@ LGS Admin Panel is a Next.js 14 administrative dashboard for "Let's Go Speak" la
 ### Jobs Automáticos (Cron)
 134. Expiración automática de contratos (diario 04:00 UTC = 11:00 PM Colombia, marca como FINALIZADA + estadoInactivo)
 135. Reactivación automática de OnHold (diario 03:00 UTC = 10:00 PM Colombia, extiende contrato por días pausados)
-136. Autenticación de cron jobs con CRON_SECRET
+135b. Activación académica (diario 01:30 UTC): enciende ACADEMICA + login de beneficiarios aprobados ≤10 días antes del inicio de su curso y genera agendamientos faltantes
+135c. Reconciliación de "usuarios pegados" (diario 02:00 UTC, sólo casos limpios)
+135d. Cancelación de nivelaciones sin confirmar (jueves 22:00 hora de Chile)
+136. Autenticación de cron jobs con CRON_SECRET. Horarios: [scripts/cron-worker.js](scripts/cron-worker.js); cada corrida queda en `CRON_RUNS` y se monitorea en `/api/cron/health-check`
 
 ### Panel del Estudiante (Auto-Servicio)
 137. Portal de auto-servicio para estudiantes logueados (rol ESTUDIANTE). Header muestra: saludo con nombre + badge nivel/step + botón logout. El botón de ayuda WhatsApp fue eliminado del header.
@@ -234,28 +237,28 @@ LGS Admin Panel is a Next.js 14 administrative dashboard for "Let's Go Speak" la
 157. Parseo client-side de CSV con aliases flexibles de columnas (ej: "Documento"→"numeroId", "Nombres"→"primerNombre", "Cédula"→"numeroId"). Soporta separadores `,` y `;`
 158. Campo mapping CSV→DB: `pais`→`plataforma`, `direccion`→`domicilio`
 159. Vista previa de datos parseados con tabla editable inline antes de importar
-159. Validación de campos obligatorios (numeroId, primerNombre, primerApellido) con resaltado visual
-160. UPSERT: busca por (numeroId + tipoUsuario), si existe UPDATE, si no INSERT (sin ON CONFLICT ya que PEOPLE no tiene unique constraint en esos campos)
-161. Soporte de formatos de fecha YYYY-MM-DD y DD/MM/YYYY
-162. Máximo 5000 registros por lote, reporte de éxitos/fallos/errores
-163. Acceso restringido a SUPER_ADMIN únicamente
+160. Validación de campos obligatorios (numeroId, primerNombre, primerApellido) con resaltado visual
+161. UPSERT: busca por (numeroId + tipoUsuario), si existe UPDATE, si no INSERT (sin ON CONFLICT ya que PEOPLE no tiene unique constraint en esos campos)
+162. Soporte de formatos de fecha YYYY-MM-DD y DD/MM/YYYY
+163. Máximo 5000 registros por lote, reporte de éxitos/fallos/errores
+164. Acceso con permiso `COMERCIAL.SUBIR_LOTE` (SUPER_ADMIN/ADMIN bypass)
 
-### Visor de Base de Datos (dblgs)
-164. Herramienta de debug para ver tablas de PostgreSQL (solo SUPER_ADMIN/ADMIN)
-165. Lista de tablas con schema y conteo de registros
-166. Lectura paginada con ordenamiento y filtros dinámicos
-167. Edición de celdas individuales con coerción de tipos
-168. Creación de registros con auto-generación de _id
-169. Eliminación masiva de registros (máximo 100)
-170. Filtro por NULL/vacío: botón `∅` por columna → filtra `IS NULL OR = ''` (texto) o `IS NULL` (otros tipos)
-171. Filtro por rango de fechas: columnas tipo fecha/timestamp muestran dos date pickers (Desde ≥ / Hasta ≤) con botón `∅ nulo`; backend usa `__gte`/`__lte` como sufijos de clave en filters
+### Visor de Base de Datos (`/dbmosaico`)
+165. Herramienta de debug para ver tablas de PostgreSQL (solo SUPER_ADMIN/ADMIN)
+166. Lista de tablas con schema y conteo de registros
+167. Lectura paginada con ordenamiento y filtros dinámicos
+168. Edición de celdas individuales con coerción de tipos
+169. Creación de registros con auto-generación de _id
+170. Eliminación masiva de registros (máximo 100)
+171. Filtro por NULL/vacío: botón `∅` por columna → filtra `IS NULL OR = ''` (texto) o `IS NULL` (otros tipos)
+172. Filtro por rango de fechas: columnas tipo fecha/timestamp muestran dos date pickers (Desde ≥ / Hasta ≤) con botón `∅ nulo`; backend usa `__gte`/`__lte` como sufijos de clave en filters
 
 ### Caché y Rendimiento
-162. Caché client-side en localStorage con TTL para calendario (5 min, keys por mes)
-163. Caché server-side en memoria para permisos (5 min TTL, por rol)
-164. Invalidación automática de caché en operaciones CRUD
-165. Endpoint admin para invalidación manual de caché de permisos
-166. React Query con staleTime configurable por feature (5-30 min)
+173. Caché client-side en localStorage con TTL para calendario (5 min, keys por mes)
+174. Caché server-side en memoria para permisos (5 min TTL, por rol)
+175. Invalidación automática de caché en operaciones CRUD
+176. Endpoint admin para invalidación manual de caché de permisos
+177. React Query con staleTime configurable por feature (5-30 min)
 
 ## Architecture
 
@@ -505,18 +508,17 @@ ANTHROPIC_API_KEY=anthropic_api_key_for_dashboard_charts
 # PDF con Chromium propio (puppeteer-core). En el contenedor lo instala el
 # Dockerfile (apk add chromium); en local se autodetecta Chrome si no se define.
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-# Google Drive — carpeta CONTRATOS MOS (id 1d35R-w1V0XDpBCnnDl4nKQgezmSRZ3QM).
-# PENDIENTES de cargar: hasta entonces los contratos se archivan en el Drive de
-# LGS vía bsl-utilidades (ver "Generación de PDF").
+# Google Drive — carpeta CONTRATOS MOS (id 1d35R-w1V0XDpBCnnDl4nKQgezmSRZ3QM),
+# dentro de la Unidad compartida ORGANIZACION. CARGADAS en DO y .env.local (jul-2026).
 GDRIVE_CONTRATOS_FOLDER_ID=id_de_la_carpeta_de_drive
-# Modo 1 (el elegido): OAuth de la cuenta DUEÑA de la carpeta. Obtener el refresh
-# token con `node scripts/get-google-oauth-token.js <CLIENT_ID> <CLIENT_SECRET>`.
+# Modo en uso: cuenta de servicio (miembro Colaborador de la carpeta), JSON crudo o base64.
+GOOGLE_SERVICE_ACCOUNT_JSON=service_account_json_o_base64
+# Alternativa NO usada (sólo para "Mi unidad"): OAuth de la cuenta dueña.
+# Refresh token con `node scripts/get-google-oauth-token.js <CLIENT_ID> <CLIENT_SECRET>`.
 GOOGLE_OAUTH_CLIENT_ID=oauth_client_id
 GOOGLE_OAUTH_CLIENT_SECRET=oauth_client_secret
 GOOGLE_OAUTH_REFRESH_TOKEN=oauth_refresh_token
-# Modo 2 (alternativa): cuenta de servicio. SÓLO sirve si la carpeta está en una
-# UNIDAD COMPARTIDA de Workspace — ver la nota de cuota más abajo.
-GOOGLE_SERVICE_ACCOUNT_JSON=service_account_json_o_base64
+CRM_DATABASE_URL=postgresql://mosaico_ro:...  # lectura del CRM (líder comercial), SECRET
 ```
 
 ### Generación de PDF (contratos)
@@ -757,193 +759,29 @@ En marzo 2026 se realizó la migración única de todos los datos históricos de
 ### Datos históricos con formato legacy
 Los registros migrados de Wix dejaron columnas con nombres distintos a los actuales. El código mantiene compatibilidad via COALESCE (ver sección "Datos históricos Wix"). **No crear nuevos registros con el formato legacy.**
 
-## OnHold System with Automatic Contract Extension
+## OnHold System (pausa del contrato)
 
-### Overview
-The OnHold system allows administrators to temporarily pause a student without losing contract days. When a student is reactivated from OnHold, the system **automatically extends** their contract end date (`finalContrato`) by the number of days they were paused.
+> Sección reescrita en oct-2026: los ejemplos anteriores describían que reactivar sumaba a `extensionCount`/`extensionHistory`, comportamiento que se eliminó en `a0fd692` y `bb45acc`.
 
-### Key Features
-- **Temporary Pause**: Mark students as inactive for a specific period
-- **Automatic Extension**: Contract `finalContrato` automatically extended by paused days when reactivated
-- **Complete History**: Both `onHoldHistory` and `extensionHistory` track all operations
-- **Transparent Tracking**: Extension reason clearly indicates it was automatic due to OnHold
-- **Zero Data Loss**: Students never lose contract days due to pauses
+### Reglas vigentes
+- **Pausar** (`activateOnHold` en [contract.service.ts](src/services/contract.service.ts)): `PEOPLE.estadoInactivo=true`, `fechaOnHold`/`fechaFinOnHold`, `onHoldCount+1`, entrada en `onHoldHistory`; bloquea el login por identidad (userLogin de ACADEMICA/PEOPLE o numberid, nunca por correo) y el alumno **suelta su curso** (deja de ocupar cupo: `cupoOcupadoSql` exige `fechaOnHold IS NULL`).
+- **Límites**: máximo **2 OnHold** por contrato; **no se puede pausar si ya tuvo una extensión manual** (`extensionCount > 0`); no se puede pausar a quien ya está pausado.
+- **Reactivar** (`deactivateOnHold`): ÚNICA definición, la usan el botón de la ficha (`MANUAL`, se puede adelantar), el cron `reactivate-onhold` y la carga del panel del alumno (`AUTOMATICO`, al vencer).
+  - Extiende `finalContrato` sólo por los días **realmente pausados** (`diasAExtenderOnHold` en [lib/onhold.ts](src/lib/onhold.ts): hasta hoy si se adelanta, el período completo si venció, 0 si no empezaba).
+  - **No toca `extensionCount` ni `extensionHistory`**: la traza queda en la última entrada de `onHoldHistory` (`reactivadoEn/Por`, `modoReactivacion`, `diasProgramados`, `diasPausados`, vigencia anterior/nueva).
+  - Reactiva PEOPLE (estado ACTIVA), ACADEMICA y el login (por identidad); si con la extensión el contrato ya estaría vencido, el login no se abre.
+  - **No asigna salón**: el botón de la ficha pide Campaña → Curso → Salón con cupo y mueve al alumno (`cambiarCursoAcademico` con `confirmarCupo`); quien vuelve solo (cron/login) aparece en **Servicio › Reactivados sin salón**.
+- **Extensión manual** (`extendByDays`/`extendToDate`): suma a `extensionCount`/`extensionHistory` y deja `estado='CON EXTENSION'`.
 
-### Architecture
+### Archivos
+- [contract.service.ts](src/services/contract.service.ts) — `activateOnHold`, `deactivateOnHold`, `extendByDays`, `listarReactivadosSinSalon`
+- [lib/onhold.ts](src/lib/onhold.ts) — cálculo de días a extender (con pruebas en `tests/unit/onhold.spec.ts`)
+- [students/onhold/route.ts](src/app/api/postgres/students/onhold/route.ts) — API de pausar/reactivar (+ `asignar-salon`)
+- [StudentOnHold.tsx](src/components/student/StudentOnHold.tsx) — modal, estado e historial; [StudentContract.tsx](src/components/student/StudentContract.tsx) — extensiones manuales
+- Cron [reactivate-onhold](src/app/api/cron/reactivate-onhold/route.ts) (03:00 UTC)
 
-#### Data Flow - Activating OnHold
-```javascript
-// User activates OnHold via StudentOnHold component
-POST /api/postgres/students/onhold
-{
-  studentId: "abc123",
-  setOnHold: true,
-  fechaOnHold: "2025-07-01",
-  fechaFinOnHold: "2025-07-31",
-  motivo: "Vacaciones"
-}
-
-// contractService.activateOnHold() updates PEOPLE table:
-{
-  estadoInactivo: true,
-  fechaOnHold: "2025-07-01",
-  fechaFinOnHold: "2025-07-31",
-  onHoldCount: 1,
-  onHoldHistory: [{
-    fechaActivacion: "2025-07-01T10:00:00Z",
-    fechaOnHold: "2025-07-01",
-    fechaFinOnHold: "2025-07-31",
-    motivo: "Vacaciones",
-    activadoPor: "Admin"
-  }]
-}
-```
-
-#### Data Flow - Deactivating OnHold (Automatic Extension)
-```javascript
-// User deactivates OnHold via StudentOnHold component
-POST /api/postgres/students/onhold
-{
-  studentId: "abc123",
-  setOnHold: false
-}
-
-// contractService.deactivateOnHold():
-// 1. Calculates paused days: 30 days
-// 2. Extends finalContrato: 2025-12-31 → 2026-01-30 (+30 days)
-// 3. Creates extension history entry
-// 4. Clears OnHold fields
-
-// Updated PEOPLE record:
-{
-  estadoInactivo: false,
-  fechaOnHold: null,
-  fechaFinOnHold: null,
-  finalContrato: "2026-01-30",  // ← Extended automatically
-  vigencia: 395,                 // ← Recalculated
-  extensionCount: 1,             // ← Incremented
-  extensionHistory: [{           // ← Auto-extension entry
-    numero: 1,
-    fechaEjecucion: "2025-07-31T14:00:00Z",
-    vigenciaAnterior: "2025-12-31",
-    vigenciaNueva: "2026-01-30",
-    diasExtendidos: 30,
-    motivo: "Extensión automática por OnHold (30 días pausados desde 2025-07-01 hasta 2025-07-31)"
-  }]
-}
-```
-
-### Implementation Files
-
-- **`src/services/contract.service.ts`**
-  - `activateOnHold()`: Handles OnHold activation
-  - `deactivateOnHold()`: Calculates paused days, extends `finalContrato`, creates `extensionHistory` entry
-  - `extendByDays()`: Manual contract extension
-
-- **`src/repositories/people.repository.ts`**
-  - `activateOnHold()`, `deactivateOnHold()`, `extendContract()`: SQL queries for PEOPLE table updates
-
-- **`src/app/api/postgres/students/onhold/route.ts`**
-  - API route that delegates to `contractService`
-
-- **`src/components/student/StudentOnHold.tsx`**
-  - Modal to activate OnHold with date pickers
-  - Shows OnHold status card
-  - Displays OnHold history modal
-  - Button to reactivate (triggers automatic extension)
-
-- **`src/components/student/StudentContract.tsx`**
-  - Shows extension counter and "Ver historial" link
-  - Modal displays all extensions (manual + automatic)
-  - Automatic extensions clearly labeled with OnHold motivo
-
-### Data Schema
-
-#### PEOPLE Table Fields
-```typescript
-interface Person {
-  // OnHold fields
-  estadoInactivo: boolean           // true = paused
-  fechaOnHold: string | null        // Start date of current pause
-  fechaFinOnHold: string | null     // End date of current pause
-  onHoldCount: number               // Total times paused
-  onHoldHistory: OnHoldHistoryEntry[]
-
-  // Contract/Extension fields
-  finalContrato: Date               // Contract end date (auto-extended on OnHold deactivation)
-  vigencia: number                  // Days remaining (recalculated)
-  extensionCount: number            // Total extensions (manual + automatic)
-  extensionHistory: ExtensionHistoryEntry[]
-}
-
-interface OnHoldHistoryEntry {
-  fechaActivacion: string    // When OnHold was activated
-  fechaOnHold: string         // Pause start date
-  fechaFinOnHold: string      // Pause end date
-  motivo: string              // Reason for pause
-  activadoPor: string         // Who activated it
-}
-
-interface ExtensionHistoryEntry {
-  numero: number              // Extension number
-  fechaEjecucion: string      // When extension was applied
-  vigenciaAnterior: string    // Previous end date
-  vigenciaNueva: string       // New end date
-  diasExtendidos: number      // Days added
-  motivo: string              // Reason (auto-extensions mention OnHold)
-}
-```
-
-### Example Scenario
-
-```
-Student: Juan Pérez
-Contract start: 2025-01-01
-Contract end: 2025-12-31 (365 days)
-
-┌─────────────────────────────────────┐
-│ Step 1: Activate OnHold             │
-│ Dates: 2025-07-01 to 2025-07-31    │
-│ Duration: 30 days                   │
-└─────────────────────────────────────┘
-  ↓
-  estadoInactivo: true
-  finalContrato: 2025-12-31 (unchanged)
-  onHoldCount: 1
-
-┌─────────────────────────────────────┐
-│ Step 2: Deactivate OnHold           │
-│ Automatic Extension Triggered       │
-└─────────────────────────────────────┘
-  ↓
-  estadoInactivo: false
-  finalContrato: 2026-01-30 (extended +30 days)
-  extensionCount: 1
-  extensionHistory[0]:
-    - diasExtendidos: 30
-    - motivo: "Extensión automática por OnHold (30 días pausados...)"
-
-Result: Student maintains full 365 days of contract
-```
-
-### Benefits
-
-1. **Fairness**: Students don't lose contract days when paused
-2. **Automatic**: No manual intervention needed from admins
-3. **Traceable**: All extensions logged in `extensionHistory`
-4. **Transparent**: Extension reason clearly indicates OnHold origin
-5. **Consistent**: Uses same structure as manual extensions
-
-### Testing
-
-After changes:
-1. Activate OnHold on a test student (e.g., 10 days)
-2. Verify `onHoldCount` incremented
-3. Deactivate OnHold
-4. Verify `finalContrato` extended by 10 days
-5. Verify `extensionCount` incremented
-6. Check `extensionHistory` contains entry with OnHold motivo
-7. View extension history in frontend modal
+### Campos en PEOPLE
+`estadoInactivo`, `fechaOnHold`, `fechaFinOnHold`, `onHoldCount`, `onHoldHistory` (JSONB) · `finalContrato` (DATE), `vigencia`, `extensionCount`, `extensionHistory` (JSONB, sólo extensiones manuales).
 
 ## Permissions System (RBAC - Role-Based Access Control)
 
@@ -969,16 +807,9 @@ Permissions follow a hierarchical dot notation:
   - `SERVICIO.WELCOME.CARGAR_EVENTOS`
   - `COMERCIAL.CONTRATO.MODIFICAR`
 
-#### 3. Available Roles (9 total)
-1. `SUPER_ADMIN` - 41 permissions (full system access)
-2. `ADMIN` - 40 permissions (all except delete persons)
-3. `ADVISOR` - 16 permissions (academic + welcome sessions)
-4. `COMERCIAL` - 21 permissions (commercial + approvals)
-5. `APROBADOR` - 12 permissions (approval workflows)
-6. `TALERO` - 1 permission (advisor list view only)
-7. `FINANCIERO` - 4 permissions (financial queries)
-8. `SERVICIO` - 9 permissions (service management)
-9. `READONLY` - 2 permissions (view-only access)
+#### 3. Available Roles (22 en `ROL_PERMISOS`, conteo al 20-oct-2026)
+`SUPER_ADMIN` 199 · `COORDINADOR_ACADEMICO` 126 · `ASISTENTE_ACADEMICO` 112 · `DIRECCION_ADMIN` 107 · `ADMIN` 92 · `ADMIN_JEFE` 84 · `SERVICIO_NIVELACIONES` 55 · `RECAUDOS_JEFE` 48 · `SERVICIO_CASOS` 40 · `TALERO` 26 · `GUIA` 24 (antes `ADVISOR`; la key del enum sigue siendo `Role.ADVISOR`) · `SERVICIO` 23 · `COMERCIAL` 17 · `RECAUDOS_ASESOR` 16 · `APROBADOR` 15 · `READONLY` 15 · `COMERCIAL_DIRECTOR` 14 · `COMERCIAL_LIDER` 14 · `FINANCIERO` 13 · `COMERCIAL_JEFE` 11 · `ESTUDIANTE` 2 · `ACTUALIZA_MATERIAL` 1.
+SUPER_ADMIN y ADMIN bypassean todo permiso (frontend, middleware y `requirePermission`). Los conteos cambian desde `/admin/permissions`; la fuente de verdad es la tabla.
 
 ### Implementation Components
 
@@ -1334,13 +1165,8 @@ The cron `expire-contracts` and the special-nivel `MASTER/IELTS/B2FIRST/TOEFL �
 
 ### By Student Login (OnHold Auto-Reactivation)
 When a student with role ESTUDIANTE loads the panel (`resolveStudentFromSession`):
-- If `fechaFinOnHold < today` and student is currently on hold (estadoInactivo + fechaOnHold set):
-  - Calculates paused days (`fechaFinOnHold - fechaOnHold`)
-  - Extends `finalContrato` by paused days
-  - Creates `extensionHistory` entry with motivo "Extensión automática por OnHold"
-  - Clears `fechaOnHold`, `fechaFinOnHold`, sets `estadoInactivo = false`
-  - Sets `USUARIOS_ROLES.activo = true` (restores login)
-- This mirrors `contractService.deactivateOnHold()` but triggered automatically at login
+- If `fechaFinOnHold < today` and student is currently on hold, calls **the same** `contractService.deactivateOnHold()` (modo `AUTOMATICO`) — no copy of the logic. See "OnHold System": extends by paused days, does NOT touch `extensionCount`/`extensionHistory`, restores ACADEMICA + login by identity, does not assign a salón.
+- In practice this path rarely runs (an on-hold student can't log in); the daily cron `reactivate-onhold` is the main trigger.
 - Implementation: `src/services/panel-estudiante.service.ts` (resolveStudentFromSession)
 
 ### By Cron Job
@@ -1724,14 +1550,7 @@ export interface Person {
 - **`fechaInicioESS`** es nullable en ACADEMICA y PEOPLE; se llena con `NOW()` al asignar ESS y se borra al promover
 - **Migración idempotente**: `ALTER TABLE ... ADD COLUMN IF NOT EXISTS "fechaInicioESS" TIMESTAMPTZ` corre una vez por arranque del servidor en `panel-estudiante.service.ts`
 - **Jump Steps**: No aplican en ESS (solo tiene Step 0)
-
-### ESS — Flujo completo
-
-1. Admin asigna ESS desde panel: `Cambiar Step → ESS → Step 0`
-2. `updateStep(nivel='ESS')` — como `esParalelo=false`, actualiza `nivel` y `step` (no `nivelParalelo`/`stepParalelo`); el `essClause` en repositorios guarda `fechaInicioESS=NOW()`
-3. Estudiante puede reservar eventos ESS en el panel (borde naranja, filtro step omitido porque `esESS=true`)
-4. Al cargar el panel (`resolveStudentFromSession`): si `nivel='ESS'` y `NOW() - fechaInicioESS >= 30 días` → actualiza ACADEMICA y PEOPLE con `nivel='BN1'`, `step='Step 1'`, `fechaInicioESS=NULL`
-5. Migración idempotente: `ALTER TABLE ... ADD COLUMN IF NOT EXISTS "fechaInicioESS" TIMESTAMPTZ` corre una vez por arranque del servidor en `panel-estudiante.service.ts`
+- **Repositorios**: el `essClause` de `academica.repository`/`people.repository.updateStep` es el que guarda `fechaInicioESS=NOW()` cuando `nivel='ESS'`
 
 ### Fix filtro 30 min en panel de reservas
 
