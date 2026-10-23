@@ -55,6 +55,29 @@ export default function StudentOnHold({
   // Reactivación: destino (campaña/curso/salón con cupo) elegido en el selector compartido.
   const [showReactivar, setShowReactivar] = useState(false)
   const [destino, setDestino] = useState<SalonDestino | null>(null)
+  // Con el avance por calendario, mientras estuvo pausado su salón siguió avanzando:
+  // se le buscan salones que vayan en la lección en que venía.
+  const [sugerencias, setSugerencias] = useState<{ venia: string; candidatos: any[] } | null>(null)
+  const [inicialSel, setInicialSel] = useState<Partial<SalonDestino> | null>(null)
+  const [selKey, setSelKey] = useState(0)
+
+  useEffect(() => {
+    if (!showReactivar) return
+    setSugerencias(null)
+    fetch(`/api/postgres/students/${studentId}/recomendar-salones?incluirActual=1`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        const x = d?.data || d
+        if (!x?.student) return
+        setSugerencias({ venia: `${x.student.modulo || '—'} · ${x.student.leccion || '—'}`, candidatos: x.candidatos || [] })
+      })
+      .catch(() => setSugerencias(null))
+  }, [showReactivar, studentId])
+
+  const elegirSugerido = (c: any, tipoCurso: string) => {
+    setInicialSel({ campaign: c.campaign, tipoCurso, horarioCurso: c.horarioCurso, salon: c.salon || '' })
+    setSelKey(k => k + 1)
+  }
 
   // Sincronizar con el prop inicial
   useEffect(() => {
@@ -89,6 +112,15 @@ export default function StudentOnHold({
 
   const handleReactivarConfirm = async () => {
     if (!destino) { alert('⚠️ Selecciona campaña, curso y un salón con cupo'); return }
+    // Verificación: ¿el salón elegido va en la lección en que venía?
+    if (sugerencias) {
+      const elegido = sugerencias.candidatos.find(c =>
+        c.campaign === destino.campaign && c.horarioCurso === destino.horarioCurso && String(c.salon || '') === String(destino.salon || ''))
+      if (elegido && elegido.gap !== 0) {
+        const txt = elegido.gap == null ? 'no se pudo comparar' : elegido.gap > 0 ? `se saltaría ${elegido.gap} lección(es)` : `repetiría ${Math.abs(elegido.gap)} lección(es)`
+        if (!confirm(`El alumno venía en ${sugerencias.venia}, y ese salón va en ${elegido.moduloActual} · ${elegido.leccionActual} (${txt}).\n\n¿Reactivarlo igualmente en ese salón?`)) return
+      }
+    }
     await executeOnHoldToggle(false, '', '', undefined, destino)
     setShowReactivar(false)
   }
@@ -341,8 +373,42 @@ export default function StudentOnHold({
                 </div>
               )}
 
+              {sugerencias && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm">
+                  <p className="text-blue-900 mb-2">
+                    Venía en <strong>{sugerencias.venia}</strong>. Mientras estuvo pausado su salón siguió avanzando;
+                    estos salones van en esa lección:
+                  </p>
+                  {(() => {
+                    const mismos = sugerencias.candidatos.filter(c => c.mismaLeccion && !c.lleno)
+                    if (!mismos.length) return (
+                      <p className="text-amber-800">
+                        Ningún salón con cupo va hoy en esa lección. Si eliges otro, el alumno se saltará o repetirá lecciones.
+                      </p>
+                    )
+                    return (
+                      <ul className="space-y-1">
+                        {mismos.slice(0, 6).map(c => (
+                          <li key={c.cursoCampaignId} className="flex items-center justify-between gap-2">
+                            <span className="text-gray-800">
+                              {c.campaign} · {c.horarioCurso} · Salón {c.salon}
+                              {c.esSalonActual ? ' (su salón)' : ''} — {c.cupos.inscritos}/{c.cupos.total}
+                            </span>
+                            <button type="button" onClick={() => elegirSugerido(c, currentCurso || '')}
+                              className="px-2 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700">
+                              Elegir
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  })()}
+                </div>
+              )}
+
               <SalonDestinoSelector
-                inicial={{ campaign: currentCampaign || '', tipoCurso: currentCurso || '', horarioCurso: currentHorario || '', salon: currentSalon || '' }}
+                key={selKey}
+                inicial={inicialSel || { campaign: currentCampaign || '', tipoCurso: currentCurso || '', horarioCurso: currentHorario || '', salon: currentSalon || '' }}
                 onChange={setDestino}
               />
 

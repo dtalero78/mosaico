@@ -94,6 +94,29 @@ async function executeActivateAcademica() {
 }
 
 /**
+ * Ejecuta el avance por calendario (MOSAICO): lleva a cada alumno a la leccion de
+ * la siguiente sesion de su salon que aun no termina. No toca IMPULSA ni a quien
+ * esta en pausa.
+ */
+async function executeAvanceCalendario() {
+  const timestamp = getLocalTimestamp();
+  try {
+    const response = await fetch(`${NEXTAUTH_URL}/api/cron/avance-calendario`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${CRON_SECRET}`, 'Content-Type': 'application/json' }
+    });
+    const data = await response.json();
+    if (response.ok && data.success) {
+      if (data.alumnosCambiados > 0) console.log(`[${timestamp}] avance-calendario: ${data.alumnosCambiados} alumno(s) movido(s) de ${data.alumnosRevisados}`);
+    } else {
+      console.error(`[${timestamp}] avance-calendario error: ${data.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error(`[${timestamp}] avance-calendario error de conexion:`, error.message);
+  }
+}
+
+/**
  * Ejecuta el cron de reactivacion de OnHold
  */
 async function executeReactivateOnHold() {
@@ -184,6 +207,12 @@ async function executeCancelarNivelaciones() {
 
 // Activar academica (MOSAICO): Diariamente a las 01:30 UTC (8:30 PM Colombia)
 cron.schedule('30 1 * * *', executeActivateAcademica, {
+  scheduled: true,
+  timezone: 'UTC'
+});
+
+// Avance por calendario: cada 15 minutos. Una sesion que termina adelanta a todo su salon.
+cron.schedule('*/15 * * * *', executeAvanceCalendario, {
   scheduled: true,
   timezone: 'UTC'
 });

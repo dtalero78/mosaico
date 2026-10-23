@@ -2,6 +2,7 @@ import 'server-only';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError } from '@/lib/errors';
 import { EVALUACION_STEP } from './repetir-clase.service';
+import { posicionDeSalon } from './avance-calendario.service';
 
 /**
  * Barrido de salones — recomienda a qué CAMPAÑA/SALÓN del MISMO curso mover a un alumno
@@ -19,7 +20,8 @@ const EVAL_NORM = norm(EVALUACION_STEP);
 
 export async function recomendarSalones(
   academicaId: string,
-  target?: { modulo?: string | null; leccion?: string | null }
+  target?: { modulo?: string | null; leccion?: string | null },
+  opts: { incluirActual?: boolean } = {}
 ) {
   const aca = await queryOne<{ curso: string | null; nivel: string | null; step: string | null; numeroId: string | null }>(
     `SELECT "curso","nivel","step","numeroId" FROM "ACADEMICA" WHERE "_id"=$1`, [academicaId]
@@ -72,8 +74,8 @@ export async function recomendarSalones(
   // Salones candidatos: mismo tipoCurso, activos, distinto del actual.
   const cursos = await queryMany<any>(
     `SELECT "_id","campaign","salon","horarioCurso","guia","numeroUsuarios","usuInscritos"
-     FROM "CURSOS_CAMPAIGN" WHERE "tipoCurso"=$1 AND "activa"=true AND ($2::text IS NULL OR "_id" <> $2)`,
-    [curso, currentCC]
+     FROM "CURSOS_CAMPAIGN" WHERE "tipoCurso"=$1 AND "activa"=true AND ($2::text IS NULL OR $3::boolean OR "_id" <> $2)`,
+    [curso, currentCC, opts.incluirActual === true]
   );
 
   const guiaIds = [...new Set(cursos.map(c => c.guia).filter(Boolean))];
@@ -88,10 +90,8 @@ export async function recomendarSalones(
   const candidatos: any[] = [];
   for (const c of cursos) {
     // Lección actual del salón = próximo evento futuro mapeado (o el último si terminó).
-    let lec = await queryOne<{ sm: string | null; sl: string | null }>(
-      `SELECT "sesionModulo" sm,"sesionLeccion" sl FROM "CALENDARIO"
-       WHERE "cursoCampaignId"=$1 AND "dia">=NOW() AND "sesionLeccion" IS NOT NULL ORDER BY "dia" ASC LIMIT 1`, [c._id]
-    );
+    const pos = await posicionDeSalon(c._id);
+    let lec: { sm: string | null; sl: string | null } | null = pos ? { sm: pos.modulo, sl: pos.leccion } : null;
     if (!lec?.sl) {
       lec = await queryOne<{ sm: string | null; sl: string | null }>(
         `SELECT "sesionModulo" sm,"sesionLeccion" sl FROM "CALENDARIO"
@@ -106,7 +106,7 @@ export async function recomendarSalones(
       campaign: c.campaign, salon: c.salon, horarioCurso: c.horarioCurso,
       guia: guiasMap.get(c.guia) || null,
       moduloActual: lec?.sm ?? null, leccionActual: lec?.sl ?? null,
-      gap, mismaLeccion: gap === 0,
+      gap, mismaLeccion: gap === 0, esSalonActual: c._id === currentCC,
       cupos, lleno: cupos.total > 0 && cupos.inscritos >= cupos.total,
     });
   }

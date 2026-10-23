@@ -4,6 +4,7 @@ import { asegurarCupoSalon } from '@/services/cupo-guard.service';
 import { ids } from '@/lib/id-generator';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { esAprobadoSql } from '@/lib/estados';
+import { posicionDeSalon } from '@/services/avance-calendario.service';
 
 /**
  * "Cambio Académico" — mueve un beneficiario de una campaña/curso/salón a otro.
@@ -43,14 +44,10 @@ export async function resolverCursoId(campaign: string, tipoCurso: string, horar
   return r?._id || null;
 }
 
-/** Lección "actual" del curso destino: la del primer evento futuro (o el último si ya terminó). */
+/** Lección "actual" del curso destino: la de la primera sesión que aún no terminó (o la última si ya terminó). */
 export async function leccionActualCurso(cursoId: string, tipoCurso: string): Promise<{ modulo: string | null; leccion: string | null }> {
-  const fut = await queryOne<{ sesionModulo: string | null; sesionLeccion: string | null }>(
-    `SELECT "sesionModulo","sesionLeccion" FROM "CALENDARIO"
-     WHERE "cursoCampaignId"=$1 AND "dia" >= NOW() AND "sesionLeccion" IS NOT NULL
-     ORDER BY "dia" ASC LIMIT 1`, [cursoId]
-  );
-  if (fut?.sesionLeccion) return { modulo: fut.sesionModulo, leccion: fut.sesionLeccion };
+  const actual = await posicionDeSalon(cursoId);
+  if (actual) return { modulo: actual.modulo, leccion: actual.leccion };
   const last = await queryOne<{ sesionModulo: string | null; sesionLeccion: string | null }>(
     `SELECT "sesionModulo","sesionLeccion" FROM "CALENDARIO"
      WHERE "cursoCampaignId"=$1 AND "sesionLeccion" IS NOT NULL
