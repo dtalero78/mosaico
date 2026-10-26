@@ -143,6 +143,9 @@ export async function ejecutarMovimiento(
   if (p.direction === 'igual') {
     throw new ValidationError('El destino es la misma posición actual; no hay cambio que aplicar.');
   }
+  if (p.direction === 'atras' && !String(motivo || '').trim()) {
+    throw new ValidationError('Para retroceder lecciones el motivo es obligatorio.');
+  }
   if (opts.soloAdelante && p.direction !== 'adelante') {
     throw new ValidationError('El alumno ya va más adelante que la lección elegida; no se retrocede.');
   }

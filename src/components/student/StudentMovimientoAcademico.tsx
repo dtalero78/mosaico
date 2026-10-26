@@ -33,6 +33,7 @@ export default function StudentMovimientoAcademico({
   const [selLeccion, setSelLeccion] = useState('')
   const [motivo, setMotivo] = useState('')
   const [confirm, setConfirm] = useState(false)
+  const [textoConfirma, setTextoConfirma] = useState('')
   const [preview, setPreview] = useState<Preview | null>(null)
   const [loadingPrev, setLoadingPrev] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -56,7 +57,7 @@ export default function StudentMovimientoAcademico({
 
   const lecciones = modulos.find(m => m.code === selModulo)?.steps || []
   // reset preview cuando cambia la selección
-  useEffect(() => { setPreview(null); setConfirm(false) }, [selModulo, selLeccion])
+  useEffect(() => { setPreview(null); setConfirm(false); setTextoConfirma('') }, [selModulo, selLeccion])
 
   // Al elegir la lección destino, buscar salones (otras campañas) cerca de ESA lección.
   useEffect(() => {
@@ -102,7 +103,10 @@ export default function StudentMovimientoAcademico({
     } catch (e: any) { setError(e.message || 'Error'); setSubmitting(false) }
   }
 
-  const dirLabel = preview?.direccion === 'adelante' ? 'Hacia adelante' : preview?.direccion === 'atras' ? 'Hacia atrás' : 'Misma posición'
+  const retrocede = preview?.direccion === 'atras'
+  const FRASE = 'RETROCEDER'
+  const faltaVerificar = retrocede && (textoConfirma.trim().toUpperCase() !== FRASE || !motivo.trim())
+  const dirLabel =preview?.direccion === 'adelante' ? 'Hacia adelante' : preview?.direccion === 'atras' ? 'Hacia atrás' : 'Misma posición'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -209,8 +213,25 @@ export default function StudentMovimientoAcademico({
                     )}
                   </div>
 
+                  {retrocede && (
+                    <div className="border-2 border-red-300 bg-red-50 rounded-lg p-3 text-sm text-red-800 space-y-2">
+                      <p className="font-semibold">⚠ Efecto del retroceso</p>
+                      <p>
+                        {studentName} pasa de {currentModulo || '—'} · {currentLeccion || '—'} a {preview.destino.modulo} · {preview.destino.leccion}.
+                        Se des-aprueban <strong>{preview.perder}</strong> lección(es){preview.perderEval > 0 ? <> (incl. <strong>{preview.perderEval}</strong> evaluación/es)</> : null};
+                        esa asistencia y esas notas dejan de contar en su avance.
+                      </p>
+                      <p className="text-xs">El avance por calendario (cada 15 min) puede devolverlo a la lección en que va su salón.</p>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">Escribe <strong>{FRASE}</strong> para confirmar</label>
+                        <input value={textoConfirma} onChange={e => setTextoConfirma(e.target.value)} placeholder={FRASE}
+                          className="px-3 py-1.5 text-sm border border-red-300 rounded-lg bg-white" />
+                      </div>
+                    </div>
+                  )}
+
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Motivo (opcional)</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Motivo{retrocede ? <span className="text-red-600"> *</span> : ' (opcional)'}</label>
                     <input type="text" value={motivo} onChange={e => setMotivo(e.target.value)}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg" placeholder="Ej. corrección de posición" />
                   </div>
@@ -229,7 +250,7 @@ export default function StudentMovimientoAcademico({
           <button type="button" onClick={onClose} disabled={submitting}
             className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">Cancelar</button>
           {preview && preview.encontrado && !preview.bloqueadoWelcome && preview.direccion !== 'igual' && (
-            <button type="button" onClick={ejecutar} disabled={!confirm || submitting}
+            <button type="button" onClick={ejecutar} disabled={!confirm || submitting || faltaVerificar}
               className="px-4 py-2 text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50">
               {submitting ? 'Aplicando…' : 'Confirmar ajuste'}
             </button>

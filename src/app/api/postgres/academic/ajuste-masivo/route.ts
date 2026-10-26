@@ -12,7 +12,7 @@ import { listarCursos, previewAjusteMasivo, aplicarAjusteMasivo } from '@/servic
  * GET                                  → cursos activos (cascada Campaña → Curso → Salón)
  * GET ?cursoId=                        → alumnos del salón con su posición actual
  * GET ?cursoId=&modulo=&leccion=       → + vista previa por alumno (qué se le hará)
- * POST { cursoId, modulo, leccion, motivo, academicaIds }  → aplica (sólo hacia adelante)
+ * POST { cursoId, modulo, leccion, motivo, academicaIds }  → aplica (+ permitirRetroceso: true para retroceder)
  */
 export const GET = handlerWithAuth(async (req, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.AJUSTE_MASIVO)
@@ -21,16 +21,16 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
   if (!cursoId) return successResponse({ cursos: await listarCursos() })
   const modulo = (url.searchParams.get('modulo') || '').trim()
   const leccion = (url.searchParams.get('leccion') || '').trim()
-  return successResponse(await previewAjusteMasivo(cursoId, modulo || undefined, leccion || undefined))
+  return successResponse(await previewAjusteMasivo(cursoId, modulo || undefined, leccion || undefined, url.searchParams.get('retroceder') === '1'))
 })
 
 export const POST = handlerWithAuth(async (req, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.AJUSTE_MASIVO)
   const body = await req.json().catch(() => ({}))
-  const { cursoId, modulo, leccion, motivo, academicaIds } = body || {}
+  const { cursoId, modulo, leccion, motivo, academicaIds, permitirRetroceso } = body || {}
   if (!cursoId) throw new ValidationError('cursoId es requerido')
   if (!Array.isArray(academicaIds)) throw new ValidationError('academicaIds debe ser una lista')
   const actor = { email: session.user?.email || null, nombre: (session.user as any)?.name || null }
-  const r = await aplicarAjusteMasivo(String(cursoId), String(modulo || ''), String(leccion || ''), String(motivo || ''), academicaIds, actor)
+  const r = await aplicarAjusteMasivo(String(cursoId), String(modulo || ''), String(leccion || ''), String(motivo || ''), academicaIds, actor, permitirRetroceso === true)
   return successResponse({ message: `Ajuste aplicado a ${r.ok} alumno(s)`, ...r })
 })

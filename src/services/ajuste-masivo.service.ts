@@ -14,8 +14,10 @@ import { previewMovimiento, ejecutarMovimiento } from './movimiento-academico.se
  * cosas distintas que el individual.
  *
  * Decisiones del usuario:
- *  - Sólo HACIA ADELANTE: quien ya va más adelante que la lección elegida (o en
- *    ella) queda como está; un ajuste masivo nunca le quita lecciones a nadie.
+ *  - Por defecto sólo HACIA ADELANTE: quien ya va más adelante que la lección
+ *    elegida (o en ella) queda como está. Retroceder exige marcar expresamente
+ *    "permitir retroceder" y pasa por una confirmación que muestra cuántas
+ *    lecciones y evaluaciones perdería cada alumno.
  *  - Los alumnos de un salón son los que OCUPAN cupo en él (lib/cupo), la misma
  *    regla con la que se cuentan los inscritos.
  *  - Motivo obligatorio; cada alumno queda con su entrada en cambioStepHistory y
@@ -28,6 +30,7 @@ export const ORIGEN_AJUSTE_MASIVO = 'Ajuste masivo';
 
 export type AccionAjuste =
   | 'APLICA'          // se moverá hacia adelante
+  | 'RETROCEDE'       // (sólo con "permitir retroceder") se moverá hacia atrás
   | 'MAS_ADELANTE'    // ya va más adelante: no se toca
   | 'IGUAL'           // ya está en esa lección
   | 'WELCOME'         // sigue en el puente WELCOME
@@ -91,7 +94,7 @@ async function alumnosDelSalon(c: Curso): Promise<Alumno[]> {
 }
 
 /** Lista del salón; con módulo y lección, además la vista previa de cada alumno. */
-export async function previewAjusteMasivo(cursoId: string, modulo?: string, leccion?: string) {
+export async function previewAjusteMasivo(cursoId: string, modulo?: string, leccion?: string, retroceder = false) {
   const c = await cursoPorId(cursoId);
   const alumnos = await alumnosDelSalon(c);
   if (alumnos.length > MAX_ALUMNOS_AJUSTE) {
@@ -100,7 +103,7 @@ export async function previewAjusteMasivo(cursoId: string, modulo?: string, lecc
 
   const filas = [];
   for (const al of alumnos) {
-    const base = { ...al, accion: null as AccionAjuste | null, aprobar: 0, aprobarEval: 0, error: null as string | null };
+    const base = { ...al, accion: null as AccionAjuste | null, aprobar: 0, aprobarEval: 0, perder: 0, perderEval: 0, error: null as string | null };
     if (!modulo || !leccion) { filas.push(base); continue; }
     if (!al.academicaId) { filas.push({ ...base, accion: 'NO_ENCONTRADA' as AccionAjuste, error: 'Sin ficha académica' }); continue; }
     try {
@@ -109,8 +112,12 @@ export async function previewAjusteMasivo(cursoId: string, modulo?: string, lecc
         p.bloqueadoWelcome ? 'WELCOME'
         : !p.encontrado ? 'NO_ENCONTRADA'
         : p.direccion === 'adelante' ? 'APLICA'
-        : p.direccion === 'atras' ? 'MAS_ADELANTE' : 'IGUAL';
-      filas.push({ ...base, accion, aprobar: accion === 'APLICA' ? p.aprobar : 0, aprobarEval: accion === 'APLICA' ? p.aprobarEval : 0 });
+        : p.direccion === 'atras' ? (retroceder ? 'RETROCEDE' : 'MAS_ADELANTE') : 'IGUAL';
+      filas.push({
+        ...base, accion,
+        aprobar: accion === 'APLICA' ? p.aprobar : 0, aprobarEval: accion === 'APLICA' ? p.aprobarEval : 0,
+        perder: accion === 'RETROCEDE' ? p.perder : 0, perderEval: accion === 'RETROCEDE' ? p.perderEval : 0,
+      });
     } catch (e: any) {
       filas.push({ ...base, accion: 'NO_ENCONTRADA' as AccionAjuste, error: e?.message || 'Error' });
     }
@@ -119,6 +126,7 @@ export async function previewAjusteMasivo(cursoId: string, modulo?: string, lecc
   const resumen = {
     total: filas.length,
     aplica: filas.filter(f => f.accion === 'APLICA').length,
+    retrocede: filas.filter(f => f.accion === 'RETROCEDE').length,
     masAdelante: filas.filter(f => f.accion === 'MAS_ADELANTE').length,
     igual: filas.filter(f => f.accion === 'IGUAL').length,
     welcome: filas.filter(f => f.accion === 'WELCOME').length,
@@ -133,7 +141,8 @@ export async function previewAjusteMasivo(cursoId: string, modulo?: string, lecc
  */
 export async function aplicarAjusteMasivo(
   cursoId: string, modulo: string, leccion: string, motivo: string, academicaIds: string[],
-  actor: { email?: string | null; nombre?: string | null }
+  actor: { email?: string | null; nombre?: string | null },
+  permitirRetroceso = false
 ) {
   if (!modulo || !leccion) throw new ValidationError('Elige el módulo y la lección destino.');
   const mot = String(motivo || '').trim();
@@ -153,10 +162,12 @@ export async function aplicarAjusteMasivo(
     if (!al) { resultados.push({ academicaId: id, nombre: id, ok: false, detalle: 'No pertenece a este salón' }); continue; }
     try {
       const r = await ejecutarMovimiento(id, modulo, leccion, actor, `Salón ${c.campaign} · ${c.tipoCurso} · ${c.salon || '—'}. ${mot}`,
-        { soloAdelante: true, origen: ORIGEN_AJUSTE_MASIVO });
+        { soloAdelante: !permitirRetroceso, origen: ORIGEN_AJUSTE_MASIVO });
       resultados.push({
         academicaId: id, nombre: al.nombre, ok: true,
-        detalle: `${r.de} → ${r.a} · ${r.aprobadas} lección(es) aprobada(s)${r.evaluacionesAprobadas ? ` (incl. ${r.evaluacionesAprobadas} evaluación/es)` : ''}`,
+        detalle: r.direccion === 'atras'
+          ? `${r.de} → ${r.a} · ${r.perdidas} lección(es) des-aprobada(s)${r.evaluacionesPerdidas ? ` (incl. ${r.evaluacionesPerdidas} evaluación/es)` : ''}`
+          : `${r.de} → ${r.a} · ${r.aprobadas} lección(es) aprobada(s)${r.evaluacionesAprobadas ? ` (incl. ${r.evaluacionesAprobadas} evaluación/es)` : ''}`,
       });
     } catch (e: any) {
       resultados.push({ academicaId: id, nombre: al.nombre, ok: false, detalle: e?.message || 'Error' });

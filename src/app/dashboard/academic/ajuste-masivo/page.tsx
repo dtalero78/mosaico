@@ -21,17 +21,18 @@ interface Curso {
   _id: string; campaign: string; tipoCurso: string; horarioCurso: string
   salon: string | null; guiaNombre: string | null; inscritos: number
 }
-type Accion = 'APLICA' | 'MAS_ADELANTE' | 'IGUAL' | 'WELCOME' | 'NO_ENCONTRADA'
+type Accion = 'APLICA' | 'RETROCEDE' | 'MAS_ADELANTE' | 'IGUAL' | 'WELCOME' | 'NO_ENCONTRADA'
 interface Alumno {
   academicaId: string | null; peopleId: string; nombre: string; numeroId: string | null
   modulo: string | null; leccion: string | null
-  accion: Accion | null; aprobar: number; aprobarEval: number; error: string | null
+  accion: Accion | null; aprobar: number; aprobarEval: number; perder: number; perderEval: number; error: string | null
 }
 interface ModuloOpt { code: string; steps: string[] }
 interface Resultado { academicaId: string; nombre: string; ok: boolean; detalle: string }
 
 const ACCION_META: Record<Accion, { label: string; cls: string }> = {
   APLICA:        { label: 'Se ajusta',          cls: 'bg-emerald-100 text-emerald-700' },
+  RETROCEDE:     { label: 'Retrocede',           cls: 'bg-red-100 text-red-700' },
   MAS_ADELANTE:  { label: 'Va más adelante',     cls: 'bg-gray-100 text-gray-600' },
   IGUAL:         { label: 'Ya está ahí',         cls: 'bg-gray-100 text-gray-600' },
   WELCOME:       { label: 'En WELCOME',          cls: 'bg-amber-100 text-amber-700' },
@@ -67,6 +68,8 @@ function AjusteMasivoContent() {
   const [marcados, setMarcados] = useState<Set<string>>(new Set())
   const [motivo, setMotivo] = useState('')
   const [confirmo, setConfirmo] = useState(false)
+  const [retroceder, setRetroceder] = useState(false)
+  const [textoConfirma, setTextoConfirma] = useState('')
   const [aplicando, setAplicando] = useState(false)
   const [resultados, setResultados] = useState<Resultado[] | null>(null)
 
@@ -83,11 +86,11 @@ function AjusteMasivoContent() {
   const lecciones = modulos.find(m => m.code === modulo)?.steps || []
 
   // Cualquier cambio de salón o de destino invalida la vista previa y lo marcado.
-  const limpiarPreview = () => { setPreviewHecho(false); setMarcados(new Set()); setConfirmo(false); setResultados(null) }
+  const limpiarPreview = () => { setPreviewHecho(false); setMarcados(new Set()); setConfirmo(false); setTextoConfirma(''); setResultados(null) }
 
-  const cargarAlumnos = async (id: string, mod?: string, lec?: string) => {
+  const cargarAlumnos = async (id: string, mod?: string, lec?: string, retro = false) => {
     const qs = new URLSearchParams({ cursoId: id })
-    if (mod && lec) { qs.set('modulo', mod); qs.set('leccion', lec) }
+    if (mod && lec) { qs.set('modulo', mod); qs.set('leccion', lec); if (retro) qs.set('retroceder', '1') }
     const r = await fetch(`${API}?${qs}`, { cache: 'no-store' })
     const d = await r.json()
     if (!r.ok || d?.error) throw new Error(d?.error || 'No se pudo cargar el salón')
@@ -96,7 +99,7 @@ function AjusteMasivoContent() {
 
   // Al elegir salón: su lista de alumnos y el currículo de su curso.
   useEffect(() => {
-    setAlumnos([]); setModulo(''); setLeccion(''); limpiarPreview()
+    setAlumnos([]); setModulo(''); setLeccion(''); setRetroceder(false); limpiarPreview()
     if (!cursoId || !curso) return
     let alive = true
     setLoadingAlumnos(true)
@@ -110,20 +113,25 @@ function AjusteMasivoContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursoId])
 
-  useEffect(() => { limpiarPreview() }, [modulo, leccion])
+  useEffect(() => { limpiarPreview() }, [modulo, leccion, retroceder])
 
   const verImpacto = async () => {
     if (!cursoId || !modulo || !leccion) return
     setLoadingPrev(true)
     try {
-      const a = await cargarAlumnos(cursoId, modulo, leccion)
+      const a = await cargarAlumnos(cursoId, modulo, leccion, retroceder)
       setAlumnos(a)
-      setMarcados(new Set(a.filter(x => x.accion === 'APLICA' && x.academicaId).map(x => x.academicaId as string)))
+      setMarcados(new Set(a.filter(x => (x.accion === 'APLICA' || x.accion === 'RETROCEDE') && x.academicaId).map(x => x.academicaId as string)))
       setPreviewHecho(true)
     } catch (e: any) { toast.error(e.message) } finally { setLoadingPrev(false) }
   }
 
-  const aplicables = alumnos.filter(a => a.accion === 'APLICA' && a.academicaId)
+  const aplicables = alumnos.filter(a => (a.accion === 'APLICA' || a.accion === 'RETROCEDE') && a.academicaId)
+  const retrocesos = aplicables.filter(a => a.accion === 'RETROCEDE' && marcados.has(a.academicaId as string))
+  const totPerder = retrocesos.reduce((n, a) => n + a.perder, 0)
+  const totPerderEval = retrocesos.reduce((n, a) => n + a.perderEval, 0)
+  const FRASE = 'RETROCEDER'
+  const falta = retrocesos.length > 0 && textoConfirma.trim().toUpperCase() !== FRASE
   const toggle = (id: string) => setMarcados(prev => {
     const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n
   })
@@ -133,7 +141,7 @@ function AjusteMasivoContent() {
     try {
       const r = await fetch(API, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cursoId, modulo, leccion, motivo, academicaIds: Array.from(marcados) }),
+        body: JSON.stringify({ cursoId, modulo, leccion, motivo, academicaIds: Array.from(marcados), permitirRetroceso: retroceder }),
       })
       const d = await r.json()
       if (!r.ok || d?.error) throw new Error(d?.error || 'No se pudo aplicar el ajuste')
@@ -141,7 +149,7 @@ function AjusteMasivoContent() {
       toast.success(`Ajuste aplicado a ${d.ok} alumno(s)${d.fail ? ` · ${d.fail} con error` : ''}`)
       // La lista vuelve a leerse: así se ve la posición nueva de cada alumno.
       setAlumnos(await cargarAlumnos(cursoId))
-      setPreviewHecho(false); setMarcados(new Set()); setConfirmo(false); setMotivo('')
+      setPreviewHecho(false); setMarcados(new Set()); setConfirmo(false); setTextoConfirma(''); setMotivo('')
     } catch (e: any) { toast.error(e.message) } finally { setAplicando(false) }
   }
 
@@ -153,7 +161,8 @@ function AjusteMasivoContent() {
         <h1 className="text-2xl font-bold text-gray-900">Ajuste masivo</h1>
         <p className="text-sm text-gray-500 mt-1">
           Mueve a todos los alumnos de un salón a la misma lección, igual que <em>Ajuste Lecciones</em> en la ficha
-          del alumno. Sólo hacia adelante: quien ya va más adelante no se toca.
+          del alumno. Por defecto sólo hacia adelante: quien ya va más adelante no se toca.
+          Para retroceder hay que marcar la casilla del paso 2 y confirmar el efecto.
         </p>
       </div>
 
@@ -216,6 +225,13 @@ function AjusteMasivoContent() {
               {loadingPrev ? 'Calculando…' : 'Ver impacto'}
             </button>
           </div>
+          <label className="mt-3 flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5" checked={retroceder} onChange={e => setRetroceder(e.target.checked)} />
+            <span>
+              <strong>Permitir retroceder lecciones.</strong> A quien ya va más adelante que el destino se le
+              des-aprueban las lecciones posteriores (pierde su asistencia y evaluaciones de esas lecciones).
+            </span>
+          </label>
         </section>
       )}
 
@@ -255,7 +271,7 @@ function AjusteMasivoContent() {
                 <tbody>
                   {alumnos.map(a => {
                     const meta = a.accion ? ACCION_META[a.accion] : null
-                    const puede = a.accion === 'APLICA' && !!a.academicaId
+                    const puede = (a.accion === 'APLICA' || a.accion === 'RETROCEDE') && !!a.academicaId
                     return (
                       <tr key={a.peopleId} className="border-b border-gray-100">
                         {previewHecho && (
@@ -277,7 +293,12 @@ function AjusteMasivoContent() {
                         {previewHecho && (
                           <td className="py-2 pr-4">
                             {meta && <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${meta.cls}`}>{meta.label}</span>}
-                            {puede && (
+                            {a.accion === 'RETROCEDE' && (
+                              <span className="ml-2 text-xs text-red-600">
+                                pierde {a.perder} lección(es){a.perderEval ? ` (incl. ${a.perderEval} evaluación/es)` : ''}
+                              </span>
+                            )}
+                            {a.accion === 'APLICA' && (
                               <span className="ml-2 text-xs text-gray-500">
                                 aprueba {a.aprobar} lección(es){a.aprobarEval ? ` (incl. ${a.aprobarEval} evaluación/es)` : ''}
                               </span>
@@ -297,10 +318,31 @@ function AjusteMasivoContent() {
           {previewHecho && aplicables.length > 0 && (
             <div className="mt-5 border-t pt-4 space-y-3">
               <p className="text-sm text-gray-700">
-                Se moverán <strong>{marcados.size}</strong> alumno(s) a <strong>{modulo} · {leccion}</strong>. A cada uno se le
-                aprueban las lecciones anteriores que le falten, con la nota <em>"Ajuste masivo"</em>; la asistencia ya
-                marcada de verdad no se toca.
+                Se moverán <strong>{marcados.size}</strong> alumno(s) a <strong>{modulo} · {leccion}</strong>. A quien va
+                atrasado se le aprueban las lecciones anteriores que le falten, con la nota <em>"Ajuste masivo"</em>; la
+                asistencia ya marcada de verdad no se toca.
               </p>
+              {retrocesos.length > 0 && (
+                <div className="border-2 border-red-300 bg-red-50 rounded-lg p-4 text-sm text-red-800 space-y-2">
+                  <p className="font-semibold">⚠ Efecto del retroceso</p>
+                  <p>
+                    <strong>{retrocesos.length}</strong> alumno(s) retroceden a {modulo} · {leccion}: en total se
+                    des-aprueban <strong>{totPerder}</strong> lección(es){totPerderEval ? <> (incl. <strong>{totPerderEval}</strong> evaluación/es)</> : null}.
+                    Esa asistencia y esas notas se pierden de su historial de avance.
+                  </p>
+                  <ul className="list-disc ml-5 text-xs">
+                    {retrocesos.map(a => (
+                      <li key={a.academicaId}>{a.nombre}: {a.modulo} · {a.leccion} → {modulo} · {leccion} (−{a.perder}{a.perderEval ? `, ${a.perderEval} eval.` : ''})</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs">El avance por calendario (cada 15 min) puede devolverlos a la lección en que va su salón.</p>
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Escribe <strong>{FRASE}</strong> para confirmar</label>
+                    <input value={textoConfirma} onChange={e => setTextoConfirma(e.target.value)}
+                      className="px-3 py-1.5 text-sm border border-red-300 rounded-lg bg-white" placeholder={FRASE} />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Motivo <span className="text-red-600">*</span></label>
                 <textarea value={motivo} onChange={e => setMotivo(e.target.value)} rows={2} maxLength={500}
@@ -312,7 +354,7 @@ function AjusteMasivoContent() {
                 Confirmo el ajuste de {marcados.size} alumno(s). Para deshacerlo hay que ajustarlos de nuevo uno por uno.
               </label>
               <button type="button" onClick={aplicar}
-                disabled={aplicando || !confirmo || !motivo.trim() || marcados.size === 0}
+                disabled={aplicando || !confirmo || !motivo.trim() || marcados.size === 0 || falta}
                 className="px-5 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50">
                 {aplicando ? 'Aplicando…' : `Aplicar a ${marcados.size} alumno(s)`}
               </button>
