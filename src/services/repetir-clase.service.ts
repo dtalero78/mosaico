@@ -82,11 +82,11 @@ export async function leccionesBaseCurso(tipoCurso: string, sinteticas = false):
  * NO crea sesiones nuevas ni extiende — eso lo hace la autorización.
  */
 export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<number> {
-  type CursoMapeo = { tipoCurso: string; horarioCurso: string | null; inicioCurso: string | null; historicRepet: any; sinteticas: boolean | null };
+  type CursoMapeo = { tipoCurso: string; horarioCurso: string | null; inicioCurso: string | null; historicRepet: any; sinteticas: boolean | null; dosDesde?: string | null };
   const cc = await queryOne<CursoMapeo>(
     `SELECT "tipoCurso","historicRepet",
             "horarioCurso", "inicioCurso"::text AS "inicioCurso",
-            COALESCE("evalSinteticaPorModulo", false) AS "sinteticas"
+            COALESCE("evalSinteticaPorModulo", false) AS "sinteticas", "dosBloquesDesde"::text AS "dosDesde"
        FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
   ).catch(() => queryOne<CursoMapeo>(
     `SELECT "tipoCurso","horarioCurso","inicioCurso"::text AS "inicioCurso","historicRepet", false AS "sinteticas" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
@@ -128,7 +128,7 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
   const lec2Arr: Array<string | null> = [];
   let k = 0;
   for (const s of sesiones) {
-    const cuantas = leccionesDeSesion(s.fecha, cc.horarioCurso, cc.inicioCurso);
+    const cuantas = leccionesDeSesion(s.fecha, cc.horarioCurso, cc.inicioCurso, cc.dosDesde);
     const l1 = seq[k];
     // La segunda, sólo si la sesión es de dos bloques Y queda lección por dictar:
     // la última clase de un curso puede cerrar con una sola.
@@ -190,7 +190,7 @@ export async function autorizarRepetir(eventoId: string, comentario: string, aut
 
   // 2) ¿Faltan sesiones? needed = lecciones base + repeticiones autorizadas.
   const histRow = await queryOne<any>(
-    `SELECT "historicRepet", COALESCE("evalSinteticaPorModulo", false) AS "sinteticas" FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`,
+    `SELECT "historicRepet", COALESCE("evalSinteticaPorModulo", false) AS "sinteticas", "dosBloquesDesde"::text AS "dosDesde" FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`,
     [ev.cursoCampaignId]);
   const base = await leccionesBaseCurso(ev.tipoCurso, histRow?.sinteticas === true);
   const hist = Array.isArray(histRow?.historicRepet) ? histRow.historicRepet : [];

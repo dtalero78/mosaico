@@ -81,7 +81,21 @@ export function leccionesDeSesion(
   fecha: string | Date | null | undefined,
   horarioCurso?: string | null,
   inicioCurso?: string | Date | null,
+  /**
+   * Corte PROPIO del curso (`CURSOS_CAMPAIGN."dosBloquesDesde"`). Cuando existe,
+   * manda sobre la regla por campaña y por fecha global: el curso reparte dos
+   * lecciones por clase de dos horas desde ESE día y no antes (lo ya dictado no
+   * se reetiqueta). Es lo que permite incluir un salón de una campaña anterior a
+   * agosto sin tocar al resto.
+   */
+  dosBloquesDesde?: string | Date | null,
 ): 1 | 2 {
+  if (dosBloquesDesde) {
+    const desde = dosBloquesDesde instanceof Date ? dosBloquesDesde.toISOString().slice(0, 10) : String(dosBloquesDesde).slice(0, 10);
+    const f = fecha instanceof Date ? fecha.toISOString().slice(0, 10) : String(fecha || '').slice(0, 10);
+    if (!f || f < desde) return 1;
+    return leccionesPorSesion(horarioCurso);
+  }
   // Sin `inicioCurso` no se puede saber la campaña: se asume dentro del alcance
   // para que quien ya pasa fecha + horario (y los tests de la regla) no cambie.
   if (inicioCurso !== undefined && !campanaAplicaDosBloques(inicioCurso)) return 1;

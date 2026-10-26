@@ -104,3 +104,17 @@ test.describe('Alcance: sólo campañas desde AGOSTO 2026', () => {
     expect(leccionesDeSesion('2026-08-08', 'SÁB 09:00-11:00', '2026-08-17')).toBe(1);
   });
 });
+
+test.describe('Corte propio del curso (dosBloquesDesde)', () => {
+  test('incluye una campaña anterior a agosto desde su propio corte, no antes', () => {
+    expect(leccionesDeSesion('2026-10-24', 'SÁB 11:00-13:00', '2026-04-13', '2026-10-31')).toBe(1);
+    expect(leccionesDeSesion('2026-10-31', 'SÁB 11:00-13:00', '2026-04-13', '2026-10-31')).toBe(2);
+    expect(leccionesDeSesion('2027-01-09', 'SÁB 11:00-13:00', '2026-04-13', '2026-10-31')).toBe(2);
+  });
+  test('entre semana sigue siendo una aunque el curso tenga corte', () => {
+    expect(leccionesDeSesion('2027-01-12', 'MAR-JUE 17:00-18:00', '2026-04-13', '2026-10-31')).toBe(1);
+  });
+  test('sin corte propio rige la regla global de siempre', () => {
+    expect(leccionesDeSesion('2026-10-31', 'SÁB 11:00-13:00', '2026-04-13', null)).toBe(1);
+  });
+});
