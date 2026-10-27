@@ -40,16 +40,16 @@ import {
 } from '@/lib/casos-atencion-estados';
 import type { EstadoCaso, OrigenCaso } from '@/lib/casos-atencion-estados';
 
-export type TemaCaso = 'ASISTENCIA' | 'CONDUCTA' | 'DESEMPENO' | 'SALUD' | 'PAGO' | 'OTRO';
+export type TemaCaso = 'ASISTENCIA' | 'CONDUCTA' | 'DESEMPENO' | 'SALUD' | 'PAGO' | 'OTRO' | 'CAMBIO_CURSO';
 export type CanalContacto = 'LLAMADA' | 'WHATSAPP' | 'EMAIL';
 export type ResultadoContacto = 'CONTESTO' | 'NO_CONTESTO' | 'RESPONDIO' | 'SIN_RESPUESTA' | 'PENDIENTE';
-export const TEMAS: TemaCaso[] = ['ASISTENCIA', 'CONDUCTA', 'DESEMPENO', 'SALUD', 'PAGO', 'OTRO'];
+export const TEMAS: TemaCaso[] = ['ASISTENCIA', 'CONDUCTA', 'DESEMPENO', 'SALUD', 'PAGO', 'OTRO', 'CAMBIO_CURSO'];
 export const CANALES: CanalContacto[] = ['LLAMADA', 'WHATSAPP', 'EMAIL'];
 export const RESULTADOS: ResultadoContacto[] = ['CONTESTO', 'NO_CONTESTO', 'RESPONDIO', 'SIN_RESPUESTA', 'PENDIENTE'];
 
 export const TEMA_LABEL: Record<TemaCaso, string> = {
   ASISTENCIA: 'Asistencia', CONDUCTA: 'Conducta', DESEMPENO: 'Desempeño',
-  SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro',
+  SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro', CAMBIO_CURSO: 'Cambio de curso',
 };
 
 export interface Actor { email?: string | null; nombre?: string | null }

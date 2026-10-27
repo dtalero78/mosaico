@@ -242,11 +242,11 @@ export const TRASLADA_A_AREA: Partial<Record<EstadoCaso, AreaCaso>> = {
  * Vive aquí, fuera de `server-only`, porque lo usan la bandeja de Servicio, la
  * ficha del alumno y el servicio: era la tercera copia de la misma lista.
  */
-export type TipoCaso = 'ASISTENCIA' | 'CONDUCTA' | 'DESEMPENO' | 'SALUD' | 'PAGO' | 'OTRO';
+export type TipoCaso = 'ASISTENCIA' | 'CONDUCTA' | 'DESEMPENO' | 'SALUD' | 'PAGO' | 'OTRO' | 'CAMBIO_CURSO';
 
 export const TIPO_CASO_LABEL: Record<string, string> = {
   ASISTENCIA: 'Asistencia', CONDUCTA: 'Conducta', DESEMPENO: 'Desempeño',
-  SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro',
+  SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro', CAMBIO_CURSO: 'Cambio de curso',
 };
 
 export function tipoCasoLabel(t: string | null | undefined): string {

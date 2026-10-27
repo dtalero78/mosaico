@@ -15,7 +15,7 @@ import { recomendarSalones } from '@/services/recomendar-salones.service'
  */
 export const GET = handlerWithAuth(async (req, { params }, session) => {
   // Ajuste Lecciones y la reactivación de OnHold (que busca un salón en la lección en que venía).
-  await requireAnyPermission(session, [StudentPermission.MOVIMIENTO_ACADEMICO, StudentPermission.ACTIVAR_HOLD])
+  await requireAnyPermission(session, [StudentPermission.MOVIMIENTO_ACADEMICO, StudentPermission.ACTIVAR_HOLD, StudentPermission.CAMBIO_ACADEMICO])
   const { searchParams } = new URL(req.url)
   const modulo = searchParams.get('modulo')
   const leccion = searchParams.get('leccion')

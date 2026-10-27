@@ -28,7 +28,7 @@ import {
 
 const TEMA_LABEL: Record<string, string> = {
   ASISTENCIA: 'Asistencia', CONDUCTA: 'Conducta', DESEMPENO: 'Desempeño',
-  SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro',
+  SALUD: 'Salud', PAGO: 'Pago', OTRO: 'Otro', CAMBIO_CURSO: 'Cambio de curso',
 }
 const REINCIDENCIA_COLOR: Record<string, string> = {
   BAJA: 'bg-emerald-100 text-emerald-700', MEDIA: 'bg-amber-100 text-amber-700', ALTA: 'bg-red-100 text-red-700',
