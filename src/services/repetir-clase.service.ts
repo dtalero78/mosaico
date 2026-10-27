@@ -5,6 +5,7 @@ import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
 import { leccionesDeSesion } from '@/lib/bloques-leccion';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { EVALUACION_STEP } from '@/lib/evaluacion';
+import { eventEndDate } from '@/lib/event-duration';
 import { asignarLeccionesImpulsa } from './impulsa-calendario.service';
 
 function addDaysISO(iso: string, days: number): string {
@@ -127,7 +128,22 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
   const mod2Arr: Array<string | null> = [];
   const lec2Arr: Array<string | null> = [];
   let k = 0;
+  // Saltos del salón (Ajuste masivo hacia adelante): desde la sesión de esa fecha la
+  // secuencia continúa en la lección elegida, no en la que tocaría por conteo. Sólo
+  // adelantan; las lecciones saltadas dejan de repartirse (el curso termina antes).
+  const saltos: Array<{ desde: string; modulo: string; leccion: string }> = ((await queryOne<{ s: any }>(
+    `SELECT "saltosLeccion" AS s FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
+  ).catch(() => null))?.s || [])
+    .filter((x: any) => x?.desde && x?.modulo && x?.leccion)
+    .sort((a: any, b: any) => String(a.desde).localeCompare(String(b.desde)));
+  const nrm = (x: any) => String(x ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  let si = 0;
   for (const s of sesiones) {
+    while (si < saltos.length && s.fecha >= String(saltos[si].desde).slice(0, 10)) {
+      const idx = seq.findIndex(l => !l.esEvaluacion && nrm(l.code) === nrm(saltos[si].modulo) && nrm(l.step) === nrm(saltos[si].leccion));
+      if (idx > k) k = idx;
+      si++;
+    }
     const cuantas = leccionesDeSesion(s.fecha, cc.horarioCurso, cc.inicioCurso, cc.dosDesde);
     const l1 = seq[k];
     // La segunda, sólo si la sesión es de dos bloques Y queda lección por dictar:
@@ -152,6 +168,45 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
     [idsArr, ordArr, modArr, lecArr, mod2Arr, lec2Arr]
   );
   return sesiones.length;
+}
+
+/**
+ * Reposiciona el CALENDARIO del salón: desde su próxima sesión sin terminar, la
+ * secuencia sigue en `modulo · leccion`. Es lo que ve el guía en la sesión (la
+ * lección de una clase la fija el calendario, no la posición de cada alumno).
+ * Sólo adelanta: si el salón ya va en esa lección o más allá, no hace nada.
+ */
+export async function registrarSaltoSalon(
+  cursoCampaignId: string, modulo: string, leccion: string, actor?: string | null
+): Promise<{ aplicado: boolean; desde?: string }> {
+  const cc = await queryOne<{ tipoCurso: string; historicRepet: any; sinteticas: boolean }>(
+    `SELECT "tipoCurso","historicRepet", COALESCE("evalSinteticaPorModulo", false) AS "sinteticas" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
+  ).catch(() => null);
+  if (!cc || String(cc.tipoCurso || '').toUpperCase() === 'IMPULSA') return { aplicado: false };
+  const hist = Array.isArray(cc.historicRepet) ? cc.historicRepet : [];
+  const seq = expandirSecuencia(
+    await leccionesBaseCurso(cc.tipoCurso, cc.sinteticas === true),
+    hist.filter((h: any) => h?.modulo && h?.leccion).map((h: any) => ({ modulo: h.modulo, leccion: h.leccion }))
+  );
+  const nrm = (x: any) => String(x ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const idx = seq.findIndex(l => !l.esEvaluacion && nrm(l.code) === nrm(modulo) && nrm(l.step) === nrm(leccion));
+  if (idx < 0) return { aplicado: false };
+
+  const ahora = new Date();
+  const proximas = await queryMany<{ fecha: string; dia: string; tipo: string | null; nombreEvento: string | null; duracionMin: number | null; lo: number | null }>(
+    `SELECT "fecha"::text AS fecha, "dia"::text AS dia, "tipo", "nombreEvento", "duracionMin", "leccionOrden" AS lo
+       FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 AND "dia" >= NOW() - INTERVAL '12 hours' ORDER BY "dia" ASC LIMIT 3`, [cursoCampaignId]);
+  const prox = proximas.find(s => eventEndDate(new Date(s.dia), s.tipo, s.nombreEvento, s.duracionMin).getTime() > ahora.getTime());
+  if (!prox || prox.lo == null || idx + 1 <= prox.lo) return { aplicado: false };
+
+  const desde = String(prox.fecha).slice(0, 10);
+  const entrada = JSON.stringify([{ desde, modulo, leccion, fecha: ahora.toISOString(), por: actor || null }]);
+  await query(
+    `UPDATE "CURSOS_CAMPAIGN"
+        SET "saltosLeccion" = COALESCE("saltosLeccion",'[]'::jsonb) || $2::jsonb, "_updatedDate" = NOW()
+      WHERE "_id" = $1`, [cursoCampaignId, entrada]);
+  await mapearLeccionesSalon(cursoCampaignId);
+  return { aplicado: true, desde };
 }
 
 /**

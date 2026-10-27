@@ -3,6 +3,7 @@ import { queryMany, queryOne } from '@/lib/postgres';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { previewMovimiento, ejecutarMovimiento } from './movimiento-academico.service';
+import { registrarSaltoSalon } from './repetir-clase.service';
 
 /**
  * Ajuste masivo (Académico › Mantenimiento) — el Ajuste Lecciones de la ficha
@@ -173,9 +174,17 @@ export async function aplicarAjusteMasivo(
       resultados.push({ academicaId: id, nombre: al.nombre, ok: false, detalle: e?.message || 'Error' });
     }
   }
+  // El salón entero se reposiciona: desde su próxima sesión el calendario sigue en la
+  // lección elegida, que es la que verá el guía. Sólo hacia adelante.
+  let calendario: { aplicado: boolean; desde?: string } = { aplicado: false };
+  if (!permitirRetroceso && resultados.some(r => r.ok)) {
+    try { calendario = await registrarSaltoSalon(cursoId, modulo, leccion, actor?.email); }
+    catch (e: any) { console.warn('[ajuste-masivo] salto de calendario:', e?.message); }
+  }
   return {
     ok: resultados.filter(r => r.ok).length,
     fail: resultados.filter(r => !r.ok).length,
     resultados,
+    calendario,
   };
 }
