@@ -314,6 +314,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Mover al beneficiario de campaña/curso/salón: actualiza curso, cupos, reagenda los bookings futuros al curso nuevo y lo ubica en la lección actual del curso destino. Requiere motivo y confirmación.',
   },
   {
+    code: StudentPermission.BUSQUEDA_LECCION,
+    module: Module.STUDENT,
+    section: 'Tab Académica',
+    name: 'Ítem "Búsqueda Lección"',
+    description: 'Buscar salones de otras campañas en una lección (o por debajo), abrir el caso «Cambio de curso» a Servicio Académico y confirmar el cambio de curso/salón/lección.',
+  },
+  {
     code: StudentPermission.MOVIMIENTO_ACADEMICO,
     module: Module.STUDENT,
     section: 'Tab Académica',

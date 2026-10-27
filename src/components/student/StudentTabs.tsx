@@ -103,7 +103,7 @@ export default function StudentTabs({ student, classes, contratoFinalizado = fal
     ...(canAgendar ? [{ id: 'schedule', name: 'Agendar Sesión', icon: '📅' }] : []),
     ...(canCambioAcademico ? [{ id: 'cambio-academico', name: 'Cambio Académico', icon: '🔀' }] : []),
     ...(canMovimiento ? [{ id: 'movimiento-academico', name: 'Ajuste Lecciones', icon: '↕️' }] : []),
-    ...(canCambioAcademico ? [{ id: 'busqueda-leccion', name: 'Búsqueda Lección', icon: '🔎' }] : []),
+    ...(hasPermission(StudentPermission.BUSQUEDA_LECCION) ? [{ id: 'busqueda-leccion', name: 'Búsqueda Lección', icon: '🔎' }] : []),
     ...(canAprobarWelcome ? [{ id: 'aprobar-welcome', name: 'Aprobar Welcome', icon: '✅' }] : []),
   ]
 

@@ -21,7 +21,7 @@ import { cierraElCaso } from '@/lib/casos-atencion-estados'
  *  - action = 'confirmar' → Servicio confirma: se hace el cambio de curso/salón/lección
  *      (el mismo Cambio Académico) y el caso queda cerrado como «Salón cambiado».
  *
- * Gateado por STUDENT.ACADEMIA.CAMBIO_ACADEMICO.
+ * Gateado por STUDENT.ACADEMIA.BUSQUEDA_LECCION (permiso propio).
  */
 interface Destino { campaign: string; tipoCurso: string; horarioCurso: string; salon: string }
 
@@ -40,7 +40,7 @@ async function validarDestino(b: any): Promise<Destino> {
 }
 
 export const POST = handlerWithAuth(async (req, { params }, session) => {
-  await requirePermission(session, StudentPermission.CAMBIO_ACADEMICO)
+  await requirePermission(session, StudentPermission.BUSQUEDA_LECCION)
   const academicaId = decodeURIComponent(params.id || '').trim()
   const body = await req.json().catch(() => ({}))
   const action = String(body?.action || '')
