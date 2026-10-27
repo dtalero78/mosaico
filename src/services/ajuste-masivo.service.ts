@@ -175,9 +175,13 @@ export async function aplicarAjusteMasivo(
     }
   }
   // El salón entero se reposiciona: desde su próxima sesión el calendario sigue en la
-  // lección elegida, que es la que verá el guía. Sólo hacia adelante.
+  // lección elegida, que es la que verá el guía. Sólo si el destino queda por delante
+  // de la próxima sesión (registrarSaltoSalon lo comprueba) y SIEMPRE, también cuando
+  // se marcó "permitir retroceder": esa casilla decide qué pasa con los ALUMNOS que
+  // van más adelante, no con el calendario del salón. Antes se omitía con ella y el
+  // guía seguía viendo la lección vieja.
   let calendario: { aplicado: boolean; desde?: string } = { aplicado: false };
-  if (!permitirRetroceso && resultados.some(r => r.ok)) {
+  if (resultados.some(r => r.ok)) {
     try { calendario = await registrarSaltoSalon(cursoId, modulo, leccion, actor?.email); }
     catch (e: any) { console.warn('[ajuste-masivo] salto de calendario:', e?.message); }
   }

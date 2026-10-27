@@ -72,6 +72,7 @@ function AjusteMasivoContent() {
   const [textoConfirma, setTextoConfirma] = useState('')
   const [aplicando, setAplicando] = useState(false)
   const [resultados, setResultados] = useState<Resultado[] | null>(null)
+  const [calendario, setCalendario] = useState<{ aplicado: boolean; desde?: string } | null>(null)
 
   useEffect(() => {
     fetch(API, { cache: 'no-store' }).then(r => r.json())
@@ -146,6 +147,7 @@ function AjusteMasivoContent() {
       const d = await r.json()
       if (!r.ok || d?.error) throw new Error(d?.error || 'No se pudo aplicar el ajuste')
       setResultados(d.resultados || [])
+      setCalendario(d.calendario || null)
       toast.success(`Ajuste aplicado a ${d.ok} alumno(s)${d.fail ? ` · ${d.fail} con error` : ''}`)
       // La lista vuelve a leerse: así se ve la posición nueva de cada alumno.
       setAlumnos(await cargarAlumnos(cursoId))
@@ -372,6 +374,14 @@ function AjusteMasivoContent() {
       {resultados && (
         <section className="bg-white border border-gray-200 rounded-xl p-5">
           <h2 className="font-semibold text-gray-900 mb-3">Resultado</h2>
+          {calendario && (
+            <p className={`text-sm mb-3 rounded-lg px-3 py-2 border ${calendario.aplicado
+              ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+              {calendario.aplicado
+                ? `Calendario del salón actualizado: desde la sesión del ${calendario.desde} el guía verá esta lección.`
+                : 'El calendario del salón NO se movió (el destino no queda por delante de su próxima sesión). El guía seguirá viendo la lección que ya tenía.'}
+            </p>
+          )}
           <ul className="space-y-1 text-sm">
             {resultados.map(r => (
               <li key={r.academicaId} className={r.ok ? 'text-gray-700' : 'text-red-700'}>
