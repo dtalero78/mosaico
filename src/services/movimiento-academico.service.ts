@@ -33,6 +33,7 @@ interface Bk {
   sm2: string | null; sl2: string | null;
   asistio: boolean | null; asistencia: boolean | null; noAprobo: boolean | null; cancelo: boolean | null;
   movimientoAcademico: boolean | null;
+  dia: string | null;
 }
 
 async function cargar(academicaId: string): Promise<{ aca: Aca; bookings: Bk[] }> {
@@ -43,7 +44,7 @@ async function cargar(academicaId: string): Promise<{ aca: Aca; bookings: Bk[] }
   const bookings = await queryMany<Bk>(
     `SELECT b."_id" AS "bid", c."sesionModulo" AS "sm", c."sesionLeccion" AS "sl", c."leccionOrden" AS "lo",
             c."sesionModulo2" AS "sm2", c."sesionLeccion2" AS "sl2",
-            b."asistio", b."asistencia", b."noAprobo", b."cancelo", b."movimientoAcademico"
+            b."asistio", b."asistencia", b."noAprobo", b."cancelo", b."movimientoAcademico", c."dia"::text AS "dia"
      FROM "ACADEMICA_BOOKINGS" b
      JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
      WHERE (b."idEstudiante"=$1 OR b."studentId"=$1) AND c."sesionLeccion" IS NOT NULL`,
@@ -88,7 +89,10 @@ function planificar(aca: Aca, bookings: Bk[], targetModulo: string, targetLeccio
   let aAprobar: Bk[] = [], aDesaprobar: Bk[] = [];
   if (targetOrder != null) {
     if (direction === 'adelante') {
-      aAprobar = conOrden.filter(b => ultimo(b) < targetOrder && !isAprobada(b));
+      // Sólo se aprueban las sesiones que YA ocurrieron: una que el salón aún no dicta
+      // debe llegar limpia al guía para que marque su asistencia de verdad.
+      const ahora = Date.now();
+      aAprobar = conOrden.filter(b => ultimo(b) < targetOrder && !isAprobada(b) && (!b.dia || new Date(b.dia).getTime() <= ahora));
     } else if (direction === 'atras') {
       aDesaprobar = conOrden.filter(b => ultimo(b) >= targetOrder && isAprobada(b));
     }
