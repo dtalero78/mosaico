@@ -26,7 +26,7 @@ import { NotFoundError, ValidationError } from '@/lib/errors';
 import { spacesClient, SPACES_BUCKET, SPACES_CDN } from '@/lib/spaces';
 import {
   ReciboExtraido, ReciboInscripcion, MAX_MB_RECIBO, reciboPermitido,
-  normalizarExtraido, montoCoincide, medioDelCatalogo, aNumero,
+  normalizarExtraido, montoCoincide, medioDelCatalogo, aNumero, urlsDeRecibo,
 } from '@/lib/recibo-inscripcion';
 
 const OPENAI_MODEL = 'gpt-4o-mini';
@@ -235,8 +235,66 @@ export async function registrarRecibo(opts: {
     extraido: null,
     origen: opts.origen || 'MODAL',
   };
+  await persistirRecibo(t, recibo);
+  return recibo;
+}
+
+/**
+ * "El pago tiene dos recibos": registra los DOS comprobantes de un mismo pago y el
+ * monto TOTAL que digitó una persona. Queda `PENDIENTE` de lectura; `procesarLectura`
+ * lee cada archivo (como referencia) y deja `extraido.monto = montoManual`.
+ */
+export async function registrarDosRecibos(opts: {
+  peopleId: string;
+  recibos: { url: string; nombre: string | null; tipo: string | null }[];
+  montoManual: number;
+  actor: string;
+}): Promise<ReciboInscripcion> {
+  const t = await cargarTitular(opts.peopleId);
+  if (opts.recibos.length !== 2) throw new ValidationError('Adjunta el recibo 1 y el recibo 2.');
+  const monto = Number(opts.montoManual);
+  if (!(monto > 0)) throw new ValidationError('Con dos recibos el monto del pago se digita y debe ser mayor a 0.');
+  if (opts.recibos[0].url === opts.recibos[1].url) throw new ValidationError('Los dos recibos son el mismo archivo.');
+  for (const r of opts.recibos) {
+    if (!keyDeNuestroBucket(r.url)) throw new ValidationError('El recibo no está en el almacenamiento de MOSAICO.');
+    if (!reciboPermitido(r.tipo, r.nombre)) {
+      throw new ValidationError('Cada recibo debe ser una imagen JPG, PNG o WEBP, o un PDF.');
+    }
+  }
+  const [a] = opts.recibos;
+  const recibo: ReciboInscripcion = {
+    url: a.url,
+    nombre: a.nombre,
+    tipo: a.tipo,
+    subidoPor: opts.actor,
+    subidoEn: new Date().toISOString(),
+    lectura: 'PENDIENTE',
+    lecturaError: null,
+    extraido: null,
+    origen: 'MODAL',
+    dosRecibos: true,
+    montoManual: monto,
+    recibos: opts.recibos.map(r => ({ url: r.url, nombre: r.nombre, tipo: r.tipo, extraido: null })),
+  };
+  await persistirRecibo(t, recibo);
+  return recibo;
+}
+
+/**
+ * Deja `recibo` como el vigente (el anterior pasa al historial) y lo adjunta a la
+ * cuota #0, quitando los archivos del anterior (uno o dos).
+ */
+async function persistirRecibo(t: Titular, recibo: ReciboInscripcion): Promise<void> {
   const anterior = t.reciboInscripcion;
   const cuota = await cuotaInscripcion(t._id);
+  const urlsAnteriores = urlsDeRecibo(anterior);
+  const adjuntos = (recibo.recibos?.length ? recibo.recibos : [recibo]).map((r, i, arr) => ({
+    url: r.url,
+    nombre: `${PREFIJO_ADJUNTO}${arr.length > 1 ? `${i + 1} — ` : ''}${r.nombre || 'recibo'}`,
+    tipo: r.tipo,
+    fechaSubida: recibo.subidoEn,
+    esReciboInscripcion: true,
+  }));
 
   await withTransaction(async (client) => {
     // El vigente pasa al historial (append en SQL, no leer-modificar-escribir).
@@ -259,26 +317,14 @@ export async function registrarRecibo(opts: {
         `UPDATE "PAGOS_TITULARES"
             SET "documentosAdjuntos" = COALESCE((
                   SELECT jsonb_agg(d) FROM jsonb_array_elements(COALESCE("documentosAdjuntos", '[]'::jsonb)) d
-                   WHERE d->>'url' IS DISTINCT FROM $2
+                   WHERE NOT (d->>'url' = ANY($2::text[]))
                 ), '[]'::jsonb) || $3::jsonb,
                 "_updatedDate" = NOW()
           WHERE "_id" = $1`,
-        [
-          cuota._id,
-          anterior?.url ?? null,
-          JSON.stringify([{
-            url: recibo.url,
-            nombre: `${PREFIJO_ADJUNTO}${recibo.nombre || 'recibo'}`,
-            tipo: recibo.tipo,
-            fechaSubida: recibo.subidoEn,
-            esReciboInscripcion: true,
-          }]),
-        ]
+        [cuota._id, urlsAnteriores, JSON.stringify(adjuntos)]
       );
     }
   });
-
-  return recibo;
 }
 
 /**
@@ -293,14 +339,28 @@ export async function procesarLectura(peopleId: string, actor: string): Promise<
 
   let extraido: ReciboExtraido | null = null;
   let error: string | null = null;
-  try {
-    extraido = await leerRecibo(recibo.url);
-  } catch (e: any) {
-    error = e?.message || 'La lectura falló.';
+  let leidos: ReciboInscripcion['recibos'] | undefined;
+  if (recibo.dosRecibos && recibo.recibos?.length) {
+    // Dos recibos: se lee cada uno (un fallo no impide guardar) como REFERENCIA; el
+    // monto que vale es el digitado. Fecha, medio y referencia salen del recibo 1.
+    leidos = await Promise.all(recibo.recibos.map(async r => {
+      try { return { ...r, extraido: await leerRecibo(r.url) }; }
+      catch { return { ...r, extraido: r.extraido ?? null }; }
+    }));
+    const base = leidos[0].extraido || leidos[1]?.extraido || null;
+    if (base) extraido = { ...base, monto: aNumero(recibo.montoManual) };
+    else error = 'No se pudo leer ninguno de los dos recibos.';
+  } else {
+    try {
+      extraido = await leerRecibo(recibo.url);
+    } catch (e: any) {
+      error = e?.message || 'La lectura falló.';
+    }
   }
 
   const actualizado: ReciboInscripcion = {
     ...recibo,
+    ...(leidos ? { recibos: leidos } : {}),
     lectura: extraido ? 'OK' : 'FALLIDA',
     lecturaError: error,
     extraido: extraido ?? recibo.extraido ?? null,

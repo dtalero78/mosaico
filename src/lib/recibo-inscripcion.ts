@@ -38,6 +38,21 @@ export interface ReciboInscripcion {
   /** Sólo en el historial: cuándo dejó de ser el vigente y por qué. */
   reemplazadoEn?: string;
   origen?: 'MODAL' | 'MIGRACION' | 'RECAUDOS';
+  /**
+   * "El pago tiene dos recibos": url/nombre/tipo/extraido arriba son los del
+   * recibo 1 (para quien sólo conoce un recibo) y `extraido.monto` es el
+   * `montoManual`, digitado por una persona — con dos recibos la IA no decide el valor.
+   */
+  dosRecibos?: boolean;
+  montoManual?: number | null;
+  recibos?: { url: string; nombre: string | null; tipo: string | null; extraido: ReciboExtraido | null }[];
+}
+
+/** URLs de todos los archivos del recibo vigente (uno o dos). */
+export function urlsDeRecibo(r: Pick<ReciboInscripcion, 'url' | 'recibos'> | null | undefined): string[] {
+  if (!r) return [];
+  const lista = Array.isArray(r.recibos) && r.recibos.length ? r.recibos.map(x => x.url) : [r.url];
+  return lista.filter(Boolean);
 }
 
 /**
