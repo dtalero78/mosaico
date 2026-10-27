@@ -15,6 +15,7 @@ import {
   SIN_ASIGNAR_LABEL, CANAL_CONTACTO_LABEL, RESULTADO_CONTACTO_LABEL, RESULTADO_CONTACTO_COLOR,
 } from '@/lib/casos-atencion-estados'
 import NoContinuaCasilla from '@/components/casos/NoContinuaCasilla'
+import AdicionarNivelacionModal from '@/components/servicio/AdicionarNivelacionModal'
 import { hoyEnChile } from '@/lib/cursos-campaign'
 
 /**
@@ -411,6 +412,11 @@ function CasosAtencionContent() {
   // `undefined` = todavía no eligió; `null` = eligió Cerrar (que no tiene área).
   const [destino, setDestino] = useState<string | null | undefined>(undefined)
   const [saving, setSaving] = useState(false)
+  // Al asignar a Servicio Académico: ¿el alumno requiere nivelación? Si sí, tras
+  // asignar se abre el diálogo para solicitarla, con el alumno ya elegido.
+  const [requiereNivelacion, setRequiereNivelacion] = useState(false)
+  const [nivelacionDe, setNivelacionDe] = useState<{ row: Row; motivo: string } | null>(null)
+  useEffect(() => { setRequiereNivelacion(false) }, [resolver, destino])
 
   // Modal "Cerrar caso" (bandejas de área). La conclusión es el comentario del
   // cierre; acuerdo y fecha sólo se piden si el caso no los tiene (R5).
@@ -603,7 +609,8 @@ function CasosAtencionContent() {
       toast.success(cierra ? 'Caso cerrado'
         : `Caso asignado a ${DESTINOS.find(d => d.area === destino)?.label || destino}`)
       setRows(prev => prev.filter(x => x.bookingId !== resolver.bookingId))
-      setResolver(null); setComentario(''); setDestino(undefined); setResolverNoContinua(false)
+      if (destino === 'ACADEMICOS' && requiereNivelacion) setNivelacionDe({ row: resolver, motivo: comentario.trim() })
+      setResolver(null); setComentario(''); setDestino(undefined); setResolverNoContinua(false); setRequiereNivelacion(false)
       cargarConteos()
     } catch (e: any) {
       toast.error(e?.message || 'Error')
@@ -1242,6 +1249,16 @@ function CasosAtencionContent() {
               ))}
             </div>
 
+            {destino === 'ACADEMICOS' && (
+              <label className="flex items-start gap-2 mb-4 cursor-pointer bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <input type="checkbox" checked={requiereNivelacion} onChange={e => setRequiereNivelacion(e.target.checked)}
+                  disabled={saving} className="mt-0.5 h-4 w-4 accent-orange-600" />
+                <span className="text-sm text-orange-900">
+                  <b>Requiere nivelación.</b> Al asignar el caso se abrirá el diálogo para solicitarla.
+                </span>
+              </label>
+            )}
+
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {destino === 'NIVELACIONES' ? 'Detalle de la nivelación' : 'Comentario'}
               {EXIGE_TEXTO(destino) && <span className="text-red-500"> *</span>}
@@ -1270,6 +1287,17 @@ function CasosAtencionContent() {
             </>)}
           </div>
         </div>
+      )}
+
+      {nivelacionDe && (
+        <AdicionarNivelacionModal
+          prefill={{
+            academicaId: nivelacionDe.row.academicaId, guiaNombre: nivelacionDe.row.guia,
+            curso: nivelacionDe.row.curso, salon: nivelacionDe.row.salon, motivo: nivelacionDe.motivo,
+          }}
+          onClose={() => setNivelacionDe(null)}
+          onCreated={() => setNivelacionDe(null)}
+        />
       )}
 
       {/* Modal Cerrar caso (bandejas de área) */}

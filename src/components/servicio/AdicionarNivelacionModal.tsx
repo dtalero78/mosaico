@@ -20,9 +20,12 @@ interface Leccion { value: string; modulo: string }
  * Se elige el guía primero y no el alumno porque es lo que ata la nivelación a
  * una clase real: el servidor comprueba que ese guía dicte el salón del alumno.
  */
-export default function AdicionarNivelacionModal({ onClose, onCreated }: {
+export default function AdicionarNivelacionModal({ onClose, onCreated, prefill }: {
   onClose: () => void
   onCreated: () => void
+  /** Alumno ya conocido (p. ej. al asignar un caso a Servicio Académico): la
+   *  cascada Guía → Curso → Salón → Usuario se recorre sola. */
+  prefill?: { academicaId: string; guiaNombre?: string | null; curso?: string | null; salon?: string | null; motivo?: string }
 }) {
   const [guias, setGuias] = useState<Guia[]>([])
   const [cursos, setCursos] = useState<string[]>([])
@@ -56,12 +59,47 @@ export default function AdicionarNivelacionModal({ onClose, onCreated }: {
         setGuias(gs)
         // Con el rol GUIA el servidor devuelve sólo su ficha: queda elegido y
         // la cascada arranca en sus cursos.
+        if (prefill) { precargar(gs).catch(() => {}); if (prefill.motivo) setMotivo(prefill.motivo.slice(0, 300)); return }
         if (gs.length === 1) elegirGuia(gs[0]._id)
       })
       .catch(() => toast.error('No se pudieron cargar los guías'))
       .finally(() => setCargando(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Recorre la cascada con el alumno conocido. Si algún paso no se puede resolver
+  // (guía sin coincidir, alumno fuera de la lista) se queda donde llegó y el
+  // usuario completa a mano.
+  const precargar = async (gs: Guia[]) => {
+    if (!prefill) return
+    const n = (s: any) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+    const candidatos = prefill.guiaNombre ? gs.filter(g => n(g.nombreCompleto) === n(prefill.guiaNombre)) : gs
+    for (const g of candidatos) {
+      const cs: string[] = (await opciones(`guiaId=${encodeURIComponent(g._id)}`)).cursos || []
+      const c = cs.find(x => n(x) === n(prefill.curso))
+      if (!c) continue
+      const [s, nv] = await Promise.all([
+        opciones(`guiaId=${encodeURIComponent(g._id)}&curso=${encodeURIComponent(c)}`),
+        fetch(`/api/postgres/niveles?curso=${encodeURIComponent(c)}`, { cache: 'no-store' }).then(r => r.json()),
+      ])
+      const sals: Salon[] = (s.salones || []).filter((x: Salon) => !prefill.salon || n(x.salon) === n(prefill.salon))
+      for (let i = 0; i < sals.length; i++) {
+        const d = await opciones(
+          `guiaId=${encodeURIComponent(g._id)}&curso=${encodeURIComponent(c)}` +
+          `&salon=${encodeURIComponent(sals[i].salon)}&campaign=${encodeURIComponent(sals[i].campaign)}` +
+          `&horarioCurso=${encodeURIComponent(sals[i].horarioCurso)}`
+        )
+        if (!(d.alumnos || []).some((a: Alumno) => a.academicaId === prefill.academicaId)) continue
+        const ls: Leccion[] = []
+        ;(nv.modulos || []).forEach((m: any) => (m.steps || []).forEach((st: string) => ls.push({ value: st, modulo: m.code })))
+        setGuiaId(g._id); setCursos(cs); setCurso(c); setLecciones(ls)
+        setSalones(s.salones || []); setSalonKey(String((s.salones || []).findIndex((x: Salon) =>
+          x.salon === sals[i].salon && x.campaign === sals[i].campaign && x.horarioCurso === sals[i].horarioCurso)))
+        setAlumnos(d.alumnos || []); setAcademicaId(prefill.academicaId)
+        return
+      }
+    }
+  }
 
   // Cada paso limpia lo que cuelga de él: un salón de otro curso no significa nada.
   const elegirGuia = async (id: string) => {
