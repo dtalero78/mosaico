@@ -16,6 +16,8 @@ export const GET = handler(async () => {
   const result = await query(
     `SELECT "campaign", "tipoCurso", "horarioCurso", "paraMenores", "salon", "guia",
             "inicioCurso", "finalCurso", "finalCampaign",
+            -- Día (Chile) en que se creó el curso: la extemporánea dura 2 semanas desde ahí.
+            ("_createdDate" AT TIME ZONE 'America/Santiago')::date::text AS "creadoEn",
             -- Inicio de la CAMPAÑA = su primer curso. Los demás sólo se reúnen
             -- otro día de la semana (LUN-MIÉ, MAR-JUE, SÁB); la semana de
             -- matrícula se cuenta desde el primero.

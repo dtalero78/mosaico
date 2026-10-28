@@ -1,12 +1,12 @@
 /**
  * Renombra una campaña en TODAS las tablas que la referencian, en una transacción.
  * Uso: node scripts/rename-campaign.js <VIEJO> <NUEVO> [--apply]
- * Tablas con columna campaign: ACADEMICA, CALENDARIO, CURSOS_CAMPAIGN, PEOPLE, REPORTE_ACADEMICO_NOTAS.
+ * Tablas con columna campaign: ACADEMICA, CALENDARIO, CURSOS_CAMPAIGN, PEOPLE, REPORTE_ACADEMICO_NOTAS, REPORTE_ACADEMICO_CIERRE.
  */
 const {Pool}=require("pg");require("dotenv").config({path:".env.local"});
 const [OLD,NEW]=process.argv.slice(2).filter(a=>!a.startsWith("--"));
 const APPLY=process.argv.includes("--apply");
-const TABLES=["ACADEMICA","CALENDARIO","CURSOS_CAMPAIGN","PEOPLE","REPORTE_ACADEMICO_NOTAS"];
+const TABLES=["ACADEMICA","CALENDARIO","CURSOS_CAMPAIGN","PEOPLE","REPORTE_ACADEMICO_NOTAS","REPORTE_ACADEMICO_CIERRE"];
 if(!OLD||!NEW){console.error("Uso: node scripts/rename-campaign.js <VIEJO> <NUEVO> [--apply]");process.exit(1);}
 const p=new Pool({connectionString:(process.env.DATABASE_URL||"").replace(/[?&]sslmode=[^&]*/g,""),ssl:{rejectUnauthorized:false}});
 const cnt=async(t,c,val)=>{try{return Number((await c.query(`SELECT COUNT(*) n FROM "${t}" WHERE "campaign"=$1`,[val])).rows[0].n);}catch(e){return `(sin tabla: ${e.message.split("\n")[0]})`;}};

@@ -272,7 +272,14 @@ export function cursosVisiblesContrato<T extends { campaign?: string; inicioCamp
   const [ly, lm, ld] = hoy.split('-').map(Number);
   const limStr = new Date(Date.UTC(ly, lm - 1, ld - 14)).toISOString().slice(0, 10);
 
-  return rows.filter(r => r.campaign === target && fcurso(r) >= hoy && ini(r) && ini(r) >= limStr);
+  // El plazo corre dos semanas desde el inicio del curso O desde su CREACIÓN, lo que
+  // dé más tiempo: un curso creado cuando su campaña ya pasó a activa (porque sus
+  // cursos empezaron) también necesita su ventana de extemporánea.
+  return rows.filter(r => {
+    if (r.campaign !== target || !(fcurso(r) >= hoy)) return false;
+    const creado = sl((r as any).creadoEn);
+    return (!!ini(r) && ini(r) >= limStr) || (!!creado && creado >= limStr);
+  });
 }
 
 /** Suma `meses` a una fecha ISO (YYYY-MM-DD) manejando el overflow de fin de mes. */
