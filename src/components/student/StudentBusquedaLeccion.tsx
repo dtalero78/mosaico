@@ -61,8 +61,8 @@ export default function StudentBusquedaLeccion({
       const d = await r.json()
       if (!r.ok || d.error) throw new Error(d.error || 'No se pudo buscar')
       if (d.bloqueadoWelcome) throw new Error('El alumno sigue en WELCOME: primero hay que promoverlo a su curso.')
-      // Misma lección (gap 0) o una por debajo (gap < 0); el salón actual no cuenta.
-      setCands((d.candidatos as Candidato[]).filter(c => !c.esSalonActual && c.gap != null && c.gap <= 0))
+      // Misma lección o a lo sumo UNA arriba o abajo (|gap| ≤ 1); el salón actual no cuenta.
+      setCands((d.candidatos as Candidato[]).filter(c => !c.esSalonActual && c.gap != null && Math.abs(c.gap) <= 1))
     } catch (e: any) { toast.error(e.message || 'Error'); setCands([]) }
     finally { setBuscando(false) }
   }
@@ -163,7 +163,7 @@ export default function StudentBusquedaLeccion({
                             </p>
                           </div>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${c.gap === 0 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {c.gap === 0 ? 'Misma lección' : `${Math.abs(c.gap as number)} abajo`}
+                            {c.gap === 0 ? 'Misma lección' : `${Math.abs(c.gap as number)} ${(c.gap as number) > 0 ? 'arriba' : 'abajo'}`}
                           </span>
                         </li>
                       ))}

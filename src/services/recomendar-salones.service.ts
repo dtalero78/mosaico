@@ -3,6 +3,7 @@ import { query, queryOne, queryMany } from '@/lib/postgres';
 import { NotFoundError } from '@/lib/errors';
 import { EVALUACION_STEP } from './repetir-clase.service';
 import { posicionDeSalon } from './avance-calendario.service';
+import { hoyEnChile } from '@/lib/cursos-campaign';
 
 /**
  * Barrido de salones — recomienda a qué CAMPAÑA/SALÓN del MISMO curso mover a un alumno
@@ -12,7 +13,7 @@ import { posicionDeSalon } from './avance-calendario.service';
  * de su próximo evento futuro mapeado. Se compara con la lección actual del alumno usando el
  * `orden` de NIVELES (pedagógico, igual para todos los salones del tipo). El `gap` = orden del
  * salón − orden del alumno: 0 = misma lección (ideal); >0 = el alumno adelantaría (se saltaría
- * lecciones); <0 = repetiría. Se ordena por |gap| y, a igualdad, por cupo disponible.
+ * lecciones); <0 = repetiría. Sólo se ofrecen salones ACTIVOS y no cerrados (final de curso y cierre no vencidos). Se ordena por |gap| y, a igualdad, por cupo disponible.
  */
 
 const norm = (s: any) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -74,8 +75,10 @@ export async function recomendarSalones(
   // Salones candidatos: mismo tipoCurso, activos, distinto del actual.
   const cursos = await queryMany<any>(
     `SELECT "_id","campaign","salon","horarioCurso","guia","numeroUsuarios","usuInscritos"
-     FROM "CURSOS_CAMPAIGN" WHERE "tipoCurso"=$1 AND "activa"=true AND ($2::text IS NULL OR $3::boolean OR "_id" <> $2)`,
-    [curso, currentCC, opts.incluirActual === true]
+     FROM "CURSOS_CAMPAIGN" WHERE "tipoCurso"=$1 AND "activa"=true AND ($2::text IS NULL OR $3::boolean OR "_id" <> $2)
+        AND ("finalCurso" IS NULL OR "finalCurso" >= $4::date)
+        AND ("cierreCurso" IS NULL OR "cierreCurso" >= $4::date)`,
+    [curso, currentCC, opts.incluirActual === true, hoyEnChile()]
   );
 
   const guiaIds = [...new Set(cursos.map(c => c.guia).filter(Boolean))];
