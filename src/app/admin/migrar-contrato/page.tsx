@@ -113,7 +113,10 @@ export default function MigrarContratoPage() {
 
   // Cursos de campaña (cascada) — paridad con Crear Contrato
   const [cursosCampaign, setCursosCampaign] = useState<CursoRow[]>([])
-  const cursosVisibles = useMemo(() => cursosVisiblesContrato(cursosCampaign, false), [cursosCampaign])
+  // Extemporánea: marca el contrato (PEOPLE.extemporanea) y cambia los cursos
+  // ofrecidos, igual que en Crear Contrato.
+  const [esExtemporanea, setEsExtemporanea] = useState(false)
+  const cursosVisibles = useMemo(() => cursosVisiblesContrato(cursosCampaign, esExtemporanea), [cursosCampaign, esExtemporanea])
 
   // Salón del curso a partir de (campaña, curso, horario) — el beneficiario guarda
   // campaign/tipoCurso/horarioCurso pero no el salón, que vive en el catálogo.
@@ -304,6 +307,7 @@ export default function MigrarContratoPage() {
             asesor,
             asesorMail,
             plataforma,
+            extemporanea: esExtemporanea,
             celular: prefix ? prefix + titular.celular : titular.celular,
           },
           financial,
@@ -379,6 +383,7 @@ export default function MigrarContratoPage() {
           primerApellido={titular.primerApellido}
           segundoApellido={titular.segundoApellido}
           numeroId={titular.numeroId}
+          esExtemporanea={esExtemporanea}
         />
 
         {/* Progress */}
@@ -427,6 +432,26 @@ export default function MigrarContratoPage() {
                   {PLATAFORMAS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
+              <label
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 cursor-pointer transition-colors select-none ${
+                  esExtemporanea ? 'bg-red-100 border-red-500 text-red-800 shadow-sm' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'
+                }`}
+                title="Marca la matrícula como extemporánea (fuera de plazo). Se guarda en PEOPLE.extemporanea."
+              >
+                <input
+                  type="checkbox"
+                  checked={esExtemporanea}
+                  onChange={e => {
+                    setEsExtemporanea(e.target.checked)
+                    // Cambia el set de cursos visibles → limpiar las selecciones de curso
+                    setTitular(t => ({ ...t, campaign: '', tipoCurso: '', horarioCurso: '' }))
+                    setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' })))
+                    setCurrentBenef(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' }))
+                  }}
+                  className="h-4 w-4 rounded border-red-400 text-red-600 focus:ring-red-500"
+                />
+                <span className="text-sm font-semibold">⏰ EXTEMPORÁNEA</span>
+              </label>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Asesor comercial *</label>
                 <input
