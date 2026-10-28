@@ -1,5 +1,6 @@
 import 'server-only';
 import { query, transaction } from '@/lib/postgres';
+import { resolverCurso } from '@/services/curso-resolver.service';
 import type { PoolClient } from 'pg';
 import { ids } from '@/lib/id-generator';
 import { parseHorario } from '@/lib/cursos-campaign';
@@ -237,10 +238,10 @@ export async function regenerarCursoPreservandoEstado(
      FROM "PEOPLE" p
      JOIN "ACADEMICA" a ON a."peopleId" = p."_id"
      WHERE p."tipoUsuario" = 'BENEFICIARIO'
-       AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
+       AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3 AND p."salon" IS NOT DISTINCT FROM $4
        AND ${esAprobadoSql('p."aprobacion"')}
        AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
-    [curso.campaign, curso.tipoCurso, curso.horarioCurso]
+    [curso.campaign, curso.tipoCurso, curso.horarioCurso, curso.salon]
   )).rows;
 
   const snap = (await query<any>(
@@ -267,7 +268,7 @@ export async function regenerarCursoPreservandoEstado(
   let bookings = 0;
   for (const s of est) {
     bookings += await generarBookingsBeneficiario(s.acaid, {
-      campaign: curso.campaign, tipoCurso: curso.tipoCurso, horarioCurso: curso.horarioCurso,
+      campaign: curso.campaign, tipoCurso: curso.tipoCurso, horarioCurso: curso.horarioCurso, salon: curso.salon,
       numeroId: s.numeroId, primerNombre: s.primerNombre, primerApellido: s.primerApellido,
       celular: s.celular, plataforma: s.plataforma,
     });
@@ -300,6 +301,8 @@ export interface BeneficiarioParaBookings {
   campaign?: string | null;
   tipoCurso?: string | null;
   horarioCurso?: string | null;
+  /** Salón del alumno: obligatorio de hecho cuando el horario lo comparten varios salones. */
+  salon?: string | null;
   numeroId?: string | null;
   primerNombre?: string | null;
   primerApellido?: string | null;
@@ -337,12 +340,10 @@ export async function generarBookingsBeneficiario(
   if (!persona.campaign || !persona.tipoCurso || !persona.horarioCurso) return 0;
 
   // Resolver el curso (cursoCampaignId)
-  const cr = await query(
-    `SELECT "_id" FROM "CURSOS_CAMPAIGN"
-     WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
-    [persona.campaign, persona.tipoCurso, persona.horarioCurso]
-  );
-  const cursoId = cr.rows[0]?._id;
+  const cr = await resolverCurso<{ _id: string }>({ query }, {
+    campaign: persona.campaign, tipoCurso: persona.tipoCurso, horarioCurso: persona.horarioCurso, salon: persona.salon,
+  }, { columnas: '"_id"' });
+  const cursoId = cr?._id;
   if (!cursoId) return 0;
 
   // Eventos del curso
@@ -482,8 +483,8 @@ export async function arrastrarAlumnosDelCurso(
   const alumnos = (await query<{ _id: string; numeroId: string | null }>(
     `SELECT "_id","numeroId" FROM "PEOPLE"
       WHERE "tipoUsuario"='BENEFICIARIO'
-        AND "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3`,
-    [antes.campaign, antes.tipoCurso, antes.horarioCurso]
+        AND "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "salon" IS NOT DISTINCT FROM $4`,
+    [antes.campaign, antes.tipoCurso, antes.horarioCurso, antes.salon || null]
   )).rows;
   if (!alumnos.length) return 0;
 

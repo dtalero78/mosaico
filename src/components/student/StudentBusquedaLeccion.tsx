@@ -75,7 +75,7 @@ export default function StudentBusquedaLeccion({
     if (!r.ok || d.error) throw new Error(d.error || 'No se pudo completar la acción')
     return d
   }
-  const destinoBody = () => sel && ({ campaign: sel.campaign, tipoCurso: curso, horarioCurso: sel.horarioCurso })
+  const destinoBody = () => sel && ({ campaign: sel.campaign, tipoCurso: curso, horarioCurso: sel.horarioCurso, salon: sel.salon || '' })
 
   const asignar = async () => {
     if (!sel) return

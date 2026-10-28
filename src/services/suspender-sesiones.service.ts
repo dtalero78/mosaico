@@ -133,7 +133,7 @@ export async function previsualizar(items: SuspensionItem[]): Promise<CambioCurs
     const antes = await resumenCurso(cursoId);
     const alumnos = await query<{ n: number }>(
       `SELECT COUNT(DISTINCT p."_id")::int AS n FROM "PEOPLE" p
-       JOIN "CURSOS_CAMPAIGN" cc ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
+       JOIN "CURSOS_CAMPAIGN" cc ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
        WHERE cc."_id" = $1 AND p."tipoUsuario" = 'BENEFICIARIO' AND ${esAprobadoSql('p."aprobacion"')}`,
       [cursoId]
     );

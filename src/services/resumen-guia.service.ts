@@ -67,7 +67,7 @@ alumnos AS (
     FROM cursos k
     JOIN "PEOPLE" p
       ON p."tipoUsuario" = 'BENEFICIARIO'
-     AND p."campaign" = k."campaign" AND p."tipoCurso" = k."tipoCurso" AND p."horarioCurso" = k."horarioCurso"
+     AND p."campaign" = k."campaign" AND p."tipoCurso" = k."tipoCurso" AND p."horarioCurso" = k."horarioCurso" AND p."salon" IS NOT DISTINCT FROM k."salon"
    WHERE ${cupoOcupadoSql('p')}
 ),
 acad AS (

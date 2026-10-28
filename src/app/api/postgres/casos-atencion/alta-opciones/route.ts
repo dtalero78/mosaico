@@ -114,7 +114,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        WHERE EXISTS (SELECT 1 FROM "CURSOS_CAMPAIGN" cc
                       WHERE cc."guia" = $1 AND cc."activa" = true
                         AND cc."tipoCurso" = p."tipoCurso"
-                        AND cc."horarioCurso" = p."horarioCurso"
+                        AND cc."horarioCurso" = p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
                         AND cc."campaign" = p."campaign")
          AND ${cond.join(' AND ')}
        ORDER BY UPPER(p."primerApellido"), UPPER(p."primerNombre")`,

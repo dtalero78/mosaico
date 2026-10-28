@@ -74,6 +74,8 @@ interface Beneficiario {
   campaign: string
   tipoCurso: string
   horarioCurso: string
+
+  salon?: string
   userLogin: string
 }
 
@@ -81,7 +83,7 @@ const emptyBeneficiario = (): Beneficiario => ({
   primerNombre: '', segundoNombre: '', primerApellido: '', segundoApellido: '',
   numeroId: '', fechaNacimiento: '', email: '', celular: '', domicilio: '', ciudad: '',
   apoderado: '', apoderadoTelefono: '', apoderadoMail: '', titularEsApoderado: false,
-  campaign: '', tipoCurso: '', horarioCurso: '', userLogin: '',
+  campaign: '', tipoCurso: '', horarioCurso: '', salon: '', userLogin: '',
 })
 
 // ─── Componente ──────────────────────────────────────────────────────────────
@@ -108,7 +110,7 @@ export default function MigrarContratoPage() {
     referenciaDos: '', parentezcoRefDos: '', telRefDos: '',
     // Curso del titular (cuando el titular también es beneficiario) + flag Impulsa
     esCursoImpulsa: false,
-    campaign: '', tipoCurso: '', horarioCurso: '', userLogin: '',
+    campaign: '', tipoCurso: '', horarioCurso: '', salon: '', userLogin: '',
   })
 
   // Cursos de campaña (cascada) — paridad con Crear Contrato
@@ -120,15 +122,16 @@ export default function MigrarContratoPage() {
 
   // Salón del curso a partir de (campaña, curso, horario) — el beneficiario guarda
   // campaign/tipoCurso/horarioCurso pero no el salón, que vive en el catálogo.
-  const salonFor = (campaign?: string, tipoCurso?: string, horarioCurso?: string): string => {
+  const salonFor = (campaign?: string, tipoCurso?: string, horarioCurso?: string, salon?: string): string => {
+    if (salon) return salon;
     const r = cursosCampaign.find(
       x => x.campaign === campaign && x.tipoCurso === tipoCurso && x.horarioCurso === horarioCurso
     )
     return (r?.salon || '').toString()
   }
   // Resumen "Campaña · Curso · Salón N · Horario" de un curso (para las tarjetas).
-  const cursoResumen = (campaign?: string, tipoCurso?: string, horarioCurso?: string): string => {
-    const salon = salonFor(campaign, tipoCurso, horarioCurso)
+  const cursoResumen = (campaign?: string, tipoCurso?: string, horarioCurso?: string, salonSel?: string): string => {
+    const salon = salonFor(campaign, tipoCurso, horarioCurso, salonSel)
     return [
       campaign || '—',
       tipoCurso || '—',
@@ -444,9 +447,9 @@ export default function MigrarContratoPage() {
                   onChange={e => {
                     setEsExtemporanea(e.target.checked)
                     // Cambia el set de cursos visibles → limpiar las selecciones de curso
-                    setTitular(t => ({ ...t, campaign: '', tipoCurso: '', horarioCurso: '' }))
-                    setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' })))
-                    setCurrentBenef(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' }))
+                    setTitular(t => ({ ...t, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' }))
+                    setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' })))
+                    setCurrentBenef(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' }))
                   }}
                   className="h-4 w-4 rounded border-red-400 text-red-600 focus:ring-red-500"
                 />
@@ -482,7 +485,7 @@ export default function MigrarContratoPage() {
               {/* Check curso Impulsa — gobierna la cascada de cursos (titular + beneficiarios) */}
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={titular.esCursoImpulsa}
-                  onChange={e => setTitular(t => ({ ...t, esCursoImpulsa: e.target.checked, campaign: '', tipoCurso: '', horarioCurso: '' }))} />
+                  onChange={e => setTitular(t => ({ ...t, esCursoImpulsa: e.target.checked, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' }))} />
                 ¿Es curso Impulsa? (muestra solo cursos IMPULSA en los dropdowns)
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -798,7 +801,7 @@ export default function MigrarContratoPage() {
                     <CursoCampaignFields
                       rows={cursosVisibles}
                       esImpulsa={titular.esCursoImpulsa}
-                      values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso }}
+                      values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso, salon: titular.salon }}
                       onPatch={(patch) => setTitular(t => ({ ...t, ...patch }))}
                       userLogin={titular.userLogin}
                     />
@@ -820,7 +823,7 @@ export default function MigrarContratoPage() {
                     <div key={i} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm">
                       <span>
                         <span className="font-medium">{b.primerNombre} {b.primerApellido} — ID: {b.numeroId}</span>
-                        <span className="block text-xs text-gray-500">{cursoResumen(b.campaign, b.tipoCurso, b.horarioCurso)}</span>
+                        <span className="block text-xs text-gray-500">{cursoResumen(b.campaign, b.tipoCurso, b.horarioCurso, b.salon)}</span>
                       </span>
                       <button
                         type="button"
@@ -912,7 +915,7 @@ export default function MigrarContratoPage() {
                       <CursoCampaignFields
                         rows={cursosVisibles}
                         esImpulsa={titular.esCursoImpulsa}
-                        values={{ campaign: currentBenef.campaign, tipoCurso: currentBenef.tipoCurso, horarioCurso: currentBenef.horarioCurso }}
+                        values={{ campaign: currentBenef.campaign, tipoCurso: currentBenef.tipoCurso, horarioCurso: currentBenef.horarioCurso, salon: currentBenef.salon }}
                         onPatch={(patch) => setCurrentBenef(b => ({ ...b, ...patch }))}
                         userLogin={currentBenef.userLogin}
                       />
@@ -1032,13 +1035,13 @@ export default function MigrarContratoPage() {
                   {titularEsBeneficiario && (
                     <div className="text-sm text-gray-700">
                       <p>• {titular.primerNombre} {titular.primerApellido} <span className="text-blue-600 text-xs">(Titular)</span></p>
-                      <p className="text-xs text-gray-500 ml-3">{cursoResumen(titular.campaign, titular.tipoCurso, titular.horarioCurso)}</p>
+                      <p className="text-xs text-gray-500 ml-3">{cursoResumen(titular.campaign, titular.tipoCurso, titular.horarioCurso, titular.salon)}</p>
                     </div>
                   )}
                   {beneficiarios.map((b, i) => (
                     <div key={i} className="text-sm text-gray-700">
                       <p>• {b.primerNombre} {b.primerApellido} — ID: {b.numeroId}</p>
-                      <p className="text-xs text-gray-500 ml-3">{cursoResumen(b.campaign, b.tipoCurso, b.horarioCurso)}</p>
+                      <p className="text-xs text-gray-500 ml-3">{cursoResumen(b.campaign, b.tipoCurso, b.horarioCurso, b.salon)}</p>
                     </div>
                   ))}
                   {totalBenef === 0 && <p className="text-sm text-gray-500 italic">Sin beneficiarios</p>}

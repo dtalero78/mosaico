@@ -5,6 +5,7 @@ import { PersonPermission } from '@/types/permissions';
 import { query, queryOne, transaction } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { assertPuedeInscribirBeneficiario } from '@/services/inscripcion-beneficiario.service';
+import { resolverCurso } from '@/services/curso-resolver.service';
 import {
   insertBeneficiarioTx,
   incrementarCupoCurso,
@@ -68,11 +69,9 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   await assertPuedeInscribirBeneficiario(body.numeroId, titular.contrato);
 
   // El curso debe existir en la campaña y estar activo.
-  const curso = await queryOne<any>(
-    `SELECT "salon" FROM "CURSOS_CAMPAIGN"
-      WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "activa"=true LIMIT 1`,
-    [body.campaign, body.tipoCurso, body.horarioCurso]
-  );
+  const curso = await resolverCurso<any>({ query }, {
+    campaign: body.campaign, tipoCurso: body.tipoCurso, horarioCurso: body.horarioCurso, salon: body.salon,
+  }, { soloActivo: true, columnas: '"salon"' });
   if (!curso) {
     throw new ValidationError(`El curso ${body.tipoCurso} ${body.horarioCurso} no existe en la campaña ${body.campaign}`);
   }
@@ -102,6 +101,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     campaign: body.campaign,
     tipoCurso: body.tipoCurso,
     horarioCurso: body.horarioCurso,
+    salon: curso.salon ?? body.salon ?? null,
     apoderado: body.apoderado || null,
     apoderadoTelefono: body.apoderadoTelefono || null,
     apoderadoMail: body.apoderadoMail || null,
@@ -121,7 +121,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     })
   );
 
-  await incrementarCupoCurso(b.campaign, b.tipoCurso, b.horarioCurso);
+  await incrementarCupoCurso(b.campaign, b.tipoCurso, b.horarioCurso, b.salon);
 
   // ACADEMICA creada por insertBeneficiarioTx — la devolvemos para que la tarjeta
   // no aparezca como "SIN REGISTRO ACADÉMICO" hasta recargar la página.

@@ -39,8 +39,8 @@ export async function recomendarSalones(
 
   // cursoCampaignId actual (para excluirlo).
   const currentCC = (people?.campaign && people?.horarioCurso)
-    ? (await queryOne<{ _id: string }>(`SELECT "_id" FROM "CURSOS_CAMPAIGN" WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
-        [people.campaign, curso, people.horarioCurso]))?._id || null
+    ? (await queryOne<{ _id: string }>(`SELECT "_id" FROM "CURSOS_CAMPAIGN" WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND ($4::text IS NULL OR "salon"=$4) LIMIT 1`,
+        [people.campaign, curso, people.horarioCurso, people.salon || null]))?._id || null
     : null;
 
   // Mapa de orden de NIVELES del curso: (code||step)->orden y por módulo su orden máx (para las evaluaciones).

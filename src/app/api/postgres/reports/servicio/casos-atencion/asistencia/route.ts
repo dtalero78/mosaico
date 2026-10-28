@@ -106,7 +106,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
        LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
        LEFT JOIN "CURSOS_CAMPAIGN" cc
-         ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
+         ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
        LEFT JOIN "NIVELES" n
          ON UPPER(n."curso") = UPPER(p."tipoCurso")
@@ -128,7 +128,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
        LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
        LEFT JOIN "CURSOS_CAMPAIGN" cc
-         ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
+         ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
       WHERE ${whereBase.join(' AND ')}`,
     paramsBase

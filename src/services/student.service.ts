@@ -193,7 +193,7 @@ export async function promoteFromWelcome(
     // La misma regla que Cambio Académico: la lección del próximo evento del
     // salón (o la última, si el curso ya terminó).
     const { resolverCursoId, leccionActualCurso } = await import('@/services/cambio-academico.service');
-    const cursoId = await resolverCursoId(people.campaign, people.tipoCurso, people.horarioCurso);
+    const cursoId = await resolverCursoId(people.campaign, people.tipoCurso, people.horarioCurso, people.salon);
     if (cursoId) {
       const l = await leccionActualCurso(cursoId, people.tipoCurso);
       if (l.modulo && l.leccion) {
@@ -287,6 +287,7 @@ export async function promoteFromWelcome(
       campaign: people.campaign,
       tipoCurso: people.tipoCurso,
       horarioCurso: people.horarioCurso,
+      salon: people.salon,
       numeroId: academic.numeroId,
       primerNombre: people.primerNombre,
       primerApellido: people.primerApellido,

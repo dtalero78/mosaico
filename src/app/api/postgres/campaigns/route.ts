@@ -2,6 +2,7 @@ import 'server-only';
 import { randomUUID } from 'crypto';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query, queryOne } from '@/lib/postgres';
+import { normalizarSalon } from '@/lib/curso-salon';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, ConflictError } from '@/lib/errors';
@@ -39,7 +40,7 @@ export const GET = handlerWithAuth(async (_request, _ctx, session) => {
                WHERE pe."tipoUsuario"='BENEFICIARIO'
                  AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign"
                  AND pe."tipoCurso" = "CURSOS_CAMPAIGN"."tipoCurso"
-                 AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso"
+                 AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso" AND pe."salon" IS NOT DISTINCT FROM "CURSOS_CAMPAIGN"."salon"
                  AND ${cupoOcupadoSql('pe')}) AS "usuInscritos"
      FROM "CURSOS_CAMPAIGN"
      ORDER BY
@@ -91,7 +92,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     // El catálogo vive en HORARIOS_CURSO (Académico › Horarios), ya no en el código.
     if (!(await horarioEsValido(tipo, horario))) throw new ValidationError(`Horario inválido para ${tipo}: ${horario}`);
 
-    const salon = (c?.salon ? String(c.salon).trim() : null) || null;
+    // El salón se guarda sólo como su número/nombre ("Salon 9" → "9"): es parte de la
+    // identidad del curso (campaña + tipo + horario + salón).
+    const salon = normalizarSalon(c?.salon);
     // Se normaliza aquí: el formulario puede mandar el texto 'null'/'undefined'
     // cuando no se elige guía, y guardarlo así lo convertía en un guía llamado «null».
     const guia = guiaAsignado(c?.guia);
@@ -106,14 +109,23 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     // un alta con un horario que ya existía SOBREESCRIBÍA ese curso (salón, guía, fechas,
     // cupos) aunque tuviera alumnos, y luego fallaba al regenerar sus eventos. Un curso que
     // ya existe se edita desde Gestión; aquí sólo se crean cursos nuevos.
-    const existente = await queryOne<{ salon: string | null }>(
+    // Dos salones del mismo tipo PUEDEN compartir horario, pero cada uno con su salón:
+    // lo que no puede repetirse es (campaña, tipo, horario, salón).
+    const mismosHorario = (await query<{ salon: string | null }>(
       `SELECT "salon" FROM "CURSOS_CAMPAIGN" WHERE "campaign" = $1 AND "tipoCurso" = $2 AND "horarioCurso" = $3`,
       [nombre, tipo, horario]
-    );
-    if (existente || aInsertar.some(x => x.tipo === tipo && x.horario === horario)) {
+    )).rows;
+    const salonesLote = aInsertar.filter(x => x.tipo === tipo && x.horario === horario).map(x => x.salon);
+    const salonesPrevios = [...mismosHorario.map(r => r.salon ?? null), ...salonesLote];
+    if (salonesPrevios.length && !salon) {
       throw new ValidationError(
-        `Ya existe un curso ${tipo} con el horario ${horario} en la campaña ${nombre}${existente?.salon ? ` (Salón ${existente.salon})` : ''}. ` +
-        `No puede haber dos cursos del mismo tipo con el mismo horario: elija otro horario o edite ese curso en Gestión (por ejemplo, ampliar sus cupos).`
+        `Ya hay un curso ${tipo} con el horario ${horario} en ${nombre}: indique el salón del nuevo curso (por ejemplo, el número).`
+      );
+    }
+    if (salonesPrevios.some(s => (s ?? '') === (salon ?? ''))) {
+      throw new ValidationError(
+        `Ya existe el Salón ${salon} de ${tipo} con el horario ${horario} en la campaña ${nombre}. ` +
+        `Use otro número de salón, o edite ese curso en Gestión (por ejemplo, ampliar sus cupos).`
       );
     }
 
@@ -188,12 +200,6 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       `INSERT INTO "CURSOS_CAMPAIGN"
          ("_id","campaign","inicioCampania","finalCampaign","tipoCurso","salon","guia","horarioCurso","inicioCurso","duracionCurso","finalCurso","numeroUsuarios","usuInscritos","paraMenores","activa","_createdDate","_updatedDate")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,true,NOW(),NOW())
-       ON CONFLICT ("campaign","tipoCurso","horarioCurso") DO UPDATE SET
-         "inicioCampania"=EXCLUDED."inicioCampania", "finalCampaign"=EXCLUDED."finalCampaign",
-         "salon"=EXCLUDED."salon", "guia"=EXCLUDED."guia", "inicioCurso"=EXCLUDED."inicioCurso",
-         "duracionCurso"=EXCLUDED."duracionCurso", "finalCurso"=EXCLUDED."finalCurso",
-         "numeroUsuarios"=EXCLUDED."numeroUsuarios", "paraMenores"=EXCLUDED."paraMenores",
-         "activa"=true, "_updatedDate"=NOW()
        RETURNING *`,
       [`ccp_${randomUUID()}`, nombre, inicioCamp, finalCamp, tipo, salon, guia, horario, inicioCurso, duracion, finalCurso, numeroUsuarios, await esMenoresAsync(tipo)]
     );

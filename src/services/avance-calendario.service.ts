@@ -157,9 +157,9 @@ export async function sincronizarAvanceCalendario(
             ORDER BY (x."peopleId" = p."_id") DESC NULLS LAST, (x."tipoUsuario" = 'BENEFICIARIO') DESC NULLS LAST
             LIMIT 1) a ON true
         WHERE p."tipoUsuario" = 'BENEFICIARIO'
-          AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
+          AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3 AND p."salon" IS NOT DISTINCT FROM $4
           AND ${cupoOcupadoSql('p')}`,
-      [s.campaign, s.tipoCurso, s.horarioCurso]
+      [s.campaign, s.tipoCurso, s.horarioCurso, s.salon]
     );
     for (const al of alumnos) {
       res.alumnosRevisados++;

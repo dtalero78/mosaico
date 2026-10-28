@@ -81,7 +81,7 @@ export async function listarCursosAjuste(campaign: string | null) {
             (SELECT COUNT(*)::int FROM "PEOPLE" pe
                WHERE pe."tipoUsuario" = 'BENEFICIARIO'
                  AND pe."campaign" = cc."campaign" AND pe."tipoCurso" = cc."tipoCurso"
-                 AND pe."horarioCurso" = cc."horarioCurso"
+                 AND pe."horarioCurso" = cc."horarioCurso" AND pe."salon" IS NOT DISTINCT FROM cc."salon"
                  AND ${cupoOcupadoSql('pe')}) AS "usuInscritos",
             COALESCE(cc."ajustesHistory", '[]'::jsonb) AS "ajustesHistory",
             COALESCE(ev.total, 0) AS "clasesTotal", COALESCE(ev.dictadas, 0) AS "clasesDictadas",
@@ -157,11 +157,11 @@ async function alumnosDelCurso(c: CursoRow) {
        FROM "PEOPLE" p
        JOIN "ACADEMICA" a ON a."peopleId" = p."_id"
       WHERE p."tipoUsuario" = 'BENEFICIARIO'
-        AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
+        AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3 AND p."salon" IS NOT DISTINCT FROM $4
         AND ${esAprobadoSql('p."aprobacion"')}
         AND COALESCE(p."contrato", '') NOT LIKE 'PRB-%'
         AND ${cupoOcupadoSql('p')}`,
-    [c.campaign, c.tipoCurso, c.horarioCurso]
+    [c.campaign, c.tipoCurso, c.horarioCurso, c.salon]
   )).rows;
 }
 
@@ -180,7 +180,7 @@ async function alumnosActivosDelCurso(cursoId: string): Promise<{ _id: string; n
             TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."primerApellido"), '\\s+', ' ', 'g')) AS nombre
        FROM "CURSOS_CAMPAIGN" cc
        JOIN "PEOPLE" p ON p."campaign" = cc."campaign" AND p."tipoCurso" = cc."tipoCurso"
-                      AND p."horarioCurso" = cc."horarioCurso"
+                      AND p."horarioCurso" = cc."horarioCurso" AND p."salon" IS NOT DISTINCT FROM cc."salon"
       WHERE cc."_id" = $1 AND p."tipoUsuario" = 'BENEFICIARIO' AND p."estadoInactivo" IS NOT TRUE
       ORDER BY 2`,
     [cursoId]
@@ -435,7 +435,7 @@ export async function aplicarAmpliacion(cursoId: string, nuevoFinal: string, mot
     for (const s of c._alumnos) {
       try {
         agendamientos += await generarBookingsBeneficiario(s.acaid, {
-          campaign: c._curso.campaign, tipoCurso: c._curso.tipoCurso, horarioCurso: c._curso.horarioCurso,
+          campaign: c._curso.campaign, tipoCurso: c._curso.tipoCurso, horarioCurso: c._curso.horarioCurso, salon: c._curso.salon,
           numeroId: s.numeroId, primerNombre: s.primerNombre, primerApellido: s.primerApellido,
           celular: s.celular, plataforma: s.plataforma,
         }, { soloFuturos: true, agendadoPor: 'Sistema (ampliación de curso)' });

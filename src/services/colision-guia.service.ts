@@ -168,7 +168,8 @@ export async function detectarColisionesGuia(curso: CursoParaColision): Promise<
     if (curso.excluirClaveNatural
       && c.campaign === curso.campaign
       && c.tipoCurso === curso.tipoCurso
-      && c.horarioCurso === curso.horarioCurso) continue;
+      && c.horarioCurso === curso.horarioCurso
+      && (c.salon ?? '') === (curso.salon ?? '')) continue;
     // Hermanos del mismo grupo de salón: comparten guía y horario A PROPÓSITO.
     if (grupoPropio && String(c.grupoHorarioId || '').trim() === grupoPropio) continue;
     if (!horariosSeSolapan(curso.horarioCurso, c.horarioCurso)) continue;

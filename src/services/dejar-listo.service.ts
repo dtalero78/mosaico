@@ -53,6 +53,7 @@ export function sanitizarCambios(raw: unknown): CambioHorario[] {
       campaign: String(c.campaign),
       tipoCurso: String(c.tipoCurso),
       horarioCurso: String(c.horarioCurso),
+      salon: c.salon ? String(c.salon) : null,
     }));
 }
 

@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { MantenimientoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
 import { query, queryOne, withTransaction } from '@/lib/postgres';
+import { resolverCurso } from '@/services/curso-resolver.service';
 import { ids } from '@/lib/id-generator';
 import { generateUserLogin } from '@/lib/user-login';
 import { generarClave } from '@/lib/password-gen';
@@ -108,11 +109,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const clave = String(body?.clave || '').trim() || generarClave();
 
   // Resolver curso desde CURSOS_CAMPAIGN.
-  const cc = await queryOne<{ salon: string | null; inicioCurso: string | null }>(
-    `SELECT "salon","inicioCurso" FROM "CURSOS_CAMPAIGN"
-     WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
-    [campaign, tipoCurso, horarioCurso]
-  );
+  const cc = await resolverCurso<{ salon: string | null; inicioCurso: string | null }>({ query }, {
+    campaign, tipoCurso, horarioCurso, salon: String(body?.salon || persona.salon || '').trim() || null,
+  }, { columnas: '"salon","inicioCurso"' });
   if (!cc) throw new ValidationError('No existe ese curso en la campaña seleccionada.');
   const welcomeModulo = welcomeModuloForCurso(tipoCurso);
 

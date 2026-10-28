@@ -44,7 +44,7 @@ const JOINS = `
     FROM "ACADEMICA" a
     JOIN "PEOPLE" p ON p."_id" = a."peopleId"
     LEFT JOIN "CURSOS_CAMPAIGN" cc
-      ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
+      ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
     LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"`
 
 const NO_PRB = `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`

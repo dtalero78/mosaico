@@ -9,6 +9,7 @@ import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.
 import { esAprobadoSql } from '@/lib/estados';
 import { query, queryOne, transaction } from '@/lib/postgres';
 import { asegurarCupoSalon } from '@/services/cupo-guard.service';
+import { resolverCurso } from '@/services/curso-resolver.service';
 import { liberarCupoBeneficiario, registrarCupoAsignado } from '@/services/cupo-liberacion.service';
 
 /**
@@ -130,12 +131,7 @@ export const POST = handlerWithAuth(async (request, ctx, session) => {
   }
 
   // El curso destino debe existir y estar activo.
-  const existe = await queryOne<{ salon: string | null }>(
-    `SELECT "salon" FROM "CURSOS_CAMPAIGN"
-      WHERE "campaign" = $1 AND UPPER("tipoCurso") = UPPER($2)
-        AND "horarioCurso" = $3 AND "activa" = true LIMIT 1`,
-    [destino.campaign, destino.tipoCurso, destino.horarioCurso]
-  );
+  const existe = await resolverCurso<{ salon: string | null }>({ query }, destino, { soloActivo: true, columnas: '"salon"' });
   if (!existe) throw new ValidationError('El curso/salón destino no existe o no está activo.');
 
   // Comprobar el cupo y tomar el asiento van JUNTOS, con el salón bloqueado: entre

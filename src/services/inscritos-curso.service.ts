@@ -51,10 +51,10 @@ export async function listarInscritosCurso(cursoId: string): Promise<CursoInscri
           WHERE pt."contrato" = p."contrato" AND pt."tipoUsuario" = 'TITULAR' LIMIT 1
        ) t ON true
       WHERE p."tipoUsuario" = 'BENEFICIARIO'
-        AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
+        AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3 AND p."salon" IS NOT DISTINCT FROM $4
         AND ${cupoOcupadoSql('p')}
       ORDER BY p."primerApellido" NULLS LAST, p."primerNombre" NULLS LAST`,
-    [curso.campaign, curso.tipoCurso, curso.horarioCurso]
+    [curso.campaign, curso.tipoCurso, curso.horarioCurso, curso.salon]
   );
 
   const items: InscritoCurso[] = inscritos.map((r) => ({

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       // ACADEMICA inactivos, aprobados, con inicioCurso a <= 10 días
       const elegibles = await query(
         `SELECT a."_id", a."numeroId", a."userLogin", a."email", a."primerNombre", a."primerApellido", a."inicioCurso",
-                p."campaign" AS "pcampaign", p."tipoCurso" AS "ptipoCurso", p."horarioCurso" AS "phorarioCurso",
+                p."campaign" AS "pcampaign", p."tipoCurso" AS "ptipoCurso", p."horarioCurso" AS "phorarioCurso", p."salon" AS "psalon",
                 p."celular" AS "pcelular", p."plataforma" AS "pplataforma"
            FROM "ACADEMICA" a
            JOIN "PEOPLE" p ON p."_id" = a."peopleId"
@@ -93,6 +93,7 @@ export async function GET(request: NextRequest) {
               campaign: a.pcampaign,
               tipoCurso: a.ptipoCurso,
               horarioCurso: a.phorarioCurso,
+              salon: a.psalon,
               numeroId: a.numeroId,
               primerNombre: a.primerNombre,
               primerApellido: a.primerApellido,

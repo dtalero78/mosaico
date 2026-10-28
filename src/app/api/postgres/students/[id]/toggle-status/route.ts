@@ -6,7 +6,8 @@ import { cambiarCursoAcademico } from '@/services/cambio-academico.service';
 import { PeopleRepository } from '@/repositories/people.repository';
 import { ValidationError } from '@/lib/errors';
 import { parseTipoSalida } from '@/lib/tipo-salida-cupo';
-import { queryOne } from '@/lib/postgres';
+import { query, queryOne } from '@/lib/postgres';
+import { resolverCurso } from '@/services/curso-resolver.service';
 
 /**
  * POST /api/postgres/students/[id]/toggle-status
@@ -65,11 +66,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     if (!campaign || !tipoCurso || !horarioCurso) {
       throw new ValidationError('Debe indicar campaña, curso y salón destino para reactivar.');
     }
-    const dest = await queryOne<any>(
-      `SELECT 1 FROM "CURSOS_CAMPAIGN"
-        WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "activa"=true LIMIT 1`,
-      [campaign, tipoCurso, horarioCurso]
-    );
+    const dest = await resolverCurso<any>({ query }, { campaign, tipoCurso, horarioCurso, salon }, { soloActivo: true, columnas: '1 AS ok' });
     if (!dest) throw new ValidationError(`El curso ${tipoCurso} ${horarioCurso} no existe en la campaña ${campaign}.`);
     // El cupo lo valida `cambiarCursoAcademico` dentro de su transacción y con el
     // salón bloqueado — comprobarlo aquí, fuera, dejaba pasar dos reactivaciones

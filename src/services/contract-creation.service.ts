@@ -11,6 +11,8 @@ import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 import { apoderadoPorDefectoEsTitular, resolverApoderado } from '@/lib/apoderado';
 import { RESERVA_CUPO_MIN } from '@/lib/cupo';
 import { asegurarCupoSalon } from '@/services/cupo-guard.service';
+import { resolverCurso } from '@/services/curso-resolver.service';
+import { normalizarSalon } from '@/lib/curso-salon';
 import { MENSAJE_SIN_CUPO } from '@/lib/cursos-campaign';
 import { normalizeNumeroId } from '@/lib/numeroid-normalize';
 import { normalizeTelefonoOrNull } from '@/lib/telefono-normalize';
@@ -116,6 +118,8 @@ export interface BeneficiarioInput {
   domicilio?: string | null;
   ciudad?: string | null;
   campaign?: string | null;
+  /** Salón del curso elegido (obligatorio si el horario lo comparten varios salones). */
+  salon?: string | null;
   tipoCurso?: string | null;
   horarioCurso?: string | null;
   apoderado?: string | null;
@@ -190,14 +194,16 @@ export async function insertBeneficiarioTx(
   let salon: string | null = null;
   let inicioCurso: string | null = null;
   if (b.campaign && b.tipoCurso && b.horarioCurso) {
-    const cr = await client.query(
-      `SELECT "_id", "salon", "inicioCurso", COALESCE("numeroUsuarios", 0) AS cupos,
+    // Con salón la referencia es única; sin él sólo vale si el horario es de un único
+    // curso (si lo comparten varios, resolverCurso lanza y pide el salón).
+    const crRow = await resolverCurso<any>(client, {
+      campaign: b.campaign, tipoCurso: b.tipoCurso, horarioCurso: b.horarioCurso, salon: b.salon,
+    }, {
+      columnas: `"_id", "salon", "inicioCurso", COALESCE("numeroUsuarios", 0) AS cupos,
               (SELECT MIN(c2."inicioCurso"::text) FROM "CURSOS_CAMPAIGN" c2
-                WHERE c2."campaign" = $1) AS "inicioCampanaCursos"
-         FROM "CURSOS_CAMPAIGN"
-        WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
-      [b.campaign, b.tipoCurso, b.horarioCurso]
-    );
+                WHERE c2."campaign" = "CURSOS_CAMPAIGN"."campaign") AS "inicioCampanaCursos"`,
+    });
+    const cr = { rows: crRow ? [crRow] : [] as any[] };
     salon = cr.rows[0]?.salon || null;
     inicioCurso = cr.rows[0]?.inicioCurso || null;
 
@@ -227,7 +233,7 @@ export async function insertBeneficiarioTx(
       // El guard bloquea el salón antes de contar: sin el lock, dos altas
       // simultáneas al último asiento lo leerían libre las dos.
       await asegurarCupoSalon(client, {
-        campaign: b.campaign, tipoCurso: b.tipoCurso, horarioCurso: b.horarioCurso,
+        campaign: b.campaign, tipoCurso: b.tipoCurso, horarioCurso: b.horarioCurso, salon,
       });
     }
   }
@@ -411,14 +417,15 @@ export async function registrarAsesorEnEquipoComercial(titular: any, liderDado?:
 }
 
 /** Incrementa el cupo del curso (+1). Best-effort — no rompe la creación si falla. */
-export async function incrementarCupoCurso(campaign?: string | null, tipoCurso?: string | null, horarioCurso?: string | null) {
+export async function incrementarCupoCurso(campaign?: string | null, tipoCurso?: string | null, horarioCurso?: string | null, salon?: string | null) {
   if (!campaign || !tipoCurso || !horarioCurso) return;
   try {
     await query(
       `UPDATE "CURSOS_CAMPAIGN"
          SET "usuInscritos" = COALESCE("usuInscritos", 0) + 1, "_updatedDate" = NOW()
-       WHERE "campaign" = $1 AND "tipoCurso" = $2 AND "horarioCurso" = $3`,
-      [campaign, tipoCurso, horarioCurso]
+       WHERE "campaign" = $1 AND "tipoCurso" = $2 AND "horarioCurso" = $3
+         AND ($4::text IS NULL OR "salon" = $4)`,
+      [campaign, tipoCurso, horarioCurso, normalizarSalon(salon)]
     );
   } catch (err: any) {
     console.warn('[contract-creation] no se pudo incrementar usuInscritos:', err?.message || err);
@@ -496,6 +503,7 @@ export async function createFullContract(input: CreateContractInput) {
       celular: titular.celular,
       tipoCurso: titular.tipoCurso,
       horarioCurso: titular.horarioCurso,
+      salon: titular.salon,
       campaign: titular.campaign,
       userLogin: titular.userLogin,
     });
@@ -562,7 +570,7 @@ export async function createFullContract(input: CreateContractInput) {
 
   // Incrementar usuInscritos (+1) en CURSOS_CAMPAIGN por cada inscrito. Best-effort.
   for (const b of allBeneficiarios) {
-    await incrementarCupoCurso(b.campaign, b.tipoCurso, b.horarioCurso);
+    await incrementarCupoCurso(b.campaign, b.tipoCurso, b.horarioCurso, b.salon);
   }
 
   // Resolver el líder-tope del asesor en la escalera del CRM (best-effort; si el

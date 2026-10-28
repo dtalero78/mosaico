@@ -49,7 +49,7 @@ export async function listarCursos() {
             g."nombreCompleto" AS "guiaNombre",
             (SELECT COUNT(*)::int FROM "PEOPLE" pe
               WHERE pe."tipoUsuario"='BENEFICIARIO' AND pe."campaign"=cc."campaign"
-                AND pe."tipoCurso"=cc."tipoCurso" AND pe."horarioCurso"=cc."horarioCurso"
+                AND pe."tipoCurso"=cc."tipoCurso" AND pe."horarioCurso"=cc."horarioCurso" AND pe."salon" IS NOT DISTINCT FROM cc."salon"
                 AND ${cupoOcupadoSql('pe')}) AS "inscritos"
        FROM "CURSOS_CAMPAIGN" cc
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
@@ -87,10 +87,10 @@ async function alumnosDelSalon(c: Curso): Promise<Alumno[]> {
           LIMIT 1
        ) a ON true
       WHERE p."tipoUsuario" = 'BENEFICIARIO'
-        AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
+        AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3 AND p."salon" IS NOT DISTINCT FROM $4
         AND ${cupoOcupadoSql('p')}
       ORDER BY UPPER(p."primerApellido"), UPPER(p."primerNombre")`,
-    [c.campaign, c.tipoCurso, c.horarioCurso]
+    [c.campaign, c.tipoCurso, c.horarioCurso, c.salon]
   );
 }
 

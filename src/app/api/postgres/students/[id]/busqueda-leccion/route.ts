@@ -2,7 +2,8 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { StudentPermission } from '@/types/permissions'
-import { queryOne, withTransaction } from '@/lib/postgres'
+import { query, queryOne, withTransaction } from '@/lib/postgres'
+import { resolverCurso } from '@/services/curso-resolver.service'
 import { ids } from '@/lib/id-generator'
 import { ValidationError, NotFoundError } from '@/lib/errors'
 import { crearReporte } from '@/services/casos-atencion.service'
@@ -30,11 +31,9 @@ async function validarDestino(b: any): Promise<Destino> {
   const tipoCurso = String(b?.tipoCurso || '').trim()
   const horarioCurso = String(b?.horarioCurso || '').trim()
   if (!campaign || !tipoCurso || !horarioCurso) throw new ValidationError('Elige el salón destino.')
-  const cc = await queryOne<{ salon: string | null }>(
-    `SELECT "salon" FROM "CURSOS_CAMPAIGN"
-      WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "activa"=true LIMIT 1`,
-    [campaign, tipoCurso, horarioCurso]
-  )
+  const cc = await resolverCurso<{ salon: string | null }>({ query }, {
+    campaign, tipoCurso, horarioCurso, salon: String(b?.salon || '').trim() || null,
+  }, { soloActivo: true, columnas: '"salon"' })
   if (!cc) throw new ValidationError('El salón destino no existe o no está activo.')
   return { campaign, tipoCurso, horarioCurso, salon: cc.salon || '' }
 }

@@ -24,14 +24,15 @@ export default function CursoCampaignFields({
   rows, values, onPatch, esImpulsa = false, userLogin,
 }: {
   rows: CursoRow[];
-  values: { campaign?: string; tipoCurso?: string; horarioCurso?: string };
-  onPatch: (patch: { campaign?: string; tipoCurso?: string; horarioCurso?: string }) => void;
+  values: { campaign?: string; tipoCurso?: string; horarioCurso?: string; salon?: string | null };
+  onPatch: (patch: { campaign?: string; tipoCurso?: string; horarioCurso?: string; salon?: string }) => void;
   esImpulsa?: boolean;
   userLogin?: string;
 }) {
   const campaign = values.campaign || '';
   const tipoCurso = values.tipoCurso || '';
   const horarioCurso = values.horarioCurso || '';
+  const salonSel = String(values.salon ?? '');
   const campaigns = Array.from(new Set(rows.map(r => r.campaign)));
   const cursos = Array.from(new Set(
     rows.filter(r => r.campaign === campaign && (esImpulsa ? r.tipoCurso === 'IMPULSA' : r.tipoCurso !== 'IMPULSA')).map(r => r.tipoCurso)
@@ -42,7 +43,10 @@ export default function CursoCampaignFields({
   const horarioRows = rows
     .filter(r => r.campaign === campaign && r.tipoCurso === tipoCurso)
     .sort((a, b) => compararHorarios(a.horarioCurso, b.horarioCurso) || String(a.salon || '').localeCompare(String(b.salon || '')));
-  const selectedRow = horarioRows.find(r => r.horarioCurso === horarioCurso);
+  // El curso es (horario + salón): dos salones pueden compartir horario, así que la opción
+  // elegida se identifica por los dos. Sin salón guardado (datos viejos) cae al primero del horario.
+  const claveOpcion = (r: CursoRow) => `${r.horarioCurso}${r.salon ?? ''}`;
+  const selectedRow = horarioRows.find(r => r.horarioCurso === horarioCurso && (salonSel ? String(r.salon ?? '') === salonSel : true));
   // ¿Algún salón de este curso está sin cupo? Se avisa debajo del dropdown para
   // que se entienda qué significa el "SIN CUPO (provisional)" de las opciones.
   const hayLlenos = horarioRows.some(r => {
@@ -57,7 +61,7 @@ export default function CursoCampaignFields({
       <div>
         <label className={lbl}>Campaña *</label>
         <select className={sel} value={campaign}
-          onChange={(e) => onPatch({ campaign: e.target.value, tipoCurso: '', horarioCurso: '' })}>
+          onChange={(e) => onPatch({ campaign: e.target.value, tipoCurso: '', horarioCurso: '', salon: '' })}>
           <option value="">Seleccionar...</option>
           {campaigns.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -65,15 +69,18 @@ export default function CursoCampaignFields({
       <div>
         <label className={lbl}>Tipo de Curso *</label>
         <select className={sel} value={tipoCurso} disabled={!campaign}
-          onChange={(e) => onPatch({ tipoCurso: e.target.value, horarioCurso: '' })}>
+          onChange={(e) => onPatch({ tipoCurso: e.target.value, horarioCurso: '', salon: '' })}>
           <option value="">Seleccionar...</option>
           {cursos.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
       <div>
         <label className={lbl}>Horario *</label>
-        <select className={sel} value={horarioCurso} disabled={!tipoCurso}
-          onChange={(e) => onPatch({ horarioCurso: e.target.value })}>
+        <select className={sel} value={selectedRow ? claveOpcion(selectedRow) : ''} disabled={!tipoCurso}
+          onChange={(e) => {
+            const [h, s] = e.target.value.split('');
+            onPatch({ horarioCurso: h || '', salon: s || '' });
+          }}>
           <option value="">Seleccionar...</option>
           {horarioRows.map(r => {
             const cap = r.numeroUsuarios ?? 0;
@@ -86,7 +93,7 @@ export default function CursoCampaignFields({
             // cambiar de horario. Bloquear aquí frenaría ventas por un salón
             // que puede haberse liberado para cuando se cierre el contrato.
             return (
-              <option key={r.horarioCurso} value={r.horarioCurso}>
+              <option key={claveOpcion(r)} value={claveOpcion(r)}>
                 {r.horarioCurso}{r.salon ? ` · Salón ${r.salon}` : ''} — {full ? 'SIN CUPO (provisional)' : `${cupos} cupos`}
               </option>
             );

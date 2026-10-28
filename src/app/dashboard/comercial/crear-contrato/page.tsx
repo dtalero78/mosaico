@@ -57,6 +57,8 @@ interface Beneficiario {
   campaign?: string;
   tipoCurso?: string;
   horarioCurso?: string;
+
+  salon?: string;
   userLogin?: string;
   // Apoderado propio de cada beneficiario (como en Migrar Contrato)
   apoderado?: string;
@@ -120,7 +122,7 @@ function CrearContratoContent() {
     esCursoImpulsa: false,
     campaign: '',
     tipoCurso: '',
-    horarioCurso: '',
+    horarioCurso: '', salon: '',
     userLogin: '',
     apoderado: '',
     apoderadoTelefono: '',
@@ -358,7 +360,7 @@ function CrearContratoContent() {
       celular: '',
       campaign: '',
       tipoCurso: '',
-      horarioCurso: '',
+      horarioCurso: '', salon: '',
       apoderado: '',
       apoderadoTelefono: '',
       apoderadoMail: '',
@@ -425,7 +427,8 @@ function CrearContratoContent() {
   };
 
   // Salón del curso seleccionado (desde el catálogo CURSOS_CAMPAIGN).
-  const salonFor = (campaign?: string, tipoCurso?: string, horarioCurso?: string): string => {
+  const salonFor = (campaign?: string, tipoCurso?: string, horarioCurso?: string, salon?: string): string => {
+    if (salon) return salon;
     const r = cursosCampaign.find(x => x.campaign === campaign && x.tipoCurso === tipoCurso && x.horarioCurso === horarioCurso);
     return r?.salon || '';
   };
@@ -658,8 +661,8 @@ function CrearContratoContent() {
                 onChange={e => {
                   setEsExtemporanea(e.target.checked)
                   // Cambia el set de cursos visibles → limpiar selecciones de curso
-                  setTitular({ ...titular, campaign: '', tipoCurso: '', horarioCurso: '' })
-                  setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' })))
+                  setTitular({ ...titular, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' })
+                  setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' })))
                 }}
                 className="h-4 w-4 rounded border-red-400 text-red-600 focus:ring-red-500"
               />
@@ -802,8 +805,8 @@ function CrearContratoContent() {
                     onChange={(e) => {
                       const v = e.target.checked;
                       // Al cambiar Impulsa cambian los cursos válidos → limpiar selecciones de curso.
-                      setTitular({ ...titular, esCursoImpulsa: v, campaign: '', tipoCurso: '', horarioCurso: '' });
-                      setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' })));
+                      setTitular({ ...titular, esCursoImpulsa: v, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' });
+                      setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' })));
                     }}
                     className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   />
@@ -929,7 +932,7 @@ function CrearContratoContent() {
                         rows={cursosVisibles}
                         esImpulsa={titular.esCursoImpulsa}
                         userLogin={titular.userLogin}
-                        values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso }}
+                        values={{ campaign: titular.campaign, tipoCurso: titular.tipoCurso, horarioCurso: titular.horarioCurso, salon: titular.salon }}
                         onPatch={(patch) => setTitular({ ...titular, ...patch })}
                       />
                     </div>
@@ -1327,7 +1330,7 @@ function CrearContratoContent() {
                             rows={cursosVisibles}
                             esImpulsa={titular.esCursoImpulsa}
                             userLogin={beneficiario.userLogin}
-                            values={{ campaign: beneficiario.campaign, tipoCurso: beneficiario.tipoCurso, horarioCurso: beneficiario.horarioCurso }}
+                            values={{ campaign: beneficiario.campaign, tipoCurso: beneficiario.tipoCurso, horarioCurso: beneficiario.horarioCurso, salon: beneficiario.salon }}
                             onPatch={(patch) => setBeneficiarios(prev => prev.map((b, i) => i === index ? { ...b, ...patch, confirmado: false } : b))}
                           />
                         </div>
@@ -1444,8 +1447,8 @@ function CrearContratoContent() {
                     <button
                       type="button"
                       onClick={() => {
-                        setTitular({ ...titular, esCursoImpulsa: true, campaign: '', tipoCurso: '', horarioCurso: '' });
-                        setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '' })));
+                        setTitular({ ...titular, esCursoImpulsa: true, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' });
+                        setBeneficiarios(prev => prev.map(b => ({ ...b, campaign: '', tipoCurso: '', horarioCurso: '', salon: '' })));
                         setShowSinCursoModal(false);
                       }}
                       className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg"
@@ -1516,7 +1519,7 @@ function CrearContratoContent() {
                     <p>{`${titular.primerNombre} ${titular.segundoNombre} ${titular.primerApellido} ${titular.segundoApellido}`.replace(/\s+/g, ' ').trim()}</p>
                     <p className="text-gray-500">ID: {titular.numeroId} · {titular.plataforma}</p>
                     {titularEsBeneficiario && (
-                      <p className="text-primary-700 mt-1">Toma el curso: <b>{titular.campaign} · {titular.tipoCurso} · {titular.horarioCurso}</b>{salonFor(titular.campaign, titular.tipoCurso, titular.horarioCurso) ? ` · Salón ${salonFor(titular.campaign, titular.tipoCurso, titular.horarioCurso)}` : ''}</p>
+                      <p className="text-primary-700 mt-1">Toma el curso: <b>{titular.campaign} · {titular.tipoCurso} · {titular.horarioCurso}</b>{salonFor(titular.campaign, titular.tipoCurso, titular.horarioCurso, titular.salon) ? ` · Salón ${salonFor(titular.campaign, titular.tipoCurso, titular.horarioCurso, titular.salon)}` : ''}</p>
                     )}
                   </div>
 
@@ -1530,7 +1533,7 @@ function CrearContratoContent() {
                         {beneficiarios.map((b, i) => (
                           <li key={i}>
                             {`${b.primerNombre} ${b.primerApellido}`.trim()} <span className="text-gray-500">(ID {b.numeroId})</span>
-                            <span className="block text-gray-500">{b.campaign} · {b.tipoCurso} · {b.horarioCurso}{salonFor(b.campaign, b.tipoCurso, b.horarioCurso) ? ` · Salón ${salonFor(b.campaign, b.tipoCurso, b.horarioCurso)}` : ''}</span>
+                            <span className="block text-gray-500">{b.campaign} · {b.tipoCurso} · {b.horarioCurso}{salonFor(b.campaign, b.tipoCurso, b.horarioCurso, b.salon) ? ` · Salón ${salonFor(b.campaign, b.tipoCurso, b.horarioCurso, b.salon)}` : ''}</span>
                           </li>
                         ))}
                       </ul>
@@ -1580,7 +1583,7 @@ function CrearContratoContent() {
                               <span className="text-gray-500"> (ID {b.numeroId})</span>
                               {b.confirmado ? <span className="ml-2 text-green-600 text-xs font-semibold">confirmado</span> : <span className="ml-2 text-amber-600 text-xs font-semibold">sin confirmar</span>}
                             </p>
-                            <p className="text-gray-500">{b.tipoCurso} · {b.horarioCurso}{salonFor(b.campaign || '', b.tipoCurso || '', b.horarioCurso || '') ? ` · Salón ${salonFor(b.campaign || '', b.tipoCurso || '', b.horarioCurso || '')}` : ''}</p>
+                            <p className="text-gray-500">{b.tipoCurso} · {b.horarioCurso}{salonFor(b.campaign || '', b.tipoCurso || '', b.horarioCurso || '', b.salon) ? ` · Salón ${salonFor(b.campaign || '', b.tipoCurso || '', b.horarioCurso || '', b.salon)}` : ''}</p>
                             <p className="text-gray-500">Apoderado: {b.apoderado || '—'}{b.apoderadoTelefono ? ` · ${b.apoderadoTelefono}` : ''}{b.apoderadoMail ? ` · ${b.apoderadoMail}` : ''}</p>
                           </li>
                         ))}

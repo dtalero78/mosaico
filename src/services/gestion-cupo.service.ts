@@ -4,6 +4,8 @@ import { ValidationError, NotFoundError } from '@/lib/errors';
 import { cupoOcupadoSql } from '@/lib/cupo';
 import { compararHorarios } from '@/lib/cursos-campaign';
 import { lockSalon } from '@/services/cupo-guard.service';
+import { resolverCurso } from '@/services/curso-resolver.service';
+import { normalizarSalon } from '@/lib/curso-salon';
 import { entradaCupoHistory, type CursoDelAlumno } from '@/services/cupo-liberacion.service';
 
 /**
@@ -58,6 +60,8 @@ export interface CambioHorario {
   campaign: string;
   tipoCurso: string;
   horarioCurso: string;
+  /** Salón destino: obligatorio cuando el horario lo comparten varios salones. */
+  salon?: string | null;
 }
 
 const nombreDe = (r: any) =>
@@ -75,7 +79,7 @@ const nombreDe = (r: any) =>
 
 /** Cuenta cuántos asientos están tomados AHORA en ese salón. */
 async function contarOcupados(
-  client: any, campaign: string, tipoCurso: string, horarioCurso: string, excluir: string[] = []
+  client: any, campaign: string, tipoCurso: string, horarioCurso: string, excluir: string[] = [], salon?: string | null
 ): Promise<number> {
   // `excluir` son los beneficiarios que se están confirmando AHORA. Su reserva
   // temporal ya los cuenta como ocupantes, y el bucle les vuelve a sumar un
@@ -86,20 +90,19 @@ async function contarOcupados(
       WHERE pe."tipoUsuario" = 'BENEFICIARIO'
         AND pe."campaign" = $1 AND pe."tipoCurso" = $2 AND pe."horarioCurso" = $3
         AND pe."_id" <> ALL($4::text[])
+        AND ($5::text IS NULL OR pe."salon" = $5)
         AND ${cupoOcupadoSql('pe')}`,
-    [campaign, tipoCurso, horarioCurso, excluir]
+    [campaign, tipoCurso, horarioCurso, excluir, normalizarSalon(salon)]
   );
   return Number(r.rows[0]?.n ?? 0);
 }
 
 /** Cupos declarados del salón (0 = sin límite definido). */
-async function cuposDe(client: any, campaign: string, tipoCurso: string, horarioCurso: string) {
-  const r = await client.query(
-    `SELECT "salon", COALESCE("numeroUsuarios", 0) AS cupos FROM "CURSOS_CAMPAIGN"
-      WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
-    [campaign, tipoCurso, horarioCurso]
-  );
-  return { salon: r.rows[0]?.salon ?? null, cupos: Number(r.rows[0]?.cupos ?? 0), existe: r.rows.length > 0 };
+async function cuposDe(client: any, campaign: string, tipoCurso: string, horarioCurso: string, salon?: string | null) {
+  const c = await resolverCurso<{ salon: string | null; cupos: number }>(client, { campaign, tipoCurso, horarioCurso, salon }, {
+    columnas: `"salon", COALESCE("numeroUsuarios", 0) AS cupos`,
+  });
+  return { salon: c?.salon ?? null, cupos: Number(c?.cupos ?? 0), existe: !!c };
 }
 
 /**
@@ -108,7 +111,7 @@ async function cuposDe(client: any, campaign: string, tipoCurso: string, horario
  * rechazarse al confirmarlo.
  */
 export async function alternativasConCupo(
-  campaign: string, tipoCurso: string, excluirHorario: string | null
+  campaign: string, tipoCurso: string, excluirHorario: string | null, excluirSalon?: string | null
 ): Promise<Alternativa[]> {
   const { rows } = await query<any>(
     `SELECT cc."campaign", cc."tipoCurso", cc."horarioCurso", cc."salon",
@@ -116,12 +119,13 @@ export async function alternativasConCupo(
             (SELECT COUNT(*)::int FROM "PEOPLE" pe
               WHERE pe."tipoUsuario"='BENEFICIARIO'
                 AND pe."campaign"=cc."campaign" AND pe."tipoCurso"=cc."tipoCurso"
-                AND pe."horarioCurso"=cc."horarioCurso" AND ${cupoOcupadoSql('pe')}) AS ocupados
+                AND pe."horarioCurso"=cc."horarioCurso" AND pe."salon" IS NOT DISTINCT FROM cc."salon" AND ${cupoOcupadoSql('pe')}) AS ocupados
        FROM "CURSOS_CAMPAIGN" cc
       WHERE cc."activa" = true AND cc."campaign" = $1 AND cc."tipoCurso" = $2
-        AND ($3::text IS NULL OR cc."horarioCurso" <> $3)
+        -- Se excluye SÓLO el propio salón: otro salón con el mismo horario sí es una alternativa.
+        AND ($3::text IS NULL OR cc."horarioCurso" <> $3 OR ($4::text IS NOT NULL AND cc."salon" IS DISTINCT FROM $4))
       ORDER BY cc."salon"`,
-    [campaign, tipoCurso, excluirHorario]
+    [campaign, tipoCurso, excluirHorario, normalizarSalon(excluirSalon)]
   );
   return rows
     .map(r => ({ ...r, cupos: Number(r.cupos), ocupados: Number(r.ocupados), libres: Number(r.cupos) - Number(r.ocupados) }))
@@ -177,12 +181,12 @@ export async function marcarListoConCupo(opts: {
     const { provisionales } = await provisionalesDelContrato(client, titularId);
 
     // Destino final de cada beneficiario: el que pidió el modal, o el que ya tenía.
-    const destino = new Map<string, { campaign: string | null; tipoCurso: string | null; horarioCurso: string | null }>();
+    const destino = new Map<string, { campaign: string | null; tipoCurso: string | null; horarioCurso: string | null; salon: string | null }>();
     for (const b of provisionales) {
       const c = cambios.find(x => x.personId === b._id);
       destino.set(b._id, c
-        ? { campaign: c.campaign, tipoCurso: c.tipoCurso, horarioCurso: c.horarioCurso }
-        : { campaign: b.campaign, tipoCurso: b.tipoCurso, horarioCurso: b.horarioCurso });
+        ? { campaign: c.campaign, tipoCurso: c.tipoCurso, horarioCurso: c.horarioCurso, salon: normalizarSalon(c.salon) }
+        : { campaign: b.campaign, tipoCurso: b.tipoCurso, horarioCurso: b.horarioCurso, salon: normalizarSalon(b.salon) });
     }
 
     // Bloquear los salones implicados en orden estable — bloquearlos en órdenes
@@ -190,11 +194,11 @@ export async function marcarListoConCupo(opts: {
     const salones = Array.from(new Set(
       Array.from(destino.values())
         .filter(d => d.campaign && d.tipoCurso && d.horarioCurso)
-        .map(d => `${d.campaign}|${d.tipoCurso}|${d.horarioCurso}`)
+        .map(d => `${d.campaign}|${d.tipoCurso}|${d.horarioCurso}|${d.salon ?? ''}`)
     )).sort();
     for (const s of salones) {
-      const [campaign, tipoCurso, horarioCurso] = s.split('|');
-      await lockSalon(client, campaign, tipoCurso, horarioCurso);
+      const [campaign, tipoCurso, horarioCurso, salon] = s.split('|');
+      await lockSalon(client, campaign, tipoCurso, horarioCurso, salon || null);
     }
 
     // Con los salones bloqueados, contar de nuevo y repartir los asientos. Los
@@ -210,13 +214,13 @@ export async function marcarListoConCupo(opts: {
         aConfirmar.push({ b, d, excede: false });
         continue;
       }
-      const key = `${d.campaign}|${d.tipoCurso}|${d.horarioCurso}`;
-      const { cupos, salon, existe } = await cuposDe(client, d.campaign, d.tipoCurso, d.horarioCurso);
+      const key = `${d.campaign}|${d.tipoCurso}|${d.horarioCurso}|${d.salon ?? ''}`;
+      const { cupos, salon, existe } = await cuposDe(client, d.campaign, d.tipoCurso, d.horarioCurso, d.salon);
       if (!existe) throw new ValidationError(`El curso ${d.tipoCurso} ${d.horarioCurso} no existe en la campaña ${d.campaign}.`);
 
       if (!ocupadosPorSalon.has(key)) {
         ocupadosPorSalon.set(key, await contarOcupados(
-          client, d.campaign, d.tipoCurso, d.horarioCurso, provisionales.map((p: any) => p._id)));
+          client, d.campaign, d.tipoCurso, d.horarioCurso, provisionales.map((p: any) => p._id), d.salon));
       }
       const ocupados = ocupadosPorSalon.get(key)!;
       const cabe = cupos === 0 || ocupados < cupos;
@@ -231,7 +235,7 @@ export async function marcarListoConCupo(opts: {
           numeroId: b.numeroId,
           campaign: d.campaign, tipoCurso: d.tipoCurso, horarioCurso: d.horarioCurso,
           salon, cupos, ocupados,
-          alternativas: await alternativasConCupo(d.campaign, d.tipoCurso, d.horarioCurso),
+          alternativas: await alternativasConCupo(d.campaign, d.tipoCurso, d.horarioCurso, salon),
         });
       }
     }
@@ -253,7 +257,7 @@ export async function marcarListoConCupo(opts: {
     for (const { b, d, excede } of aConfirmar) {
       const cambio = cambios.find(x => x.personId === b._id);
       if (cambio) {
-        const { salon } = await cuposDe(client, d.campaign, d.tipoCurso, d.horarioCurso);
+        const { salon } = await cuposDe(client, d.campaign, d.tipoCurso, d.horarioCurso, d.salon);
         await client.query(
           `UPDATE "PEOPLE" SET "campaign"=$2, "tipoCurso"=$3, "horarioCurso"=$4, "salon"=$5, "_updatedDate"=NOW()
             WHERE "_id"=$1`,
@@ -280,9 +284,10 @@ export async function marcarListoConCupo(opts: {
               AND a."peopleId" = $1
               AND c."cursoCampaignId" = (
                 SELECT cc."_id" FROM "CURSOS_CAMPAIGN" cc
-                 WHERE cc."campaign" = $2 AND cc."tipoCurso" = $3 AND cc."horarioCurso" = $4 LIMIT 1)
+                 WHERE cc."campaign" = $2 AND cc."tipoCurso" = $3 AND cc."horarioCurso" = $4
+                   AND cc."salon" IS NOT DISTINCT FROM $5 LIMIT 1)
             RETURNING c."_id" AS evid`,
-          [b._id, b.campaign, b.tipoCurso, b.horarioCurso]
+          [b._id, b.campaign, b.tipoCurso, b.horarioCurso, b.salon ?? null]
         ).catch(() => ({ rows: [] as any[] }));
         const evs = Array.from(new Set((soltadas.rows || []).map((r: any) => r.evid).filter(Boolean)));
         if (evs.length) {
@@ -291,11 +296,11 @@ export async function marcarListoConCupo(opts: {
               WHERE "_id" = ANY($1::text[])`, [evs]);
         }
 
-        if (b.horarioCurso !== d.horarioCurso || b.tipoCurso !== d.tipoCurso) {
+        if (b.horarioCurso !== d.horarioCurso || b.tipoCurso !== d.tipoCurso || (normalizarSalon(b.salon) ?? '') !== (d.salon ?? '')) {
           movidos.push({
             nombre: nombreDe(b),
-            de: `${b.tipoCurso || '—'} ${b.horarioCurso || ''}`.trim(),
-            a: `${d.tipoCurso} ${d.horarioCurso}`,
+            de: `${b.tipoCurso || '—'} ${b.horarioCurso || ''}${b.salon ? ` · Salón ${b.salon}` : ''}`.trim(),
+            a: `${d.tipoCurso} ${d.horarioCurso}${d.salon ? ` · Salón ${d.salon}` : ''}`,
           });
         }
       }

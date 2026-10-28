@@ -27,7 +27,7 @@ export const GET = handlerWithAuth(async (_req, { params }) => {
                WHERE pe."tipoUsuario"='BENEFICIARIO'
                  AND pe."campaign" = "CURSOS_CAMPAIGN"."campaign"
                  AND pe."tipoCurso" = "CURSOS_CAMPAIGN"."tipoCurso"
-                 AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso"
+                 AND pe."horarioCurso" = "CURSOS_CAMPAIGN"."horarioCurso" AND pe."salon" IS NOT DISTINCT FROM "CURSOS_CAMPAIGN"."salon"
                  AND ${cupoOcupadoSql('pe')}) AS "usuInscritos"
      FROM "CURSOS_CAMPAIGN"
      WHERE "guia" = $1 AND "activa" = true

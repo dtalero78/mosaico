@@ -223,7 +223,7 @@ export async function getCampaniasResumen(_tz: string = TZ_OPERACION): Promise<C
               (SELECT COUNT(*)::int FROM "PEOPLE" pe
                  WHERE pe."tipoUsuario"='BENEFICIARIO' AND pe."tipoCurso"=cc."tipoCurso" AND ${cupoOcupadoSql('pe')}
                    AND EXISTS (SELECT 1 FROM "CURSOS_CAMPAIGN" c2 WHERE c2."campaign"=pe."campaign"
-                                 AND c2."tipoCurso"=pe."tipoCurso" AND c2."horarioCurso"=pe."horarioCurso" AND c2."finalCurso"::text >= $1)
+                                 AND c2."tipoCurso"=pe."tipoCurso" AND c2."horarioCurso"=pe."horarioCurso" AND c2."salon" IS NOT DISTINCT FROM pe."salon" AND c2."finalCurso"::text >= $1)
               )::int AS "inscritos"
          FROM "CURSOS_CAMPAIGN" cc
         WHERE cc."finalCurso"::text >= $1

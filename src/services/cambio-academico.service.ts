@@ -1,4 +1,5 @@
 import 'server-only';
+import { resolverCurso } from '@/services/curso-resolver.service';
 import { query, queryOne, queryMany, transaction } from '@/lib/postgres';
 import { asegurarCupoSalon } from '@/services/cupo-guard.service';
 import { ids } from '@/lib/id-generator';
@@ -36,11 +37,14 @@ export interface CambioAcademicoInput {
 
 interface Actor { email?: string | null; nombre?: string | null }
 
-export async function resolverCursoId(campaign: string, tipoCurso: string, horarioCurso: string): Promise<string | null> {
-  const r = await queryOne<{ _id: string }>(
-    `SELECT "_id" FROM "CURSOS_CAMPAIGN" WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 LIMIT 1`,
-    [campaign, tipoCurso, horarioCurso]
-  );
+/**
+ * Id del curso de campaña. Con `salon` es único; sin él sólo si el horario es de un único
+ * curso (si lo comparten varios salones lanza y pide el salón).
+ */
+export async function resolverCursoId(
+  campaign: string, tipoCurso: string, horarioCurso: string, salon?: string | null
+): Promise<string | null> {
+  const r = await resolverCurso<{ _id: string }>({ query }, { campaign, tipoCurso, horarioCurso, salon }, { columnas: '"_id"' });
   return r?._id || null;
 }
 
@@ -100,8 +104,8 @@ export async function cambiarCursoAcademico(
 
   // Curso viejo (de PEOPLE, la identidad real) y curso nuevo (destino)
   const oldCursoId = (per.campaign && per.tipoCurso && per.horarioCurso)
-    ? await resolverCursoId(per.campaign, per.tipoCurso, per.horarioCurso) : null;
-  const newCursoId = await resolverCursoId(campaign, tipoCurso, horarioCurso);
+    ? await resolverCursoId(per.campaign, per.tipoCurso, per.horarioCurso, per.salon) : null;
+  const newCursoId = await resolverCursoId(campaign, tipoCurso, horarioCurso, salon);
   if (!newCursoId) throw new NotFoundError('Curso destino', `${campaign}/${tipoCurso}/${horarioCurso}`);
   if (oldCursoId && oldCursoId === newCursoId) throw new ValidationError('El estudiante ya está en ese curso/salón.');
 
@@ -140,7 +144,7 @@ export async function cambiarCursoAcademico(
     //    modal marcaba "LLENO" pero no lo impedía, ni aquí ni en el navegador.
     //    Se excluye al propio alumno: si se queda en el mismo salón (cambia de
     //    lección, no de aula) ya está contado y se rechazaría a sí mismo.
-    await asegurarCupoSalon(client, { campaign, tipoCurso, horarioCurso }, {
+    await asegurarCupoSalon(client, { campaign, tipoCurso, horarioCurso, salon }, {
       excluir: per._id ? [per._id] : [],
       contexto: 'para mover a otro salón hay que ampliarlo en Académico › Campañas',
     });

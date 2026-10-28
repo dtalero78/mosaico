@@ -74,7 +74,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
        SELECT "_id", "curso", "nivel", "step" FROM "ACADEMICA" WHERE "peopleId" = p."_id" LIMIT 1
      ) a ON true
      LEFT JOIN "CURSOS_CAMPAIGN" cc
-       ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
+       ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
      LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
      WHERE ${where.join(' AND ')}
      ORDER BY nombre ASC
@@ -103,7 +103,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `SELECT DISTINCT g."_id" AS id, g."nombreCompleto" AS nombre
        FROM "PEOPLE" p
        JOIN "CURSOS_CAMPAIGN" cc
-         ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso"
+         ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
        JOIN "GUIAS" g ON g."_id" = cc."guia"
       WHERE p."tipoUsuario"='BENEFICIARIO' AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
       ORDER BY g."nombreCompleto" ASC`

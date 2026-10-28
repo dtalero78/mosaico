@@ -52,11 +52,12 @@ interface Props {
   saving: boolean
   puedeSobrecupo: boolean
   onCancel: () => void
-  onCambiarHorario: (cambios: { personId: string; campaign: string; tipoCurso: string; horarioCurso: string }[]) => void
+  onCambiarHorario: (cambios: { personId: string; campaign: string; tipoCurso: string; horarioCurso: string; salon: string }[]) => void
   onSobrecupo: () => void
 }
 
-const claveAlt = (a: AlternativaCupo) => `${a.campaign}|${a.tipoCurso}|${a.horarioCurso}`
+// El salón forma parte de la clave: dos salones pueden compartir horario.
+const claveAlt = (a: AlternativaCupo) => `${a.campaign}|${a.tipoCurso}|${a.horarioCurso}|${a.salon ?? ''}`
 
 export default function SinCupoModal({
   detalle, contrato, titular, saving, puedeSobrecupo, onCancel, onCambiarHorario, onSobrecupo,
@@ -71,8 +72,8 @@ export default function SinCupoModal({
 
   const confirmarHorarios = () => {
     const cambios = benefs.map(b => {
-      const [campaign, tipoCurso, horarioCurso] = String(sel[b.personId]).split('|')
-      return { personId: b.personId, campaign, tipoCurso, horarioCurso }
+      const [campaign, tipoCurso, horarioCurso, salon] = String(sel[b.personId]).split('|')
+      return { personId: b.personId, campaign, tipoCurso, horarioCurso, salon: salon || '' }
     })
     onCambiarHorario(cambios)
   }

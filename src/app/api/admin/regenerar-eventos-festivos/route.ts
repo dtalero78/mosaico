@@ -48,10 +48,10 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
        FROM "PEOPLE" p
        JOIN "ACADEMICA" a ON a."peopleId" = p."_id"
        WHERE p."tipoUsuario" = 'BENEFICIARIO'
-         AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3
+         AND p."campaign" = $1 AND p."tipoCurso" = $2 AND p."horarioCurso" = $3 AND p."salon" IS NOT DISTINCT FROM $4
          AND ${esAprobadoSql('p."aprobacion"')}
          AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
-      [curso.campaign, curso.tipoCurso, curso.horarioCurso]
+      [curso.campaign, curso.tipoCurso, curso.horarioCurso, curso.salon]
     )).rows
 
     // Snapshot de bookings con estado marcado (por estudiante + fecha)
@@ -89,7 +89,7 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
     let nBk = 0
     for (const s of est) {
       nBk += await generarBookingsBeneficiario(s.acaid, {
-        campaign: curso.campaign, tipoCurso: curso.tipoCurso, horarioCurso: curso.horarioCurso,
+        campaign: curso.campaign, tipoCurso: curso.tipoCurso, horarioCurso: curso.horarioCurso, salon: curso.salon,
         numeroId: s.numeroId, primerNombre: s.primerNombre, primerApellido: s.primerApellido,
         celular: s.celular, plataforma: s.plataforma,
       })

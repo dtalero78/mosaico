@@ -1,6 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
+import { normalizarSalon } from '@/lib/curso-salon';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
@@ -57,7 +58,8 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
     throw new ValidationError(`Horario inválido para ${tipoCurso}: ${horarioCurso}`);
   }
 
-  const salon = body.salon !== undefined ? (String(body.salon).trim() || null) : row.salon;
+  // El salón forma parte de la identidad del curso: se guarda sólo su número/nombre.
+  const salon = body.salon !== undefined ? normalizarSalon(body.salon) : row.salon;
   // Normalizado: el formulario puede mandar el texto 'null'/'undefined' cuando no
   // se elige guía, y guardarlo así lo volvía un guía llamado «null» que chocaba
   // contra cualquier otro curso sin guía.
@@ -73,12 +75,14 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
   const finalCurso = (inicioCurso && duracion > 0) ? addMonths(inicioCurso, duracion + 1) : null;
 
   // Si cambia (tipoCurso, horarioCurso), verificar que no choque con otro curso de la misma campaña
-  if (tipoCurso !== row.tipoCurso || horarioCurso !== row.horarioCurso) {
+  // La identidad es (campaña, tipo, horario, salón): dos salones pueden compartir horario.
+  if (tipoCurso !== row.tipoCurso || horarioCurso !== row.horarioCurso || (salon || '') !== (row.salon || '')) {
     const dup = await query(
-      `SELECT 1 FROM "CURSOS_CAMPAIGN" WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "_id" <> $4 LIMIT 1`,
-      [row.campaign, tipoCurso, horarioCurso, id]
+      `SELECT 1 FROM "CURSOS_CAMPAIGN" WHERE "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3
+          AND "salon" IS NOT DISTINCT FROM $5 AND "_id" <> $4 LIMIT 1`,
+      [row.campaign, tipoCurso, horarioCurso, id, salon]
     );
-    if (dup.rows.length > 0) throw new ConflictError(`Ya existe un curso ${tipoCurso} ${horarioCurso} en la campaña ${row.campaign}.`);
+    if (dup.rows.length > 0) throw new ConflictError(`Ya existe el Salón ${salon || '—'} de ${tipoCurso} con el horario ${horarioCurso} en la campaña ${row.campaign}.`);
   }
 
   // ─── Curso agrupado al que le cambian el horario ───
@@ -124,6 +128,7 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
          JOIN "CURSOS_CAMPAIGN" otro
            ON otro."campaign" = h."campaign" AND otro."tipoCurso" = h."tipoCurso"
           AND otro."horarioCurso" = $1
+          AND otro."salon" IS NOT DISTINCT FROM h."salon"
           AND otro."grupoHorarioId" IS DISTINCT FROM h."grupoHorarioId"
         WHERE h."grupoHorarioId" = $2 AND h."_id" <> $3`,
       [horarioCurso, row.grupoHorarioId, id]
@@ -207,9 +212,9 @@ export const PATCH = handlerWithAuth(async (request, ctx: any, session) => {
       `SELECT TRIM(CONCAT_WS(' ', "primerNombre", "primerApellido")) AS nombre, "numeroId"
          FROM "PEOPLE"
         WHERE "tipoUsuario"='BENEFICIARIO'
-          AND "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3
+          AND "campaign"=$1 AND "tipoCurso"=$2 AND "horarioCurso"=$3 AND "salon" IS NOT DISTINCT FROM $4
         ORDER BY 1`,
-      [row.campaign, row.tipoCurso, row.horarioCurso]
+      [row.campaign, row.tipoCurso, row.horarioCurso, row.salon]
     )).rows;
 
     if (alumnos.length > 0) {

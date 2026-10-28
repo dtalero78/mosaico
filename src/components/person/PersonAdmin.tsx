@@ -1887,6 +1887,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                           campaign: beneficiaryData.campaign,
                           tipoCurso: beneficiaryData.tipoCurso,
                           horarioCurso: beneficiaryData.horarioCurso,
+                          salon: (beneficiaryData as any).salon,
                         }}
                         onPatch={(patch) => setBeneficiaryData(prev => ({ ...prev, ...patch }))}
                         esImpulsa={(person as any).esCursoImpulsa === true}

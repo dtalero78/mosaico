@@ -81,8 +81,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
          FROM "CURSOS_CAMPAIGN" cc
          LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
         WHERE cc."campaign"=$1 AND cc."tipoCurso"=$2 AND cc."horarioCurso"=$3
+          AND ($4::text IS NULL OR cc."salon" = $4)
         LIMIT 1`,
-      [persona.campaign, persona.tipoCurso, persona.horarioCurso]
+      [persona.campaign, persona.tipoCurso, persona.horarioCurso, persona.salon || null]
     )
     if (!curso) {
       problemas.push(`El curso ${persona.tipoCurso} · ${persona.horarioCurso} no existe en la campaña ${persona.campaign}.`)

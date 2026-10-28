@@ -281,6 +281,7 @@ export async function approveOnePerson(
         campaign: person.campaign,
         tipoCurso: person.tipoCurso,
         horarioCurso: person.horarioCurso,
+        salon: person.salon,
         numeroId: person.numeroId,
         primerNombre: person.primerNombre,
         primerApellido: person.primerApellido,
@@ -443,7 +444,7 @@ async function completarClasesYaAprobados(
 ): Promise<ApproveContractResult['clasesCompletadas']> {
   const hijos = await queryMany(
     `SELECT b."_id", b."numeroId", b."primerNombre", b."primerApellido", b."celular",
-            b."plataforma", b."campaign", b."tipoCurso", b."horarioCurso",
+            b."plataforma", b."campaign", b."tipoCurso", b."horarioCurso", b."salon",
             a."_id" AS "academicaId"
        FROM "PEOPLE" b
        JOIN LATERAL (SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = b."numeroId" LIMIT 1) a ON true

@@ -82,8 +82,9 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       WHERE g."_id" = $1
         AND EXISTS (SELECT 1 FROM "CURSOS_CAMPAIGN" cc
                      WHERE cc."guia" = g."_id" AND cc."activa" = true
-                       AND cc."tipoCurso" = $2 AND cc."campaign" = $3 AND cc."horarioCurso" = $4)`,
-    [guiaId, alumno.tipoCurso, alumno.campaign, alumno.horarioCurso]
+                       AND cc."tipoCurso" = $2 AND cc."campaign" = $3 AND cc."horarioCurso" = $4
+                       AND cc."salon" IS NOT DISTINCT FROM $5)`,
+    [guiaId, alumno.tipoCurso, alumno.campaign, alumno.horarioCurso, alumno.salon ?? null]
   )
   if (!guia) throw new ValidationError('El guía seleccionado no dicta el salón de ese usuario.')
 

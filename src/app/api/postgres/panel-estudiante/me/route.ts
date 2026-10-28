@@ -66,8 +66,9 @@ export const GET = handlerWithAuth(async (request, context, session) => {
          FROM "CURSOS_CAMPAIGN" cc
          JOIN "GUIAS" g ON g."_id" = cc."guia"
         WHERE cc."campaign" = $1 AND cc."tipoCurso" = $2 AND cc."horarioCurso" = $3
+          AND ($4::text IS NULL OR cc."salon" = $4)
         LIMIT 1`,
-      [campaign, tipoCurso, (student as any)?.horarioCurso ?? '']
+      [campaign, tipoCurso, (student as any)?.horarioCurso ?? '', (student as any)?.salon || null]
     ).catch(() => null);
     cursoGuia = g?.nombreCompleto ?? null;
   }
