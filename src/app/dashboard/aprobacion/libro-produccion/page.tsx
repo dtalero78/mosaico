@@ -14,7 +14,7 @@ import {
   ArrowPathIcon, ArrowDownTrayIcon, ChevronDownIcon, ChevronRightIcon, ChevronLeftIcon, MagnifyingGlassIcon, FunnelIcon,
   XMarkIcon, ArrowTopRightOnSquareIcon, CalendarDaysIcon, TableCellsIcon, RectangleStackIcon,
 } from '@heroicons/react/24/outline'
-import DashboardLayout from '@/components/layout/DashboardLayout'
+import { useRouter } from 'next/navigation'
 import { PermissionGuard } from '@/components/permissions'
 import { AprobacionPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -127,18 +127,31 @@ const LEFTS = COLS.reduce<number[]>((acc, c, i) => { acc.push(i === 0 ? 0 : acc[
 
 // ── Página ──────────────────────────────────────────────────────────────────────
 export default function LibroProduccionPage() {
+  const router = useRouter()
   const { hasPermission } = usePermissions()
   const puedeVigencias = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_VIGENCIAS)
   const puedePlanes = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_PLANES)
   const [tab, setTab] = useState<'libro' | 'vigencias' | 'planes'>('libro')
 
+  // Página completa, sin menú lateral: se abre en pestaña nueva, así que si no hay historial
+  // previo "Volver" lleva al Centro de Aprobaciones.
+  const volver = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back()
+    else router.push('/dashboard/aprobacion')
+  }
   return (
-    <DashboardLayout>
+    <div className="min-h-screen bg-gray-50 px-4 py-4">
       <PermissionGuard permission={AprobacionPermission.LIBRO_PRODUCCION_VER} showDefaultMessage>
         <div className="space-y-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Libro de Producción</h1>
-            <p className="text-sm text-gray-500">Contratos por vigencia comercial, con sus beneficiarios. Fuente: la plataforma (estado, pagos y plan en vivo).</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Libro de Producción</h1>
+              <p className="text-sm text-gray-500">Contratos por vigencia comercial, con sus beneficiarios. Fuente: la plataforma (estado, pagos y plan en vivo).</p>
+            </div>
+            <button type="button" onClick={volver}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-100">
+              <ChevronLeftIcon className="h-4 w-4" /> Volver
+            </button>
           </div>
           <div className="flex gap-2 border-b border-gray-200">
             {([['libro', 'Libro', TableCellsIcon],
@@ -153,7 +166,7 @@ export default function LibroProduccionPage() {
           {tab === 'libro' ? <Libro /> : tab === 'vigencias' ? <Vigencias /> : <PlanesTiposPanel />}
         </div>
       </PermissionGuard>
-    </DashboardLayout>
+    </div>
   )
 }
 
