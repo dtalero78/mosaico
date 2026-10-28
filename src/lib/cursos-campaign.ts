@@ -202,7 +202,9 @@ const MESES_ES: Record<string, number> = {
  * "AGOSTO172026M" / "AGOSTO102026I".
  */
 export function campaignNameToDate(name: string): string | null {
-  const m = String(name || '').toUpperCase().replace(/(\d{4})[A-Z]$/, '$1').match(/^([A-Z]+)(\d{1,2})(\d{4})$/);
+  // "0CTUBRE192026M" se tecleó con cero en vez de la O: sin esto no parseaba y la
+  // campaña quedaba sin fecha, con lo que la extemporánea elegía la campaña equivocada.
+  const m = String(name || '').toUpperCase().replace(/^0(?=CTUBRE)/, 'O').replace(/(\d{4})[A-Z]$/, '$1').match(/^([A-Z]+)(\d{1,2})(\d{4})$/);
   if (!m) return null;
   const mes = MESES_ES[m[1]];
   if (!mes) return null;
