@@ -34,6 +34,7 @@ export const ids = {
   advisor: () => generateId('adv'),
   audit: () => generateId('aud'),
   payment: () => generateId('pag'),
+  libro: () => generateId('lib'),
   advisorEventLog: () => generateId('ael'),
   comercial: () => generateId('com'),
 };

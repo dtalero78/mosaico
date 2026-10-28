@@ -130,6 +130,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Centro de Aprobaciones', href: '/dashboard/aprobacion' },
       { name: 'Aprobados',              href: '/dashboard/aprobacion/aprobados' },
       { name: 'Gestión Aprobaciones',   href: '/dashboard/aprobacion/gestion' },
+      { name: 'Libro de Producción',    href: '/dashboard/aprobacion/libro-produccion', newTab: true },
     ],
   },
   {
@@ -540,6 +541,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/aprobacion/gestion': [
       AprobacionPermission.GESTION_VER,
     ],
+    '/dashboard/aprobacion/libro-produccion': [
+      AprobacionPermission.LIBRO_PRODUCCION_VER,
+    ],
   }
 
   // Mapeo de secciones del menú a los permisos requeridos (si el usuario tiene CUALQUIERA de estos permisos, ve la sección)
@@ -622,6 +626,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       AprobacionPermission.CENTRO_VER,
       AprobacionPermission.GESTION_VER,
       AprobacionPermission.MIGRACION_APROBAR,
+      AprobacionPermission.LIBRO_PRODUCCION_VER,
       // APROBACION.MODIFICAR.*
       AprobacionPermission.ACTUALIZAR,
       AprobacionPermission.EXPORTAR_CSV,

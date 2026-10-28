@@ -114,6 +114,79 @@ export async function resolverLiderComercial(
   }
 }
 
+export interface EscaleraComercial {
+  ejecutivo: string;
+  fullExecutive: string;
+  jefeGrupo: string;
+  gerente: string;
+  gerenteDivision: string;
+  salesManager: string;
+}
+
+/** Rango del CRM → columna de la escalera del Libro de Producción. */
+const ESCALERA_POR_RANGO: Record<string, keyof EscaleraComercial> = {
+  FULL_EXECUTIVE: 'fullExecutive',
+  JEFE_GRUPO: 'jefeGrupo',
+  GERENTE: 'gerente',
+  GERENTE_DIVISIONAL: 'gerenteDivision',
+  SALES_MANAGER: 'salesManager',
+};
+
+const escaleraCache = new Map<string, { v: EscaleraComercial | null; exp: number }>();
+
+/**
+ * Escalera completa del asesor (ejecutivo → full executive → jefe de grupo → gerente →
+ * gerente división → sales manager), subiendo por `supervisorId`. Para cada rango toma el
+ * nodo MÁS CERCANO al asesor (él mismo cuenta). Alimenta el Libro de Producción.
+ * Cacheado 30 min por asesor; best-effort (null si el CRM no responde o no lo encuentra).
+ */
+export async function resolverEscalera(correo?: string | null, nombre?: string | null): Promise<EscaleraComercial | null> {
+  const pool = getCrmPool();
+  if (!pool) return null;
+  const email = String(correo || '').trim().toLowerCase();
+  const name = String(nombre || '').trim();
+  if (!email && !name) return null;
+  const key = email || name.toLowerCase();
+  const hit = escaleraCache.get(key);
+  if (hit && hit.exp > Date.now()) return hit.v;
+
+  const sql = `
+    WITH RECURSIVE seed AS (
+      SELECT id, "firstName", "lastName", email, "position", "supervisorId"
+        FROM "User"
+       WHERE ${email ? `lower(email) = $1` : `lower("firstName" || ' ' || "lastName") = lower($1)`}
+       ORDER BY ("isActive" IS TRUE) DESC
+       LIMIT 1
+    ),
+    up AS (
+      SELECT s.*, 0 AS depth FROM seed s
+      UNION ALL
+      SELECT u.id, u."firstName", u."lastName", u.email, u."position", u."supervisorId", up.depth + 1
+        FROM "User" u
+        JOIN up ON u.id = up."supervisorId"
+       WHERE up.depth < 20
+    )
+    SELECT "firstName", "lastName", "position"::text AS position, depth FROM up ORDER BY depth ASC`;
+  try {
+    const r = await pool.query(sql, [email || name]);
+    let v: EscaleraComercial | null = null;
+    if (r.rows.length) {
+      v = { ejecutivo: '', fullExecutive: '', jefeGrupo: '', gerente: '', gerenteDivision: '', salesManager: '' };
+      const nom = (row: any) => `${row.firstName || ''} ${row.lastName || ''}`.replace(/s+/g, ' ').trim();
+      v.ejecutivo = nom(r.rows[0]);
+      for (const row of r.rows) {
+        const col = ESCALERA_POR_RANGO[row.position];
+        if (col && !v[col]) v[col] = nom(row);
+      }
+    }
+    escaleraCache.set(key, { v, exp: Date.now() + 30 * 60 * 1000 });
+    return v;
+  } catch (err: any) {
+    console.warn('[crm] resolverEscalera falló:', err?.message || err);
+    return null;
+  }
+}
+
 export interface ComercialScope {
   /** true = ve todos los contratos (Sales Manager+, o usuario fuera del CRM). */
   seeAll: boolean;

@@ -6,7 +6,7 @@ import { ValidationError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { generateUserLogin } from '@/lib/user-login';
 import { syncFinancieroSaldo } from '@/services/pagos-titulares.service';
-import { resolverLiderComercial, type LiderComercial } from '@/lib/crm';
+import { resolverLiderComercial, resolverEscalera, type LiderComercial } from '@/lib/crm';
 import { welcomeModuloForCurso } from '@/lib/welcome-modulo';
 import { apoderadoPorDefectoEsTitular, resolverApoderado } from '@/lib/apoderado';
 import { RESERVA_CUPO_MIN } from '@/lib/cupo';
@@ -586,6 +586,28 @@ export async function createFullContract(input: CreateContractInput) {
     } catch (err: any) {
       console.warn('[contract-creation] no se pudo guardar liderComercial en el titular:', err?.message || err);
     }
+  }
+
+  // Escalera comercial completa del día de la matrícula (Libro de Producción) + filial del
+  // asesor: foto en el titular. Best-effort, nunca pisa un dato ya cargado.
+  try {
+    const esc = await resolverEscalera(titular.asesorMail, titular.asesor);
+    const correoAs = String(titular.asesorMail || '').trim().toLowerCase();
+    await query(
+      `UPDATE "PEOPLE" SET
+         "fullExecutive"   = COALESCE(NULLIF("fullExecutive",''),   $2),
+         "jefeGrupo"       = COALESCE(NULLIF("jefeGrupo",''),       $3),
+         "gerente"         = COALESCE(NULLIF("gerente",''),         $4),
+         "gerenteDivision" = COALESCE(NULLIF("gerenteDivision",''), $5),
+         "salesManager"    = COALESCE(NULLIF("salesManager",''),    $6),
+         "filial"          = COALESCE(NULLIF("filial",''), (SELECT "filial" FROM "EQUIPO_COMERCIAL" WHERE LOWER(TRIM("correo")) = $7 LIMIT 1)),
+         "_updatedDate" = NOW()
+       WHERE "_id" = $1`,
+      [titularId, esc?.fullExecutive || null, esc?.jefeGrupo || null, esc?.gerente || null,
+       esc?.gerenteDivision || null, esc?.salesManager || null, correoAs]
+    );
+  } catch (err: any) {
+    console.warn('[contract-creation] no se pudo guardar la escalera comercial:', err?.message || err);
   }
 
   // Registrar al asesor (nombre + correo + líder) en EQUIPO_COMERCIAL. Best-effort.
