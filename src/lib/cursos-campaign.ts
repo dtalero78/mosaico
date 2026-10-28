@@ -213,6 +213,9 @@ export function campaignNameToDate(name: string): string | null {
   return `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 }
 
+/** Primera campaña (por la fecha de su nombre) con la extemporánea por curso: ver abajo. */
+const INICIO_REGLA_EXTEMP_POR_CURSO = '2026-12-07';
+
 /**
  * Cursos visibles en Crear Contrato según la casilla EXTEMPORÁNEA.
  * - NO extemporánea → sólo cursos con la matrícula abierta: la semana que sigue
@@ -278,6 +281,15 @@ export function cursosVisiblesContrato<T extends { campaign?: string; inicioCamp
   return rows.filter(r => {
     if (r.campaign !== target || !(fcurso(r) >= hoy)) return false;
     const creado = sl((r as any).creadoEn);
+    // Desde la campaña DICIEMBRE072026M en adelante: la ventana de cada curso corre
+    // DOS SEMANAS desde su ancla —el día de inicio del curso o, si se creó después
+    // de empezar, el día de su creación— y no abre antes de esa fecha.
+    const nd = campaignNameToDate(r.campaign || '');
+    if (nd && nd >= INICIO_REGLA_EXTEMP_POR_CURSO) {
+      const i = ini(r);
+      const ancla = i && creado ? (i > creado ? i : creado) : (i || creado);
+      return !!ancla && ancla <= hoy && ancla >= limStr;
+    }
     return (!!ini(r) && ini(r) >= limStr) || (!!creado && creado >= limStr);
   });
 }
