@@ -123,14 +123,23 @@ export interface EscaleraComercial {
   salesManager: string;
 }
 
-/** Rango del CRM → columna de la escalera del Libro de Producción. */
-const ESCALERA_POR_RANGO: Record<string, keyof EscaleraComercial> = {
-  FULL_EXECUTIVE: 'fullExecutive',
-  JEFE_GRUPO: 'jefeGrupo',
-  GERENTE: 'gerente',
-  GERENTE_DIVISIONAL: 'gerenteDivision',
-  SALES_MANAGER: 'salesManager',
+/**
+ * Orden de los rangos de la escalera comercial (de abajo hacia arriba). El CRM no tiene el
+ * rango "gerente división" (nivel 4): ese escalón lo ocupa quien esté por encima.
+ * Regla (verificada contra el Libro de Producción): cada columna toma el nodo MÁS CERCANO al
+ * asesor cuyo rango sea IGUAL O SUPERIOR al del escalón; si en la cadena falta un nivel, lo
+ * cubre el siguiente hacia arriba (p. ej. sin gerente, el sales manager figura como gerente).
+ */
+const ORDEN_RANGO: Record<string, number> = {
+  ASESOR_TRAINING: 0,
+  FULL_EXECUTIVE: 1,
+  JEFE_GRUPO: 2,
+  GERENTE: 3,
+  SALES_MANAGER: 5,
 };
+const NIVEL_COLUMNA: [keyof EscaleraComercial, number][] = [
+  ['fullExecutive', 1], ['jefeGrupo', 2], ['gerente', 3], ['gerenteDivision', 4], ['salesManager', 5],
+];
 
 const escaleraCache = new Map<string, { v: EscaleraComercial | null; exp: number }>();
 
@@ -172,11 +181,11 @@ export async function resolverEscalera(correo?: string | null, nombre?: string |
     let v: EscaleraComercial | null = null;
     if (r.rows.length) {
       v = { ejecutivo: '', fullExecutive: '', jefeGrupo: '', gerente: '', gerenteDivision: '', salesManager: '' };
-      const nom = (row: any) => `${row.firstName || ''} ${row.lastName || ''}`.replace(/s+/g, ' ').trim();
+      const nom = (row: any) => `${row.firstName || ''} ${row.lastName || ''}`.replace(/\s+/g, ' ').trim();
       v.ejecutivo = nom(r.rows[0]);
-      for (const row of r.rows) {
-        const col = ESCALERA_POR_RANGO[row.position];
-        if (col && !v[col]) v[col] = nom(row);
+      for (const [col, nivel] of NIVEL_COLUMNA) {
+        const hit = r.rows.find((row: any) => (ORDEN_RANGO[row.position] ?? -1) >= nivel);
+        if (hit) v[col] = nom(hit);
       }
     }
     escaleraCache.set(key, { v, exp: Date.now() + 30 * 60 * 1000 });
