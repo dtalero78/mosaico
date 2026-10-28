@@ -275,7 +275,24 @@ export async function libroDeVigencia(vigenciaId?: string | null) {
   const vigencia = vigenciaId ? vigencias.find((v) => v._id === vigenciaId) : await vigenciaActual(vigencias);
   if (vigenciaId && !vigencia) throw new NotFoundError('Vigencia', vigenciaId);
   const registros = vigencia ? await construir({ vigencia }) : [];
-  return { vigencias, vigencia: vigencia || null, registros };
+  return { vigencias, vigencia: vigencia || null, registros, sinVigencia: await contarSinVigencia() };
+}
+
+/**
+ * Titulares creados dentro del rango de vigencias configurado (a partir del inicio de la primera)
+ * que NO caen en ninguna: no salen en el libro de ningún mes. Sirve para avisar que falta generar
+ * el calendario del año siguiente.
+ */
+async function contarSinVigencia(): Promise<number> {
+  const r = await queryOne<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM "PEOPLE" p
+      WHERE p."tipoUsuario" = 'TITULAR' AND COALESCE(p."contrato",'') <> '' AND p."contrato" NOT LIKE 'PRB-%'
+        AND p."fechaCreacion" >= (SELECT MIN("inicio") FROM "VIGENCIAS_COMERCIALES") AT TIME ZONE 'UTC' - INTERVAL '1 day'
+        AND NOT EXISTS (
+          SELECT 1 FROM "VIGENCIAS_COMERCIALES" v
+           WHERE to_char(p."fechaCreacion" AT TIME ZONE (${TZ_SQL}), 'YYYY-MM-DD"T"HH24:MI') >= to_char(v."inicio",'YYYY-MM-DD"T"HH24:MI')
+             AND to_char(p."fechaCreacion" AT TIME ZONE (${TZ_SQL}), 'YYYY-MM-DD"T"HH24:MI') <  to_char(v."fin",'YYYY-MM-DD"T"HH24:MI'))`);
+  return r?.n || 0;
 }
 
 /** Un contrato del libro (vista detallada), ubicado en su vigencia/semana si existe. */

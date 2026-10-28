@@ -176,6 +176,7 @@ function Libro() {
   const puedeExportar = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_EXPORTAR)
   const [vigencias, setVigencias] = useState<Vigencia[]>([])
   const [vigencia, setVigencia] = useState<Vigencia | null>(null)
+  const [sinVigencia, setSinVigencia] = useState(0)
   const [registros, setRegistros] = useState<Registro[]>([])
   const [loading, setLoading] = useState(true)
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
@@ -189,7 +190,8 @@ function Libro() {
     setLoading(true)
     try {
       const qs = vigenciaId ? `?vigenciaId=${encodeURIComponent(vigenciaId)}` : ''
-      const d = await api.get<{ vigencias: Vigencia[]; vigencia: Vigencia | null; registros: Registro[] }>(`/api/postgres/libro-produccion${qs}`)
+      const d = await api.get<{ vigencias: Vigencia[]; vigencia: Vigencia | null; registros: Registro[]; sinVigencia?: number }>(`/api/postgres/libro-produccion${qs}`)
+      setSinVigencia(d.sinVigencia || 0)
       setVigencias(d.vigencias || []); setVigencia(d.vigencia); setRegistros(d.registros || []); setAbiertos(new Set())
     } catch (e) { handleApiError(e, 'No se pudo cargar el Libro de Producción') } finally { setLoading(false) }
   }, [])
@@ -285,8 +287,14 @@ function Libro() {
 
   return (
     <div className="space-y-3 min-w-0">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-8 items-end gap-3 rounded-lg border border-gray-200 bg-white p-3">
-        <label className="text-xs text-gray-600 min-w-0">
+      {sinVigencia > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          ⚠ Hay <b>{sinVigencia}</b> contrato(s) creados fuera de toda vigencia configurada: no salen en ningún mes del libro.
+          Genere el calendario del año siguiente en la pestaña <b>Vigencias</b>.
+        </div>
+      )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-9 items-end gap-3 rounded-lg border border-gray-200 bg-white p-3">
+        <label className="text-xs text-gray-600 min-w-0 col-span-2">
           <span className="block mb-0.5">Vigencia</span>
           <select value={vigencia?._id || ''} onChange={e => { setF(s => ({ ...s, semana: TODOS })); cargar(e.target.value) }}
             className="w-full rounded-md border border-indigo-300 bg-indigo-50 py-1.5 pl-2 pr-7 text-sm font-semibold text-indigo-900">
