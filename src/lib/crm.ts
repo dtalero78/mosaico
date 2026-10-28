@@ -187,6 +187,28 @@ export async function resolverEscalera(correo?: string | null, nombre?: string |
   }
 }
 
+/** Diagnóstico de solo lectura: usuarios activos por rango y cadena hacia arriba de cada correo. */
+export async function crmDiagnostico(emails: string[]) {
+  const pool = getCrmPool();
+  if (!pool) return { configurado: false, rangos: [], cadenas: {} as Record<string, any[]> };
+  const rangos = (await pool.query(
+    `SELECT "position"::text AS position, COUNT(*)::int AS n FROM "User" WHERE "isActive" IS TRUE GROUP BY 1 ORDER BY 2 DESC`)).rows;
+  const cadenas: Record<string, any[]> = {};
+  for (const e of emails) {
+    const email = String(e || '').trim().toLowerCase();
+    if (!email) continue;
+    const r = await pool.query(
+      `WITH RECURSIVE up AS (
+         SELECT id,"firstName","lastName","position","supervisorId",0 AS depth FROM "User" WHERE lower(email)=$1
+         UNION ALL
+         SELECT u.id,u."firstName",u."lastName",u."position",u."supervisorId",up.depth+1
+           FROM "User" u JOIN up ON u.id=up."supervisorId" WHERE up.depth<20)
+       SELECT depth, "firstName" || ' ' || "lastName" AS nombre, "position"::text AS position FROM up ORDER BY depth`, [email]);
+    cadenas[email] = r.rows;
+  }
+  return { configurado: true, rangos, cadenas };
+}
+
 export interface ComercialScope {
   /** true = ve todos los contratos (Sales Manager+, o usuario fuera del CRM). */
   seeAll: boolean;
