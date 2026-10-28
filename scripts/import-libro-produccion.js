@@ -16,6 +16,8 @@ const fs = require('fs');
 const { Client } = require('pg');
 const arg = (k) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').slice(k.length + 3);
 const APPLY = process.argv.includes('--apply');
+// --solo-origen: sólo origen de matrícula (para pestañas con nombres de escalera cortados, p. ej. Perú).
+const SOLO_ORIGEN = process.argv.includes('--solo-origen');
 const ruta = arg('csv'); const filial = arg('filial').trim().toUpperCase();
 if (!ruta || !filial) { console.error('Faltan --csv=ruta y --filial=NOMBRE'); process.exit(1); }
 
@@ -31,6 +33,7 @@ function parseCsv(txt) {
 }
 const norm = (s) => String(s || '').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
 const limpio = (v) => { const s = String(v || '').replace(/\s+/g, ' ').trim(); return !s || /^(N\/?A|NA|-|PENDIENTE)$/i.test(s) ? null : s; };
+const idNorm = (v) => String(v || '').toUpperCase().replace(/[^0-9K]/g, '').replace(/^0+/, '');
 const nucleo = (c) => { const m = String(c || '').match(/(\d{3,6})-(\d{2})\s*$/); return m ? `${parseInt(m[1], 10)}-${m[2]}` : null; };
 
 const rows = parseCsv(fs.readFileSync(ruta, 'utf8'));
@@ -40,14 +43,14 @@ const H = rows[hdr].map(norm);
 const col = (...names) => H.findIndex((h) => names.some((n) => h.startsWith(n)));
 const C = {
   contrato: col('N° CONTRATO', 'N CONTRATO'), fe: col('FULL EXEC'), jg: col('JEFE DE'), ge: col('GERENTE'),
-  gd: col('GERENTE DIV'), sm: col('SALES MAN'), ori: col('ORIGEN'),
+  gd: col('GERENTE DIV'), sm: col('SALES MAN'), ori: col('ORIGEN'), rut: col('RUT  TIT', 'RUT TIT'),
 };
 // "GERENTE" también es prefijo de "GERENTE DIVISIONAL": el simple es el primero que NO es división.
 C.ge = H.findIndex((h) => h === 'GERENTE');
 console.log('Columnas:', JSON.stringify(C));
 
 const datos = rows.slice(hdr + 1).map((r) => ({
-  contrato: limpio(r[C.contrato]), fullExecutive: limpio(r[C.fe]), jefeGrupo: limpio(r[C.jg]), gerente: limpio(r[C.ge]),
+  contrato: limpio(r[C.contrato]), rut: limpio(r[C.rut]), fullExecutive: limpio(r[C.fe]), jefeGrupo: limpio(r[C.jg]), gerente: limpio(r[C.ge]),
   gerenteDivision: limpio(r[C.gd]), salesManager: limpio(r[C.sm]), origen: limpio(r[C.ori]),
 })).filter((d) => d.contrato && /\d{3,}/.test(d.contrato));
 console.log(`Filas con contrato: ${datos.length} (filial ${filial})`);
@@ -55,20 +58,26 @@ console.log(`Filas con contrato: ${datos.length} (filial ${filial})`);
 (async () => {
   const c = new Client({ connectionString: process.env.DATABASE_URL.replace(/[?&]sslmode=[^&]*/g, ''), ssl: { rejectUnauthorized: false } });
   await c.connect();
-  const tit = (await c.query(`SELECT "_id","contrato","fullExecutive","jefeGrupo","gerente","gerenteDivision","salesManager","filial","origenMatricula","asesorMail"
+  const tit = (await c.query(`SELECT "_id","contrato","numeroId","fullExecutive","jefeGrupo","gerente","gerenteDivision","salesManager","filial","origenMatricula","asesorMail"
      FROM "PEOPLE" WHERE "tipoUsuario"='TITULAR' AND "contrato" NOT LIKE 'PRB-%'`)).rows;
   const porExacto = new Map(tit.map((t) => [String(t.contrato).trim(), t]));
   const porNucleo = new Map(); tit.forEach((t) => { const k = nucleo(t.contrato); if (k) porNucleo.set(k, [...(porNucleo.get(k) || []), t]); });
+  const porRut = new Map(); tit.forEach((t) => { const k = idNorm(t.numeroId); if (k) porRut.set(k, [...(porRut.get(k) || []), t]); });
   let ok = 0, sinMatch = [], ambiguo = [], cambios = [];
   for (const d of datos) {
     let t = porExacto.get(d.contrato);
+    // Respaldo: cédula del titular (el contrato pudo renumerarse al migrarlo, p. ej. 5-2928-26 → 04-M5-09000-26).
+    if (!t && d.rut) { const l = porRut.get(idNorm(d.rut)) || []; if (l.length === 1) t = l[0]; }
     if (!t) { const l = porNucleo.get(nucleo(d.contrato)) || []; if (l.length === 1) t = l[0]; else if (l.length > 1) { ambiguo.push(d.contrato); continue; } }
     if (!t) { sinMatch.push(d.contrato); continue; }
     const set = {};
     const poner = (campo, v) => { if (v && !String(t[campo] || '').trim()) set[campo] = v; };
-    poner('fullExecutive', d.fullExecutive); poner('jefeGrupo', d.jefeGrupo); poner('gerente', d.gerente);
-    poner('gerenteDivision', d.gerenteDivision); poner('salesManager', d.salesManager);
-    poner('filial', filial); poner('origenMatricula', d.origen);
+    if (!SOLO_ORIGEN) {
+      poner('fullExecutive', d.fullExecutive); poner('jefeGrupo', d.jefeGrupo); poner('gerente', d.gerente);
+      poner('gerenteDivision', d.gerenteDivision); poner('salesManager', d.salesManager);
+      poner('filial', filial);
+    }
+    poner('origenMatricula', d.origen);
     if (Object.keys(set).length) cambios.push({ id: t._id, contrato: t.contrato, asesorMail: t.asesorMail, set }); ok++;
   }
   console.log(`Cruzados: ${ok} · con cambios: ${cambios.length} · sin match: ${sinMatch.length} · ambiguos: ${ambiguo.length}`);
