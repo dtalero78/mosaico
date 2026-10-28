@@ -1,7 +1,7 @@
 import 'server-only';
 import { randomUUID } from 'crypto';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
-import { query } from '@/lib/postgres';
+import { query, queryOne } from '@/lib/postgres';
 import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, ConflictError } from '@/lib/errors';
@@ -101,6 +101,21 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     const finalCurso = (inicioCurso && duracion > 0) ? addMonths(inicioCurso, duracion + 1) : null;
     const numeroUsuarios = parseInt(String(c?.numeroUsuarios ?? 0), 10) || 0;
     if (numeroUsuarios <= 0) throw new ValidationError(`El curso ${tipo} ${horario} debe tener número de usuarios (cupos) > 0.`);
+
+    // La clave natural (campaña + tipo + horario) es única. Antes el INSERT hacía UPSERT y
+    // un alta con un horario que ya existía SOBREESCRIBÍA ese curso (salón, guía, fechas,
+    // cupos) aunque tuviera alumnos, y luego fallaba al regenerar sus eventos. Un curso que
+    // ya existe se edita desde Gestión; aquí sólo se crean cursos nuevos.
+    const existente = await queryOne<{ salon: string | null }>(
+      `SELECT "salon" FROM "CURSOS_CAMPAIGN" WHERE "campaign" = $1 AND "tipoCurso" = $2 AND "horarioCurso" = $3`,
+      [nombre, tipo, horario]
+    );
+    if (existente || aInsertar.some(x => x.tipo === tipo && x.horario === horario)) {
+      throw new ValidationError(
+        `Ya existe un curso ${tipo} con el horario ${horario} en la campaña ${nombre}${existente?.salon ? ` (Salón ${existente.salon})` : ''}. ` +
+        `No puede haber dos cursos del mismo tipo con el mismo horario: elija otro horario o edite ese curso en Gestión (por ejemplo, ampliar sus cupos).`
+      );
+    }
 
     // Un guía no puede dictar dos cursos a la vez: se revisa contra TODAS las
     // campañas activas, no sólo ésta (ver colision-guia.service). El INSERT es
