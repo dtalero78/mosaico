@@ -36,11 +36,19 @@ test.describe('Ventana de la sesión del guía', () => {
     expect(w.isExpired).toBe(false);
   });
 
-  test('al minuto 0 se abre la asistencia, pero el registro todavía no', () => {
-    const w = getSessionWindow(INICIO, 'GUIA', en(0));
+  test('la asistencia abre a los 15 minutos del inicio (también para el coordinador)', () => {
+    for (const rol of ['GUIA', 'COORDINADOR_ACADEMICO', 'ADMIN']) {
+      expect(getSessionWindow(INICIO, rol, en(0)).canMarkAttendance, rol).toBe(false);
+      expect(getSessionWindow(INICIO, rol, en(14)).canMarkAttendance, rol).toBe(false);
+      expect(getSessionWindow(INICIO, rol, en(15)).canMarkAttendance, rol).toBe(true);
+    }
+  });
+
+  test('a los 15 min abre la asistencia, pero el registro todavía no', () => {
+    const w = getSessionWindow(INICIO, 'GUIA', en(15));
     expect(w.canMarkAttendance).toBe(true);
     expect(w.canRegister).toBe(false);
-    expect(w.minutesUntilRegister).toBe(REGISTER_OPEN_MIN);
+    expect(w.minutesUntilRegister).toBe(REGISTER_OPEN_MIN - 15);
   });
 
   test(`el registro abre a los ${REGISTER_OPEN_MIN} minutos exactos`, () => {

@@ -17,7 +17,7 @@ import SessionGeneralTab from '@/components/session/SessionGeneralTab'
 import SessionStudentsTab from '@/components/session/SessionStudentsTab'
 import SessionMaterialTab from '@/components/session/SessionMaterialTab'
 import SessionAdvisorMaterialTab from '@/components/session/SessionAdvisorMaterialTab'
-import { getSessionWindow, EXPIRED_MESSAGE, AUTORIZADO_MESSAGE, ATTENDANCE_WINDOW_MIN } from '@/lib/session-window'
+import { getSessionWindow, EXPIRED_MESSAGE, AUTORIZADO_MESSAGE, ATTENDANCE_WINDOW_MIN, ATTENDANCE_OPEN_MIN } from '@/lib/session-window'
 import { esSesionEvaluacion, esModuloEvaluacion } from '@/lib/evaluacion'
 
 interface CalendarioEvent {
@@ -491,14 +491,14 @@ export default function SesionPage() {
                   canMarkAttendance={windowState.canMarkAttendance && !sesionCerrada}
                   // Las 9 casillas vienen marcadas sólo mientras la sesión está por
                   // empezar o abierta: cerrada o vencida se muestra lo guardado.
-                  aplicarPorDefecto={!sesionCerrada && !windowState.isExpired}
+                  aplicarPorDefecto={!sesionCerrada && !windowState.isExpired && windowState.minutesElapsed >= 0}
                   attendanceLockedReason={
                     sesionCerrada
                       ? 'La sesión ya está cerrada — los registros son de solo lectura.'
                       : windowState.isExpired
                         ? EXPIRED_MESSAGE
-                        : (windowState.minutesElapsed < 0 && !windowState.isCoordinator)
-                          ? `El evento comienza a las ${format(new Date(evento.dia), 'HH:mm')} (faltan ${Math.abs(windowState.minutesElapsed)} min) — podrás marcar asistencia cuando inicie.`
+                        : (windowState.minutesElapsed < ATTENDANCE_OPEN_MIN)
+                          ? `El evento comienza a las ${format(new Date(evento.dia), 'HH:mm')}. La asistencia se podrá modificar desde las ${format(new Date(new Date(evento.dia).getTime() + ATTENDANCE_OPEN_MIN * 60000), 'HH:mm')} (15 min después del inicio).`
                           : null
                   }
                 />

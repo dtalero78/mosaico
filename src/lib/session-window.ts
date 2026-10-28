@@ -26,6 +26,8 @@
 
 export const ATTENDANCE_WINDOW_MIN = 1440;  // 0 .. +1440 min (24h)
 export const REGISTER_OPEN_MIN     = 30;    // +30 .. +1440 min
+/** La asistencia sólo se puede marcar/modificar desde +15 min del inicio (para TODOS los roles). */
+export const ATTENDANCE_OPEN_MIN   = 15;
 export const REGISTER_CLOSE_MIN    = 1440;  // 24 horas
 
 /** Roles que NO están atados a ventanas temporales. */
@@ -103,7 +105,7 @@ export function getSessionWindow(
   const elapsedMs = now.getTime() - startMs;
   const minutesElapsed = Math.floor(elapsedMs / 60_000);
 
-  const inAttendanceWindow = minutesElapsed >= 0 && minutesElapsed <= ATTENDANCE_WINDOW_MIN;
+  const inAttendanceWindow = minutesElapsed >= ATTENDANCE_OPEN_MIN && minutesElapsed <= ATTENDANCE_WINDOW_MIN;
   const inRegisterWindow   = minutesElapsed >= REGISTER_OPEN_MIN && minutesElapsed <= REGISTER_CLOSE_MIN;
   const expired            = minutesElapsed > ATTENDANCE_WINDOW_MIN;
 
@@ -120,7 +122,8 @@ export function getSessionWindow(
 
   return {
     isCoordinator,
-    canMarkAttendance: isCoordinator || inAttendanceWindow || porAutorizacion,
+    // Antes de +15 min del inicio nadie modifica la asistencia (tampoco el coordinador).
+    canMarkAttendance: minutesElapsed >= ATTENDANCE_OPEN_MIN && (isCoordinator || inAttendanceWindow || porAutorizacion),
     canRegister:       isCoordinator || inRegisterWindow   || porAutorizacion,
     isExpired:         !isCoordinator && expired && !porAutorizacion,
     minutesElapsed,

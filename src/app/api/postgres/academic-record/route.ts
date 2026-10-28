@@ -4,7 +4,7 @@ import { ValidationError, NotFoundError } from '@/lib/errors';
 import { autoAdvanceStep } from '@/services/student.service';
 import { autoAvanceModuloMosaico } from '@/services/modulo-avance.service';
 import { query, queryOne } from '@/lib/postgres';
-import { getSessionWindow, EXPIRED_MESSAGE } from '@/lib/session-window';
+import { getSessionWindow, EXPIRED_MESSAGE, ATTENDANCE_OPEN_MIN } from '@/lib/session-window';
 import { estaAutorizado } from '@/services/autorizacion-gestion.service';
 import { guiaIdDeSesion } from '@/services/guia-sesion.service';
 
@@ -75,8 +75,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     if (!ws.canMarkAttendance) {
       if (ws.isExpired) throw new ValidationError(EXPIRED_MESSAGE);
       throw new ValidationError(
-        ws.minutesElapsed < 0
-          ? 'El evento aún no ha comenzado — no se puede marcar asistencia todavía.'
+        ws.minutesElapsed < ATTENDANCE_OPEN_MIN
+          ? 'La asistencia sólo se puede modificar desde 15 minutos después del inicio del evento.'
           : 'Fuera de la ventana de registro de asistencia.',
       );
     }
