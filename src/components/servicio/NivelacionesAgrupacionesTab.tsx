@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import toast from 'react-hot-toast'
+import CruceNivelacionModal, { esCruceNivelacion, type CruceNivelacionDetalle } from '@/components/common/CruceNivelacionModal'
 import { UserGroupIcon } from '@heroicons/react/24/outline'
 import { ServicioPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -206,7 +207,8 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
   }
 
   /** Suma los seleccionados a una nivelación ya agendada (pasan a Pendientes). */
-  const sumarASesion = async (eventoExistenteId: string) => {
+  const [cruceSumar, setCruceSumar] = useState<{ eventoId: string; detalle: CruceNivelacionDetalle } | null>(null)
+  const sumarASesion = async (eventoExistenteId: string, cancelarCruces = false) => {
     const ids = Array.from(sel)
     if (!ids.length) { toast.error('Marca al menos un usuario'); return }
     setGuardando(true)
@@ -214,9 +216,10 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
       const res = await fetch('/api/postgres/reports/servicio/nivelaciones/gestion-grupo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ academicaIds: ids, eventoExistenteId }),
+        body: JSON.stringify({ academicaIds: ids, eventoExistenteId, cancelarCruces }),
       })
       const j = await res.json()
+      if (!res.ok && esCruceNivelacion(j?.detail)) { setCruceSumar({ eventoId: eventoExistenteId, detalle: j.detail }); return }
       if (!res.ok) throw new Error(j?.error || 'No se pudo sumar a la nivelación')
       toast.success(j?.message || 'Usuarios sumados a la nivelación')
       setSel(new Set())
@@ -257,6 +260,11 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
 
   return (
     <div>
+      {cruceSumar && (
+        <CruceNivelacionModal detalle={cruceSumar.detalle} procesando={guardando}
+          onCancel={() => setCruceSumar(null)}
+          onConfirm={() => { const id = cruceSumar.eventoId; setCruceSumar(null); sumarASesion(id, true) }} />
+      )}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
@@ -699,8 +707,9 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
   const [modulo, setModulo] = useState(grupo.modulo || '')
   const [leccion, setLeccion] = useState(grupo.leccion || '')
   const [saving, setSaving] = useState(false)
+  const [cruce, setCruce] = useState<CruceNivelacionDetalle | null>(null)
 
-  const guardar = async () => {
+  const guardar = async (cancelarCruces = false) => {
     if (!advisor) { toast.error('Elige el guía'); return }
     if (!fecha || !hora) { toast.error('Completa fecha y hora'); return }
     setSaving(true)
@@ -719,8 +728,11 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
           curso: grupo.curso, modulo, leccion,
           campaign: primero?.campaign || null,
           salon: primero?.salon || null,
+          cancelarCruces,
         }),
       }).then(x => x.json())
+      // Alumnos con otra clase a esa hora: se avisa y, si la nivelación prevalece, se reintenta.
+      if (esCruceNivelacion(r.detail)) { setCruce(r.detail); return }
       // Si un alumno no se puede agendar, el servidor NO crea la nivelación y
       // responde el motivo: el modal queda abierto para corregir (p.ej. la hora).
       if (r.error) throw new Error(r.error)
@@ -837,12 +849,16 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
         <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
           <button type="button" onClick={onClose} disabled={saving}
             className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">Cancelar</button>
-          <button type="button" onClick={guardar} disabled={saving}
+          <button type="button" onClick={() => guardar()} disabled={saving}
             className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">
             {saving ? 'Creando…' : 'Crear nivelación y agendar'}
           </button>
         </div>
       </div>
+      {cruce && (
+        <CruceNivelacionModal detalle={cruce} procesando={saving}
+          onCancel={() => setCruce(null)} onConfirm={() => { setCruce(null); guardar(true) }} />
+      )}
     </div>
   )
 }

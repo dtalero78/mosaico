@@ -7,7 +7,7 @@
 import 'server-only';
 import { CalendarioRepository } from '@/repositories/calendar.repository';
 import { BookingRepository } from '@/repositories/booking.repository';
-import { ValidationError, NotFoundError, ConflictError } from '@/lib/errors';
+import { ValidationError, NotFoundError, ConflictError, AppError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { eventEndDate } from '@/lib/event-duration';
 import { registrarSolicitudPorAgendamientoDirecto } from '@/services/nivelacion.service';
@@ -38,6 +38,13 @@ interface EnrollInput {
    * siempre para los roles que se saltaban el cupo.
    */
   masivo?: boolean;
+  /**
+   * Nivelación que PREVALECE: si el alumno tiene otra clase que se cruza, se cancela
+   * ESE agendamiento (sólo para él; el evento sigue) y se agenda la nivelación. Sin
+   * esta marca el cruce se rechaza con el detalle (`cruce_nivelacion`) para que quien
+   * agenda lo confirme.
+   */
+  cancelarCruces?: boolean;
 }
 
 const ROLES_SIN_LIMITE_CAPACIDAD = ['COORDINADOR_ACADEMICO', 'SERVICIO_JEFE', 'SUPER_ADMIN', 'ADMIN', 'ADMINISTRACION_JEFE'];
@@ -174,8 +181,51 @@ export async function enrollStudents(input: EnrollInput) {
   // This prevents "ghost bookings" where INSERT succeeds but incrementInscritos fails.
   const { transaction } = await import('@/lib/postgres');
   const bookings: any[] = [];
+  let canceladas: any[] = [];
 
   await transaction(async (client) => {
+    // NIVELACIÓN: los cruces con otras clases se avisan y, si quien agenda confirma que
+    // la nivelación prevalece, se cancela ese agendamiento (sólo el de este alumno).
+    if (String(event.tipo || event.evento || '').toUpperCase() === 'NIVELACION') {
+      const ini = new Date(event.dia);
+      const fin = eventEndDate(ini, event.tipo || event.evento || '', event.nombreEvento, (event as any).duracionMin);
+      const cruces: any[] = [];
+      for (const st of students) {
+        const { rows } = await client.query(
+          `SELECT b."_id" AS "bookingId", COALESCE(b."eventoId", b."idEvento") AS "eventoId", b."nombreEvento",
+                  COALESCE(b."tipo", b."tipoEvento", '') AS tipo, b."fechaEvento"::text AS ts
+             FROM "ACADEMICA_BOOKINGS" b
+            WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
+              AND b."cancelo" = false
+              AND COALESCE(b."eventoId", b."idEvento") <> $4
+              AND UPPER(COALESCE(b."tipo", b."tipoEvento", '')) <> 'NIVELACION'
+              AND b."fechaEvento" < $3::timestamptz
+              AND b."fechaEvento" + interval '60 minutes' > $2::timestamptz`,
+          [st._id, ini.toISOString(), fin.toISOString(), input.eventId]);
+        for (const r of rows) {
+          cruces.push({
+            bookingId: r.bookingId, eventoId: r.eventoId, studentId: st._id,
+            alumno: `${st.primerNombre || ''} ${st.primerApellido || ''}`.trim(),
+            evento: r.nombreEvento || r.tipo || 'Clase', tipo: r.tipo, fecha: new Date(r.ts).toISOString(),
+          });
+        }
+      }
+      if (cruces.length) {
+        if (!input.cancelarCruces) {
+          throw new AppError(
+            'Hay alumnos con otra clase en el mismo horario: confirma si la nivelación prevalece.',
+            409, 'CRUCE_NIVELACION', { tipo: 'cruce_nivelacion', cruces });
+        }
+        for (const c of cruces) {
+          await client.query(`UPDATE "ACADEMICA_BOOKINGS" SET "cancelo" = true, "_updatedDate" = NOW() WHERE "_id" = $1`, [c.bookingId]);
+          if (c.eventoId) {
+            await client.query(`UPDATE "CALENDARIO" SET "inscritos" = GREATEST(COALESCE("inscritos",0) - 1, 0), "_updatedDate" = NOW() WHERE "_id" = $1`, [c.eventoId]);
+          }
+        }
+        console.log(`[enroll] nivelación ${input.eventId}: canceladas ${cruces.length} clase(s) que se cruzaban, por ${input.agendadoPorEmail || 'desconocido'}`);
+        canceladas = cruces;
+      }
+    }
     // Cupo con el evento BLOQUEADO: quien llegue a la vez espera aquí y cuenta
     // después, ya con estos agendamientos dentro.
     if (limite > 0) {
@@ -313,6 +363,7 @@ export async function enrollStudents(input: EnrollInput) {
   return {
     bookings,
     enrolled: bookings.length,
+    cancelados: canceladas,
   };
 }
 

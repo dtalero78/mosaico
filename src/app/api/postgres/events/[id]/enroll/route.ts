@@ -28,11 +28,14 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
     // decide el permiso, resuelto aquí con la sesión.
     autorizarSobrecupo: body.autorizarSobrecupo === true && await autorizaSobrecupo(session),
     autorizadoPor: session?.user?.email || undefined,
+    // Nivelación que prevalece sobre otra clase del alumno (se confirma en el modal).
+    cancelarCruces: body.cancelarCruces === true,
   });
 
   return successResponse({
     bookings: result.bookings,
     enrolled: result.enrolled,
+    cancelados: result.cancelados,
     message: `${result.enrolled} estudiante(s) inscrito(s) exitosamente`,
   });
 });

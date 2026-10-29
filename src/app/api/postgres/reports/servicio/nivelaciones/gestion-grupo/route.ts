@@ -1,7 +1,7 @@
 import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
-import { ValidationError } from '@/lib/errors'
+import { AppError, ValidationError } from '@/lib/errors'
 import { createEvent } from '@/services/calendar.service'
 import { enrollStudents } from '@/services/enrollment.service'
 import { ServicioPermission } from '@/types/permissions'
@@ -87,9 +87,11 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         // Gestión de grupo crea la nivelación con el cupo que se acaba de
         // elegir: agendamiento masivo, sin modal de sobrecupo.
         masivo: true,
+        cancelarCruces: body?.cancelarCruces === true,
       })
       sumados = res.enrolled
     } catch (e: any) {
+      if (e instanceof AppError && e.code === 'CRUCE_NIVELACION') throw e
       throw new ValidationError(`No se pudo sumar a la nivelación: ${e?.message || 'error al agendar a los estudiantes'}`)
     }
     await limpiarGrupoBorrador(academicaIds)
@@ -168,6 +170,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       sessionRole: (session?.user as any)?.role || undefined,
       // Igual que arriba: la nivelación se acaba de crear con su cupo.
       masivo: true,
+      cancelarCruces: body?.cancelarCruces === true,
     })
     enrolled = res.enrolled
   } catch (e: any) {
@@ -176,6 +179,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
          AND NOT EXISTS (SELECT 1 FROM "ACADEMICA_BOOKINGS" b WHERE b."eventoId" = c."_id" OR b."idEvento" = c."_id")`,
       [event._id]
     ).catch(() => {})
+    if (e instanceof AppError && e.code === 'CRUCE_NIVELACION') throw e
     throw new ValidationError(
       `No se creó la nivelación: ${e?.message || 'no se pudo agendar a los estudiantes'}. ` +
       'El grupo sigue en Agrupaciones para corregirlo.'

@@ -12,6 +12,7 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { usePermissions } from '@/hooks/usePermissions'
 import SobrecupoModal, { esSobrecupo, type SobrecupoDetalle } from '@/components/common/SobrecupoModal'
+import CruceNivelacionModal, { esCruceNivelacion, type CruceNivelacionDetalle } from '@/components/common/CruceNivelacionModal'
 import { StudentPermission, AcademicoPermission, Role } from '@/types/permissions'
 import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
 
@@ -82,6 +83,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [isCreatingEvent, setIsCreatingEvent] = useState(false)
   /** Detalle del evento lleno; abre el modal de sobrecupo cuando llega. */
   const [sobrecupo, setSobrecupo] = useState<SobrecupoDetalle | null>(null)
+  /** Clases del alumno que se cruzan con la nivelación; abre el aviso de confirmación. */
+  const [cruceNivelacion, setCruceNivelacion] = useState<CruceNivelacionDetalle | null>(null)
 
   // Step management state
   const [steps, setSteps] = useState<{_id: string, step: string, checkCompletado: boolean}[]>([])
@@ -525,7 +528,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
     }
   }
 
-  const handleSaveNewEvent = async (autorizarSobrecupo = false) => {
+  const handleSaveNewEvent = async (autorizarSobrecupo = false, cancelarCruces = false) => {
     console.log('🔍 handleSaveNewEvent called - selectedTime:', selectedTime)
 
     if (blockSchedulingByInactive) {
@@ -607,6 +610,8 @@ export default function StudentAcademic({ student, classes: initialClasses, view
           agendadoPorRol: usuarioAgenda.agendadoPorRol || '',
           // Sólo dice que se marcó la casilla; el permiso lo valida el servidor.
           autorizarSobrecupo,
+          // La nivelación prevalece sobre la clase que se cruza (se confirma en el aviso).
+          cancelarCruces,
         })
       })
 
@@ -646,6 +651,11 @@ export default function StudentAcademic({ student, classes: initialClasses, view
           const errData = await response.json()
           // Evento lleno: en vez del alert genérico se abre el modal, que dice
           // cuánto se pasa y deja autorizarlo a quien tenga el permiso.
+          if (esCruceNivelacion(errData.detail)) {
+            setCruceNivelacion(errData.detail)
+            setIsCreatingEvent(false)
+            return
+          }
           if (esSobrecupo(errData.detail)) {
             setSobrecupo(errData.detail)
             setIsCreatingEvent(false)
@@ -1815,6 +1825,15 @@ export default function StudentAcademic({ student, classes: initialClasses, view
             </div>
           </div>
         </div>
+      )}
+
+      {cruceNivelacion && (
+        <CruceNivelacionModal
+          detalle={cruceNivelacion}
+          procesando={isCreatingEvent}
+          onCancel={() => setCruceNivelacion(null)}
+          onConfirm={() => { setCruceNivelacion(null); handleSaveNewEvent(false, true) }}
+        />
       )}
 
       {/* Evento lleno: se autoriza el sobrecupo o se elige otro horario */}
