@@ -293,3 +293,24 @@ export async function getSessionComercialScope(session: any): Promise<ComercialS
   }
   return getUserComercialScope(session?.user?.email || '');
 }
+
+/** Diagnóstico de solo lectura: columnas de "User", tablas parecidas a filial/equipo y valores distintos de las columnas candidatas. */
+export async function crmEsquema() {
+  const pool = getCrmPool();
+  if (!pool) return { configurado: false };
+  const cols = await pool.query(
+    `SELECT table_name, column_name, data_type FROM information_schema.columns
+      WHERE table_schema = 'public' AND (table_name = 'User'
+         OR table_name ILIKE '%filial%' OR table_name ILIKE '%branch%' OR table_name ILIKE '%team%' OR table_name ILIKE '%sucursal%'
+         OR column_name ILIKE '%filial%' OR column_name ILIKE '%branch%' OR column_name ILIKE '%team%' OR column_name ILIKE '%sucursal%' OR column_name ILIKE '%company%' OR column_name ILIKE '%empresa%' OR column_name ILIKE '%group%')
+      ORDER BY table_name, ordinal_position`);
+  const valores: Record<string, any[]> = {};
+  for (const c of cols.rows) {
+    if (c.table_name !== 'User' || !/filial|branch|team|sucursal|company|empresa|group/i.test(c.column_name)) continue;
+    try {
+      const r = await pool.query(`SELECT "${c.column_name}"::text AS v, COUNT(*)::int AS n FROM "User" WHERE "isActive" IS TRUE GROUP BY 1 ORDER BY n DESC LIMIT 30`);
+      valores[c.column_name] = r.rows;
+    } catch { /* ignora */ }
+  }
+  return { configurado: true, columnas: cols.rows, valores };
+}
