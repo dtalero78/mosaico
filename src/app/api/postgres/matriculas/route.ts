@@ -41,7 +41,7 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
             COALESCE(p."fechaContrato", p."inicioContrato", p."_createdDate"::date)::text AS "fechaContrato",
             p."finalContrato"::text AS "finalContrato",
             COALESCE(bc."n", 0) AS "numBeneficiarios",
-            bc."campanias", bc."cursos",
+            COALESCE(p."campaign", bc."campanias") AS "campanias", bc."cursos",
             CASE
               WHEN LOWER(TRIM(COALESCE(p."aprobacion",''))) IN ('aprobado','aprobada') THEN 'Aprobados'
               WHEN UPPER(TRIM(COALESCE(p."aprobacion",''))) = 'FINALIZADA' OR p."estado" = 'FINALIZADA' THEN 'Finalizado'

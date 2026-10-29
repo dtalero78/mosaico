@@ -511,6 +511,7 @@ export async function createFullContract(input: CreateContractInput) {
   if (beneficiarios?.length) allBeneficiarios.push(...beneficiarios);
 
   const titularId = ids.person();
+  const titularCampaign: string | null = (allBeneficiarios.find((x: any) => x?.campaign)?.campaign as string) || (titular as any).campaign || null;
   await transaction(async (client) => {
     // 1. TITULAR
     const titularResult = await client.query(
@@ -519,8 +520,8 @@ export async function createFullContract(input: CreateContractInput) {
         "plataforma", "ingresos", "empresa", "cargo", "genero",
         "referenciaUno", "parentezcoRefUno", "telefonoRefUno", "referenciaDos", "parentezcoRefDos", "telefonoRefDos",
         "asesor", "asesorMail", "tipoUsuario", "contrato", "vigencia", "fechaContrato", "finalContrato", "plan",
-        "apoderado", "apoderadoTelefono", "apoderadoMail", "esCursoImpulsa", "extemporanea", "modulo", "origen", "_createdDate", "_updatedDate")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$34,'TITULAR',$25,$26,NOW(),$27::date,$28,$29,$30,$31,$32,$33,$35,'POSTGRES',NOW(),NOW()) RETURNING *`,
+        "apoderado", "apoderadoTelefono", "apoderadoMail", "esCursoImpulsa", "extemporanea", "modulo", "campaign", "origen", "_createdDate", "_updatedDate")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$34,'TITULAR',$25,$26,NOW(),$27::date,$28,$29,$30,$31,$32,$33,$35,$36,'POSTGRES',NOW(),NOW()) RETURNING *`,
       [titularId, titular.numeroId, titular.primerNombre, titular.segundoNombre || null,
        titular.primerApellido, titular.segundoApellido || null,
        titular.email || null, titular.celular || null, titular.telefono || null,
@@ -532,7 +533,10 @@ export async function createFullContract(input: CreateContractInput) {
        titular.apoderado || null, titular.apoderadoTelefono || null, titular.apoderadoMail || null, titular.esCursoImpulsa === true, titular.extemporanea === true,
        titular.asesorMail || null,
        // Contrato "Módulo" (vigencia fija de 3 meses). Vive sólo en el titular.
-       financial?.modulo === true]
+       financial?.modulo === true,
+       // Campaña en que NACE el contrato: la del primer beneficiario. No cambia luego,
+       // aunque los alumnos se muevan de campaña por ajustes de curso.
+       titularCampaign]
     );
     created.titular = titularResult.rows[0];
 

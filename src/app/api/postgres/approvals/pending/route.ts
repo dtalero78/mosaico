@@ -20,7 +20,7 @@ export const GET = handlerWithAuth(async () => {
             -- antes de intentar la aprobación y no sólo al chocar con el error.
             COALESCE(p."gestionContratoListo", false) AS "gestionContratoListo",
             p."_createdDate", p."fechaCreacion",
-            camp."campaign"
+            COALESCE(p."campaign", camp."campaign") AS "campaign"
      FROM "PEOPLE" p
      LEFT JOIN LATERAL (
        SELECT "campaign" FROM "PEOPLE"

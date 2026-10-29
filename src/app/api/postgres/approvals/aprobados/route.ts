@@ -64,7 +64,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
             p."aprobacion", p."estado", p."estadoInactivo", p."hashConsentimiento", p."extemporanea",
             p."finalContrato"::text AS "finalContrato",
             p."_createdDate", p."fechaCreacion",
-            camp."campaign", ant."campaign" AS "campaignAnterior"
+            COALESCE(p."campaign", camp."campaign") AS "campaign", ant."campaign" AS "campaignAnterior"
      FROM "PEOPLE" p
      LEFT JOIN LATERAL (
        SELECT "campaign" FROM "PEOPLE"
@@ -77,7 +77,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
             LATERAL jsonb_array_elements(
               CASE WHEN jsonb_typeof(b."cupoHistory") = 'array' THEN b."cupoHistory" ELSE '[]'::jsonb END
             ) h
-       WHERE camp."campaign" IS NULL
+       WHERE p."campaign" IS NULL AND camp."campaign" IS NULL
          AND b."contrato" = p."contrato" AND b."tipoUsuario" = 'BENEFICIARIO'
          AND COALESCE(h->>'campaign', '') <> ''
        ORDER BY h->>'fecha' DESC

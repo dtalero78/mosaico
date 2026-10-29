@@ -62,8 +62,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   params.push(hasta); conds.push(`p."finalContrato" <= $${params.length}::date`);
   if (campaign) {
     params.push(campaign);
-    conds.push(`EXISTS (SELECT 1 FROM "PEOPLE" b WHERE b."contrato" = p."contrato"
-                          AND b."tipoUsuario" = 'BENEFICIARIO' AND b."campaign" = $${params.length})`);
+    // Campaña del TITULAR = en la que nació el contrato (no cambia con los ajustes de curso).
+    conds.push(`COALESCE(p."campaign", (SELECT b."campaign" FROM "PEOPLE" b WHERE b."contrato" = p."contrato"
+                          AND b."tipoUsuario" = 'BENEFICIARIO' AND b."campaign" IS NOT NULL LIMIT 1)) = $${params.length}`);
   }
   if (curso) {
     params.push(curso);
@@ -82,7 +83,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             p."finalContrato"::text AS "finalContrato",
             (p."finalContrato"::date - $${params.length + 1}::date)::int AS "diasRestantes",
             COALESCE(p."modulo", false) AS modulo,
-            bf.campanias, bf.cursos
+            COALESCE(p."campaign", bf.campanias) AS campanias, bf.cursos
        FROM "PEOPLE" p
        LEFT JOIN LATERAL (
          SELECT STRING_AGG(DISTINCT b."campaign", ', ') AS campanias,
@@ -100,9 +101,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   // elegidos), así elegir una campaña no hace desaparecer las demás.
   const opciones = (await query<any>(
     `SELECT
-       (SELECT ARRAY_AGG(DISTINCT b."campaign" ORDER BY b."campaign")
-          FROM "PEOPLE" p JOIN "PEOPLE" b ON b."contrato" = p."contrato" AND b."tipoUsuario" = 'BENEFICIARIO'
-         WHERE ${UNIVERSO}${scopeSql} AND b."campaign" IS NOT NULL AND b."campaign" <> '') AS campanias,
+       (SELECT ARRAY_AGG(DISTINCT p."campaign" ORDER BY p."campaign")
+          FROM "PEOPLE" p
+         WHERE ${UNIVERSO}${scopeSql} AND p."campaign" IS NOT NULL AND p."campaign" <> '') AS campanias,
        (SELECT ARRAY_AGG(DISTINCT UPPER(b."tipoCurso") ORDER BY UPPER(b."tipoCurso"))
           FROM "PEOPLE" p JOIN "PEOPLE" b ON b."contrato" = p."contrato" AND b."tipoUsuario" = 'BENEFICIARIO'
          WHERE ${UNIVERSO}${scopeSql} AND b."tipoCurso" IS NOT NULL AND b."tipoCurso" <> '') AS cursos,
