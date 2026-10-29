@@ -414,9 +414,6 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/aprobacion/aprobados': [
     'APROBACION.APROBADOS.VER' as Permission,
   ],
-  '/dashboard/aprobacion/gestion': [
-    'APROBACION.GESTION.VER' as Permission,
-  ],
   '/dashboard/aprobacion/libro-produccion': [
     'APROBACION.LIBRO_PRODUCCION.VER' as Permission,
   ],

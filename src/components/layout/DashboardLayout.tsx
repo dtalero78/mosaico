@@ -129,7 +129,6 @@ const getNavigation = (userEmail: string, userRole: string) => [
     children: [
       { name: 'Centro de Aprobaciones', href: '/dashboard/aprobacion' },
       { name: 'Aprobados',              href: '/dashboard/aprobacion/aprobados' },
-      { name: 'Gestión Aprobaciones',   href: '/dashboard/aprobacion/gestion' },
       { name: 'Libro de Producción',    href: '/dashboard/aprobacion/libro-produccion', newTab: true },
     ],
   },
@@ -538,9 +537,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/aprobacion/aprobados': [
       AprobacionPermission.APROBADOS_VER,
     ],
-    '/dashboard/aprobacion/gestion': [
-      AprobacionPermission.GESTION_VER,
-    ],
     '/dashboard/aprobacion/libro-produccion': [
       AprobacionPermission.LIBRO_PRODUCCION_VER,
     ],
@@ -624,7 +620,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     'Aprobación': [
       // Acceso por ítem (MOSAICO)
       AprobacionPermission.CENTRO_VER,
-      AprobacionPermission.GESTION_VER,
       AprobacionPermission.MIGRACION_APROBAR,
       AprobacionPermission.LIBRO_PRODUCCION_VER,
       // APROBACION.MODIFICAR.*

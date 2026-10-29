@@ -1306,13 +1306,6 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Ver el ítem del submenú y la página Gestión de Aprobaciones (/dashboard/aprobacion)',
   },
   {
-    code: AprobacionPermission.GESTION_VER,
-    module: Module.APROBACION,
-    section: 'Acceso (ítems del menú)',
-    name: 'Ítem "Gestión Aprobaciones"',
-    description: 'Ver el ítem del submenú y la página Gestión Aprobaciones (/dashboard/aprobacion/gestion)',
-  },
-  {
     code: AprobacionPermission.APROBADOS_VER,
     module: Module.APROBACION,
     section: 'Acceso (ítems del menú)',
