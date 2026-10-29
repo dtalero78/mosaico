@@ -145,6 +145,42 @@ const NIVEL_COLUMNA: [keyof EscaleraComercial, number][] = [
 
 const escaleraCache = new Map<string, { v: EscaleraComercial | null; exp: number }>();
 
+const sinAcentos = (t: string) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/s+/g, ' ').trim();
+
+let usuariosCrmCache: { rows: any[]; exp: number } | null = null;
+async function usuariosCrm(pool: Pool): Promise<any[]> {
+  if (usuariosCrmCache && usuariosCrmCache.exp > Date.now()) return usuariosCrmCache.rows;
+  const r = await pool.query(`SELECT id, email, "firstName", "lastName", "position"::text AS position, "supervisorId", "filial", "isActive" FROM "User"`);
+  usuariosCrmCache = { rows: r.rows, exp: Date.now() + 30 * 60 * 1000 };
+  return r.rows;
+}
+
+/**
+ * Respaldo cuando el correo/nombre exacto no aparece: en los contratos el asesor viene con
+ * otro correo (personal) o con el nombre completo ("Alejandra Jasmin Oñate Toledo") y en el
+ * CRM figura de otra forma ("Alejandra Oñate"). Se busca por nombre sin acentos: todas las
+ * palabras del nombre del CRM (mín. 2) están en el nombre del contrato. Sólo se acepta si
+ * hay UN solo usuario que cumpla (prefiriendo activos), para no asignar a un homónimo.
+ * Devuelve la cadena hacia arriba con la misma forma que la consulta principal.
+ */
+async function cadenaPorNombreAproximado(pool: Pool, nombre: string): Promise<any[]> {
+  const tokens = new Set(sinAcentos(nombre).split(' ').filter(Boolean));
+  if (tokens.size < 2) return [];
+  const users = await usuariosCrm(pool);
+  const cand = users.filter((u) => {
+    const t = sinAcentos(`${u.firstName || ''} ${u.lastName || ''}`).split(' ').filter(Boolean);
+    return t.length >= 2 && t.every((x) => tokens.has(x));
+  });
+  const activos = cand.filter((u) => u.isActive === true);
+  const unicos = activos.length ? activos : cand;
+  if (unicos.length !== 1) return [];
+  const porId = new Map(users.map((u) => [u.id, u]));
+  const cadena: any[] = [];
+  let cur: any = unicos[0];
+  for (let d = 0; cur && d < 20; d++) { cadena.push({ ...cur, depth: d }); cur = cur.supervisorId ? porId.get(cur.supervisorId) : null; }
+  return cadena;
+}
+
 /**
  * Escalera completa del asesor (ejecutivo → full executive → jefe de grupo → gerente →
  * gerente división → sales manager), subiendo por `supervisorId`. Para cada rango toma el
@@ -180,14 +216,16 @@ export async function resolverEscalera(correo?: string | null, nombre?: string |
     SELECT "firstName", "lastName", "position"::text AS position, "filial", depth FROM up ORDER BY depth ASC`;
   try {
     const r = await pool.query(sql, [email || name]);
+    let rows: any[] = r.rows;
+    if (!rows.length && name) rows = await cadenaPorNombreAproximado(pool, name);
     let v: EscaleraComercial | null = null;
-    if (r.rows.length) {
+    if (rows.length) {
       v = { ejecutivo: '', fullExecutive: '', jefeGrupo: '', gerente: '', gerenteDivision: '', salesManager: '', filial: '' };
-      v.filial = String(r.rows.find((row: any) => String(row.filial || '').trim())?.filial || '').trim();
+      v.filial = String(rows.find((row: any) => String(row.filial || '').trim())?.filial || '').trim();
       const nom = (row: any) => `${row.firstName || ''} ${row.lastName || ''}`.replace(/\s+/g, ' ').trim();
-      v.ejecutivo = nom(r.rows[0]);
+      v.ejecutivo = nom(rows[0]);
       for (const [col, nivel] of NIVEL_COLUMNA) {
-        const hit = r.rows.find((row: any) => (ORDEN_RANGO[row.position] ?? -1) >= nivel);
+        const hit = rows.find((row: any) => (ORDEN_RANGO[row.position] ?? -1) >= nivel);
         if (hit) v[col] = nom(hit);
       }
     }
