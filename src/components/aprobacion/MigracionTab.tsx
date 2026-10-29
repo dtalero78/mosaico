@@ -83,6 +83,9 @@ export default function MigracionTab({ onCount }: { onCount?: (n: number) => voi
   })
   const [loading, setLoading] = useState(true)
   const [errorCarga, setErrorCarga] = useState<string | null>(null)
+  // Catálogo de cursos (campaña · curso · salón): alimenta los desplegables aunque
+  // todavía no haya contratos migrados que mostrar.
+  const [catalogo, setCatalogo] = useState<{ campaign: string; tipoCurso: string; salon: string | null }[]>([])
 
   // Filtros
   const [buscar, setBuscar] = useState('')
@@ -120,24 +123,42 @@ export default function MigracionTab({ onCount }: { onCount?: (n: number) => voi
   }
 
   useEffect(() => { cargar() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetch('/api/postgres/cursos-campaign', { cache: 'no-store' })
+      .then(r => r.json()).then(j => setCatalogo(j?.rows || [])).catch(() => {})
+  }, [])
 
   // Opciones de los desplegables, sacadas de los propios contratos: así nunca se
   // ofrece una opción que devolvería la lista vacía.
+  // Se unen el catálogo de cursos y lo que traen los contratos, sin las campañas que
+  // este flujo no aprueba (la en matrícula y la anterior).
+  const vetadas = useMemo(
+    () => new Set([...excluidas.enMatricula, ...(excluidas.anterior ? [excluidas.anterior] : [])]),
+    [excluidas]
+  )
+  const opciones = useMemo(() => {
+    const filas: { campaign: string; tipoCurso: string; salon: string }[] = []
+    for (const r of catalogo) {
+      if (r.campaign && !vetadas.has(r.campaign)) filas.push({ campaign: r.campaign, tipoCurso: r.tipoCurso || '', salon: r.salon || '' })
+    }
+    for (const c of contratos) for (const b of c.beneficiarios) {
+      if (b.campaign) filas.push({ campaign: b.campaign, tipoCurso: b.tipoCurso || '', salon: b.salon || '' })
+    }
+    return filas
+  }, [catalogo, contratos, vetadas])
   const opcionesCampana = useMemo(
-    () => Array.from(new Set(contratos.flatMap(campanasDe))).sort(),
-    [contratos]
+    () => Array.from(new Set(opciones.map(o => o.campaign))).sort(),
+    [opciones]
   )
   const opcionesCurso = useMemo(
-    () => Array.from(new Set(contratos.flatMap(c => c.beneficiarios
-      .filter(b => !campaign || b.campaign === campaign)
-      .map(b => b.tipoCurso).filter(Boolean)))).sort() as string[],
-    [contratos, campaign]
+    () => Array.from(new Set(opciones.filter(o => !campaign || o.campaign === campaign).map(o => o.tipoCurso).filter(Boolean))).sort(),
+    [opciones, campaign]
   )
   const opcionesSalon = useMemo(
-    () => Array.from(new Set(contratos.flatMap(c => c.beneficiarios
-      .filter(b => (!campaign || b.campaign === campaign) && (!curso || b.tipoCurso === curso))
-      .map(b => b.salon).filter(Boolean)))).sort() as string[],
-    [contratos, campaign, curso]
+    () => Array.from(new Set(opciones
+      .filter(o => (!campaign || o.campaign === campaign) && (!curso || o.tipoCurso === curso))
+      .map(o => o.salon).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es', { numeric: true })),
+    [opciones, campaign, curso]
   )
 
   const filtrados = useMemo(() => {
@@ -267,51 +288,51 @@ export default function MigracionTab({ onCount }: { onCount?: (n: number) => voi
 
       {/* Filtros */}
       <div className="card p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-12 gap-4 items-end">
           <div className="lg:col-span-2">
-            <label htmlFor="mig-buscar" className="block text-sm font-medium text-gray-700 mb-1">Buscar por apellido, nombre o contrato</label>
+            <label htmlFor="mig-buscar" className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">Apellido, nombre o contrato</label>
             <input id="mig-buscar" type="text" value={buscar} onChange={e => setBuscar(e.target.value)}
               placeholder="Apellido, nombre o contrato…"
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+              className="w-full h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
           </div>
           <div className="lg:col-span-2">
-            <label htmlFor="mig-estado" className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+            <label htmlFor="mig-estado" className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">Estado</label>
             <select id="mig-estado" value={estado} onChange={e => setEstado(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              className="w-full h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
               {ESTADOS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <div className="lg:col-span-2">
-            <label htmlFor="mig-campana" className="block text-sm font-medium text-gray-700 mb-1">Campaña</label>
+            <label htmlFor="mig-campana" className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">Campaña</label>
             <select id="mig-campana" value={campaign} onChange={e => { setCampaign(e.target.value); setCurso(''); setSalon('') }}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              className="w-full h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
               <option value="">Todas</option>
               {opcionesCampana.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="lg:col-span-2">
-            <label htmlFor="mig-curso" className="block text-sm font-medium text-gray-700 mb-1">Curso</label>
+            <label htmlFor="mig-curso" className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">Curso</label>
             <select id="mig-curso" value={curso} onChange={e => { setCurso(e.target.value); setSalon('') }}
-              className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              className="w-full h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
               <option value="">Todos</option>
               {opcionesCurso.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="lg:col-span-1">
-            <label htmlFor="mig-salon" className="block text-sm font-medium text-gray-700 mb-1">Salón</label>
+            <label htmlFor="mig-salon" className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">Salón</label>
             <select id="mig-salon" value={salon} onChange={e => setSalon(e.target.value)}
-              className="w-full px-2 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              className="w-full h-10 px-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
               <option value="">Todos</option>
               {opcionesSalon.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div className="lg:col-span-3">
-            <span className="block text-sm font-medium text-gray-700 mb-1">Rango de fechas</span>
+            <span className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">Rango de fechas</span>
             <div className="flex gap-2">
               <input type="date" aria-label="Desde" value={desde} onChange={e => setDesde(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                className="flex-1 min-w-0 h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
               <input type="date" aria-label="Hasta" value={hasta} onChange={e => setHasta(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                className="flex-1 min-w-0 h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
             </div>
           </div>
         </div>
