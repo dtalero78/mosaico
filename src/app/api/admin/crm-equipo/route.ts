@@ -1,7 +1,7 @@
 import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { ForbiddenError } from '@/lib/errors';
-import { getUserComercialScope } from '@/lib/crm';
+import { getUserComercialScope, resolverEscalera } from '@/lib/crm';
 import { query } from '@/lib/postgres';
 
 /**
@@ -21,5 +21,6 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     titulares = (await query(`SELECT COUNT(*)::int n FROM "PEOPLE" WHERE "tipoUsuario"='TITULAR' AND COALESCE("contrato",'') NOT LIKE 'PRB-%' AND ${cond}`, [scope.equipo])).rows[0].n;
     porAsesor = (await query(`SELECT "asesor", COUNT(*)::int n FROM "PEOPLE" WHERE "tipoUsuario"='TITULAR' AND COALESCE("contrato",'') NOT LIKE 'PRB-%' AND ${cond} GROUP BY 1 ORDER BY n DESC LIMIT 40`, [scope.equipo])).rows;
   }
-  return successResponse({ scope: { seeAll: scope.seeAll, position: scope.position, liderCorreo: scope.liderCorreo, equipoSize: scope.equipo.length, equipo: scope.equipo }, titulares, porAsesor });
+  const escalera = await resolverEscalera(email, null);
+  return successResponse({ escalera, scope: { seeAll: scope.seeAll, position: scope.position, liderCorreo: scope.liderCorreo, equipoSize: scope.equipo.length, equipo: scope.equipo }, titulares, porAsesor });
 });

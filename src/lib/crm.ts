@@ -80,7 +80,7 @@ export async function resolverLiderComercial(
   // devuelve el primer nodo (incluyéndose a sí mismo) con rango de líder.
   const sql = `
     WITH RECURSIVE seed AS (
-      SELECT id, "firstName", "lastName", email, "position", "supervisorId", "filial"
+      SELECT id, "firstName", "lastName", email, "position", "supervisorId"
         FROM "User"
        WHERE ${email ? `lower(email) = $1` : `lower("firstName" || ' ' || "lastName") = lower($1)`}
        ORDER BY ("isActive" IS TRUE) DESC
@@ -199,7 +199,7 @@ export async function resolverEscalera(correo?: string | null, nombre?: string |
 
   const sql = `
     WITH RECURSIVE seed AS (
-      SELECT id, "firstName", "lastName", email, "position", "supervisorId"
+      SELECT id, "firstName", "lastName", email, "position", "supervisorId", "filial"
         FROM "User"
        WHERE ${email ? `lower(email) = $1` : `lower("firstName" || ' ' || "lastName") = lower($1)`}
        ORDER BY ("isActive" IS TRUE) DESC
