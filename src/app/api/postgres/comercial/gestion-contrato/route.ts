@@ -62,11 +62,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const role = (session as any)?.user?.role;
   const email = (session as any)?.user?.email || '';
   const scope = (role === 'SUPER_ADMIN' || role === 'ADMIN')
-    ? { seeAll: true, liderCorreo: null as string | null }
+    ? { seeAll: true, liderCorreo: null as string | null, equipo: [] as string[] }
     : await getUserComercialScope(email);
   // Fragmento de scope para las consultas de dropdowns (usan $1 propio).
-  const scopeFrag = scope.seeAll ? '' : ` AND LOWER(p."liderComercialCorreo") = LOWER($1)`;
-  const scopeArgs: any[] = scope.seeAll ? [] : [scope.liderCorreo];
+  const scopeFrag = scope.seeAll ? '' : ` AND ARRAY[LOWER(COALESCE(p."liderComercialCorreo",'')), LOWER(COALESCE(p."asesorMail",'')), LOWER(TRIM(COALESCE(p."asesor",'')))] && $1::text[]`;
+  const scopeArgs: any[] = scope.seeAll ? [] : [scope.equipo];
 
   // El filtro Estado decide el UNIVERSO, no sólo acota la bandeja: vacío = la
   // bandeja de trabajo (lo pendiente); cualquier otro valor levanta el corte de
@@ -85,7 +85,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     const params: any[] = [];
     const add = (sql: (n: number) => string, value: any) => { params.push(value); where.push(sql(params.length)); };
 
-    if (!scope.seeAll) add((n) => `LOWER(p."liderComercialCorreo") = LOWER($${n})`, scope.liderCorreo);
+    if (!scope.seeAll) add((n) => `ARRAY[LOWER(COALESCE(p."liderComercialCorreo",'')), LOWER(COALESCE(p."asesorMail",'')), LOWER(TRIM(COALESCE(p."asesor",'')))] && $${n}::text[]`, scope.equipo);
     if (asesor) add((n) => `p."asesor" = $${n}`, asesor);
     if (contrato) add((n) => `p."contrato" ILIKE $${n}`, `%${contrato}%`);
     if (numeroId) add((n) => `p."numeroId" ILIKE $${n}`, `%${numeroId}%`);

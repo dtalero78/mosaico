@@ -53,13 +53,13 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   for (const id of ids) {
     const t = await queryOne<any>(
-      `SELECT "_id","contrato","aprobacion","hashConsentimiento","gestionContratoListo","liderComercialCorreo"
+      `SELECT "_id","contrato","aprobacion","hashConsentimiento","gestionContratoListo","liderComercialCorreo","asesorMail","asesor"
          FROM "PEOPLE" WHERE "_id" = $1 AND "tipoUsuario" = 'TITULAR'`, [id]);
     if (!t || !t.contrato) { results.push({ titularId: id, contrato: id, status: 'rechazado', error: 'No se encontró el titular o no tiene contrato.' }); continue; }
 
     const rechazo =
       /^PRB-/i.test(t.contrato) ? 'Es un contrato de prueba (se purga en Mantenimiento › Contratos de prueba).'
-      : !scope.seeAll && String(t.liderComercialCorreo || '').toLowerCase() !== String(scope.liderCorreo || '').toLowerCase()
+      : !scope.seeAll && ![t.liderComercialCorreo, t.asesorMail, t.asesor].some((v: any) => scope.equipo.includes(String(v || '').trim().toLowerCase()))
         ? 'Fuera de tu equipo comercial.'
       : String(t.hashConsentimiento || '').trim() ? 'El contrato ya está FIRMADO; sólo se borran matrículas sin firmar.'
       : String(t.aprobacion || '').trim() ? `El contrato tiene estado "${t.aprobacion}"; sólo se borran matrículas sin decisión.`

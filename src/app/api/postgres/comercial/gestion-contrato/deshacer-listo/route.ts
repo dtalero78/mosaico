@@ -36,15 +36,15 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const role = (session as any)?.user?.role;
   const email = (session as any)?.user?.email || 'desconocido';
   const scope = (role === 'SUPER_ADMIN' || role === 'ADMIN')
-    ? { seeAll: true, liderCorreo: null as string | null }
+    ? { seeAll: true, liderCorreo: null as string | null, equipo: [] as string[] }
     : await getUserComercialScope(email);
 
   // El equipo se verifica ANTES de soltar ningún asiento.
   const params: any[] = [id];
   let scopeSql = '';
   if (!scope.seeAll) {
-    params.push(scope.liderCorreo);
-    scopeSql = ` AND LOWER("liderComercialCorreo") = LOWER($${params.length})`;
+    params.push(scope.equipo);
+    scopeSql = ` AND ARRAY[LOWER(COALESCE("liderComercialCorreo",'')), LOWER(COALESCE("asesorMail",'')), LOWER(TRIM(COALESCE("asesor",'')))] && $${params.length}::text[]`;
   }
   const dueño = await query(
     `SELECT "_id" FROM "PEOPLE" WHERE "_id"=$1 AND "tipoUsuario"='TITULAR'${scopeSql}`, params

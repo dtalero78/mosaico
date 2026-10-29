@@ -223,6 +223,11 @@ export interface ComercialScope {
   seeAll: boolean;
   /** correo del líder por el que se filtra (Gerente/Jefe de Grupo). null si seeAll. */
   liderCorreo: string | null;
+  /**
+   * Correos y nombres (en minúscula) del usuario y de TODA su escalera hacia abajo en el CRM.
+   * Un contrato es del equipo si su líder, su asesor (correo) o su asesor (nombre) está aquí.
+   */
+  equipo: string[];
   position: string | null;
 }
 
@@ -237,7 +242,7 @@ const scopeCache = new Map<string, { v: ComercialScope; exp: number }>();
  */
 export async function getUserComercialScope(email?: string | null): Promise<ComercialScope> {
   const e = String(email || '').trim().toLowerCase();
-  const openAll: ComercialScope = { seeAll: true, liderCorreo: null, position: null };
+  const openAll: ComercialScope = { seeAll: true, liderCorreo: null, equipo: [], position: null };
   if (!e) return openAll;
   const pool = getCrmPool();
   if (!pool) return openAll;
@@ -253,8 +258,19 @@ export async function getUserComercialScope(email?: string | null): Promise<Come
     );
     if (r.rows.length) {
       const pos = r.rows[0].pos as string;
-      if (LIDER_EQUIPO_RANKS.has(pos)) scope = { seeAll: false, liderCorreo: r.rows[0].email, position: pos };
-      else scope = { seeAll: true, liderCorreo: null, position: pos }; // Sales Manager+ / Full Exec / Asesor → todo
+      if (LIDER_EQUIPO_RANKS.has(pos)) {
+        // Escalera hacia abajo: todos los que reportan (directa o indirectamente) a este líder.
+        const d = await pool.query(
+          `WITH RECURSIVE down AS (
+             SELECT id, lower(email) AS email, lower(trim(coalesce("firstName",'') || ' ' || coalesce("lastName",''))) AS nombre, 0 AS depth
+               FROM "User" WHERE lower(email) = $1
+             UNION ALL
+             SELECT u.id, lower(u.email), lower(trim(coalesce(u."firstName",'') || ' ' || coalesce(u."lastName",''))), down.depth + 1
+               FROM "User" u JOIN down ON u."supervisorId" = down.id WHERE down.depth < 20)
+           SELECT email, nombre FROM down`, [e]);
+        const equipo = Array.from(new Set(d.rows.flatMap((x: any) => [x.email, x.nombre]).filter(Boolean))) as string[];
+        scope = { seeAll: false, liderCorreo: r.rows[0].email, equipo: equipo.length ? equipo : [r.rows[0].email], position: pos };
+      } else scope = { seeAll: true, liderCorreo: null, equipo: [], position: pos }; // Sales Manager+ / Full Exec / Asesor → todo
     }
   } catch (err: any) {
     console.warn('[crm] getUserComercialScope falló:', err?.message || err);
@@ -273,7 +289,7 @@ export async function getUserComercialScope(email?: string | null): Promise<Come
 export async function getSessionComercialScope(session: any): Promise<ComercialScope> {
   const role = session?.user?.role;
   if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
-    return { seeAll: true, liderCorreo: null, position: null };
+    return { seeAll: true, liderCorreo: null, equipo: [], position: null };
   }
   return getUserComercialScope(session?.user?.email || '');
 }

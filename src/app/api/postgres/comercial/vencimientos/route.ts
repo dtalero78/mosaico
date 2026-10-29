@@ -52,8 +52,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const scopeParams: any[] = [];
   let scopeSql = '';
   if (!scope.seeAll) {
-    scopeParams.push(scope.liderCorreo);
-    scopeSql = ` AND LOWER(p."liderComercialCorreo") = LOWER($1)`;
+    scopeParams.push(scope.equipo);
+    scopeSql = ` AND ARRAY[LOWER(COALESCE(p."liderComercialCorreo",'')), LOWER(COALESCE(p."asesorMail",'')), LOWER(TRIM(COALESCE(p."asesor",'')))] && $1::text[]`;
   }
 
   const params: any[] = [...scopeParams];

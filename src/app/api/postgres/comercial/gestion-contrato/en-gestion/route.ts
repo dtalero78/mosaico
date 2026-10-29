@@ -49,8 +49,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const params: any[] = [];
   let scopeSql = '';
   if (!scope.seeAll) {
-    params.push(scope.liderCorreo);
-    scopeSql = ` AND LOWER(p."liderComercialCorreo") = LOWER($${params.length})`;
+    params.push(scope.equipo);
+    scopeSql = ` AND ARRAY[LOWER(COALESCE(p."liderComercialCorreo",'')), LOWER(COALESCE(p."asesorMail",'')), LOWER(TRIM(COALESCE(p."asesor",'')))] && $${params.length}::text[]`;
   }
 
   const rows = (await query<any>(
@@ -105,8 +105,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const params: any[] = [id];
   let scopeSql = '';
   if (!scope.seeAll) {
-    params.push(scope.liderCorreo);
-    scopeSql = ` AND LOWER("liderComercialCorreo") = LOWER($${params.length})`;
+    params.push(scope.equipo);
+    scopeSql = ` AND ARRAY[LOWER(COALESCE("liderComercialCorreo",'')), LOWER(COALESCE("asesorMail",'')), LOWER(TRIM(COALESCE("asesor",'')))] && $${params.length}::text[]`;
   }
   const email = (session as any)?.user?.email || 'desconocido';
   params.push(accion === 'quitar' ? email : null);

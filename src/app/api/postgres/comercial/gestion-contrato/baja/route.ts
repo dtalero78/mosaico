@@ -45,7 +45,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const role = (session as any)?.user?.role;
   const email = (session as any)?.user?.email || 'desconocido';
   const scope = (role === 'SUPER_ADMIN' || role === 'ADMIN')
-    ? { seeAll: true, liderCorreo: null as string | null }
+    ? { seeAll: true, liderCorreo: null as string | null, equipo: [] as string[] }
     : await getUserComercialScope(email);
 
   // Acotar al equipo ANTES de borrar nada: si alguno queda fuera del scope, se
@@ -55,8 +55,8 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     const { rows } = await query<any>(
       `SELECT "_id" FROM "PEOPLE"
         WHERE "_id" = ANY($1::text[]) AND "tipoUsuario" = 'TITULAR'
-          AND LOWER("liderComercialCorreo") = LOWER($2)`,
-      [idsPedidos, scope.liderCorreo]
+          AND ARRAY[LOWER(COALESCE("liderComercialCorreo",'')), LOWER(COALESCE("asesorMail",'')), LOWER(TRIM(COALESCE("asesor",'')))] && $2::text[]`,
+      [idsPedidos, scope.equipo]
     );
     permitidos = rows.map(r => r._id);
   }

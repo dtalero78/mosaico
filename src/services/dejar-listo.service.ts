@@ -69,8 +69,8 @@ export async function dejarContratoListo(session: any, opts: DejarListoOpts): Pr
   const params: any[] = [titularId];
   let scopeSql = '';
   if (!scope.seeAll) {
-    params.push(scope.liderCorreo);
-    scopeSql = ` AND LOWER("liderComercialCorreo") = LOWER($${params.length})`;
+    params.push(scope.equipo);
+    scopeSql = ` AND ARRAY[LOWER(COALESCE("liderComercialCorreo",'')), LOWER(COALESCE("asesorMail",'')), LOWER(TRIM(COALESCE("asesor",'')))] && $${params.length}::text[]`;
   }
   const titular = await queryOne<{
     _id: string; contrato: string | null; hashConsentimiento: string | null;

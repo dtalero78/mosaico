@@ -27,8 +27,8 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
   const params: any[] = [];
   let scopeSql = '';
   if (!scope.seeAll) {
-    params.push(scope.liderCorreo);
-    scopeSql = ` AND LOWER(p."liderComercialCorreo") = LOWER($1)`;
+    params.push(scope.equipo);
+    scopeSql = ` AND ARRAY[LOWER(COALESCE(p."liderComercialCorreo",'')), LOWER(COALESCE(p."asesorMail",'')), LOWER(TRIM(COALESCE(p."asesor",'')))] && $1::text[]`;
   }
 
   const result = await query(
