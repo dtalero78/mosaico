@@ -21,6 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { api, handleApiError } from '@/hooks/use-api'
 import { exportToExcel } from '@/lib/export-excel'
 import PlanesTiposPanel from '@/components/aprobacion/PlanesTiposPanel'
+import GestionContratoLibroModal from '@/components/aprobacion/GestionContratoLibroModal'
 import {
   MESES, etiquetaVigencia, etiquetaSemana, semanasDeVigencia, type Vigencia,
 } from '@/lib/vigencias-comerciales'
@@ -79,7 +80,7 @@ const resumenPrograma = (r: Registro) => {
 // ── Columnas de la hoja (mismo orden del libro). Las 8 primeras quedan fijas. ──
 interface Col { key: string; header: string; w: number; titular: (r: Registro) => React.ReactNode; benef?: (b: Benef) => React.ReactNode }
 const COLS: Col[] = [
-  { key: 'item', header: 'Item', w: 56, titular: r => r.item },
+  { key: 'item', header: 'Item', w: 76, titular: r => r.item },
   { key: 'semana', header: 'Semana', w: 64, titular: r => r.semana ? etiquetaSemana(r.semana) : '—' },
   { key: 'ingreso', header: 'Fecha ingreso', w: 104, titular: r => fmtF(r.fechaIngreso) },
   { key: 'pago', header: 'Fecha de pago', w: 104, titular: r => fmtF(r.fechaPago) },
@@ -188,6 +189,8 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
   const [loading, setLoading] = useState(true)
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
   const [detalle, setDetalle] = useState<string | null>(null)
+  const [gestionando, setGestionando] = useState<string | null>(null)
+  const puedeGestionar = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_DEPURAR) || hasPermission(AprobacionPermission.LIBRO_PRODUCCION_RATIFICAR)
   const FILTROS_VACIOS = { semana: TODOS, pais: TODOS, estado: TODOS, ejecutivo: TODOS, filial: TODOS, conciliado: TODOS, factura: TODOS, q: '' }
   const [f, setF] = useState(FILTROS_VACIOS)
   // La vigencia no es un filtro de esta lista: "Limpiar filtros" la conserva.
@@ -382,6 +385,10 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
                           className={`px-2 py-1.5 border-b border-r border-gray-200 align-top ${i < FIJAS ? 'sticky z-10 bg-white group-hover:bg-indigo-50' : 'group-hover:bg-indigo-50/60'} ${i === FIJAS - 1 ? 'shadow-[2px_0_0_0_rgba(0,0,0,0.12)]' : ''}`}>
                           {c.key === 'item' ? (
                             <span className="inline-flex items-center gap-0.5">
+                              {puedeGestionar && (
+                                <input type="checkbox" checked={false} onChange={() => setGestionando(r.titularId)}
+                                  title="Gestionar contrato (depurar / ratificar)" className="mr-1 h-3.5 w-3.5 cursor-pointer" />
+                              )}
                               {r.beneficiarios.length > 0 ? (
                                 <button type="button" onClick={() => toggle(r.titularId)} title={abierto ? 'Ocultar beneficiarios' : 'Ver beneficiarios'} className="text-gray-500 hover:text-indigo-700">
                                   {abierto ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronRightIcon className="h-3.5 w-3.5" />}
@@ -414,6 +421,10 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {gestionando && (
+        <GestionContratoLibroModal titularId={gestionando} onClose={() => setGestionando(null)} onDone={() => cargar(vigencia?._id)} />
       )}
 
       {detalle && (

@@ -38,6 +38,7 @@
     "exceljs": "^4.4.0",
     "googleapis": "^144.0.0",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
     "katex": "^0.17.0",
     "lodash": "^4.17.21",
     "lucide-react": "^0.292.0",

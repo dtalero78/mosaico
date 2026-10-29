@@ -1348,6 +1348,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: "Crear, editar y desactivar los planes y tipos de plan por país",
   },
   {
+    code: AprobacionPermission.LIBRO_PRODUCCION_DEPURAR,
+    module: Module.APROBACION,
+    section: 'Libro de Producción',
+    name: 'Depurar contrato',
+    description: 'Descargar los documentos y BORRAR un contrato con todos sus registros (aprobados sólo mientras el curso esté en matrícula)',
+  },
+  {
+    code: AprobacionPermission.LIBRO_PRODUCCION_RATIFICAR,
+    module: Module.APROBACION,
+    section: 'Libro de Producción',
+    name: 'Ratificar contrato por correo',
+    description: 'Registrar como firmado un contrato sin firma, adjuntando el correo del "Sí acepto" del titular',
+  },
+  {
     code: AprobacionPermission.ACTUALIZAR,
     module: Module.APROBACION,
     section: 'Lista de Aprobaciones',

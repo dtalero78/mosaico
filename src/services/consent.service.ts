@@ -226,3 +226,40 @@ export async function getConsentStatus(titularId: string) {
 
   return { hasConsent: false, consent: null, hash: null };
 }
+
+/** Texto que queda en el contrato cuando el titular aceptó por correo. */
+export const TEXTO_ACEPTACION_CORREO =
+  'Aceptación realizada por medio de correo electrónico adjuntado a los documentos';
+
+/**
+ * Ratifica como FIRMADO un contrato que el titular no firmó en la página, a partir
+ * del correo en que escribió "Sí, acepto" (ya adjunto a los documentos del contrato).
+ * Guarda el consentimiento con tipo 'CORREO', el texto de aceptación y el hash, igual
+ * que las demás firmas.
+ */
+export async function ratificarConsentimientoPorCorreo(
+  titularId: string,
+  admin: { email: string; nombre: string; ip: string; userAgent: string },
+  documentoNombre: string
+) {
+  const person = await PeopleRepository.getConsentData(titularId);
+  if (!person) throw new NotFoundError('Titular', titularId);
+  if (person.hashConsentimiento) {
+    throw new ValidationError('Este contrato ya tiene consentimiento declarativo');
+  }
+  const consent: ConsentData & { textoAceptacion: string; documentoAceptacion: string } = {
+    declaracionAceptada: true,
+    numeroDocumento: person.numeroId,
+    timestampAcceptacion: new Date().toISOString(),
+    ipAddress: admin.ip,
+    userAgent: `${admin.userAgent} [Ratificado por: ${admin.nombre} <${admin.email}>]`,
+    codigoOTPUtilizado: 'CORREO',
+    celularValidado: person.celular || '',
+    tipoAprobacion: 'CORREO',
+    textoAceptacion: TEXTO_ACEPTACION_CORREO,
+    documentoAceptacion: documentoNombre,
+  };
+  const hash = computeHash(consent);
+  await PeopleRepository.saveConsent(titularId, JSON.stringify(consent), hash, person.numeroId);
+  return { hash, consent };
+}

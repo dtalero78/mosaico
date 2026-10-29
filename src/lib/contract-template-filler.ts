@@ -14,6 +14,8 @@ export interface ConsentDisplay {
     ipAddress?: string;
     celularValidado?: string;
     tipoAprobacion?: string;
+    /** Sólo en la ratificación por correo: el texto del "Sí, acepto". */
+    textoAceptacion?: string;
   } | null;
   hash?: string | null;
 }
@@ -117,7 +119,9 @@ export function fillContractTemplate(
     const fecha = c.timestampAcceptacion
       ? new Date(c.timestampAcceptacion).toLocaleString('es-CO')
       : '';
-    const tipo = c.tipoAprobacion === 'AUTOMATICA' ? ' (Aprobacion Automatica)' : '';
+    const tipo = c.tipoAprobacion === 'AUTOMATICA' ? ' (Aprobacion Automatica)'
+      : c.tipoAprobacion === 'CORREO' ? ' (Aceptacion por correo electronico)' : '';
+    const aceptacionLinea = c.tipoAprobacion === 'CORREO' && c.textoAceptacion ? `Si, acepto: ${c.textoAceptacion}\n` : '';
 
     const ejecutivoLineas =
       (ejecutivoComercial && (ejecutivoComercial.nombre || ejecutivoComercial.email))

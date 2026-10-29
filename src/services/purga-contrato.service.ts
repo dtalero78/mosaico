@@ -165,6 +165,14 @@ export async function purgarContrato(contrato: string, ctx: PurgaContexto): Prom
 
     // 3) DELETE de dependientes hacia PEOPLE.
     if (academicaIds.length) {
+      // Cada clase agendada suma 1 al contador del evento: se descuenta antes de borrar.
+      await client.query(
+        `UPDATE "CALENDARIO" c SET "inscritos" = GREATEST(COALESCE(c."inscritos",0) - x.n, 0)
+           FROM (SELECT COALESCE("eventoId", "idEvento") AS ev, COUNT(*)::int AS n
+                   FROM "ACADEMICA_BOOKINGS"
+                  WHERE ("studentId" = ANY($1::text[]) OR "idEstudiante" = ANY($1::text[])) AND "cancelo" IS NOT TRUE
+                  GROUP BY 1) x
+          WHERE c."_id" = x.ev`, [academicaIds]);
       await client.query(`DELETE FROM "STEP_OVERRIDES" WHERE "studentId" = ANY($1::text[])`, [academicaIds]);
       await client.query(`DELETE FROM "COMPLEMENTARIA_ATTEMPTS" WHERE "studentId" = ANY($1::text[])`, [academicaIds]).catch(() => null);
       await client.query(`DELETE FROM "ACADEMICA_BOOKINGS" WHERE "studentId" = ANY($1::text[]) OR "idEstudiante" = ANY($1::text[])`, [academicaIds]);
