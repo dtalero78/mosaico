@@ -612,11 +612,11 @@ export async function createFullContract(input: CreateContractInput) {
          "gerente"         = COALESCE(NULLIF("gerente",''),         $4),
          "gerenteDivision" = COALESCE(NULLIF("gerenteDivision",''), $5),
          "salesManager"    = COALESCE(NULLIF("salesManager",''),    $6),
-         "filial"          = COALESCE(NULLIF("filial",''), (SELECT "filial" FROM "EQUIPO_COMERCIAL" WHERE LOWER(TRIM("correo")) = $7 LIMIT 1)),
+         "filial"          = COALESCE(NULLIF("filial",''), $8, (SELECT "filial" FROM "EQUIPO_COMERCIAL" WHERE LOWER(TRIM("correo")) = $7 LIMIT 1)),
          "_updatedDate" = NOW()
        WHERE "_id" = $1`,
       [titularId, esc?.fullExecutive || null, esc?.jefeGrupo || null, esc?.gerente || null,
-       esc?.gerenteDivision || null, esc?.salesManager || null, correoAs]
+       esc?.gerenteDivision || null, esc?.salesManager || null, correoAs, esc?.filial || null]
     );
   } catch (err: any) {
     console.warn('[contract-creation] no se pudo guardar la escalera comercial:', err?.message || err);

@@ -80,7 +80,7 @@ export async function resolverLiderComercial(
   // devuelve el primer nodo (incluyéndose a sí mismo) con rango de líder.
   const sql = `
     WITH RECURSIVE seed AS (
-      SELECT id, "firstName", "lastName", email, "position", "supervisorId"
+      SELECT id, "firstName", "lastName", email, "position", "supervisorId", "filial"
         FROM "User"
        WHERE ${email ? `lower(email) = $1` : `lower("firstName" || ' ' || "lastName") = lower($1)`}
        ORDER BY ("isActive" IS TRUE) DESC
@@ -121,6 +121,8 @@ export interface EscaleraComercial {
   gerente: string;
   gerenteDivision: string;
   salesManager: string;
+  /** Filial del asesor en el CRM (`User.filial`); si él no la tiene, la del supervisor más cercano que sí. */
+  filial: string;
 }
 
 /**
@@ -170,17 +172,18 @@ export async function resolverEscalera(correo?: string | null, nombre?: string |
     up AS (
       SELECT s.*, 0 AS depth FROM seed s
       UNION ALL
-      SELECT u.id, u."firstName", u."lastName", u.email, u."position", u."supervisorId", up.depth + 1
+      SELECT u.id, u."firstName", u."lastName", u.email, u."position", u."supervisorId", u."filial", up.depth + 1
         FROM "User" u
         JOIN up ON u.id = up."supervisorId"
        WHERE up.depth < 20
     )
-    SELECT "firstName", "lastName", "position"::text AS position, depth FROM up ORDER BY depth ASC`;
+    SELECT "firstName", "lastName", "position"::text AS position, "filial", depth FROM up ORDER BY depth ASC`;
   try {
     const r = await pool.query(sql, [email || name]);
     let v: EscaleraComercial | null = null;
     if (r.rows.length) {
-      v = { ejecutivo: '', fullExecutive: '', jefeGrupo: '', gerente: '', gerenteDivision: '', salesManager: '' };
+      v = { ejecutivo: '', fullExecutive: '', jefeGrupo: '', gerente: '', gerenteDivision: '', salesManager: '', filial: '' };
+      v.filial = String(r.rows.find((row: any) => String(row.filial || '').trim())?.filial || '').trim();
       const nom = (row: any) => `${row.firstName || ''} ${row.lastName || ''}`.replace(/\s+/g, ' ').trim();
       v.ejecutivo = nom(r.rows[0]);
       for (const [col, nivel] of NIVEL_COLUMNA) {

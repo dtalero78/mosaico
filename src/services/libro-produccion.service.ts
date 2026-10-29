@@ -196,7 +196,7 @@ async function construir(
   // (una consulta por asesor distinto, cacheada).
   const asesoresSinEscalera = new Map<string, { correo: string; nombre: string }>();
   for (const t of titulares) {
-    if (t.fullExecutive || t.jefeGrupo || t.gerente || t.gerenteDivision || t.salesManager) continue;
+    if ((t.fullExecutive || t.jefeGrupo || t.gerente || t.gerenteDivision || t.salesManager) && t.filial) continue;
     const k = String(t.asesorMail || t.asesor || '').trim().toLowerCase();
     if (k && !asesoresSinEscalera.has(k)) asesoresSinEscalera.set(k, { correo: t.asesorMail || '', nombre: t.asesor || '' });
   }
@@ -258,7 +258,7 @@ async function construir(
         ejecutivo: String(t.asesor || '').replace(/\s+/g, ' ').trim(),
         fullExecutive: t.fullExecutive || esc.fullExecutive || '', jefeGrupo: t.jefeGrupo || esc.jefeGrupo || '',
         gerente: t.gerente || esc.gerente || '', gerenteDivision: t.gerenteDivision || esc.gerenteDivision || '',
-        salesManager: t.salesManager || esc.salesManager || '', filial: t.filial || '',
+        salesManager: t.salesManager || esc.salesManager || '', filial: t.filial || esc.filial || '',
         origenMatricula: t.origenMatricula || '',
       },
       beneficiarios: (benefPor.get(t.contrato) || []).map((b) => ({
