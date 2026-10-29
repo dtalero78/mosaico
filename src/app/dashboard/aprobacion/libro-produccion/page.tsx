@@ -12,7 +12,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   ArrowPathIcon, ArrowDownTrayIcon, ChevronDownIcon, ChevronRightIcon, ChevronLeftIcon, MagnifyingGlassIcon, FunnelIcon,
-  XMarkIcon, ArrowTopRightOnSquareIcon, CalendarDaysIcon, TableCellsIcon, RectangleStackIcon,
+  XMarkIcon, ArrowTopRightOnSquareIcon, CalendarDaysIcon, TableCellsIcon, RectangleStackIcon, ClockIcon,
 } from '@heroicons/react/24/outline'
 import { useRouter } from 'next/navigation'
 import { PermissionGuard } from '@/components/permissions'
@@ -37,7 +37,7 @@ interface Registro {
   plan: number | null; tipoPlan: string | null; inscripcionPagada: number | null; valorCuota: number | null
   saldo: number | null; totalPlan: number | null; fechaPrimeraCuota: string | null
   suscripcionPago: boolean; prixus: boolean; factura: string | null
-  aprobacion: string; aprobacionFicha: string | null; firmado: boolean
+  aprobacion: string; aprobacionFicha: string | null; firmado: boolean; listo?: boolean
   estado: string | null; modulo: boolean; extemporanea: boolean; observaciones: string | null; pais: string | null
   titular: { nombre: string; documento: string; telefono: string; correo: string; direccion: string; ciudad: string }
   referencias: { nombre: string; telefono: string; parentesco: string }[]
@@ -131,7 +131,7 @@ export default function LibroProduccionPage() {
   const { hasPermission } = usePermissions()
   const puedeVigencias = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_VIGENCIAS)
   const puedePlanes = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_PLANES)
-  const [tab, setTab] = useState<'libro' | 'vigencias' | 'planes'>('libro')
+  const [tab, setTab] = useState<'libro' | 'resolver' | 'vigencias' | 'planes'>('libro')
 
   // Página completa, sin menú lateral: se abre en pestaña nueva, así que si no hay historial
   // previo "Volver" lleva al Centro de Aprobaciones.
@@ -154,7 +154,7 @@ export default function LibroProduccionPage() {
             </button>
           </div>
           <div className="flex gap-2 border-b border-gray-200">
-            {([['libro', 'Libro', TableCellsIcon],
+            {([['libro', 'Libro', TableCellsIcon], ['resolver', 'Por resolver', ClockIcon],
               ...(puedeVigencias ? [['vigencias', 'Vigencias', CalendarDaysIcon]] : []),
               ...(puedePlanes ? [['planes', 'Planes', RectangleStackIcon]] : [])] as const).map(([k, label, Icon]: any) => (
               <button key={k} type="button" onClick={() => setTab(k)}
@@ -163,7 +163,7 @@ export default function LibroProduccionPage() {
               </button>
             ))}
           </div>
-          {tab === 'libro' ? <Libro /> : tab === 'vigencias' ? <Vigencias /> : <PlanesTiposPanel />}
+          {tab === 'libro' || tab === 'resolver' ? <Libro key={tab} modo={tab} /> : tab === 'vigencias' ? <Vigencias /> : <PlanesTiposPanel />}
         </div>
       </PermissionGuard>
     </div>
@@ -171,7 +171,14 @@ export default function LibroProduccionPage() {
 }
 
 // ── Hoja ────────────────────────────────────────────────────────────────────────
-function Libro() {
+/** Libro = aprobados/finalizados y los firmados ya listos para aprobar. Por resolver = el resto (sin firmar, no listos, devueltos, etc.). */
+const esDelLibro = (r: Registro) => {
+  const a = String(r.aprobacionFicha || '').trim().toLowerCase()
+  if (a === 'aprobado' || a === 'aprobada' || a === 'finalizada' || r.estado === 'FINALIZADA') return true
+  return !a && r.firmado && r.listo === true
+}
+
+function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
   const { hasPermission } = usePermissions()
   const puedeExportar = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_EXPORTAR)
   const [vigencias, setVigencias] = useState<Vigencia[]>([])
@@ -192,9 +199,9 @@ function Libro() {
       const qs = vigenciaId ? `?vigenciaId=${encodeURIComponent(vigenciaId)}` : ''
       const d = await api.get<{ vigencias: Vigencia[]; vigencia: Vigencia | null; registros: Registro[]; sinVigencia?: number }>(`/api/postgres/libro-produccion${qs}`)
       setSinVigencia(d.sinVigencia || 0)
-      setVigencias(d.vigencias || []); setVigencia(d.vigencia); setRegistros(d.registros || []); setAbiertos(new Set())
+      setVigencias(d.vigencias || []); setVigencia(d.vigencia); setRegistros((d.registros || []).filter(r => (modo === 'libro') === esDelLibro(r))); setAbiertos(new Set())
     } catch (e) { handleApiError(e, 'No se pudo cargar el Libro de Producción') } finally { setLoading(false) }
-  }, [])
+  }, [modo])
   useEffect(() => { cargar() }, [cargar])
 
   const opciones = useMemo(() => ({

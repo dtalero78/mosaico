@@ -63,7 +63,7 @@ export interface RegistroLibro {
   formaPago: string; conciliado: { si: boolean; por: string | null; fecha: string | null };
   plan: number | null; tipoPlan: string | null; tipoPlanId: string | null; inscripcionPagada: number | null; valorCuota: number | null;
   saldo: number | null; totalPlan: number | null; fechaPrimeraCuota: string | null;
-  suscripcionPago: boolean; prixus: boolean; factura: string | null;
+  suscripcionPago: boolean; prixus: boolean; factura: string | null; listo: boolean;
   /** Estado mostrado: el "Estado Actual" de la ficha, o "Pendiente aprobación" / "Sin firmar" si aún no tiene estado. */
   aprobacion: string; aprobacionFicha: string | null; firmado: boolean;
   estado: string | null; modulo: boolean; extemporanea: boolean; observaciones: string | null; pais: string | null;
@@ -145,7 +145,7 @@ async function construir(
               p."observacionesContrato", p."referenciaUno", p."telefonoRefUno", p."parentezcoRefUno",
               p."referenciaDos", p."telefonoRefDos", p."parentezcoRefDos", p."asesor", p."asesorMail", p."liderComercial",
               p."fullExecutive", p."jefeGrupo", p."gerente", p."gerenteDivision", p."salesManager", p."filial",
-              p."origenMatricula", p."suscripcionPago", p."prixus", p."tipoPlanId", p."modulo", p."extemporanea",
+              p."gestionContratoListo", p."origenMatricula", p."suscripcionPago", p."prixus", p."tipoPlanId", p."modulo", p."extemporanea",
               (COALESCE(p."hashConsentimiento",'') <> '') AS firmado,
               to_char(p."fechaCreacion" AT TIME ZONE (${TZ_SQL}), 'YYYY-MM-DD"T"HH24:MI') AS creado_local
          FROM "PEOPLE" p
@@ -239,6 +239,7 @@ async function construir(
       suscripcionPago: t.suscripcionPago === true,
       prixus: t.prixus === true,
       factura: pg.numeroFactura || null,
+      listo: t.gestionContratoListo === true,
       aprobacion: estadoLibro(t.aprobacion, t.firmado === true),
       aprobacionFicha: t.aprobacion || null,
       firmado: t.firmado === true,
