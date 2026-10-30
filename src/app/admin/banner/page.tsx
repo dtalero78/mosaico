@@ -329,6 +329,12 @@ function NuevoAviso({ ocupado, onAgregar }: { ocupado: boolean; onAgregar: (f: F
     setPreview(URL.createObjectURL(f))
   }
 
+  /** Descarta la imagen elegida (aún no publicada) sin tocar los avisos existentes. */
+  const descartar = () => {
+    setArchivo(null)
+    setPreview(null)
+  }
+
   const agregar = async () => {
     if (!archivo) return
     if (desde && hasta && desde > hasta) return void toast.error('"Desde" no puede ser posterior a "hasta"')
@@ -363,6 +369,29 @@ function NuevoAviso({ ocupado, onAgregar }: { ocupado: boolean; onAgregar: (f: F
         )}
       </div>
       <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="hidden" aria-label="Seleccionar imagen del aviso" onChange={elegir} />
+
+      {archivo && (
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <span className="text-gray-600 truncate max-w-xs" title={archivo.name}>{archivo.name}</span>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={ocupado}
+            className="ml-auto px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cambiar imagen
+          </button>
+          <button
+            type="button"
+            onClick={descartar}
+            disabled={ocupado}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50"
+          >
+            <TrashIcon className="h-3.5 w-3.5" />
+            Quitar imagen
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <label className="text-xs text-gray-600">
