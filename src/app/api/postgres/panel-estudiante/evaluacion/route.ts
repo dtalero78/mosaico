@@ -82,7 +82,7 @@ export const GET = handlerWithAuth(async (_req, _ctx, session) => {
     const MAX_INTENTOS = 3
     const prev = (await query<{ step: string; cuestionarioId: string | null; porcentaje: number | null; aprobado: boolean | null; score: number; total: number }>(
       `SELECT "step","cuestionarioId","porcentaje","aprobado","score","total" FROM "EVALUACION_RESPUESTAS"
-        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "enviadaEn" IS NOT NULL`,
+        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "enviadaEn" IS NOT NULL AND "reseteado" IS NOT TRUE`,
       [student.academicaId, curso, nivel]
     )).rows
     // Compat: filas antiguas sin cuestionarioId → cuentan como el primer cuestionario.

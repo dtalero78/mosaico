@@ -197,6 +197,7 @@ export enum AcademicoPermission {
   // guía (Coordinación). SUPER_ADMIN/ADMIN lo tienen implícito.
   PANEL_ALUMNOS_VER = 'ACADEMICO.PANEL_ALUMNOS.VER',
   PANEL_ALUMNOS_VER_TODOS = 'ACADEMICO.PANEL_ALUMNOS.VER_TODOS',
+  PANEL_ALUMNOS_RESETEAR_EVALUACION = 'ACADEMICO.PANEL_ALUMNOS.RESETEAR_EVALUACION',
 
   // Evaluaciones Jump (Bot Tutor) — revisar/aprobar reportes del bot
   JUMP_EVAL_REVISAR = 'ACADEMICO.JUMP_EVAL.REVISAR',

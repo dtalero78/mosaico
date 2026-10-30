@@ -7,7 +7,6 @@ import DashboardLayout from '@/components/layout/DashboardLayout'
 import EventDetailModal from '@/components/academic/EventDetailModal'
 import AdminEventRegistrarModal from '@/components/admin-events/AdminEventRegistrarModal'
 import CursosAsignadosGuia from '@/components/advisor/CursosAsignadosGuia'
-import PanelAlumnosGuia from '@/components/panel-guia/PanelAlumnosGuia'
 import { ControlHorasContent } from '@/app/dashboard/academic/control-horas/page'
 import {
   CalendarIcon,
@@ -494,8 +493,8 @@ function PanelAdvisorContent() {
             {canVerMisAlumnos && (
               <button
                 type="button"
-                onClick={() => setActiveTab('alumnos')}
-                className={`py-2 px-1 border-b-2 text-sm font-medium ${activeTab === 'alumnos' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                onClick={() => advisor && router.push(`/panel-advisor/alumnos?guia=${encodeURIComponent(advisor._id)}`)}
+                className="py-2 px-1 border-b-2 text-sm font-medium border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               >
                 Mis alumnos
               </button>
@@ -523,12 +522,6 @@ function PanelAdvisorContent() {
             El servidor además fuerza al propio guía cuando el rol es GUIA. */}
         {activeTab === 'justificaciones' && advisor && canVerJustificaciones && (
           <GestionJustificacion key={advisor._id} guiaId={advisor._id} embedded />
-        )}
-
-        {/* Pestaña Mis alumnos: la misma vista de /panel-advisor/alumnos, con el
-            guía del panel. El servidor fuerza al propio guía cuando el rol es GUIA. */}
-        {activeTab === 'alumnos' && advisor && canVerMisAlumnos && (
-          <PanelAlumnosGuia key={advisor._id} guiaId={advisor._id} embebido />
         )}
 
         {/* Pestaña Cursos asignados */}

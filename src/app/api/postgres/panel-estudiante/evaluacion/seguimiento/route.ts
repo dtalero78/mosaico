@@ -60,7 +60,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     `SELECT "code","step","cuestionarioId","cuestionarioTitulo","respuestas","score","total",
             "porcentaje","aprobado","intento","enviadaEn","duracionSeg"
        FROM "EVALUACION_RESPUESTAS"
-      WHERE "academicaId"=$1 AND UPPER("curso")=UPPER($2) AND "enviadaEn" IS NOT NULL
+      WHERE "academicaId"=$1 AND UPPER("curso")=UPPER($2) AND "enviadaEn" IS NOT NULL AND "reseteado" IS NOT TRUE
       ORDER BY "intento" ASC, "enviadaEn" ASC`,
     [academicaId, curso]
   )).rows

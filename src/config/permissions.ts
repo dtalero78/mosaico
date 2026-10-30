@@ -651,6 +651,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Permite elegir y consultar el panel de alumnos de CUALQUIER guía (Coordinación). Al rol GUIA no le sirve: un guía sólo ve lo suyo. SUPER_ADMIN/ADMIN lo tienen implícito.',
   },
   {
+    code: AcademicoPermission.PANEL_ALUMNOS_RESETEAR_EVALUACION,
+    module: Module.ACADEMICO,
+    section: 'Panel del guía · Alumnos',
+    name: 'Resetear la última evaluación de un alumno',
+    description: 'En "Mis alumnos por curso": marcar alumnos (o todos) y reiniciar el contador de intentos de su última evaluación para que puedan presentarla de nuevo (3 intentos). El historial de intentos se conserva.',
+  },
+  {
     code: AcademicoPermission.JUMP_EVAL_REVISAR,
     module: Module.ACADEMICO,
     section: 'Evaluaciones Jump',

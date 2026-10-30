@@ -96,7 +96,7 @@ export default function PanelAlumnosGuia({ guiaId, cursoInicial = '', embebido =
           Este guía no tiene cursos vigentes.
         </div>
       ) : (
-        <PanelAlumnosVista cursos={data.cursos} cursoActivo={curso} onElegirCurso={setCursoSel} />
+        <PanelAlumnosVista cursos={data.cursos} cursoActivo={curso} onElegirCurso={setCursoSel} guiaId={guiaId} onRecargar={cargar} />
       )}
     </div>
   )

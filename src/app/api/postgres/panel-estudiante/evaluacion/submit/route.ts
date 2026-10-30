@@ -82,7 +82,7 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
   const prevAtt = (await query<{ aprobado: boolean | null }>(
     `SELECT "aprobado" FROM "EVALUACION_RESPUESTAS"
       WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "step"=$4
-        AND ("cuestionarioId"=$5 OR ("cuestionarioId" IS NULL AND $5=$6)) AND "enviadaEn" IS NOT NULL`,
+        AND ("cuestionarioId"=$5 OR ("cuestionarioId" IS NULL AND $5=$6)) AND "enviadaEn" IS NOT NULL AND "reseteado" IS NOT TRUE`,
     [academicaId, curso, nivel, step, cuestionarioId, cuestionarios[0].id]
   )).rows
   if (prevAtt.some(r => r.aprobado)) throw new ValidationError('Ya aprobaste este cuestionario.')
@@ -122,7 +122,7 @@ export const POST = handlerWithAuth(async (req, _ctx, session) => {
   try {
     const todos = (await query<{ cuestionarioId: string | null; aprobado: boolean | null }>(
       `SELECT "cuestionarioId","aprobado" FROM "EVALUACION_RESPUESTAS"
-        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "step"=$4 AND "enviadaEn" IS NOT NULL`,
+        WHERE "academicaId"=$1 AND "curso"=$2 AND "code"=$3 AND "step"=$4 AND "enviadaEn" IS NOT NULL AND "reseteado" IS NOT TRUE`,
       [academicaId, curso, nivel, step]
     )).rows
     const primerId = cuestionarios[0].id

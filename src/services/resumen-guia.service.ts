@@ -112,7 +112,7 @@ evals AS (
            'curso', er."curso", 'code', er."code", 'step', er."step",
            'cuestionarioId', er."cuestionarioId", 'porcentaje', er."porcentaje")) AS "evals"
     FROM "EVALUACION_RESPUESTAS" er
-   WHERE er."academicaId" IN (SELECT "academicaId" FROM acad)
+   WHERE er."academicaId" IN (SELECT "academicaId" FROM acad) AND er."reseteado" IS NOT TRUE
    GROUP BY er."academicaId"
 ),
 notas AS (

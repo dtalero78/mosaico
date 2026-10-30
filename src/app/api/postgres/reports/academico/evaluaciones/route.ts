@@ -66,7 +66,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   // ARRAY_AGG(... ORDER BY intento DESC)[1] = el ÚLTIMO intento del estudiante en
   // ese cuestionario (hasta 3). Se devuelven sus aciertos/fallos para que el
   // reporte muestre "X correctas · Y incorrectas · Z%" sin otra consulta.
-  const ult = (col: string) => `(ARRAY_AGG(er."${col}" ORDER BY er."intento" DESC NULLS LAST, er."enviadaEn" DESC NULLS LAST))[1]`;
+  const ult = (col: string) => `(ARRAY_AGG(er."${col}" ORDER BY er."enviadaEn" DESC NULLS LAST, er."intento" DESC NULLS LAST))[1]`;
 
   const raw = (await query<any>(
     `SELECT er."academicaId", er."numeroId", MAX(er."nombre") AS nombre, er."code", er."step",

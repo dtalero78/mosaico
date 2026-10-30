@@ -14,6 +14,8 @@ import { IBM_Plex_Mono } from 'next/font/google'
 import {
   tonoAsistencia, tonoNota, tonoCriterio, formatoNota, UMBRALES, type Tono,
 } from '@/lib/reglas-alertas-guia'
+import { usePermissions } from '@/hooks/usePermissions'
+import { AcademicoPermission } from '@/types/permissions'
 import type { FilaResumenAlumno } from '@/lib/resumen-guia'
 import type { CursoResumenGuia } from '@/services/resumen-guia.service'
 
@@ -287,17 +289,37 @@ function CeldaAlertas({ f }: { f: FilaResumenAlumno }) {
   )
 }
 
-function TablaAlumnos({ filas }: { filas: FilaResumenAlumno[] }) {
+function TablaAlumnos({ filas, sel }: {
+  filas: FilaResumenAlumno[]
+  /** Selección para resetear la última evaluación; sin ella no hay casillas. */
+  sel?: { marcados: Set<string>; alternar: (id: string) => void; alternarTodos: (marcar: boolean) => void }
+}) {
+  const COLS = sel ? COLUMNAS.replace('grid-cols-[', 'grid-cols-[28px_') : COLUMNAS
+  const ids = filas.map(f => f.academicaId).filter(Boolean) as string[]
+  const todos = ids.length > 0 && ids.every(id => sel?.marcados.has(id))
   return (
     <div className={`mt-3 overflow-x-auto rounded-[14px] border ${C.borde} bg-white`}>
-      <div className="min-w-[1280px]" role="table" aria-label="Alumnos del curso">
-        <div className={`${COLUMNAS} border-b ${C.borde} bg-[#F8FAFC] px-4 py-3 text-[11px] font-semibold uppercase tracking-wider ${C.sec}`} role="row">
+      <div className={sel ? 'min-w-[1320px]' : 'min-w-[1280px]'} role="table" aria-label="Alumnos del curso">
+        <div className={`${COLS} border-b ${C.borde} bg-[#F8FAFC] px-4 py-3 text-[11px] font-semibold uppercase tracking-wider ${C.sec}`} role="row">
+          {sel && (
+            <div role="columnheader">
+              <input type="checkbox" aria-label="Marcar todos los visibles" checked={todos}
+                onChange={e => sel.alternarTodos(e.target.checked)} className="h-4 w-4 accent-primary-600" />
+            </div>
+          )}
           {['Alumno', 'Asistencia', 'Lecciones', 'Nivelac.', 'Casos', 'Evaluaciones', 'Criterios guía', 'Alertas'].map(h => (
             <div key={h} role="columnheader">{h}</div>
           ))}
         </div>
         {filas.map(f => (
-          <div key={f.peopleId} className={`${COLUMNAS} items-start border-b ${C.borde} px-4 py-4 last:border-b-0 hover:bg-[#FAFBFC]`} role="row">
+          <div key={f.peopleId} className={`${COLS} items-start border-b ${C.borde} px-4 py-4 last:border-b-0 hover:bg-[#FAFBFC]`} role="row">
+            {sel && (
+              <div role="cell">
+                <input type="checkbox" aria-label={`Marcar a ${f.nombre}`} disabled={!f.academicaId}
+                  checked={!!f.academicaId && sel.marcados.has(f.academicaId)}
+                  onChange={() => f.academicaId && sel.alternar(f.academicaId)} className="h-4 w-4 accent-primary-600" />
+              </div>
+            )}
             <div role="cell"><CeldaAlumno f={f} /></div>
             <div role="cell"><CeldaAsistencia f={f} /></div>
             <div role="cell"><CeldaLecciones f={f} /></div>
@@ -342,9 +364,39 @@ export function EsqueletoPanel() {
 }
 
 // ─── Vista completa ──────────────────────────────────────────────────────────
-export default function PanelAlumnosVista({ cursos, cursoActivo, onElegirCurso }: {
+export default function PanelAlumnosVista({ cursos, cursoActivo, onElegirCurso, guiaId, onRecargar }: {
   cursos: CursoResumenGuia[]; cursoActivo: CursoResumenGuia; onElegirCurso: (id: string) => void
+  /** Con ambos (y el permiso) aparecen las casillas para resetear la última evaluación. */
+  guiaId?: string; onRecargar?: () => void
 }) {
+  const { hasPermission } = usePermissions()
+  const puedeResetear = !!guiaId && hasPermission(AcademicoPermission.PANEL_ALUMNOS_RESETEAR_EVALUACION)
+  const [marcados, setMarcados] = useState<Set<string>>(new Set())
+  const [confirmar, setConfirmar] = useState<'marcados' | 'todos' | null>(null)
+  const [enviando, setEnviando] = useState(false)
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
+  // Al cambiar de curso la selección empieza limpia.
+  useEffect(() => { setMarcados(new Set()); setConfirmar(null) }, [cursoActivo.cursoId])
+
+  const resetear = async () => {
+    if (!guiaId || !confirmar) return
+    setEnviando(true); setAviso(null)
+    try {
+      const res = await fetch(`/api/postgres/guias/${encodeURIComponent(guiaId)}/resetear-evaluacion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(confirmar === 'todos'
+          ? { cursoId: cursoActivo.cursoId, todos: true }
+          : { cursoId: cursoActivo.cursoId, academicaIds: Array.from(marcados) }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.success === false) throw new Error(j.error || 'No se pudo resetear')
+      setAviso({ ok: true, texto: `Evaluación reiniciada a ${j.reseteados} alumno(s)${j.sinEvaluacion ? ` · ${j.sinEvaluacion} sin evaluación presentada` : ''}. Ya pueden presentarla de nuevo.` })
+      setMarcados(new Set()); onRecargar?.()
+    } catch (e: any) {
+      setAviso({ ok: false, texto: e?.message || 'No se pudo resetear' })
+    } finally { setEnviando(false); setConfirmar(null) }
+  }
+
   const [soloAlertas, setSoloAlertas] = useState(false)
   const filas = useMemo(
     () => (soloAlertas ? cursoActivo.filas.filter(f => f.alertas.length > 0) : cursoActivo.filas),
@@ -375,7 +427,56 @@ export default function PanelAlumnosVista({ cursos, cursoActivo, onElegirCurso }
       ) : filas.length === 0 ? (
         <div className={`mt-3 rounded-[14px] border ${C.borde} bg-white p-8 text-center text-sm ${C.sec}`}>Ningún alumno de este curso tiene alertas.</div>
       ) : (
-        <TablaAlumnos filas={filas} />
+        <>
+          {puedeResetear && (
+            <div className={`mt-3 flex flex-wrap items-center gap-2 rounded-[14px] border ${C.borde} bg-white px-4 py-3`}>
+              <span className={`text-sm ${C.sec}`}>Última evaluación:</span>
+              <button type="button" disabled={marcados.size === 0 || enviando} onClick={() => setConfirmar('marcados')}
+                className="min-h-[44px] rounded-[14px] border border-primary-600 px-4 text-sm font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-40">
+                Resetear marcados ({marcados.size})
+              </button>
+              <button type="button" disabled={enviando} onClick={() => setConfirmar('todos')}
+                className="min-h-[44px] rounded-[14px] border border-[#E1E6EC] px-4 text-sm font-medium text-[#17212B] hover:border-primary-300 disabled:opacity-40">
+                Resetear a todos
+              </button>
+              <span className={`text-xs ${C.sec}`}>Reinicia los 3 intentos; el historial se conserva.</span>
+            </div>
+          )}
+          {aviso && (
+            <div role={aviso.ok ? 'status' : 'alert'} className={`mt-3 rounded-[14px] border p-3 text-sm ${aviso.ok ? 'border-[#B7E4C7] bg-[#ECFDF3] text-[#05603A]' : 'border-[#F5C2BC] bg-[#FDECEA] text-[#9A1B12]'}`}>{aviso.texto}</div>
+          )}
+          <TablaAlumnos filas={filas} sel={puedeResetear ? {
+            marcados,
+            alternar: id => setMarcados(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n }),
+            alternarTodos: marcar => setMarcados(p => {
+              const n = new Set(p)
+              filas.forEach(f => { if (f.academicaId) marcar ? n.add(f.academicaId) : n.delete(f.academicaId) })
+              return n
+            }),
+          } : undefined} />
+        </>
+      )}
+
+      {confirmar && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-[14px] bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-[#17212B]">Resetear la última evaluación</h2>
+            <p className={`mt-2 text-sm ${C.sec}`}>
+              {confirmar === 'todos'
+                ? `Se reiniciarán los intentos de la última evaluación de TODOS los alumnos de ${cursoActivo.tipoCurso} · Salón ${cursoActivo.salon || '—'} (${total}).`
+                : `Se reiniciarán los intentos de la última evaluación de ${marcados.size} alumno(s) marcado(s).`}
+              {' '}Podrán presentarla de nuevo con sus 3 intentos (incluso quien la había aprobado); el historial se conserva. ¿Continuar?
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmar(null)} disabled={enviando}
+                className="min-h-[44px] rounded-[14px] border border-[#E1E6EC] px-4 text-sm">Cancelar</button>
+              <button type="button" onClick={resetear} disabled={enviando}
+                className="min-h-[44px] rounded-[14px] bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+                {enviando ? 'Reseteando…' : 'Sí, resetear'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <Leyenda />
