@@ -8,9 +8,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@/lib/zod-resolver'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import { XMarkIcon, LockClosedIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
-
-const BANNER_DISMISSED_KEY = 'lgs_banner_dismissed'
+import { LockClosedIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import AvisosLogin from '@/components/login/AvisosLogin'
 
 const loginSchema = z.object({
   // Identificador: correo (titulares/staff) o userLogin (estudiantes MOSAICO).
@@ -25,31 +24,8 @@ type LoginErrorType = 'BLOCKED' | 'EXPIRED' | null
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [loginError, setLoginError] = useState<LoginErrorType>(null)
-  const [bannerImage, setBannerImage] = useState<string | null>(null)
-  const [bannerVisible, setBannerVisible] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
   const router = useRouter()
-
-  // Cargar banner al montar (GET público, sin auth)
-  useEffect(() => {
-    const dismissed = sessionStorage.getItem(BANNER_DISMISSED_KEY)
-    if (dismissed) return
-
-    fetch('/api/postgres/config/banner')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.active && data?.image) {
-          setBannerImage(data.image)
-          setBannerVisible(true)
-        }
-      })
-      .catch(() => {})
-  }, [])
-
-  const handleDismissBanner = () => {
-    setBannerVisible(false)
-    sessionStorage.setItem(BANNER_DISMISSED_KEY, '1')
-  }
 
   const {
     register,
@@ -201,54 +177,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="relative max-w-md w-full space-y-8">
 
-        {/* Banner Overlay */}
-        {bannerVisible && bannerImage && (
-          <>
-            {/* Mobile: card centrado con backdrop — imagen a tamaño natural, sin distorsión */}
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 sm:hidden">
-              <div className="relative w-[88vw] max-w-sm rounded-xl overflow-hidden shadow-2xl bg-white">
-                <button
-                  type="button"
-                  onClick={handleDismissBanner}
-                  className="absolute top-2 right-2 z-20 bg-white rounded-full p-1.5 shadow-lg hover:bg-gray-100 transition-colors"
-                  title="Cerrar"
-                  aria-label="Cerrar banner"
-                >
-                  <XMarkIcon className="h-5 w-5 text-gray-700" />
-                </button>
-                <img src={bannerImage} alt="Aviso" className="w-full h-auto block" />
-                <button
-                  type="button"
-                  onClick={handleDismissBanner}
-                  className="w-full py-2.5 px-4 bg-white hover:bg-gray-100 text-gray-800 text-sm font-medium transition-colors"
-                >
-                  Cerrar y continuar al login
-                </button>
-              </div>
-            </div>
-
-            {/* Desktop (sm+): overlay sobre el card del login */}
-            <div className="hidden sm:flex absolute inset-0 z-10 flex-col rounded-xl overflow-hidden shadow-2xl">
-              <button
-                type="button"
-                onClick={handleDismissBanner}
-                className="absolute top-2 right-2 z-20 bg-white rounded-full p-1.5 shadow-lg hover:bg-gray-100 transition-colors"
-                title="Cerrar"
-                aria-label="Cerrar banner"
-              >
-                <XMarkIcon className="h-5 w-5 text-gray-700" />
-              </button>
-              <img src={bannerImage} alt="Aviso" className="w-full flex-1 min-h-0 object-cover object-top" />
-              <button
-                type="button"
-                onClick={handleDismissBanner}
-                className="flex-shrink-0 w-full py-2.5 px-4 bg-white hover:bg-gray-100 text-gray-800 text-sm font-medium transition-colors"
-              >
-                Cerrar y continuar al login
-              </button>
-            </div>
-          </>
-        )}
+        {/* Avisos (carrusel de hasta 3 imágenes) */}
+        <AvisosLogin />
 
         <div>
           <img

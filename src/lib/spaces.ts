@@ -82,3 +82,15 @@ export async function getPresignedPutUrl(
   const command = new PutObjectCommand({ Bucket: SPACES_BUCKET, Key: key, ContentType: contentType });
   return getSignedUrl(spacesClient, command, { expiresIn: expiresInSeconds });
 }
+
+/**
+ * URL firmada ESTABLE: se firma con la hora en punto, así que durante toda esa hora
+ * la misma key produce la misma URL y el navegador reutiliza la imagen de su caché.
+ * Válida al menos 1 h (hasta 2 h desde la hora en punto).
+ */
+export async function getPresignedUrlEstable(key: string): Promise<string> {
+  const hora = new Date();
+  hora.setUTCMinutes(0, 0, 0);
+  const command = new GetObjectCommand({ Bucket: SPACES_BUCKET, Key: key });
+  return getSignedUrl(spacesClient, command, { expiresIn: 7200, signingDate: hora });
+}
