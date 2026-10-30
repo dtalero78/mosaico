@@ -5,6 +5,7 @@ import {
   listarFestivos, previsualizar, crearFestivo, festivosConSesionesPendientes,
   eventosSueltosEnFestivos, cursosParaElegir, type Alcance,
 } from '@/services/festivos-personalizados.service';
+import { cursosImpulsaParaElegir, aplicarFestivoImpulsa } from '@/services/festivos-impulsa.service';
 
 /**
  * GET  /api/postgres/academic/festivos            → lista + los que aún tienen clases
@@ -22,13 +23,14 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     const cursoIds = (sp.get('cursoIds') || '').split(',').map((x) => x.trim()).filter(Boolean);
     return successResponse({ preview: await previsualizar(fecha, alcance, cursoIds) });
   }
-  const [festivos, pendientes, sueltos, cursos] = await Promise.all([
+  const [festivos, pendientes, sueltos, cursos, cursosImpulsa] = await Promise.all([
     listarFestivos(),
     festivosConSesionesPendientes(),
     eventosSueltosEnFestivos(),
     cursosParaElegir(),
+    cursosImpulsaParaElegir(),
   ]);
-  return successResponse({ festivos, pendientes, sueltos, cursos });
+  return successResponse({ festivos, pendientes, sueltos, cursos, cursosImpulsa });
 });
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
@@ -40,5 +42,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   };
   const r = await crearFestivo(body?.fecha, body?.motivo, actor, (body?.alcance || 'TODOS') as Alcance,
     Array.isArray(body?.cursoIds) ? body.cursoIds : []);
-  return successResponse(r);
+  // IMPULSA: no se regenera; se quita sólo la clase del día y se corre al final.
+  const impulsa = (body?.alcance === 'IMPULSA') ? await aplicarFestivoImpulsa(r.festivo.fecha, r.festivo.cursoIds) : undefined;
+  return successResponse({ ...r, impulsa });
 });

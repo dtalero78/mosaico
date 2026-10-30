@@ -69,6 +69,10 @@ export default function FestivosPage() {
   const [alcance, setAlcance] = useState<Alcance>('TODOS')
   const [cursoIds, setCursoIds] = useState<string[]>([])
   const [cursosOpt, setCursosOpt] = useState<CursoOpt[]>([])
+  const [cursosImpulsa, setCursosImpulsa] = useState<CursoOpt[]>([])
+  // Dos paneles separados: MOSAICO regenera calendarios; IMPULSA sólo corre una clase al final.
+  const [panel, setPanel] = useState<'MOSAICO' | 'IMPULSA'>('MOSAICO')
+  const esImpulsaPanel = panel === 'IMPULSA'
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
   const [guardando, setGuardando] = useState(false)
 
@@ -91,11 +95,15 @@ export default function FestivosPage() {
       setPendientes(j.pendientes || [])
       setSueltos(j.sueltos || [])
       setCursosOpt(j.cursos || [])
+      setCursosImpulsa(j.cursosImpulsa || [])
     } catch (e: any) {
       setMsg({ tipo: 'error', texto: e?.message || 'Error al cargar' })
     } finally { setCargando(false) }
   }
   useEffect(() => { cargar() }, [])
+  useEffect(() => {
+    setAlcance(panel === 'IMPULSA' ? 'IMPULSA' : 'TODOS'); setCursoIds([]); setFecha(''); setMotivo(''); setPreview(null); setMsg(null); setResultados(null)
+  }, [panel])
 
   // Vista previa del impacto al elegir fecha.
   useEffect(() => {
@@ -112,7 +120,7 @@ export default function FestivosPage() {
   }, [fecha, alcance, cursoIds])
 
   const puedeGuardar = !!preview && !preview.yaEsFestivo && !preview.yaDeclarado && motivo.trim().length > 0
-    && fecha >= hoy && (alcance !== 'CURSOS' || cursoIds.length > 0)
+    && fecha >= hoy && ((alcance !== 'CURSOS' && alcance !== 'IMPULSA') || cursoIds.length > 0)
 
   const guardar = async () => {
     if (!puedeGuardar) return
@@ -124,7 +132,13 @@ export default function FestivosPage() {
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j?.error || 'No se pudo declarar')
+      if (j.impulsa) {
+        const movidas = (j.impulsa as any[]).filter((x) => x.estado === 'MOVIDA')
+        const otras = (j.impulsa as any[]).filter((x) => x.estado !== 'MOVIDA')
+        setMsg({ tipo: otras.length ? 'aviso' : 'ok', texto: `Festivo IMPULSA declarado: ${fmtLargo(fecha)}. ${movidas.map((x) => `${x.curso} → clase corrida al ${x.nuevaFecha}`).join(' · ') || 'Ninguna clase se movió.'}${otras.length ? ' · ' + otras.map((x) => `${x.curso}: ${x.detalle}`).join(' · ') : ''}` })
+      } else {
       setMsg({ tipo: 'ok', texto: `Festivo declarado: ${fmtLargo(fecha)}. ${j.sesiones} clase(s) quedan por recolocar.` })
+      }
       setFecha(''); setMotivo(''); setPreview(null); setAlcance('TODOS'); setCursoIds([])
       await cargar()
     } catch (e: any) {
@@ -163,6 +177,10 @@ export default function FestivosPage() {
       if (!r.ok) throw new Error(j?.error || 'No se pudo quitar')
       const cursos: CursoRegen[] = j.cursos || []
       const res = cursos.length ? await regenerarCursos(cursos) : []
+      if (f.alcance === 'IMPULSA') {
+        setMsg({ tipo: 'aviso', texto: `Festivo IMPULSA quitado: ${fmtLargo(f.fecha)}. La clase corrida NO vuelve sola: se ajusta a mano en Crear IMPULSA.` })
+        await cargar(); return
+      }
       const fallidos = res.filter((x) => x.error).length
       setMsg({ tipo: fallidos ? 'aviso' : 'ok',
         texto: `Festivo quitado: ${fmtLargo(f.fecha)}. ${res.length} curso(s) restablecidos${fallidos ? ` · ${fallidos} con error` : ''}.` })
@@ -193,6 +211,8 @@ export default function FestivosPage() {
     } finally { setRegenerando(false); setAvance(null) }
   }
 
+  const festivosPanel = useMemo(
+    () => festivos.filter((f) => (f.alcance === 'IMPULSA') === esImpulsaPanel), [festivos, esImpulsaPanel])
   const totalPendientes = useMemo(
     () => pendientes.reduce((a, p) => a + p.sesiones, 0), [pendientes])
 
@@ -207,6 +227,15 @@ export default function FestivosPage() {
               Días sin clase que se <strong>suman</strong> al calendario de Chile. Los feriados
               legales ya se aplican solos; aquí se declaran los que decide el colegio.
             </p>
+          </div>
+
+          <div className="flex gap-2 border-b border-gray-200">
+            {(['MOSAICO', 'IMPULSA'] as const).map((k) => (
+              <button key={k} type="button" onClick={() => setPanel(k)}
+                className={`px-4 py-2 -mb-px border-b-2 font-medium ${panel === k ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                Cursos {k}
+              </button>
+            ))}
           </div>
 
           {msg && (
@@ -241,18 +270,18 @@ export default function FestivosPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
+              {!esImpulsaPanel && (<div>
                 <label htmlFor="alcance" className="block text-sm font-medium text-gray-700 mb-1">Aplica a</label>
                 <select id="alcance" value={alcance} onChange={(e) => setAlcance(e.target.value as Alcance)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2">
-                  {(Object.keys(ALCANCE_LABEL) as Alcance[]).map((k) => <option key={k} value={k}>{ALCANCE_LABEL[k]}</option>)}
+                  {(Object.keys(ALCANCE_LABEL) as Alcance[]).filter((k) => k !== 'IMPULSA').map((k) => <option key={k} value={k}>{ALCANCE_LABEL[k]}</option>)}
                 </select>
-              </div>
-              {alcance === 'CURSOS' && (
-                <div className="md:col-span-2">
+              </div>)}
+              {(alcance === 'CURSOS' || alcance === 'IMPULSA') && (
+                <div className="md:col-span-3">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cursos ({cursoIds.length} elegidos)</label>
                   <div className="border border-gray-300 rounded-lg max-h-40 overflow-y-auto p-2 text-sm">
-                    {cursosOpt.map((c) => (
+                    {(esImpulsaPanel ? cursosImpulsa : cursosOpt).map((c) => (
                       <label key={c._id} className="flex items-center gap-2 py-0.5">
                         <input type="checkbox" checked={cursoIds.includes(c._id)}
                           onChange={(e) => setCursoIds((p) => e.target.checked ? [...p, c._id] : p.filter((x) => x !== c._id))} />
@@ -263,8 +292,8 @@ export default function FestivosPage() {
                 </div>
               )}
             </div>
-            {alcance === 'IMPULSA' && (
-              <p className="mt-2 text-sm text-sky-800">IMPULSA tiene calendario propio: el día queda registrado pero no mueve sus clases.</p>
+            {esImpulsaPanel && (
+              <p className="mt-2 text-sm text-sky-800">IMPULSA tiene calendario propio y no usa los feriados de Chile: se quita sólo la <strong>clase</strong> de ese día (si no tiene asistencia registrada) y se corre al final de las sesiones. Entrenamientos y evaluaciones no se tocan.</p>
             )}
             {fecha && fecha < hoy && (
               <p className="mt-2 text-sm text-red-700">Sólo se pueden crear festivos de hoy en adelante.</p>
@@ -318,7 +347,7 @@ export default function FestivosPage() {
           </div>
 
           {/* ── Recolocar ────────────────────────────────────────────────── */}
-          {pendientes.length > 0 && (
+          {!esImpulsaPanel && pendientes.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
               <h2 className="text-lg font-semibold text-amber-900">Clases por recolocar</h2>
               <p className="text-amber-800 mt-1">
@@ -373,7 +402,7 @@ export default function FestivosPage() {
             </div>
           )}
 
-          {sueltos.length > 0 && (
+          {!esImpulsaPanel && sueltos.length > 0 && (
             <div className="bg-rose-50 border border-rose-200 rounded-lg p-6">
               <h2 className="text-lg font-semibold text-rose-900">Eventos sueltos en día sin clase</h2>
               <p className="text-rose-800 mt-1">
@@ -395,7 +424,7 @@ export default function FestivosPage() {
             </div>
           )}
 
-          {impulsa.length > 0 && (
+          {!esImpulsaPanel && impulsa.length > 0 && (
             <div className="bg-sky-50 border border-sky-200 rounded-lg p-6">
               <h2 className="text-lg font-semibold text-sky-900">IMPULSA dicta normal estos días</h2>
               <p className="text-sky-800 mt-1">
@@ -431,11 +460,11 @@ export default function FestivosPage() {
           {/* ── Listado ──────────────────────────────────────────────────── */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Festivos declarados {festivos.length > 0 && <span className="text-gray-500 font-normal">({festivos.length})</span>}
+              Festivos declarados {festivosPanel.length > 0 && <span className="text-gray-500 font-normal">({festivosPanel.length})</span>}
             </h2>
             {cargando ? (
               <p className="text-gray-500">Cargando…</p>
-            ) : festivos.length === 0 ? (
+            ) : festivosPanel.length === 0 ? (
               <p className="text-gray-500">
                 Todavía no hay ninguno. El calendario de Chile se sigue aplicando solo.
               </p>
@@ -452,7 +481,7 @@ export default function FestivosPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {festivos.map((f) => (
+                    {festivosPanel.map((f) => (
                       <tr key={f._id} className="border-b last:border-0">
                         <td className="py-2 pr-4 whitespace-nowrap">{fmtLargo(f.fecha)}</td>
                         <td className="py-2 pr-4">{f.motivo}</td>

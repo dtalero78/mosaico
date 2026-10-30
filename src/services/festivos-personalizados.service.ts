@@ -42,7 +42,7 @@ const ALCANCES: Alcance[] = ['TODOS', 'MOSAICO', 'IMPULSA', 'CURSOS'];
  * entrenamientos y evaluaciones), así que el alcance IMPULSA no afecta ningún curso.
  */
 function filtroAlcance(alcance: Alcance, cursoIds: string[], idxParam: number): { sql: string; params: any[] } {
-  if (alcance === 'IMPULSA') return { sql: ' AND FALSE', params: [] };
+  if (alcance === 'IMPULSA') return { sql: ` AND UPPER(cc."tipoCurso") = 'IMPULSA' AND cc."_id" = ANY($${idxParam}::text[])`, params: [cursoIds] };
   if (alcance === 'CURSOS') return { sql: ` AND cc."_id" = ANY($${idxParam}::text[])`, params: [cursoIds] };
   return { sql: ` AND UPPER(cc."tipoCurso") <> 'IMPULSA'`, params: [] };
 }
@@ -100,7 +100,7 @@ export async function impactoDeFecha(fecha: string, alcance: Alcance = 'TODOS', 
               WHERE (b."eventoId" = c."_id" OR b."idEvento" = c."_id")) AS "alumnos"
        FROM "CALENDARIO" c
        JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
-      WHERE c."fecha" = $1::date AND cc."activa" IS NOT FALSE${fa.sql}
+      WHERE c."fecha" = $1::date AND cc."activa" IS NOT FALSE AND (UPPER(cc."tipoCurso") <> 'IMPULSA' OR c."tipo" = 'SESSION')${fa.sql}
       ORDER BY cc."campaign", cc."tipoCurso", cc."salon"`, [fecha, ...fa.params]
   );
   // Clases ya dictadas ese día: regenerar el curso borraría lo registrado.
@@ -123,13 +123,13 @@ export async function impactoDeFecha(fecha: string, alcance: Alcance = 'TODOS', 
 export async function previsualizar(fecha: string, alcance: Alcance = 'TODOS', cursoIds: string[] = []) {
   const f = normalizarFecha(fecha);
   const yaDeclarado = await queryOne<{ motivo: string }>(
-    `SELECT "motivo" FROM "FESTIVOS_PERSONALIZADOS" WHERE "fecha" = $1::date`, [f]
+    `SELECT "motivo" FROM "FESTIVOS_PERSONALIZADOS" WHERE "fecha" = $1::date AND ("alcance" = 'IMPULSA') = $2`, [f, alcance === 'IMPULSA']
   ).catch(() => null);
   const { cursos, yaDictadas } = await impactoDeFecha(f, alcance, cursoIds);
   return {
     fecha: f,
     pasada: f < hoyEnChile(),
-    yaEsFestivo: esFestivoChile(f),
+    yaEsFestivo: alcance === 'IMPULSA' ? false : esFestivoChile(f),
     yaDeclarado: yaDeclarado?.motivo || null,
     cursos,
     sesiones: cursos.length,
@@ -148,17 +148,17 @@ export async function crearFestivo(
   if (f < hoyEnChile()) throw new ValidationError('Los festivos sólo se pueden crear de hoy en adelante, no hacia atrás.');
   if (!ALCANCES.includes(alcance)) throw new ValidationError('Alcance inválido (TODOS, MOSAICO, IMPULSA o CURSOS).');
   const ids_ = Array.from(new Set((cursoIds || []).map(String).filter(Boolean)));
-  if (alcance === 'CURSOS' && !ids_.length) throw new ValidationError('Elige al menos un curso.');
+  if ((alcance === 'CURSOS' || alcance === 'IMPULSA') && !ids_.length) throw new ValidationError('Elige al menos un curso.');
   const m = String(motivo || '').trim();
   if (!m) throw new ValidationError('El motivo es obligatorio.');
 
-  if (esFestivoChile(f)) {
+  if (alcance !== 'IMPULSA' && esFestivoChile(f)) {
     throw new ConflictError(
       `El ${f} ya es feriado del calendario de Chile — no hace falta declararlo, ese día ya no se dicta clase.`
     );
   }
   const dup = await queryOne<{ motivo: string }>(
-    `SELECT "motivo" FROM "FESTIVOS_PERSONALIZADOS" WHERE "fecha" = $1::date`, [f]);
+    `SELECT "motivo" FROM "FESTIVOS_PERSONALIZADOS" WHERE "fecha" = $1::date AND ("alcance" = 'IMPULSA') = $2`, [f, alcance === 'IMPULSA']);
   if (dup) throw new ConflictError(`El ${f} ya está declarado como festivo: "${dup.motivo}".`);
 
   const { cursos } = await impactoDeFecha(f, alcance, ids_);
@@ -166,7 +166,7 @@ export async function crearFestivo(
     `INSERT INTO "FESTIVOS_PERSONALIZADOS" ("_id","fecha","motivo","creadoPor","creadoPorNombre","alcance","cursoIds")
      VALUES ($1,$2::date,$3,$4,$5,$6,$7::jsonb)
      RETURNING "_id","fecha"::text AS "fecha","motivo","creadoPor","creadoPorNombre","_createdDate","alcance","cursoIds"`,
-    [ids.comment(), f, m, actor.email || null, actor.nombre || null, alcance, JSON.stringify(alcance === 'CURSOS' ? ids_ : [])]
+    [ids.comment(), f, m, actor.email || null, actor.nombre || null, alcance, JSON.stringify(alcance === 'CURSOS' || alcance === 'IMPULSA' ? ids_ : [])]
   );
   return { festivo: row!, sesiones: cursos.length };
 }
@@ -209,7 +209,7 @@ export async function eliminarFestivo(id: string, quitarCursoIds?: string[]) {
     }
   }
   await queryOne(`DELETE FROM "FESTIVOS_PERSONALIZADOS" WHERE "_id" = $1`, [id]);
-  return { fecha, alcance: f.alcance, parcial: false, cursos: await cursosPorRestablecer(fecha, f.alcance, quitados) };
+  return { fecha, alcance: f.alcance, parcial: false, cursos: f.alcance === 'IMPULSA' ? [] : await cursosPorRestablecer(fecha, f.alcance, quitados) };
 }
 
 /** Cursos activos (no IMPULSA) para elegir en un festivo de alcance CURSOS. */
