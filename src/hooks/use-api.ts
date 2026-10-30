@@ -58,7 +58,10 @@ export const api = {
  */
 export function handleApiError(error: unknown, fallbackMessage = 'Error inesperado') {
   if (error instanceof ApiError) {
-    toast.error(error.details || error.message)
+    // details puede venir como objeto (p.ej. {status, message} de WhatsApp): React no lo pinta.
+    const d: any = error.details
+    const texto = typeof d === 'string' ? d : d && typeof d === 'object' ? (d.message || d.error || '') : ''
+    toast.error(String(texto || error.message))
   } else if (error instanceof Error) {
     toast.error(error.message || fallbackMessage)
   } else {
