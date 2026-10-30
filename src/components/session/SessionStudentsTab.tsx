@@ -665,6 +665,14 @@ export default function SessionStudentsTab({
                   {selectedStudent.primerNombre} {selectedStudent.primerApellido}
                 </h2>
                 <SesionAnteriorBadge rec={selectedStudent.classRecord} />
+                <button
+                  type="button"
+                  onClick={() => handleSaveClassRecord()}
+                  disabled={isLocked}
+                  className="ml-auto px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
+                >
+                  {isLocked ? 'Edición bloqueada' : 'Guardar registro Usuario'}
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
@@ -970,17 +978,6 @@ export default function SessionStudentsTab({
               </p>
             </div>
 
-            {/* Botón Guardar */}
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <button
-                type="button"
-                onClick={() => handleSaveClassRecord()}
-                disabled={isLocked}
-                className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed disabled:hover:bg-gray-300"
-              >
-                {isLocked ? 'Edición bloqueada' : 'Guardar registro Usuario'}
-              </button>
-            </div>
           </>
         )}
       </div>
