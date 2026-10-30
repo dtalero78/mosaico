@@ -194,8 +194,8 @@ export async function cursosPorRestablecer(fecha: string, alcance: Alcance, curs
  * quedan cursos, el festivo sigue para ellos. Devuelve los cursos a restablecer.
  */
 export async function eliminarFestivo(id: string, quitarCursoIds?: string[]) {
-  const f = await queryOne<{ fecha: string; alcance: Alcance; cursoIds: string[] }>(
-    `SELECT "fecha"::text AS "fecha","alcance","cursoIds" FROM "FESTIVOS_PERSONALIZADOS" WHERE "_id" = $1`, [id]);
+  const f = await queryOne<{ fecha: string; alcance: Alcance; cursoIds: string[]; movimientos: any[] }>(
+    `SELECT "fecha"::text AS "fecha","alcance","cursoIds","movimientos" FROM "FESTIVOS_PERSONALIZADOS" WHERE "_id" = $1`, [id]);
   if (!f) throw new NotFoundError('Festivo', id);
   const fecha = String(f.fecha).slice(0, 10);
   const actuales: string[] = Array.isArray(f.cursoIds) ? f.cursoIds : [];
@@ -209,7 +209,7 @@ export async function eliminarFestivo(id: string, quitarCursoIds?: string[]) {
     }
   }
   await queryOne(`DELETE FROM "FESTIVOS_PERSONALIZADOS" WHERE "_id" = $1`, [id]);
-  return { fecha, alcance: f.alcance, parcial: false, cursos: f.alcance === 'IMPULSA' ? [] : await cursosPorRestablecer(fecha, f.alcance, quitados) };
+  return { fecha, alcance: f.alcance, parcial: false, movimientos: Array.isArray(f.movimientos) ? f.movimientos : [], cursos: f.alcance === 'IMPULSA' ? [] : await cursosPorRestablecer(fecha, f.alcance, quitados) };
 }
 
 /** Cursos activos (no IMPULSA) para elegir en un festivo de alcance CURSOS. */

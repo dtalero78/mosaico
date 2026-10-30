@@ -43,6 +43,6 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const r = await crearFestivo(body?.fecha, body?.motivo, actor, (body?.alcance || 'TODOS') as Alcance,
     Array.isArray(body?.cursoIds) ? body.cursoIds : []);
   // IMPULSA: no se regenera; se quita sólo la clase del día y se corre al final.
-  const impulsa = (body?.alcance === 'IMPULSA') ? await aplicarFestivoImpulsa(r.festivo.fecha, r.festivo.cursoIds) : undefined;
+  const impulsa = (body?.alcance === 'IMPULSA') ? await aplicarFestivoImpulsa(r.festivo._id, r.festivo.fecha, r.festivo.cursoIds) : undefined;
   return successResponse({ ...r, impulsa });
 });

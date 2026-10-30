@@ -178,7 +178,9 @@ export default function FestivosPage() {
       const cursos: CursoRegen[] = j.cursos || []
       const res = cursos.length ? await regenerarCursos(cursos) : []
       if (f.alcance === 'IMPULSA') {
-        setMsg({ tipo: 'aviso', texto: `Festivo IMPULSA quitado: ${fmtLargo(f.fecha)}. La clase corrida NO vuelve sola: se ajusta a mano en Crear IMPULSA.` })
+        const hechas = ((j.impulsa || []) as any[]).filter((x) => x.estado === 'MOVIDA')
+        const fallas = ((j.impulsa || []) as any[]).filter((x) => x.estado !== 'MOVIDA')
+        setMsg({ tipo: fallas.length ? 'aviso' : 'ok', texto: `Festivo IMPULSA quitado: ${fmtLargo(f.fecha)}. ${hechas.length} clase(s) devueltas a su día.${fallas.length ? ' · ' + fallas.map((x) => `${x.curso}: ${x.detalle}`).join(' · ') + ' (ajustar a mano en Crear IMPULSA)' : ''}` })
         await cargar(); return
       }
       const fallidos = res.filter((x) => x.error).length
