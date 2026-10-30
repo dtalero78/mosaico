@@ -6,12 +6,13 @@ import { eliminarFestivo } from '@/services/festivos-personalizados.service';
 /**
  * DELETE /api/postgres/academic/festivos/[id] — quita un festivo declarado.
  *
- * No regenera los cursos: el día vuelve a estar disponible, pero las clases se
- * recolocan al regenerar (botón aparte), que es una operación pesada y con
- * consecuencias — el admin decide cuándo.
+ * No regenera los cursos: devuelve los que hay que restablecer (los de su alcance cuyo
+ * calendario cruza el día) para que la página los recorra de a uno con avance.
  */
-export const DELETE = handlerWithAuth(async (_request, { params }, session) => {
+export const DELETE = handlerWithAuth(async (request, { params }, session) => {
   await requirePermission(session, AcademicoPermission.FESTIVOS_GESTION);
-  const r = await eliminarFestivo(params.id);
+  // Body opcional: { cursoIds } para quitar el festivo sólo de algunos cursos (alcance CURSOS).
+  const body = await request.json().catch(() => ({}));
+  const r = await eliminarFestivo(params.id, Array.isArray(body?.cursoIds) ? body.cursoIds : undefined);
   return successResponse(r);
 });

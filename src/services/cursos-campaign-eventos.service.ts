@@ -5,7 +5,7 @@ import type { PoolClient } from 'pg';
 import { ids } from '@/lib/id-generator';
 import { parseHorario } from '@/lib/cursos-campaign';
 import { esFestivoChile } from '@/lib/festivos-chile';
-import { fechasFestivasPersonalizadas } from './festivos-personalizados.service';
+import { fechasFestivasDeCurso } from './festivos-personalizados.service';
 import { eventoCompartidoIdDeGrupo } from '@/lib/grupo-horario-server';
 import { bookingConRegistroSql } from '@/lib/booking-registro';
 import { mapearLeccionesSalon } from './repetir-clase.service';
@@ -96,7 +96,10 @@ export async function diasSinClaseCurso(cursoId: string): Promise<(fecha: string
     [cursoId]
   ).catch(() => ({ rows: [] as { fecha: string }[] })); // tabla aún no creada → sin suspensiones
   const suspendidas = new Set(susp.rows.map((r) => String(r.fecha).slice(0, 10)));
-  const personalizados = await fechasFestivasPersonalizadas();
+  const tc = await query<{ tipoCurso: string }>(`SELECT "tipoCurso" FROM "CURSOS_CAMPAIGN" WHERE "_id" = $1`, [cursoId])
+    .catch(() => ({ rows: [] as { tipoCurso: string }[] }));
+  // Sólo los festivos cuyo alcance incluye a ESTE curso (todos/MOSAICO, o los que lo nombran).
+  const personalizados = await fechasFestivasDeCurso(cursoId, tc.rows[0]?.tipoCurso || '');
   return (d: string) => esFestivoChile(d) || personalizados.has(d) || suspendidas.has(d);
 }
 

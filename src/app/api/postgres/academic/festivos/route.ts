@@ -3,7 +3,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import {
   listarFestivos, previsualizar, crearFestivo, festivosConSesionesPendientes,
-  eventosSueltosEnFestivos,
+  eventosSueltosEnFestivos, cursosParaElegir, type Alcance,
 } from '@/services/festivos-personalizados.service';
 
 /**
@@ -16,13 +16,19 @@ import {
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, AcademicoPermission.FESTIVOS_GESTION);
   const fecha = new URL(request.url).searchParams.get('fecha');
-  if (fecha) return successResponse({ preview: await previsualizar(fecha) });
-  const [festivos, pendientes, sueltos] = await Promise.all([
+  const sp = new URL(request.url).searchParams;
+  if (fecha) {
+    const alcance = (sp.get('alcance') || 'TODOS') as Alcance;
+    const cursoIds = (sp.get('cursoIds') || '').split(',').map((x) => x.trim()).filter(Boolean);
+    return successResponse({ preview: await previsualizar(fecha, alcance, cursoIds) });
+  }
+  const [festivos, pendientes, sueltos, cursos] = await Promise.all([
     listarFestivos(),
     festivosConSesionesPendientes(),
     eventosSueltosEnFestivos(),
+    cursosParaElegir(),
   ]);
-  return successResponse({ festivos, pendientes, sueltos });
+  return successResponse({ festivos, pendientes, sueltos, cursos });
 });
 
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
@@ -32,6 +38,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     email: (session?.user as any)?.email || null,
     nombre: (session?.user as any)?.name || null,
   };
-  const r = await crearFestivo(body?.fecha, body?.motivo, actor);
+  const r = await crearFestivo(body?.fecha, body?.motivo, actor, (body?.alcance || 'TODOS') as Alcance,
+    Array.isArray(body?.cursoIds) ? body.cursoIds : []);
   return successResponse(r);
 });

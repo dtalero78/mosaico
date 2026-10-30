@@ -19,6 +19,12 @@ import { AcademicoPermission } from '@/types/permissions'
 interface Festivo {
   _id: string; fecha: string; motivo: string
   creadoPor: string | null; creadoPorNombre: string | null; _createdDate: string
+  alcance: Alcance; cursoIds: string[]
+}
+type Alcance = 'TODOS' | 'MOSAICO' | 'IMPULSA' | 'CURSOS'
+interface CursoOpt { _id: string; campaign: string; tipoCurso: string; salon: string | null; horarioCurso: string | null }
+const ALCANCE_LABEL: Record<Alcance, string> = {
+  TODOS: 'Todos los cursos', MOSAICO: 'Cursos MOSAICO', IMPULSA: 'IMPULSA (sólo registro)', CURSOS: 'Cursos específicos',
 }
 interface CursoImpacto {
   _id: string; campaign: string; tipoCurso: string; salon: string | null
@@ -60,6 +66,10 @@ export default function FestivosPage() {
   const [fecha, setFecha] = useState('')
   const [motivo, setMotivo] = useState('')
   const [preview, setPreview] = useState<Preview | null>(null)
+  const [alcance, setAlcance] = useState<Alcance>('TODOS')
+  const [cursoIds, setCursoIds] = useState<string[]>([])
+  const [cursosOpt, setCursosOpt] = useState<CursoOpt[]>([])
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
   const [guardando, setGuardando] = useState(false)
 
   // Recolocación — va curso por curso: regenerar uno solo ya reescribe sus eventos
@@ -80,6 +90,7 @@ export default function FestivosPage() {
       setFestivos(j.festivos || [])
       setPendientes(j.pendientes || [])
       setSueltos(j.sueltos || [])
+      setCursosOpt(j.cursos || [])
     } catch (e: any) {
       setMsg({ tipo: 'error', texto: e?.message || 'Error al cargar' })
     } finally { setCargando(false) }
@@ -92,15 +103,16 @@ export default function FestivosPage() {
     let vivo = true
     ;(async () => {
       try {
-        const r = await fetch(`/api/postgres/academic/festivos?fecha=${fecha}`, { cache: 'no-store' })
+        const r = await fetch(`/api/postgres/academic/festivos?fecha=${fecha}&alcance=${alcance}&cursoIds=${cursoIds.join(',')}`, { cache: 'no-store' })
         const j = await r.json()
         if (vivo && r.ok) setPreview(j.preview)
       } catch { /* la vista previa es informativa */ }
     })()
     return () => { vivo = false }
-  }, [fecha])
+  }, [fecha, alcance, cursoIds])
 
   const puedeGuardar = !!preview && !preview.yaEsFestivo && !preview.yaDeclarado && motivo.trim().length > 0
+    && fecha >= hoy && (alcance !== 'CURSOS' || cursoIds.length > 0)
 
   const guardar = async () => {
     if (!puedeGuardar) return
@@ -108,34 +120,60 @@ export default function FestivosPage() {
     try {
       const r = await fetch('/api/postgres/academic/festivos', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fecha, motivo: motivo.trim() }),
+        body: JSON.stringify({ fecha, motivo: motivo.trim(), alcance, cursoIds }),
       })
       const j = await r.json()
       if (!r.ok) throw new Error(j?.error || 'No se pudo declarar')
       setMsg({ tipo: 'ok', texto: `Festivo declarado: ${fmtLargo(fecha)}. ${j.sesiones} clase(s) quedan por recolocar.` })
-      setFecha(''); setMotivo(''); setPreview(null)
+      setFecha(''); setMotivo(''); setPreview(null); setAlcance('TODOS'); setCursoIds([])
       await cargar()
     } catch (e: any) {
       setMsg({ tipo: 'error', texto: e?.message || 'Error al declarar' })
     } finally { setGuardando(false) }
   }
 
+  /** Regenera curso por curso (con avance); lo usan "Recolocar" y "Quitar festivo". */
+  const regenerarCursos = async (cursos: CursoRegen[]) => {
+    const acumulado: ResRegen[] = []
+    setAvance({ hechos: 0, total: cursos.length, actual: '' })
+    for (let i = 0; i < cursos.length; i++) {
+      const c = cursos[i]
+      setAvance({ hechos: i, total: cursos.length, actual: c.nombre })
+      try {
+        const r = await fetch('/api/postgres/academic/festivos/regenerar', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cursoId: c._id }),
+        })
+        const j = await r.json()
+        if (!r.ok) throw new Error(j?.error || 'error')
+        acumulado.push({ curso: c.nombre, eventos: j.eventos, bookings: j.bookings })
+      } catch (e: any) {
+        acumulado.push({ curso: c.nombre, error: e?.message || String(e) })
+      }
+      setResultados([...acumulado])
+    }
+    return acumulado
+  }
+
   const quitar = async (f: Festivo) => {
-    setMsg(null)
+    setMsg(null); setResultados(null); setRegenerando(true)
     try {
       const r = await fetch(`/api/postgres/academic/festivos/${f._id}`, { method: 'DELETE' })
       const j = await r.json()
       if (!r.ok) throw new Error(j?.error || 'No se pudo quitar')
-      setMsg({ tipo: 'aviso', texto: `Festivo quitado: ${fmtLargo(f.fecha)}. Las clases NO vuelven solas — hay que regenerar el curso desde Campañas.` })
+      const cursos: CursoRegen[] = j.cursos || []
+      const res = cursos.length ? await regenerarCursos(cursos) : []
+      const fallidos = res.filter((x) => x.error).length
+      setMsg({ tipo: fallidos ? 'aviso' : 'ok',
+        texto: `Festivo quitado: ${fmtLargo(f.fecha)}. ${res.length} curso(s) restablecidos${fallidos ? ` · ${fallidos} con error` : ''}.` })
       await cargar()
     } catch (e: any) {
       setMsg({ tipo: 'error', texto: e?.message || 'Error al quitar' })
-    }
+    } finally { setRegenerando(false); setAvance(null) }
   }
 
   const recolocar = async () => {
     setRegenerando(true); setMsg(null); setResultados(null); setConfirmarRegen(false)
-    const acumulado: ResRegen[] = []
     try {
       const fechas = pendientes.map((p) => p.fecha).join(',')
       const rl = await fetch(`/api/postgres/academic/festivos/regenerar?fechas=${fechas}`, { cache: 'no-store' })
@@ -143,24 +181,7 @@ export default function FestivosPage() {
       if (!rl.ok) throw new Error(jl?.error || 'No se pudo listar los cursos')
       const cursos: CursoRegen[] = jl.cursos || []
       setImpulsa(jl.impulsa || [])
-      setAvance({ hechos: 0, total: cursos.length, actual: '' })
-
-      for (let i = 0; i < cursos.length; i++) {
-        const c = cursos[i]
-        setAvance({ hechos: i, total: cursos.length, actual: c.nombre })
-        try {
-          const r = await fetch('/api/postgres/academic/festivos/regenerar', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cursoId: c._id }),
-          })
-          const j = await r.json()
-          if (!r.ok) throw new Error(j?.error || 'error')
-          acumulado.push({ curso: c.nombre, eventos: j.eventos, bookings: j.bookings })
-        } catch (e: any) {
-          acumulado.push({ curso: c.nombre, error: e?.message || String(e) })
-        }
-        setResultados([...acumulado])
-      }
+      const acumulado = await regenerarCursos(cursos)
       const fallidos = acumulado.filter((r) => r.error).length
       setMsg({
         tipo: fallidos ? 'aviso' : 'ok',
@@ -204,7 +225,7 @@ export default function FestivosPage() {
               <div>
                 <label htmlFor="fecha" className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
                 <input
-                  id="fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+                  id="fecha" type="date" min={hoy} value={fecha} onChange={(e) => setFecha(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                 />
               </div>
@@ -218,6 +239,36 @@ export default function FestivosPage() {
                 />
               </div>
             </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="alcance" className="block text-sm font-medium text-gray-700 mb-1">Aplica a</label>
+                <select id="alcance" value={alcance} onChange={(e) => setAlcance(e.target.value as Alcance)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2">
+                  {(Object.keys(ALCANCE_LABEL) as Alcance[]).map((k) => <option key={k} value={k}>{ALCANCE_LABEL[k]}</option>)}
+                </select>
+              </div>
+              {alcance === 'CURSOS' && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cursos ({cursoIds.length} elegidos)</label>
+                  <div className="border border-gray-300 rounded-lg max-h-40 overflow-y-auto p-2 text-sm">
+                    {cursosOpt.map((c) => (
+                      <label key={c._id} className="flex items-center gap-2 py-0.5">
+                        <input type="checkbox" checked={cursoIds.includes(c._id)}
+                          onChange={(e) => setCursoIds((p) => e.target.checked ? [...p, c._id] : p.filter((x) => x !== c._id))} />
+                        {c.campaign} {c.tipoCurso}/{c.salon || '—'} — {c.horarioCurso}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {alcance === 'IMPULSA' && (
+              <p className="mt-2 text-sm text-sky-800">IMPULSA tiene calendario propio: el día queda registrado pero no mueve sus clases.</p>
+            )}
+            {fecha && fecha < hoy && (
+              <p className="mt-2 text-sm text-red-700">Sólo se pueden crear festivos de hoy en adelante.</p>
+            )}
 
             {preview && (
               <div className="mt-4 space-y-3">
@@ -395,6 +446,7 @@ export default function FestivosPage() {
                     <tr className="text-left text-gray-500 border-b">
                       <th className="py-2 pr-4">Fecha</th>
                       <th className="py-2 pr-4">Motivo</th>
+                      <th className="py-2 pr-4">Alcance</th>
                       <th className="py-2 pr-4">Declarado por</th>
                       <th className="py-2 pr-4 text-right">Acción</th>
                     </tr>
@@ -404,11 +456,12 @@ export default function FestivosPage() {
                       <tr key={f._id} className="border-b last:border-0">
                         <td className="py-2 pr-4 whitespace-nowrap">{fmtLargo(f.fecha)}</td>
                         <td className="py-2 pr-4">{f.motivo}</td>
+                        <td className="py-2 pr-4 text-gray-600">{ALCANCE_LABEL[f.alcance] || f.alcance}{f.alcance === 'CURSOS' ? ` (${f.cursoIds.length})` : ''}</td>
                         <td className="py-2 pr-4 text-gray-500">
                           {f.creadoPorNombre || f.creadoPor || '—'}
                         </td>
                         <td className="py-2 pr-4 text-right">
-                          <button type="button" onClick={() => quitar(f)}
+                          <button type="button" onClick={() => quitar(f)} disabled={regenerando}
                             className="text-red-600 hover:text-red-800">
                             Quitar
                           </button>
