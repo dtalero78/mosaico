@@ -320,7 +320,7 @@ export default function AjusteCursosTab({
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500" />
                 <p className="text-xs text-gray-500 mt-1">
                   {modal.accion === 'cierre'
-                    ? 'Se quitan las clases posteriores a esta fecha. Sólo se pueden quitar clases que todavía no ocurren.'
+                    ? 'Se quitan las clases desde esta fecha (inclusive). Sólo se pueden quitar clases que todavía no ocurren.'
                     : 'Se agregan las clases que faltan hasta esta fecha, después de la última existente, saltando festivos y suspensiones.'}
                 </p>
               </div>

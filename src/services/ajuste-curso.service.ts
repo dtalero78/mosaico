@@ -17,7 +17,7 @@ import {
 /**
  * Académico › Campañas › Ajuste Cursos.
  *
- *  - CIERRE: adelanta el final del curso. Borra las clases posteriores a la fecha
+ *  - CIERRE: adelanta el final del curso. Borra las clases desde la fecha
  *    elegida y sus agendamientos, y fija `finalCurso` y `cierreCurso` en esa fecha
  *    — o en la de la última clase que queda, si es anterior: el curso termina en
  *    su última clase, y sin esto un cierre con fecha de hoy seguía "Activo".
@@ -198,16 +198,17 @@ export async function planCierre(cursoId: string, fecha: string) {
       throw new ValidationError(`La fecha de cierre no puede ser anterior al inicio del curso (${c.inicioCurso.slice(0, 10)}).`);
     }
     const ultimaAntes = evs[evs.length - 1].fecha;
-    const aBorrar = evs.filter((e) => e.fecha > fecha);
+    // La fecha elegida es el día del CIERRE: desde ese día (inclusive) no hay clases.
+    const aBorrar = evs.filter((e) => e.fecha >= fecha);
     if (!aBorrar.length) {
-      throw new ValidationError(`${nombreCurso(c)} no tiene clases después del ${fecha}: su última clase es el ${ultimaAntes}.`);
+      throw new ValidationError(`${nombreCurso(c)} no tiene clases desde el ${fecha}: su última clase es el ${ultimaAntes}.`);
     }
     // Sólo se quitan clases que todavía no ocurren. Una clase pasada —aunque el
     // guía no haya marcado asistencia— se dictó o se debió dictar: es historia.
     const pasadas = aBorrar.filter((e) => e.pasado);
     if (pasadas.length) {
       const ultimaPasada = evs.filter((e) => e.pasado).slice(-1)[0]?.fecha;
-      throw new ValidationError(`El cierre sólo puede quitar clases que aún no ocurren. La última clase ya dictada de ${nombreCurso(c)} es el ${ultimaPasada}: elige esa fecha o una posterior.`);
+      throw new ValidationError(`El cierre sólo puede quitar clases que aún no ocurren. La última clase ya dictada de ${nombreCurso(c)} es el ${ultimaPasada}: elige el día siguiente o una fecha posterior.`);
     }
     const conRegistro = aBorrar.filter((e) => e.cerrada || e.conRegistro);
     if (conRegistro.length) {
@@ -219,7 +220,7 @@ export async function planCierre(cursoId: string, fecha: string) {
          FROM "ACADEMICA_BOOKINGS" WHERE "eventoId" = ANY($1::text[]) OR "idEvento" = ANY($1::text[])`,
       [ids]
     )).rows[0];
-    const quedan = evs.filter((e) => e.fecha <= fecha);
+    const quedan = evs.filter((e) => e.fecha < fecha);
     const ultimaNueva = quedan.length ? quedan[quedan.length - 1].fecha : null;
     // Los alumnos ACTIVOS del curso: al cerrarlo se inactivan (ver aplicarCierre).
     const activos = await alumnosActivosDelCurso(c._id);
