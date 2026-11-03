@@ -29,7 +29,7 @@ import { getSessionWindow, REGISTER_CLOSE_MIN } from '@/lib/session-window';
 import { estaAutorizado, marcarAutorizacionUsada } from '@/services/autorizacion-gestion.service';
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
-const EDIT_WINDOW_MIN_MINUTES = 30;
+const EDIT_WINDOW_MIN_MINUTES = 20;
 const TZ_REGEX = /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+(\/[A-Za-z_+\-0-9]+)?$/;
 
 /**
@@ -131,7 +131,7 @@ function computeEditability(
   if (elapsedMin < EDIT_WINDOW_MIN_MINUTES) {
     return {
       canEdit: false,
-      editReason: `Disponible 30 min después del inicio del evento (faltan ${Math.ceil(EDIT_WINDOW_MIN_MINUTES - elapsedMin)} min).`,
+      editReason: `Disponible 20 min después del inicio del evento (faltan ${Math.ceil(EDIT_WINDOW_MIN_MINUTES - elapsedMin)} min).`,
     };
   }
   return { canEdit: true, editReason: null };
@@ -341,7 +341,7 @@ export async function updateAdvisorNotes(
       }
       if (ws.minutesUntilRegister !== null) {
         throw new ValidationError(
-          `Disponible 30 min después del inicio del evento (faltan ${ws.minutesUntilRegister} min).`,
+          `Disponible 20 min después del inicio del evento (faltan ${ws.minutesUntilRegister} min).`,
         );
       }
       throw new ValidationError('No se puede registrar esta sesión en este momento.');
@@ -492,29 +492,42 @@ export async function closeSession(
     }
   }
 
-  // Si sinAsistentes=true: defensa server-side. Verificar que ningún booking
-  // del evento tiene asistencia marcada. Si alguno la tiene → inconsistente.
   let bookingsActualizados = 0;
   if (opts.sinAsistentes === true) {
-    const conflict = await queryOne<{ n: number }>(
-      `SELECT COUNT(*)::int AS n FROM "ACADEMICA_BOOKINGS"
-       WHERE (("eventoId" = $1) OR ("idEvento" = $1))
-         AND ("asistio" = true OR "asistencia" = true)`,
-      [eventoId],
-    );
-    if ((conflict?.n ?? 0) > 0) {
-      throw new ValidationError(
-        `No se puede cerrar como "sin asistentes": ${conflict!.n} booking(s) ya tienen asistencia marcada.`,
-      );
-    }
+    // "Cerrar sin asistentes": desmarca a TODOS (asistencia, participación,
+    // no aprobó y los criterios de la rúbrica). La falta justificada se conserva:
+    // es un dato aparte y sigue siendo cierto que no asistieron.
     const upd = await query(
       `UPDATE "ACADEMICA_BOOKINGS"
-         SET "asistio" = false, "asistencia" = false, "_updatedDate" = NOW()
+         SET "asistio" = false, "asistencia" = false,
+             "participacion" = false, "noAprobo" = false,
+             "hePuntualidad" = false, "heAsignacion" = false,
+             "daDominio" = false, "daDesafio" = false,
+             "acPermanencia" = false, "acRespeto" = false,
+             "acDisposicion" = false, "acMicrofono" = false,
+             "rubricaEvaluada" = false,
+             "_updatedDate" = NOW()
        WHERE (("eventoId" = $1) OR ("idEvento" = $1))
          AND ("cancelo" IS NULL OR "cancelo" = false)`,
       [eventoId],
     );
     bookingsActualizados = upd.rowCount ?? 0;
+  } else {
+    // Cierre normal: debe haber al menos un asistente marcado. Si hay inscritos
+    // y nadie asistió, hay que marcar asistencia o cerrar "sin asistentes".
+    const cnt = await queryOne<{ inscritos: number; asistieron: number }>(
+      `SELECT COUNT(*)::int AS inscritos,
+              COUNT(*) FILTER (WHERE "asistio" = true OR "asistencia" = true)::int AS asistieron
+       FROM "ACADEMICA_BOOKINGS"
+       WHERE (("eventoId" = $1) OR ("idEvento" = $1))
+         AND ("cancelo" IS NULL OR "cancelo" = false)`,
+      [eventoId],
+    );
+    if ((cnt?.inscritos ?? 0) > 0 && (cnt?.asistieron ?? 0) === 0) {
+      throw new ValidationError(
+        'No has marcado asistencia a ningún estudiante. Marca a los asistentes o activa "Cerrar sesión sin asistentes".',
+      );
+    }
   }
 
   // Determinar motivoCierre

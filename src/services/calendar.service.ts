@@ -95,6 +95,8 @@ export async function createEvent(data: {
   campaign?: string;
   curso?: string;
   salon?: string;
+  /** Graduación: guía dueño del alcance (cursos/salones), aunque luego lo dicte otro. */
+  guiaAlcance?: string;
   /**
    * Cursos adicionales del evento compartido (máx MAX_CURSOS_COMPARTIDOS-1).
    * El route ya deriva nivel/step/nombreEvento/tituloONivel de cada hermano con
@@ -156,7 +158,10 @@ export async function createEvent(data: {
     data.advisor,
     data.dia,
     newDurationMin,
-    eventoCompartidoId ? { excludeGroupId: eventoCompartidoId } : undefined,
+    {
+      ...(eventoCompartidoId ? { excludeGroupId: eventoCompartidoId } : {}),
+      ...(String(tipo).toUpperCase() === 'GRADUACION' ? { ignorarTipo: 'GRADUACION' } : {}),
+    },
   );
   if (conflicts.length > 0) {
     const c = conflicts[0];
@@ -187,6 +192,7 @@ export async function createEvent(data: {
     campaign: data.campaign || null,
     curso: data.curso || null,
     salon: data.salon || null,
+    ...(data.guiaAlcance ? { guiaAlcance: data.guiaAlcance } : {}),
     // NULL = la duración se sigue derivando (horario del curso o tipo).
     duracionMin: Number(data.duracionMin) > 0 ? Number(data.duracionMin) : null,
     eventoCompartidoId,
@@ -336,7 +342,11 @@ export async function updateEvent(
       finalAdvisor,
       finalDiaISO,
       eventDurationMin(finalTipo, null, finalDuracionMin),
-      { excludeEventId: eventId, excludeGroupId: event.eventoCompartidoId || undefined },
+      {
+        excludeEventId: eventId,
+        excludeGroupId: event.eventoCompartidoId || undefined,
+        ignorarTipo: String(finalTipo || '').toUpperCase() === 'GRADUACION' ? 'GRADUACION' : undefined,
+      },
     );
     if (conflicts.length > 0) {
       const c = conflicts[0];

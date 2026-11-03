@@ -10,7 +10,7 @@ import { formatEventTimeRange } from '@/lib/event-duration'
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -292,6 +292,8 @@ export default function DailyAgenda({
         return 'bg-amber-50 border-amber-200 text-amber-900'
       case 'RECUPERACION':
         return 'bg-rose-50 border-rose-200 text-rose-900'
+      case 'GRADUACION':
+        return 'bg-teal-50 border-teal-200 text-teal-900'
       default:
         return 'bg-gray-50 border-gray-200 text-gray-900'
     }
@@ -312,6 +314,8 @@ export default function DailyAgenda({
         return 'badge-warning'
       case 'RECUPERACION':
         return 'badge-danger'
+      case 'GRADUACION':
+        return 'badge-success'
       default:
         return 'badge-secondary'
     }

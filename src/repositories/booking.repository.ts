@@ -934,8 +934,9 @@ class BookingRepositoryClass extends BaseRepository {
        WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
          AND b."cancelo" = false
          AND b."fechaEvento" < $3::timestamptz
-         AND b."fechaEvento" + (CASE WHEN UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = 'NIVELACION'
-                                     THEN interval '30 minutes' ELSE interval '60 minutes' END) > $2::timestamptz
+         AND b."fechaEvento" + (INTERVAL '1 minute' * COALESCE(
+               (SELECT ce."duracionMin" FROM "CALENDARIO" ce WHERE ce."_id" = COALESCE(b."eventoId", b."idEvento")),
+               CASE WHEN UPPER(COALESCE(b."tipo", b."tipoEvento", '')) IN ('NIVELACION','GRADUACION') THEN 30 ELSE 60 END)) > $2::timestamptz
          ${filtroTipo}
        ORDER BY b."fechaEvento"
        LIMIT 1`,

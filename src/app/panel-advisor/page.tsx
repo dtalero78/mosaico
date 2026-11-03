@@ -362,6 +362,8 @@ function PanelAdvisorContent() {
         return 'bg-amber-500'
       case 'RECUPERACION':
         return 'bg-rose-500'
+      case 'GRADUACION':
+        return 'bg-teal-500'
       default:
         return 'bg-gray-500'
     }

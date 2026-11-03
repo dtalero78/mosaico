@@ -186,7 +186,12 @@ export async function enrollStudents(input: EnrollInput) {
   await transaction(async (client) => {
     // NIVELACIÓN: los cruces con otras clases se avisan y, si quien agenda confirma que
     // la nivelación prevalece, se cancela ese agendamiento (sólo el de este alumno).
-    if (String(event.tipo || event.evento || '').toUpperCase() === 'NIVELACION') {
+    // La GRADUACIÓN prevalece siempre (acto de cierre del curso): cancela sin preguntar
+    // lo que se le cruce, salvo otra graduación.
+    const tipoEvento = String(event.tipo || event.evento || '').toUpperCase();
+    const prevalece = tipoEvento === 'NIVELACION' || tipoEvento === 'GRADUACION';
+    const cancelarSinPreguntar = tipoEvento === 'GRADUACION';
+    if (prevalece) {
       const ini = new Date(event.dia);
       const fin = eventEndDate(ini, event.tipo || event.evento || '', event.nombreEvento, (event as any).duracionMin);
       const cruces: any[] = [];
@@ -198,10 +203,10 @@ export async function enrollStudents(input: EnrollInput) {
             WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
               AND b."cancelo" = false
               AND COALESCE(b."eventoId", b."idEvento") <> $4
-              AND UPPER(COALESCE(b."tipo", b."tipoEvento", '')) <> 'NIVELACION'
+              AND UPPER(COALESCE(b."tipo", b."tipoEvento", '')) <> $5
               AND b."fechaEvento" < $3::timestamptz
               AND b."fechaEvento" + interval '60 minutes' > $2::timestamptz`,
-          [st._id, ini.toISOString(), fin.toISOString(), input.eventId]);
+          [st._id, ini.toISOString(), fin.toISOString(), input.eventId, tipoEvento]);
         for (const r of rows) {
           cruces.push({
             bookingId: r.bookingId, eventoId: r.eventoId, studentId: st._id,
@@ -211,7 +216,7 @@ export async function enrollStudents(input: EnrollInput) {
         }
       }
       if (cruces.length) {
-        if (!input.cancelarCruces) {
+        if (!input.cancelarCruces && !cancelarSinPreguntar) {
           throw new AppError(
             'Hay alumnos con otra clase en el mismo horario: confirma si la nivelación prevalece.',
             409, 'CRUCE_NIVELACION', { tipo: 'cruce_nivelacion', cruces });
@@ -274,8 +279,9 @@ export async function enrollStudents(input: EnrollInput) {
          WHERE (b."idEstudiante" = $1 OR b."studentId" = $1)
            AND b."cancelo" = false
            AND b."fechaEvento" < $3::timestamptz
-           AND b."fechaEvento" + (CASE WHEN UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = 'NIVELACION'
-                                       THEN interval '30 minutes' ELSE interval '60 minutes' END) > $2::timestamptz
+           AND b."fechaEvento" + (INTERVAL '1 minute' * COALESCE(
+                 (SELECT ce."duracionMin" FROM "CALENDARIO" ce WHERE ce."_id" = COALESCE(b."eventoId", b."idEvento")),
+                 CASE WHEN UPPER(COALESCE(b."tipo", b."tipoEvento", '')) IN ('NIVELACION','GRADUACION') THEN 30 ELSE 60 END)) > $2::timestamptz
            AND ($4::boolean = false OR UPPER(COALESCE(b."tipo", b."tipoEvento", '')) = 'CLUB')
          LIMIT 1`,
         [student._id, evStart.toISOString(), evEnd.toISOString(), esTaller]
@@ -365,6 +371,30 @@ export async function enrollStudents(input: EnrollInput) {
     enrolled: bookings.length,
     cancelados: canceladas,
   };
+}
+
+/**
+ * Da de baja de una graduación a los alumnos que ya no caen en su alcance: el
+ * agendamiento se marca cancelado (queda la huella) y se descuenta el contador.
+ */
+export async function unenrollGraduacion(eventId: string, bookingIds: string[]) {
+  if (bookingIds.length === 0) return { retirados: 0 };
+  const { transaction } = await import('@/lib/postgres');
+  return transaction(async (client) => {
+    const r = await client.query(
+      `UPDATE "ACADEMICA_BOOKINGS" SET "cancelo" = true, "_updatedDate" = NOW()
+        WHERE "_id" = ANY($1::text[]) AND "cancelo" = false RETURNING "_id"`,
+      [bookingIds],
+    );
+    const n = r.rowCount ?? 0;
+    if (n > 0) {
+      await client.query(
+        `UPDATE "CALENDARIO" SET "inscritos" = GREATEST(COALESCE("inscritos",0) - $1, 0), "_updatedDate" = NOW() WHERE "_id" = $2`,
+        [n, eventId],
+      );
+    }
+    return { retirados: n };
+  });
 }
 
 /**

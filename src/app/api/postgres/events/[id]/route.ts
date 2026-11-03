@@ -3,6 +3,8 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { getEventById, updateEvent, deleteEvent } from '@/services/calendar.service';
 import { estaAutorizado } from '@/services/autorizacion-gestion.service';
+import { actualizarGraduacion } from '@/services/graduacion.service';
+import { ForbiddenError } from '@/lib/errors';
 
 /**
  * GET /api/postgres/events/[id]
@@ -39,6 +41,20 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
   delete body._skipLog;
 
   const actor = (session?.user as any)?.email || 'system';
+
+  // GRADUACIÓN: su propia edición (alcance de cursos/salones, alumnos convocados y
+  // tipo inmutable). Cualquier otro tipo sigue el camino de siempre.
+  const actual: any = await getEventById(params.id);
+  if (String(actual?.tipo || actual?.evento || '').toUpperCase() === 'GRADUACION') {
+    const resumen = await actualizarGraduacion(params.id, body, {
+      actor, motivo, skipLog,
+      nombre: session?.user?.name || undefined,
+      rol: (session?.user as any)?.role,
+    });
+    const event = await getEventById(params.id);
+    return successResponse({ event, graduacion: resumen });
+  }
+
   const event = await updateEvent(params.id, body, { actor, motivo, skipLog });
   return successResponse({ event });
 });
@@ -72,6 +88,15 @@ export const DELETE = handlerWithAuth(async (request, { params }, session) => {
   const skipLog = searchParams.get('skipLog') === 'true';
   const deleteGroup = searchParams.get('deleteGroup') === 'true';
   const actor = (session?.user as any)?.email || 'system';
+
+  // Una graduación sólo la elimina Coordinación Académica o un administrador.
+  const actual: any = await getEventById(params.id);
+  if (String(actual?.tipo || actual?.evento || '').toUpperCase() === 'GRADUACION') {
+    const rol = String((session?.user as any)?.role || '').toUpperCase();
+    if (!['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN'].includes(rol)) {
+      throw new ForbiddenError('Una graduación sólo la puede eliminar Coordinación Académica o un administrador.');
+    }
+  }
 
   const result = await deleteEvent(params.id, deleteBookings, { actor, motivo, skipLog, deleteGroup });
 

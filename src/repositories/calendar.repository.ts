@@ -348,11 +348,17 @@ class CalendarioRepositoryClass extends BaseRepository {
     advisorId: string,
     startISO: string,
     newDurationMin: number,
-    opts?: { excludeEventId?: string; excludeGroupId?: string },
+    opts?: { excludeEventId?: string; excludeGroupId?: string; ignorarTipo?: string },
   ): Promise<Array<{ _id: string; dia: string; tipo: string | null; tituloONivel: string | null; nombreEvento: string | null }>> {
     if (!advisorId) return [];
     const params: any[] = [advisorId, startISO, String(newDurationMin)];
     let extra = '';
+    // Una graduación puede coincidir con OTRA graduación del mismo guía (se comparte);
+    // con cualquier otro tipo de evento sigue siendo colisión.
+    if (opts?.ignorarTipo) {
+      params.push(opts.ignorarTipo.toUpperCase());
+      extra += ` AND UPPER(COALESCE(c."tipo", '')) <> $${params.length}`;
+    }
     if (opts?.excludeEventId) {
       params.push(opts.excludeEventId);
       extra += ` AND c."_id" <> $${params.length}`;
@@ -366,7 +372,7 @@ class CalendarioRepositoryClass extends BaseRepository {
        FROM "CALENDARIO" c
        WHERE c."advisor" = $1
          AND c."dia" <  ($2::timestamptz + ($3 || ' minutes')::interval)
-         AND c."dia" + (INTERVAL '1 minute' * COALESCE(c."duracionMin", CASE WHEN UPPER(c."tipo") = 'NIVELACION' THEN 30 ELSE 60 END)) > $2::timestamptz
+         AND c."dia" + (INTERVAL '1 minute' * COALESCE(c."duracionMin", CASE WHEN UPPER(c."tipo") IN ('NIVELACION','GRADUACION') THEN 30 ELSE 60 END)) > $2::timestamptz
          ${extra}
        ORDER BY c."dia" ASC
        LIMIT 5`,

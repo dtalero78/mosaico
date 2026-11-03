@@ -33,6 +33,7 @@ const TIPOS_EVENTO: Array<{ value: string; label: string }> = [
   { value: 'NIVELACION', label: 'Nivelación' },
   { value: 'OLIMPIADA', label: 'Olimpiada' },
   { value: 'RECUPERACION', label: 'Recuperación' },
+  { value: 'GRADUACION', label: 'Graduación' },
   { value: 'ENTRENAMIENTO', label: 'Entrenamiento' },
   { value: 'EVALUACION', label: 'Evaluación' },
 ]

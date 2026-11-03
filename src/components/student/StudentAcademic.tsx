@@ -31,7 +31,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   // Cuando se llega desde el reporte de Nivelaciones (Aprobar) con ?agendar=NIVELACION,
   // se abre el modal de agendamiento con SOLO ese tipo habilitado.
-  const [lockEventType, setLockEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | 'RECUPERACION' | null>(null)
+  const [lockEventType, setLockEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION' | null>(null)
   const [selectedClass, setSelectedClass] = useState<Class | null>(null)
   /** Lecciones del curso del alumno, para reasignar el punto de una NIVELACIÓN. */
   const [leccionesCurso, setLeccionesCurso] = useState<Array<{ value: string; modulo: string }>>([])
@@ -76,7 +76,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   const [advisorFilter, setAdvisorFilter] = useState('')
 
   // Nueva Clase modal state
-  const [selectedEventType, setSelectedEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | 'RECUPERACION' | ''>('')
+  const [selectedEventType, setSelectedEventType] = useState<'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION' | ''>('')
   const [selectedDay, setSelectedDay] = useState('')
   const [availableTimes, setAvailableTimes] = useState<{label: string, value: string, disabled?: boolean}[]>([])
   const [selectedTime, setSelectedTime] = useState('')
@@ -272,7 +272,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
   }
 
   // Nueva Clase functions
-  const handleEventTypeSelection = (eventType: 'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | 'RECUPERACION') => {
+  const handleEventTypeSelection = (eventType: 'WELCOME' | 'NIVELACION' | 'SESSION' | 'CLUB' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION') => {
     setSelectedEventType(eventType)
     setSelectedDay('')
     setSelectedTime('')

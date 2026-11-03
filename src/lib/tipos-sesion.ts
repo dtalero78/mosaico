@@ -18,9 +18,10 @@
  *                       festivos). Se dicta y se le toma asistencia como a
  *                       cualquier sesión, pero NO debe generar casos: el alumno
  *                       que no va a la reposición no está faltando a su clase.
+ *   GRADUACION        — acto de cierre del curso (30 o 60 min), no una clase.
  */
 export const TIPOS_FUERA_DE_CASOS = [
-  'CLUB', 'NIVELACION', 'COMPLEMENTARIA', 'WELCOME', 'OLIMPIADA', 'RECUPERACION',
+  'CLUB', 'NIVELACION', 'COMPLEMENTARIA', 'WELCOME', 'OLIMPIADA', 'RECUPERACION', 'GRADUACION',
 ] as const;
 
 /**

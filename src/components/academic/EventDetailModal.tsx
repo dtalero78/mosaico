@@ -12,7 +12,7 @@ import { formatEventTimeRange } from '@/lib/event-duration'
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string

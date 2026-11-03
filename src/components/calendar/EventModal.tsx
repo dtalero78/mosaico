@@ -10,7 +10,7 @@ import { TIPOS_TALLER } from '@/lib/tipos-sesion'
 interface CalendarEvent {
   _id: string
   dia: Date
-  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
+  evento?: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION'
   tipo?: string
   tituloONivel: string
   nombreEvento?: string
@@ -67,7 +67,7 @@ export default function EventModal({
   const [formData, setFormData] = useState({
     fecha: '',
     hora: '',
-    evento: 'SESSION' as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION',
+    evento: 'SESSION' as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION',
     tituloONivel: '',   // = Módulo (código de NIVELES) o 'Todos'
     nombreEvento: '',   // = Lección (step) o 'Todos'
     advisor: '',
@@ -84,7 +84,11 @@ export default function EventModal({
   })
 
   // MOSAICO — catálogo de cursos de campaña + módulos del curso seleccionado
-  const [cursosCampaign, setCursosCampaign] = useState<Array<{ campaign: string; tipoCurso: string; salon?: string }>>([])
+  const [cursosCampaign, setCursosCampaign] = useState<Array<{ campaign: string; tipoCurso: string; salon?: string; guia?: string | null; horarioCurso?: string }>>([])
+  // Graduación en edición: guía dueño del alcance (puede diferir del que la dicta).
+  const [guiaAlcanceEdit, setGuiaAlcanceEdit] = useState('')
+  // Graduación: a cuántos alumnos del guía convocaría la selección actual.
+  const [graduacionPreview, setGraduacionPreview] = useState<{ total: number; salones: Array<{ tipoCurso: string; salon: string | null; horarioCurso: string; alumnos: number }> } | null>(null)
   // Caché de módulos POR CURSO (solo crece, nunca se limpia). El dropdown deriva sus
   // opciones de modulosByCurso[cursoActual]; así ningún re-render/efecto puede dejarlo vacío.
   const [modulosByCurso, setModulosByCurso] = useState<Record<string, Array<{ code: string; steps: string[] }>>>({})
@@ -143,6 +147,11 @@ export default function EventModal({
   // OLIMPIADA usa la MISMA estructura que TALLER (curso + "Tipo" del catálogo de
   // clubs + Lección con "Todas"); sólo cambia el tipo guardado y el color.
   const esTaller = formData.evento === 'CLUB' || formData.evento === 'OLIMPIADA'
+  // GRADUACION: acto de cierre. Se convoca a TODOS los cursos o a algunos, y a
+  // todos los salones o a algunos; no lleva Módulo ni Lección.
+  const esGraduacion = formData.evento === 'GRADUACION'
+  // Al editar, los cursos son los del guía ORIGINAL aunque se cambie quien la dicta.
+  const scopeGuia = isEditMode ? (guiaAlcanceEdit || (editingEvent as any)?.advisor?._id || (editingEvent as any)?.advisor || formData.advisor) : formData.advisor
   // El TALLER no lleva lección: su Tipo es BASICO / INTERMEDIO / AVANZADO
   // (TIPOS_TALLER). La OLIMPIADA conserva el catálogo de clubs + Lección.
   const tallerSinLeccion = formData.evento === 'CLUB'
@@ -157,7 +166,7 @@ export default function EventModal({
   // Carga (idempotente) de módulos al caché. No limpia nada: solo agrega/actualiza la clave
   // del curso. Re-llamarla con el mismo curso es inocuo.
   const loadModulos = (curso: string) => {
-    if (!curso || curso === TODOS) return
+    if (!curso || curso === TODOS || curso.includes(',')) return
     fetch(`/api/postgres/niveles?curso=${encodeURIComponent(curso)}`, { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : { modulos: [] }))
       .then(d => {
@@ -187,11 +196,62 @@ export default function EventModal({
   // con una lista ya marcada, se limpia: el desplegable de un solo salón no puede
   // representar "01, 02" y el evento quedaría con un valor que nadie puede leer.
   useEffect(() => {
-    if (!esTaller && formData.salon.includes(',')) {
+    if (!esTaller && !esGraduacion && formData.salon.includes(',')) {
       setFormData(prev => ({ ...prev, salon: '' }))
+    }
+    // Una lista de cursos sólo la representa la graduación.
+    if (!esGraduacion && formData.curso.includes(',')) {
+      setFormData(prev => ({ ...prev, curso: '', salon: '' }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.evento])
+
+  // GRADUACIÓN — al cambiar de guía se conserva el alcance (cursos y salones) en lo
+  // que el guía nuevo también tenga; lo que no tiene se quita.
+  useEffect(() => {
+    // Sólo al CREAR: al editar, cambiar de guía no toca cursos ni salones.
+    if (isEditMode || !esGraduacion || !formData.advisor || cursosCampaign.length === 0) return
+    const propios = cursosCampaign.filter(r => r.campaign === formData.campaign && r.guia === formData.advisor)
+    const cursosV = new Set(propios.map(r => r.tipoCurso))
+    setFormData(prev => {
+      const cursoNuevo = prev.curso === TODOS ? TODOS
+        : prev.curso.split(',').map(s => s.trim()).filter(c => cursosV.has(c)).join(', ')
+      const lista = cursoNuevo === TODOS || !cursoNuevo ? null : cursoNuevo.split(',').map(s => s.trim())
+      const salonesV = new Set(propios.filter(r => !lista || lista.includes(r.tipoCurso)).map(r => r.salon).filter(Boolean) as string[])
+      const salonNuevo = prev.salon === TODOS ? TODOS
+        : prev.salon.split(',').map(s => s.trim()).filter(s => salonesV.has(s)).join(', ')
+      if (cursoNuevo === prev.curso && salonNuevo === prev.salon) return prev
+      return { ...prev, curso: cursoNuevo, salon: salonNuevo }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.advisor, esGraduacion, cursosCampaign, formData.campaign])
+
+  // GRADUACIÓN — vista previa de a quién se convocaría.
+  useEffect(() => {
+    if (!isOpen || !esGraduacion || !formData.campaign || !scopeGuia || !formData.curso || !formData.salon) {
+      setGraduacionPreview(null)
+      return
+    }
+    let cancelado = false
+    const qs = new URLSearchParams({ campaign: formData.campaign, advisor: scopeGuia, curso: formData.curso, salon: formData.salon })
+    fetch(`/api/postgres/events/graduacion-alcance?${qs}`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelado) setGraduacionPreview(d ? { total: d.total ?? 0, salones: d.salones ?? [] } : null) })
+      .catch(() => { if (!cancelado) setGraduacionPreview(null) })
+    return () => { cancelado = true }
+  }, [isOpen, esGraduacion, formData.campaign, scopeGuia, formData.curso, formData.salon])
+
+  // Graduación en edición: se lee el guía dueño del alcance.
+  useEffect(() => {
+    if (!isOpen || !editingEvent || !esGraduacion) { setGuiaAlcanceEdit(''); return }
+    let cancelado = false
+    fetch(`/api/postgres/events/${(editingEvent as any)._id}`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelado) setGuiaAlcanceEdit(d?.event?.guiaAlcance || '') })
+      .catch(() => {})
+    return () => { cancelado = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, (editingEvent as any)?._id, esGraduacion])
 
   // Ejecutar cargarNombreStep cuando cambia tipo de evento (si ya hay nivel)
   useEffect(() => {
@@ -273,7 +333,7 @@ export default function EventModal({
       setFormData({
         fecha: format(eventDate, 'yyyy-MM-dd'),
         hora: format(eventDate, 'HH:mm'),
-        evento: (editingEvent.evento || editingEvent.tipo || 'SESSION') as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION',
+        evento: (editingEvent.evento || editingEvent.tipo || 'SESSION') as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION',
         tituloONivel: resolvedNivel,
         nombreEvento: nombreEventoValue,
         advisor: advisorId,
@@ -508,7 +568,7 @@ export default function EventModal({
 
   const getOptionsForNivelTipo = (
     nivelCode: string,
-    tipo: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION',
+    tipo: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION',
     clubPrefixFilter?: string | null,
   ): StepOption[] => {
     const niv = niveles.find(n => n.code === nivelCode)
@@ -562,12 +622,34 @@ export default function EventModal({
   // Salón → Módulo → Lección), leyendo de las mismas fuentes: `cursosCampaign`
   // para el alcance y `modulosByCurso` para el currículo del curso elegido.
   const campaniasDisponibles = Array.from(new Set(cursosCampaign.map(r => r.campaign).filter(Boolean)))
+  // En Graduación sólo cuentan los cursos DEL GUÍA elegido.
+  const delGuia = (r: { guia?: string | null }) => !esGraduacion || (!!scopeGuia && r.guia === scopeGuia)
   const cursosDeCampania = (campaign: string) =>
-    Array.from(new Set(cursosCampaign.filter(r => !campaign || r.campaign === campaign).map(r => r.tipoCurso).filter(Boolean)))
-  const salonesDeCurso = (campaign: string, curso: string) =>
-    Array.from(new Set(cursosCampaign
-      .filter(r => (!campaign || r.campaign === campaign) && r.tipoCurso === curso)
-      .map(r => r.salon).filter(Boolean))) as string[]
+    Array.from(new Set(cursosCampaign.filter(r => (!campaign || r.campaign === campaign) && delGuia(r)).map(r => r.tipoCurso).filter(Boolean)))
+  const salonesDeCurso = (campaign: string, curso: string) => {
+    // `curso` puede ser una lista ("YOJI, OKINA") o Todos: la graduación une los
+    // salones de todos los cursos elegidos.
+    const lista = curso === TODOS ? null : curso.split(',').map(c => c.trim()).filter(Boolean)
+    return Array.from(new Set(cursosCampaign
+      .filter(r => (!campaign || r.campaign === campaign) && delGuia(r) && (!lista || lista.includes(r.tipoCurso)))
+      .map(r => r.salon).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true })) as string[]
+  }
+  // ── Curso en Graduación: todos, uno o varios ──
+  const cursosDisponibles = cursosDeCampania(formData.campaign)
+  const todosLosCursos = formData.curso === TODOS
+  const cursosElegidos = (!formData.curso || todosLosCursos)
+    ? []
+    : formData.curso.split(',').map(s => s.trim()).filter(Boolean)
+  const toggleCurso = (c: string) => {
+    const next = cursosElegidos.includes(c) ? cursosElegidos.filter(x => x !== c) : [...cursosElegidos, c]
+    next.sort((a, b) => cursosDisponibles.indexOf(a) - cursosDisponibles.indexOf(b))
+    const curso = next.join(', ')
+    // Se conservan sólo los salones que siguen existiendo en los cursos elegidos.
+    const validos = salonesDeCurso(formData.campaign, curso || TODOS)
+    const salon = formData.salon === TODOS ? TODOS
+      : formData.salon.split(',').map(s => s.trim()).filter(s => validos.includes(s)).join(', ')
+    setFormData(prev => ({ ...prev, curso, salon }))
+  }
   // ── Salón en Taller / Olimpiada: varios salones en UN solo evento ──
   // A un taller se convoca a más de un salón, y es una sola clase (un guía, un
   // Zoom, una lista de asistencia), así que no se parte en un evento por salón:
@@ -728,7 +810,7 @@ export default function EventModal({
       // Validaciones básicas (cascada MOSAICO: Campaña→Curso→Salón→Módulo→Lección)
       if (!formData.fecha || !formData.hora || !formData.advisor ||
           !formData.campaign || !formData.curso || !formData.salon ||
-          !formData.tituloONivel || (!tallerSinLeccion && !formData.nombreEvento)) {
+          (!esGraduacion && (!formData.tituloONivel || (!tallerSinLeccion && !formData.nombreEvento)))) {
         setError(tallerSinLeccion
           ? 'Completa todos los campos obligatorios (Campaña, Curso, Salón, Tipo, Guía).'
           : 'Completa todos los campos obligatorios (Campaña, Curso, Salón, Módulo, Lección, Guía).')
@@ -773,7 +855,7 @@ export default function EventModal({
         limiteUsuarios: Number(formData.limiteUsuarios),
         // Sólo la nivelación lleva duración propia; el resto la deriva del
         // horario del curso o de su tipo, como siempre.
-        duracionMin: formData.evento === 'NIVELACION'
+        duracionMin: (formData.evento === 'NIVELACION' || formData.evento === 'GRADUACION')
           ? (formData.nivelacionUnaHora ? 60 : 30)
           : null,
         linkZoom: formData.linkZoom || undefined,
@@ -788,6 +870,11 @@ export default function EventModal({
       // "Lección" (nombreEvento) = la lección. Se mandan como `club` y `leccion`;
       // el backend arma nivel=curso, step=lección, nombreEvento=club y
       // tituloONivel="Curso - Tipo". (Lección='Todos' → todo el curso accede.)
+      if (esGraduacion) {
+        // Sin módulo ni lección: el backend arma el título con los cursos elegidos.
+        eventData.tituloONivel = undefined
+        eventData.nombreEvento = undefined
+      }
       if (esTaller) {
         eventData.club = formData.tituloONivel || undefined
         eventData.leccion = tallerSinLeccion ? undefined : (formData.nombreEvento || undefined)
@@ -811,8 +898,8 @@ export default function EventModal({
         const oldStep  = (editingEvent as any).step  || (editingEvent as any).nombreEvento || ''
         const newNivel = formData.tituloONivel || ''
         const newStep  = formData.nombreEvento || ''
-        const nivelChanged = oldNivel && newNivel && oldNivel !== newNivel
-        const stepChanged  = oldStep && newStep && oldStep !== newStep
+        const nivelChanged = !esGraduacion && oldNivel && newNivel && oldNivel !== newNivel
+        const stepChanged  = !esGraduacion && oldStep && newStep && oldStep !== newStep
         if (nivelChanged || stepChanged) {
           const inscritos = Number((editingEvent as any).inscritos ?? 0)
           const cursaron  = Number((editingEvent as any).asistieron ?? 0)
@@ -997,6 +1084,7 @@ export default function EventModal({
                 <select
                   value={formData.evento}
                   onChange={(e) => handleInputChange('evento', e.target.value)}
+                  disabled={isEditMode && String((editingEvent as any)?.evento || (editingEvent as any)?.tipo || '').toUpperCase() === 'GRADUACION'}
                   className="input w-full" required
                 >
                   <option value="SESSION">Sesión</option>
@@ -1004,6 +1092,7 @@ export default function EventModal({
                   <option value="OLIMPIADA">Olimpiada</option>
                   <option value="NIVELACION">Nivelación</option>
                   <option value="RECUPERACION">Recuperación</option>
+                  <option value="GRADUACION" disabled={isEditMode && String((editingEvent as any)?.evento || (editingEvent as any)?.tipo || '').toUpperCase() !== 'GRADUACION'}>Graduación</option>
                 </select>
               </div>
               {/* Campaña */}
@@ -1020,9 +1109,57 @@ export default function EventModal({
                   ))}
                 </select>
               </div>
+              {/* GRADUACIÓN: el guía va primero — los cursos y salones son LOS DEL GUÍA */}
+              {esGraduacion && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Guía *</label>
+                  <select value={formData.advisor} onChange={(e) => handleInputChange('advisor', e.target.value)} className="input w-full" required>
+                    <option value="">Seleccionar guía</option>
+                    {advisors.slice().sort((a, b) => `${a.primerNombre} ${a.primerApellido}`.toLowerCase().localeCompare(`${b.primerNombre} ${b.primerApellido}`.toLowerCase())).map((advisor) => (
+                      <option key={advisor._id} value={advisor._id}>{advisor.primerNombre} {advisor.primerApellido}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {isEditMode
+                      ? 'Cambiar el guía lo reemplaza: sus horas pasan al nuevo guía y los alumnos verán su nombre y enlace. Cursos, salones y agendamiento se conservan.'
+                      : formData.advisor ? 'Se usa el enlace de Zoom del guía. Cursos y salones: los de este guía.' : 'Elige primero el guía para ver sus cursos y salones.'}
+                  </p>
+                </div>
+              )}
               {/* Curso */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Curso *</label>
+                {esGraduacion ? (
+                  <>
+                    <div className="border border-gray-300 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={todosLosCursos}
+                          disabled={!formData.campaign}
+                          onChange={(e) => setFormData(prev => ({ ...prev, curso: e.target.checked ? TODOS : '', salon: e.target.checked ? TODOS : '' }))}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="font-medium">Todos</span>
+                      </label>
+                      {cursosDisponibles.map(c => (
+                        <label key={c} className={`flex items-center gap-2 text-sm ${todosLosCursos ? 'opacity-40' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={todosLosCursos}
+                            checked={cursosElegidos.includes(c)}
+                            onChange={() => toggleCurso(c)}
+                            className="rounded border-gray-300"
+                          />
+                          <span>{c}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {todosLosCursos ? 'Todos los cursos de la campaña.' : cursosElegidos.length > 0 ? `Cursos: ${cursosElegidos.join(', ')}` : 'Marca uno o varios cursos, o "Todos".'}
+                    </p>
+                  </>
+                ) : (
                 <select
                   value={formData.curso} disabled={!formData.campaign}
                   onChange={(e) => {
@@ -1040,11 +1177,12 @@ export default function EventModal({
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+                )}
               </div>
               {/* Salón — Taller y Olimpiada admiten VARIOS salones en el mismo evento */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Salón *</label>
-                {esTaller && formData.curso && formData.curso !== TODOS && formData.curso !== 'WELCOME' ? (
+                {((esTaller && formData.curso && formData.curso !== TODOS && formData.curso !== 'WELCOME') || (esGraduacion && formData.curso)) ? (
                   <>
                     <div className="border border-gray-300 rounded-lg p-2 max-h-36 overflow-y-auto space-y-1">
                       <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1097,7 +1235,20 @@ export default function EventModal({
                   </select>
                 )}
               </div>
-              {/* Módulo (Sesión/Nivelación) — o Tipo=clubs (Taller) */}
+              {esGraduacion && formData.curso && formData.salon && (
+                <div className="sm:col-span-2 rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
+                  {graduacionPreview === null ? 'Calculando alumnos…' : graduacionPreview.total === 0
+                    ? 'Con esta selección no hay alumnos del guía para convocar.'
+                    : <>
+                        Se agendarán <b>{graduacionPreview.total}</b> alumno(s) a este evento; si tienen otra clase a esa hora, <b>la graduación prevalece</b> y esa clase se cancela solo para ellos.
+                        <span className="block text-xs text-teal-800 mt-1">
+                          {graduacionPreview.salones.map(s => `${s.tipoCurso} ${s.salon ?? ''} (${s.alumnos})`).join(' · ')}
+                        </span>
+                      </>}
+                </div>
+              )}
+              {/* Módulo (Sesión/Nivelación) — o Tipo=clubs (Taller). La graduación no lo lleva. */}
+              {!esGraduacion && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">{esTaller ? 'Tipo *' : 'Módulo *'}</label>
                 {esTaller ? (
@@ -1129,8 +1280,9 @@ export default function EventModal({
                   </select>
                 )}
               </div>
+              )}
               {/* Lección — el Taller no la lleva (es del curso, no de una lección) */}
-              {!tallerSinLeccion && (
+              {!tallerSinLeccion && !esGraduacion && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Lección *</label>
                 {esTaller ? (
@@ -1166,10 +1318,10 @@ export default function EventModal({
                 )}
               </div>
               )}
-              {/* Duración de la nivelación. Son 30 minutos por defecto; la
+              {/* Duración de la nivelación / graduación. Son 30 minutos por defecto; la
                   casilla la amplía a una hora. No aplica a los demás tipos,
                   que derivan su duración del horario del curso. */}
-              {formData.evento === 'NIVELACION' && (
+              {(formData.evento === 'NIVELACION' || formData.evento === 'GRADUACION') && (
                 <div className="sm:col-span-2">
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
@@ -1181,22 +1333,25 @@ export default function EventModal({
                     <span className="text-sm text-gray-700">
                       Ampliar a <b>1 hora</b>
                       <span className="block text-xs text-gray-500">
-                        Sin marcar, la nivelación dura 30 minutos.
+                        Sin marcar, {formData.evento === 'GRADUACION' ? 'la graduación' : 'la nivelación'} dura 30 minutos.
                       </span>
                     </span>
                   </label>
                 </div>
               )}
 
-              {/* Límite de Usuarios */}
+              {/* Límite de Usuarios (la graduación lo toma de los convocados) */}
+              {!esGraduacion && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Límite de Usuarios *</label>
                 <input type="number" value={formData.limiteUsuarios} onChange={(e) => handleInputChange('limiteUsuarios', Number(e.target.value))} className="input w-full" min="1" max="100" required />
               </div>
+              )}
             </div>
 
             {/* ── Bloque inferior: 1 columna ── */}
-            {/* Guía */}
+            {/* Guía (en Graduación va arriba, antes de los cursos) */}
+            {!esGraduacion && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Guía *</label>
               <select value={formData.advisor} onChange={(e) => handleInputChange('advisor', e.target.value)} className="input w-full" required>
@@ -1210,6 +1365,7 @@ export default function EventModal({
                 ))}
               </select>
             </div>
+            )}
 
             {/* Link Zoom */}
             <div>
@@ -1218,7 +1374,7 @@ export default function EventModal({
             </div>
 
             {/* Evento compartido entre niveles — sólo en CREAR */}
-            {!isEditMode && (
+            {!isEditMode && !esGraduacion && (
               <div className="border border-indigo-200 bg-indigo-50/40 rounded-lg p-4">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex-1 min-w-[280px]">

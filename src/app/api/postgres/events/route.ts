@@ -3,6 +3,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { createEvent } from '@/services/calendar.service';
 import { enrollStudents } from '@/services/enrollment.service';
+import { resolverAlcance } from '@/services/graduacion.service';
 import { ValidationError } from '@/lib/errors';
 
 /**
@@ -17,6 +18,7 @@ import { ValidationError } from '@/lib/errors';
  */
 function derivarCamposEvento(v: {
   esTaller: boolean;
+  esGraduacion?: boolean;
   curso?: string | null;
   modulo?: string | null;
   leccion?: string | null;
@@ -24,6 +26,10 @@ function derivarCamposEvento(v: {
   titulo?: string | null;
 }) {
   const curso = String(v.curso || '').trim();
+  if (v.esGraduacion) {
+    // Acto de cierre: sin módulo ni lección. `curso` puede ser Todos o una lista.
+    return { nivel: curso || undefined, step: undefined, nombreEvento: 'Graduación', tituloONivel: `Graduación - ${curso || 'Todos'}` };
+  }
   if (v.esTaller) {
     const nombreEvento = v.club || undefined;
     const tituloONivel = curso && curso !== 'Todos'
@@ -69,8 +75,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
 
   // Módulo y Lección del padre: el modal los manda en tituloONivel/nombreEvento
   // (nombres heredados) o, para Taller, en curso/club/leccion.
+  const esGraduacion = eventTipoRaw === 'GRADUACION';
   const base = derivarCamposEvento({
     esTaller,
+    esGraduacion,
     curso: body.curso,
     modulo: body.nivel || body.tituloONivel,
     leccion: esTaller ? body.leccion : (body.nombreEvento || body.step),
@@ -113,6 +121,22 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         })
     : undefined;
 
+  // GRADUACIÓN: los alumnos convocados salen del alcance (campaña + cursos + salones
+  // DEL GUÍA). Sin nadie a quien convocar no se crea el evento.
+  let alumnosGraduacion: string[] = [];
+  if (esGraduacion) {
+    if (!body.campaign || !body.curso || !body.salon) {
+      throw new ValidationError('Indica campaña, cursos y salones de la graduación.');
+    }
+    const alc = await resolverAlcance({
+      campaign: String(body.campaign), advisorId: String(body.advisor), curso: body.curso, salon: body.salon,
+    });
+    if (alc.academicaIds.length === 0) {
+      throw new ValidationError('Con esa selección no hay alumnos del guía para convocar a la graduación.');
+    }
+    alumnosGraduacion = alc.academicaIds;
+  }
+
   const event = await createEvent({
     dia: body.dia,
     hora,
@@ -124,12 +148,13 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     nombreEvento: nombreEventoFinal || step,
     tituloONivel: tituloONivel || body.tituloONivel,
     linkZoom: body.linkZoom,
-    limiteUsuarios: body.limiteUsuarios || 30,
+    limiteUsuarios: esGraduacion ? Math.max(alumnosGraduacion.length, 1) : (body.limiteUsuarios || 30),
     // Duración propia (nivelación de 1 h). Sin ella se sigue derivando.
     duracionMin: body.duracionMin,
     club: body.club,
     observaciones: body.observaciones,
     campaign: body.campaign || null,
+    guiaAlcance: esGraduacion ? String(body.advisor) : undefined,
     curso: body.curso || null,
     salon: body.salon || null,
     compartidoCon,
@@ -142,9 +167,12 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // también crea y agenda en un solo endpoint.
   let agendados = 0;
   let errorAgendamiento: string | null = null;
-  const aAgendar: string[] = Array.isArray(body.agendarAlumnos)
-    ? body.agendarAlumnos.filter((x: any) => typeof x === 'string' && x.trim())
-    : [];
+  const aAgendar: string[] = esGraduacion
+    ? alumnosGraduacion
+    : Array.isArray(body.agendarAlumnos)
+      ? body.agendarAlumnos.filter((x: any) => typeof x === 'string' && x.trim())
+      : [];
+  let canceladasPorGraduacion = 0;
   if (aAgendar.length > 0 && (event as any)?._id) {
     try {
       const rol = (session?.user as any)?.role;
@@ -163,6 +191,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
         masivo: true,
       });
       agendados = Array.isArray(r?.bookings) ? r.bookings.length : aAgendar.length;
+      canceladasPorGraduacion = Array.isArray(r?.cancelados) ? r.cancelados.length : 0;
     } catch (err: any) {
       // El evento YA existe: no se deshace por esto. Se informa para que se
       // pueda completar a mano en vez de perder lo creado.
@@ -173,11 +202,13 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   return successResponse({
     event,
     agendados,
+    canceladasPorGraduacion,
     errorAgendamiento,
     message: errorAgendamiento
       ? `Evento creado, pero no se pudo agendar: ${errorAgendamiento}`
       : agendados > 0
-        ? `Evento creado con ${agendados} alumno(s) agendado(s)`
+        ? `Evento creado con ${agendados} alumno(s) agendado(s)` +
+          (canceladasPorGraduacion > 0 ? ` · se cancelaron ${canceladasPorGraduacion} clase(s) que se cruzaban` : '')
         : 'Evento creado exitosamente',
   });
 });

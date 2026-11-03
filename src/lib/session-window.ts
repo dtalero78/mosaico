@@ -6,7 +6,7 @@
  * inclusivos):
  *
  *   ┌──────────────────────────────────────────────────────────────┐
- *   │ 0min          +30min                       +1440min (24h)    │
+ *   │ 0min          +20min                    +1440min (24h)    │
  *   │  │              │                              │             │
  *   │  ├── Marcar asistencia (ADVISOR) ─────────────┤             │
  *   │  │                                            │             │
@@ -16,7 +16,7 @@
  *   └──────────────────────────────────────────────────────────────┘
  *
  * El advisor puede marcar asistencia y registrar (cerrar) la sesión hasta 24h
- * después del inicio; el botón "Registrar Sesión" se habilita a partir de +30min.
+ * después del inicio; el botón "Registrar Sesión" se habilita a partir de +20min.
  * Bypass total (sin ventanas): COORDINADOR_ACADEMICO, SUPER_ADMIN, ADMIN.
  * Mismo helper se importa en cliente y servidor → la UI muestra lo mismo
  * que el endpoint permite.
@@ -25,7 +25,7 @@
  */
 
 export const ATTENDANCE_WINDOW_MIN = 1440;  // 0 .. +1440 min (24h)
-export const REGISTER_OPEN_MIN     = 30;    // +30 .. +1440 min
+export const REGISTER_OPEN_MIN     = 20;    // +20 .. +1440 min
 /** La asistencia sólo se puede marcar/modificar desde +15 min del inicio (para TODOS los roles). */
 export const ATTENDANCE_OPEN_MIN   = 15;
 export const REGISTER_CLOSE_MIN    = 1440;  // 24 horas

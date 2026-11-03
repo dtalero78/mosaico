@@ -31,6 +31,8 @@ export const IMPULSA_LARGO_DURATION_MIN = 150;
 
 const DURATION_BY_TIPO: Record<string, number> = {
   NIVELACION: NIVELACION_DURATION_MIN,
+  // Graduación: 30 min por defecto, ampliable a 60 (duracionMin propio).
+  GRADUACION: NIVELACION_DURATION_MIN,
   ENTRENAMIENTO: IMPULSA_LARGO_DURATION_MIN,
   EVALUACION: IMPULSA_LARGO_DURATION_MIN,
 };
@@ -79,7 +81,7 @@ export function agendamientoSeCruza(
   agendamientoInicio: Date,
   agendamientoTipo?: string | null,
 ): boolean {
-  const ocupaMin = String(agendamientoTipo || '').toUpperCase() === 'NIVELACION'
+  const ocupaMin = ['NIVELACION', 'GRADUACION'].includes(String(agendamientoTipo || '').toUpperCase())
     ? NIVELACION_DURATION_MIN
     : DEFAULT_EVENT_DURATION_MIN;
   const agendamientoFin = agendamientoInicio.getTime() + ocupaMin * 60_000;

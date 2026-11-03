@@ -23,7 +23,7 @@ import { esSesionEvaluacion, esModuloEvaluacion } from '@/lib/evaluacion'
 interface CalendarioEvent {
   _id: string
   nombreEvento: string
-  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION'
+  evento: 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION'
   tipo?: string
   dia: string
   advisor: string                          // ADVISORS._id (UUID)
@@ -572,7 +572,7 @@ function RegistrarSesionButton({
   const [isMyEvent, setIsMyEvent] = useState(false)
   const [requiereRegistro, setRequiereRegistro] = useState(true)
   // Step "confirmSinAsistentes" → "registrar" → "postCierreCompartido" → done
-  const [step, setStep] = useState<'idle' | 'confirmSinAsistentes' | 'registrar' | 'postCierreCompartido'>('idle')
+  const [step, setStep] = useState<'idle' | 'registrar' | 'postCierreCompartido'>('idle')
   const [sinAsistentes, setSinAsistentes] = useState(false)
   // Pre-carga de Time Out + Notas: si vienes del flujo guiado desde un
   // hermano del grupo, el sessionStorage trae los últimos valores para no
@@ -701,7 +701,7 @@ function RegistrarSesionButton({
           className={`px-4 py-2 text-sm italic rounded-lg whitespace-nowrap ${
             yaEmpezo ? 'text-amber-700 bg-amber-50 border border-amber-200' : 'text-gray-500'
           }`}
-          title={yaEmpezo ? 'Marca asistencia ahora; el botón Registrar se habilitará a los 30 min.' : 'Disponible 30 min después del inicio'}
+          title={yaEmpezo ? 'Marca asistencia ahora; el botón Registrar se habilitará a los 20 min.' : 'Disponible 20 min después del inicio'}
         >
           {yaEmpezo
             ? `Marca asistencia · Registro en ${windowState.minutesUntilRegister} min`
@@ -724,22 +724,21 @@ function RegistrarSesionButton({
       const mm = String(now.getMinutes()).padStart(2, '0')
       setTimeoutVal(`${hh}:${mm}`)
     }
-    if (totalInscritos > 0 && totalConAsistencia === 0) {
-      setStep('confirmSinAsistentes')
-    } else {
-      setSinAsistentes(false)
-      setStep('registrar')
-    }
-  }
-
-  const confirmSinAsistentes = () => {
-    setSinAsistentes(true)
+    setSinAsistentes(false)
     setStep('registrar')
   }
+
+  // Hay inscritos y nadie tiene asistencia marcada: sólo se puede cerrar con la
+  // casilla "Cerrar sesión sin asistentes".
+  const faltaAsistencia = totalInscritos > 0 && totalConAsistencia === 0 && !sinAsistentes
 
   async function submitClose() {
     if (!TIMEOUT_REGEX.test(timeoutVal)) {
       setErr('Time Out debe estar en formato HH:MM militar (ej. 09:30)')
+      return
+    }
+    if (faltaAsistencia) {
+      setErr('No has marcado asistencia a ningún estudiante. Márcala o activa "Cerrar sesión sin asistentes".')
       return
     }
     setSaving(true); setErr(null)
@@ -820,45 +819,7 @@ function RegistrarSesionButton({
         Registrar Sesión
       </button>
 
-      {/* Modal A: confirmación "sin asistentes" — aparece ANTES del modal de registro
-          si hay inscritos pero ninguno con asistencia marcada. */}
-      {step === 'confirmSinAsistentes' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-amber-900 mb-3 flex items-center gap-2">
-              <ExclamationTriangleIcon className="h-6 w-6 text-amber-600" />
-              ¿Ningún estudiante asistió?
-            </h3>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-900">
-              No has marcado asistencia a ningún estudiante de los <strong>{totalInscritos}</strong> inscritos.
-              Si confirmas, esta acción:
-              <ul className="list-disc list-inside mt-2 space-y-0.5 text-amber-800">
-                <li>Marcará a los {totalInscritos} estudiantes como <strong>no asistidos</strong>.</li>
-                <li>Registrará la sesión con motivo <code className="bg-amber-100 px-1 rounded">SIN_ASISTENTES</code>.</li>
-                <li>Continuarás al paso de Time Out + Notas.</li>
-              </ul>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setStep('idle')}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmSinAsistentes}
-                className="px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded hover:bg-amber-700"
-              >
-                Sí, confirmar sin asistentes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal B: registrar (Time Out + Notas) */}
+      {/* Modal de registro (Time Out + Notas + casilla "sin asistentes") */}
       {step === 'registrar' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
           <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
@@ -901,6 +862,42 @@ function RegistrarSesionButton({
               />
             </div>
 
+            {totalInscritos > 0 && (
+              <div className={`mb-4 rounded-lg border p-3 text-sm ${
+                faltaAsistencia ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+              }`}>
+                {totalConAsistencia === 0 ? (
+                  <p className="mb-2 text-red-700">
+                    No has marcado asistencia a ninguno de los <strong>{totalInscritos}</strong> inscritos.
+                    Márcala antes de registrar, o cierra la sesión sin asistentes.
+                  </p>
+                ) : (
+                  <p className="mb-2 text-amber-800">
+                    Asistencia marcada: <strong>{totalConAsistencia}</strong> de {totalInscritos} inscritos.
+                  </p>
+                )}
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sinAsistentes}
+                    onChange={e => setSinAsistentes(e.target.checked)}
+                    disabled={saving}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span className="text-gray-800">
+                    <strong>Cerrar sesión sin asistentes.</strong>{' '}
+                    <span className="text-gray-600">
+                      Desmarca a los {totalInscritos} inscritos (asistencia, participación y demás métricas)
+                      y registra la sesión como <code className="bg-amber-100 px-1 rounded">SIN_ASISTENTES</code>.
+                      {totalConAsistencia > 0 && (
+                        <span className="text-red-700"> Se borrará la asistencia ya marcada a {totalConAsistencia}.</span>
+                      )}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+
             {err && <div className="mb-3 text-sm text-red-600">{err}</div>}
 
             <div className="flex justify-end gap-2">
@@ -915,7 +912,7 @@ function RegistrarSesionButton({
               <button
                 type="button"
                 onClick={submitClose}
-                disabled={saving || !timeoutVal}
+                disabled={saving || !timeoutVal || faltaAsistencia}
                 className="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50"
               >
                 {saving ? 'Guardando…' : 'Confirmar Registro'}
