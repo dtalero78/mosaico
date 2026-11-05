@@ -18,6 +18,7 @@ import { PeopleRepository } from '@/repositories/people.repository';
 import { ids } from '@/lib/id-generator';
 import { query, queryOne, queryMany } from '@/lib/postgres';
 import { asignarPagos, simularPago } from '@/lib/cuotas-pagos';
+import { fechaBaseContrato, resolveRealizadoPor } from '@/lib/cambio-contado';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { FACTURA_ADMIN, esFacturaAdmin } from '@/lib/factura-admin';
 import { spacesClient, SPACES_BUCKET, SPACES_CDN } from '@/lib/spaces';
@@ -46,6 +47,10 @@ const UPDATABLE_FIELDS = [
   'medioPago',
   'numeroReferencia',
   'banco',
+  'cambioContado',
+  'nota',
+  // 'realizadopor' NO es editable a mano: es derivado (se recalcula en update()).
+  'realizadopor',
   'numeroFactura',
   'documentosAdjuntos',
   'tipoCartera',
@@ -393,6 +398,22 @@ export const pagosTitularesService = {
     // pero el cliente normalmente la manda explícita igual a su hoy local).
     const fechaReporteDefault = new Date().toISOString().slice(0, 10);
 
+    // Cambio Contado: marca el pago como el cambio de plan a contado y registra
+    // QUIÉN lo gestionó. La atribución la decide el SERVIDOR comparando la fecha del
+    // pago con la de CREACIÓN del contrato (30 días → Comercial, después →
+    // Recaudos); lo que mande el cliente en `realizadopor` se ignora.
+    const esCambioContado = input.cambioContado === true;
+    // La nota es OBLIGATORIA con Cambio Contado: se exige acá además del formulario,
+    // para que ningún cliente pueda saltarse el motivo.
+    const nota = typeof input.nota === 'string' ? input.nota.trim() : '';
+    if (esCambioContado && !nota) {
+      throw new ValidationError('La nota es obligatoria cuando el pago se marca como Cambio Contado');
+    }
+    const fechaPagoFinal = input.fechaPago ?? new Date().toISOString().slice(0, 10);
+    const realizadopor = esCambioContado
+      ? resolveRealizadoPor(fechaBaseContrato(titular as any), fechaPagoFinal)
+      : null;
+
     // Dos recibos: el pago se respalda con DOS comprobantes (recibo 1 y 2 en
     // documentosAdjuntos) y el valor lo digita el operador. Se exige acá también,
     // no sólo en el formulario.
@@ -442,6 +463,9 @@ export const pagosTitularesService = {
       valorAplicado: valorAplicar,
       abono,
       dosRecibos,
+      cambioContado: esCambioContado,
+      realizadopor,
+      nota: nota || null,
       // Si el pago es una penalidad, su valor va aparte: mezclarlo con el pago
       // haría que una multa se leyera como abono a la deuda.
       penalidad: input.penalidad ?? false,
@@ -482,7 +506,25 @@ export const pagosTitularesService = {
     const valorAplicar = computeValorAplicar(next.valorPagado, next.descuento);
     const saldoAFechaPrevio = toNum(existing.saldo) + computeValorAplicar(existing.valorPagado, existing.descuento);
     const saldo = Math.max(0, Number((saldoAFechaPrevio - valorAplicar).toFixed(2)));
-    const payload = { ...body, saldo };
+    const payload: Record<string, any> = { ...body, saldo };
+
+    // `realizadopor` es derivado de la fecha del pago: se recalcula (nunca se toma
+    // del body) cuando el pago queda marcado como Cambio Contado, y se limpia si se
+    // desmarca para no dejar una atribución huérfana. Con Cambio Contado la nota
+    // sigue siendo obligatoria.
+    if (next.cambioContado === true) {
+      if (!String(next.nota ?? '').trim()) {
+        throw new ValidationError('La nota es obligatoria cuando el pago se marca como Cambio Contado');
+      }
+      const titularDelPago = await PeopleRepository.findById(existing.idPeople);
+      payload.realizadopor = titularDelPago
+        ? resolveRealizadoPor(fechaBaseContrato(titularDelPago as any), next.fechaPago)
+        : null;
+    } else if (body.cambioContado === false) {
+      payload.realizadopor = null;
+    } else {
+      delete payload.realizadopor;
+    }
 
     const updated = await PagosTitularesRepository.updateFields(id, payload, [...UPDATABLE_FIELDS, 'saldo']);
     if (!updated) throw new ValidationError('No se pudieron aplicar los cambios');

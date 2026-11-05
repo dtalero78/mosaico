@@ -9,6 +9,7 @@ import { PersonPermission } from '@/types/permissions'
 import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
 import { getLocalToday } from '@/lib/fecha-local'
 import { asignarPagos, simularPago } from '@/lib/cuotas-pagos'
+import { resolveRealizadoPor, diasDesdeBase, fechaBaseContrato as calcFechaBase, VENTANA_COMERCIAL_DIAS } from '@/lib/cambio-contado'
 import RecibosDobles, { type ReciboArchivo, sumaLeida, fmtPesos as fmtPesosRec } from '@/components/common/RecibosDobles'
 import { usePermissions } from '@/hooks/usePermissions'
 
@@ -23,6 +24,10 @@ interface PagoTitularWizardProps {
     gestorRecaudo?: string | null
     primerNombre?: string
     primerApellido?: string
+    /** Para atribuir el Cambio Contado: fecha de creación del contrato y respaldos. */
+    _createdDate?: string | null
+    inicioContrato?: string | null
+    fechaContrato?: string | null
   }
   /** Display label of gestor recaudo to show in read-only field. */
   gestorLabel?: string | null
@@ -83,6 +88,14 @@ interface DraftState {
    */
   dosRecibos: boolean
   recibos: (ReciboArchivo | null)[]
+  /**
+   * Cambio Contado — marca que este pago corresponde al cambio de plan a contado.
+   * Al guardarlo, el servidor registra en `realizadopor` quién lo gestionó
+   * (Comercial dentro de los 30 días de creado el contrato, Recaudos después).
+   */
+  cambioContado: boolean
+  /** Nota del pago. Obligatoria si se marca "Cambio Contado" (el servidor la exige igual). */
+  nota: string
 }
 
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000 // 72 horas
@@ -107,6 +120,8 @@ const empty = (): DraftState => ({
   cambioCartera: '',
   dosRecibos: false,
   recibos: [null, null],
+  cambioContado: false,
+  nota: '',
 })
 
 function toNum(v: string): number {
@@ -429,6 +444,11 @@ export default function PagoTitularWizard({
   const difiereDeSuma = form.dosRecibos && sumaRecibos != null && toNum(form.valorPagado) > 0
     && Math.round(toNum(form.valorPagado)) !== Math.round(sumaRecibos)
 
+  // Cambio Contado: vista previa de a quién se atribuirá (el servidor es la autoridad).
+  const fechaBaseCC = calcFechaBase(titular as any)
+  const diasPreview = diasDesdeBase(fechaBaseCC, form.fechaPago)
+  const realizadoPorPreview = resolveRealizadoPor(fechaBaseCC, form.fechaPago)
+
   const [leyendo, setLeyendo] = useState(false)
   const leerComprobante = async (file: File) => {
     setLeyendo(true)
@@ -486,6 +506,9 @@ export default function PagoTitularWizard({
     if (form.dosRecibos && (!form.recibos[0] || !form.recibos[1])) {
       toast.error('Marcaste "El pago tiene dos recibos": adjunta el recibo 1 y el recibo 2'); return
     }
+    if (form.cambioContado && !form.nota.trim()) {
+      toast.error('La nota es obligatoria cuando el pago es Cambio Contado'); return
+    }
     if (toNum(form.valorPagado) <= 0) {
       toast.error(form.dosRecibos ? 'Digita el valor total del pago (suma de los dos recibos)' : 'Valor pagado debe ser mayor a 0'); return
     }
@@ -523,6 +546,10 @@ export default function PagoTitularWizard({
             : []),
         ],
         dosRecibos: form.dosRecibos,
+        // Cambio Contado: el servidor deriva `realizadopor` de la fecha del pago
+        // contra la creación del contrato — acá sólo se envía la marca y la nota.
+        cambioContado: form.cambioContado,
+        nota: form.nota.trim() || null,
       })
 
       // Cambio de tipoCartera disparado desde la casilla en el wizard.
@@ -873,6 +900,68 @@ export default function PagoTitularWizard({
               </div>
             </div>
           </PermissionGuard>
+
+          {/* Cambio Contado — dato del pago, NO un estado de cartera: por eso va fuera
+              del PermissionGuard de arriba. Al marcarlo, el servidor registra en
+              `realizadopor` si el cambio lo gestionó Comercial (dentro de los 30 días
+              de creado el contrato) o Recaudos (después). */}
+          <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
+            <label className="inline-flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.cambioContado}
+                onChange={e => setForm(f => ({ ...f, cambioContado: e.target.checked }))}
+                className="mt-0.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+              />
+              <span>
+                <span className="text-base font-bold text-teal-900">Cambio Contado</span>
+                <span className="block text-sm text-teal-800">
+                  Marca que este pago corresponde al cambio del plan a contado.
+                  Se registra automáticamente quién lo gestionó.
+                </span>
+              </span>
+            </label>
+
+            {form.cambioContado && (
+              <div className="mt-3 pt-3 border-t border-teal-200 text-sm text-teal-900 space-y-3">
+                <div>
+                  {realizadoPorPreview ? (
+                    <>
+                      Quedará registrado como{' '}
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-base font-bold bg-teal-600 text-white align-middle">
+                        {realizadoPorPreview}
+                      </span>
+                      {diasPreview !== null && (
+                        <span className="block mt-1 text-teal-700">
+                          {diasPreview < 0
+                            ? ' — el pago es anterior a la creación del contrato'
+                            : ' — el pago es del día ' + diasPreview + ' desde la creación del contrato'}
+                          {' '}(hasta {VENTANA_COMERCIAL_DIAS} días es Comercial; después, Recaudos).
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-amber-800">
+                      El contrato no tiene fecha de creación registrada, así que el campo
+                      <em> Realizado por</em> quedará vacío. El pago se guarda igual.
+                    </span>
+                  )}
+                </div>
+                <label className="block">
+                  <span className="text-base font-bold text-rose-900">Nota <span className="text-rose-600">*</span></span>
+                  <span className="block text-sm text-rose-800 mt-0.5 mb-1">Obligatoria: explica el motivo del cambio del plan a contado.</span>
+                  <textarea
+                    value={form.nota}
+                    onChange={e => setForm(f => ({ ...f, nota: e.target.value }))}
+                    rows={3}
+                    maxLength={500}
+                    className="w-full px-3 py-2 border border-rose-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
+                    placeholder="Ej: el titular decidió pagar el saldo de contado con descuento autorizado"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
 
           {/* Pago Tercero */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">

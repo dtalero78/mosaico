@@ -45,6 +45,16 @@ export interface PagoTitular {
   numCuota: number | null;
   /** N° de pago: consecutivo por titular, uno por recibo (la inscripción no lleva). */
   numPago: number | null;
+  /** Marca el pago como el cambio del plan a contado. */
+  cambioContado: boolean;
+  /**
+   * Quién gestionó el cambio a contado ('Comercial' | 'Recaudos'). Sólo se llena si
+   * `cambioContado`; lo DERIVA el servidor (src/lib/cambio-contado.ts) y el cliente
+   * nunca lo envía.
+   */
+  realizadopor: string | null;
+  /** Nota del pago. Obligatoria cuando `cambioContado` es true. */
+  nota: string | null;
   /**
    * El pago se respalda con DOS comprobantes (recibo 1 y 2 en documentosAdjuntos) y
    * su valor lo digita el operador: la IA no lo llena.
@@ -109,14 +119,14 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          "plan", "vlrTotalProg", "numCuota", "cuotasTotal", "valorCuota", "valorPagado",
          "saldo", "descuento", "inscripcion", "medioPago", "numeroReferencia",
          "numeroFactura", "documentosAdjuntos", "validado", "createdBy",
-         "valorAplicado", "vlrpenalidad", "penalidad", "banco", "abono", "dosRecibos", "numPago"
+         "valorAplicado", "vlrpenalidad", "penalidad", "banco", "abono", "dosRecibos", "cambioContado", "realizadopor", "nota", "numPago"
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, $8, $9, $10,
          $11, $12, $13, $14, $15, $16,
          $17, $18, $19, $20, $21,
          $22, $23::jsonb, $24, $25,
-         $26, $27, $28, $29, $30, $31,
+         $26, $27, $28, $29, $30, $31, $32, $33, $34,
          -- N° de pago consecutivo por titular (sólo cuotas; la inscripción no lleva).
          CASE WHEN COALESCE($13::int, 0) > 0
               THEN (SELECT COALESCE(MAX("numPago"), 0) + 1 FROM "PAGOS_TITULARES" WHERE "idPeople" = $2)
@@ -155,6 +165,9 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
         data.banco ?? null,
         data.abono ?? false,
         data.dosRecibos ?? false,
+        data.cambioContado ?? false,
+        data.realizadopor ?? null,
+        data.nota ?? null,
       ]
     );
     return this.parse(row)!;

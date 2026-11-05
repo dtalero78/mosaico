@@ -658,6 +658,14 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                               {p.abono === true && (
                                 <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">Abono</span>
                               )}
+                              {p.cambioContado === true && (
+                                <span
+                                  className="block mt-0.5 mx-auto w-fit px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-teal-100 text-teal-800 whitespace-nowrap"
+                                  title={p.nota ? `Nota: ${p.nota}` : 'Cambio a contado'}
+                                >
+                                  Contado{p.realizadopor ? ` · ${p.realizadopor}` : ''}
+                                </span>
+                              )}
                             </td>
                             <td className="px-3 py-2 text-gray-900">{fechaPago}</td>
                             <td className="px-3 py-2 text-gray-700">
@@ -763,6 +771,9 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
             gestorRecaudo: gestorRecaudoId,
             primerNombre: person.primerNombre,
             primerApellido: person.primerApellido,
+            _createdDate: (person as any)._createdDate ?? null,
+            inicioContrato: (person as any).inicioContrato ?? null,
+            fechaContrato: (person as any).fechaContrato ?? null,
           }}
           gestorLabel={currentGestor ? `${currentGestor.nombre} · ${ROLE_LABEL[currentGestor.rol] || currentGestor.rol}` : null}
           existingPagos={pagos}
