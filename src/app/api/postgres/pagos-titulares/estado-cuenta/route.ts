@@ -60,6 +60,9 @@ function addMonthsUTC(d: Date, n: number): Date {
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const monthLabel = (d: Date) => `${MESES[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 
+/** Cuenta de quien firma el Estado de Cuenta (Jefe de Recaudos). */
+const FIRMANTE_EMAIL = 'mpalaciosq@mosaicosoroban.cl';
+
 export const GET = handlerWithAuth(async (req, _ctx, session) => {
   await requirePermission(session, PersonPermission.ESTADO_CUENTA);
 
@@ -107,20 +110,21 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     [idPeople],
   );
 
-  // 5. Jefe de Recaudos según país (Chile aislado; resto = el otro jefe)
+  // 5. Quien firma el Estado de Cuenta: María Palacios (Jefe de Recaudos), con su
+  //    firma manuscrita (public/firmas/maria-palacios.png). Es la misma para todas
+  //    las plataformas: así lo definió Recaudos. El nombre y el correo salen de su
+  //    cuenta; si no se encuentra, se usa el nombre fijo.
   const pais = norm(titular.plataforma);
   const esChile = pais === 'chile';
-  const jefes = await queryMany<any>(
-    `SELECT "nombre","email","plataforma" FROM "USUARIOS_ROLES"
-     WHERE "rol" = 'RECAUDOS_JEFE' AND "activo" IS TRUE`,
+  const firmante = await queryOne<any>(
+    `SELECT TRIM(CONCAT_WS(' ', "nombre", "apellido")) AS nombre, "email" FROM "USUARIOS_ROLES"
+      WHERE LOWER("email") = $1 AND "activo" IS TRUE LIMIT 1`,
+    [FIRMANTE_EMAIL],
   );
-  const jefeChile = jefes.find(j => norm(j.plataforma) === 'chile');
-  const jefeOtro = jefes.find(j => norm(j.plataforma) === 'colombia') || jefes.find(j => norm(j.plataforma) !== 'chile');
-  const jefe = esChile ? jefeChile : jefeOtro;
   const cartera = {
-    nombre: jefe?.nombre || 'Departamento de Recaudos',
-    cargo: jefe ? `Jefe de Recaudos${esChile ? ' — Chile' : ''}` : 'MOSAICO',
-    email: jefe?.email || '',
+    nombre: firmante?.nombre || 'María Palacios',
+    cargo: 'Jefe de Recaudos',
+    email: firmante?.email || FIRMANTE_EMAIL,
   };
 
   // ── Datos del plan ──────────────────────────────────────────────────────
@@ -279,8 +283,12 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     if (fs.existsSync(p)) logoPath = p;
   } catch { logoPath = null; }
 
-  // MOSAICO no tiene firmas manuscritas cargadas.
-  const firmaPath: string | null = null;
+  // Firma manuscrita de María Palacios (si falta el archivo, el PDF sale sin imagen).
+  let firmaPath: string | null = null;
+  try {
+    const fp = path.join(process.cwd(), 'public', 'firmas', 'maria-palacios.png');
+    if (fs.existsSync(fp)) firmaPath = fp;
+  } catch { firmaPath = null; }
 
   const nombreTitular = [titular.primerNombre, titular.segundoNombre, titular.primerApellido, titular.segundoApellido].filter(Boolean).join(' ');
 
