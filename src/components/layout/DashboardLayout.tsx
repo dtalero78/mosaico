@@ -140,6 +140,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
       { name: 'Bancos',       href: '/dashboard/recaudos/bancos',       newTab: true },
       { name: 'Asignación',   href: '/dashboard/recaudos/asignacion',   newTab: true },
       { name: 'Aprobaciones', href: '/dashboard/recaudos/aprobaciones', newTab: true },
+      { name: 'Usuarios en mora', href: '/dashboard/recaudos/usuarios-mora', newTab: true },
     ],
   },
   {
@@ -522,6 +523,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/recaudos/aprobaciones': [
       RecaudosPermission.APROBACIONES_VER,
     ],
+    '/dashboard/recaudos/usuarios-mora': [
+      RecaudosPermission.USUARIOS_MORA_VER,
+    ],
     // Aprobación — cada ítem con su propio permiso de acceso (VER)
     '/dashboard/aprobacion': [
       AprobacionPermission.CENTRO_VER,
@@ -635,6 +639,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       RecaudosPermission.BANCOS_VER,
       RecaudosPermission.ASIGNACION_VER,
       RecaudosPermission.APROBACIONES_VER,
+      RecaudosPermission.USUARIOS_MORA_VER,
     ],
   }
 

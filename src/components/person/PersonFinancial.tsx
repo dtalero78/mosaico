@@ -11,6 +11,8 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { api, handleApiError } from '@/hooks/use-api'
 import { getLocalToday } from '@/lib/fecha-local'
 import PagoTitularWizard from './PagoTitularWizard'
+import { calcularMora } from '@/lib/mora'
+import { asignarPagos } from '@/lib/cuotas-pagos'
 
 interface PersonFinancialProps {
   person: Person
@@ -77,6 +79,20 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   const [carteraMotivo, setCarteraMotivo] = useState('')
   const [carteraConfirm, setCarteraConfirm] = useState(false)
   const [savingCartera, setSavingCartera] = useState(false)
+
+  // Estado de Cuenta (PDF con el logo de MOSAICO y clave = documento del titular)
+  const [showEstadoCuenta, setShowEstadoCuenta] = useState(false)
+  const [ecModo, setEcModo] = useState<'mes' | 'total'>('mes')
+  const [ecMes, setEcMes] = useState<string>(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+  const generarEstadoCuenta = () => {
+    const qs = new URLSearchParams({ idPeople: person._id, modo: ecModo })
+    if (ecModo === 'mes' && ecMes) qs.set('mes', ecMes)
+    window.open(`/api/postgres/pagos-titulares/estado-cuenta?${qs.toString()}`, '_blank', 'noopener,noreferrer')
+    setShowEstadoCuenta(false)
+  }
 
   const loadPagos = useCallback(async () => {
     if (!isTitular) return
@@ -313,6 +329,33 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   }
   const estadoMeta = ESTADO_CARTERA_META[estadoCartera] || { label: estadoCartera, cls: 'bg-gray-100 text-gray-800' }
 
+  // Corte de Pago: día del mes de FINANCIEROS.fechaPago (fecha del primer corte).
+  const fechaCorteRaw = (financialData as any)?.fechaPago as string | undefined
+  const diaCorte = fechaCorteRaw && !isNaN(new Date(fechaCorteRaw).getTime())
+    ? new Date(fechaCorteRaw).getUTCDate()
+    : null
+  // Estado del período (badge junto a "Corte de Pago"). Misma regla que Recaudos ›
+  // Usuarios en mora: ver calcularMora() en src/lib/mora.ts, con TODOS los pagos
+  // registrados (validados o no).
+  const corteEstado: { label: string; cls: string } | null = (() => {
+    const monto = (v: any) => parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, '')) || 0
+    const mora = calcularMora({
+      fechaPago: fechaCorteRaw,
+      numeroCuotas: (financialData as any)?.numeroCuotas,
+      cuotasRegistradas: asignarPagos({
+        inscripcion: monto((financialData as any)?.pagoInscripcion),
+        valorCuota: monto((financialData as any)?.valorCuota),
+        numeroCuotas: parseInt((financialData as any)?.numeroCuotas) || 0,
+        pagos,
+      }).cuotasCompletas,
+      saldo: (financialData as any)?.saldo,
+    })
+    if (!mora) return null
+    if (mora.estado === 'PAGADO') return { label: 'Pagado', cls: 'bg-green-100 text-green-800' }
+    if (mora.estado === 'EN_TIEMPO') return { label: 'En tiempo', cls: 'bg-blue-100 text-blue-800' }
+    return { label: 'En mora', cls: 'bg-red-100 text-red-800' }
+  })()
+
   return (
     <div className="space-y-6">
       {/* Financial Summary — gateado por PERSON.FINANCIERA.RESUMEN_VER */}
@@ -322,6 +365,16 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
           <h3 className="text-lg font-medium text-gray-900">💳 Resumen Financiero del Titular</h3>
           {isTitular && (
             <div className="flex items-center gap-2 flex-wrap">
+              <PermissionGuard permission={PersonPermission.ESTADO_CUENTA}>
+                <button
+                  type="button"
+                  onClick={() => setShowEstadoCuenta(true)}
+                  title="Generar Estado de Cuenta en PDF (protegido con el documento del titular)"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                >
+                  📄 Estado de Cuenta
+                </button>
+              </PermissionGuard>
               <PermissionGuard permission={PersonPermission.ASIGNAR_GESTOR_RECAUDO}>
                 <button
                   type="button"
@@ -477,6 +530,32 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                 {estadoMeta.label}
               </span>
             </div>
+
+            {/* Corte de Pago (FINANCIEROS.fechaPago — día del mes) + estado del período */}
+            {isTitular && (
+              <div className="md:col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Corte de Pago</label>
+                {diaCorte ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">Día {diaCorte} de cada mes</span>
+                    {corteEstado && (
+                      <span
+                        title={
+                          corteEstado.label === 'Pagado' ? 'Cuota del período actual pagada'
+                          : corteEstado.label === 'En mora' ? 'El corte ya pasó y hay cuota(s) sin pagar'
+                          : 'El corte de este mes aún no vence'
+                        }
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${corteEstado.cls}`}
+                      >
+                        {corteEstado.label}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">—</p>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
@@ -897,6 +976,55 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                 className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
               >
                 {saving ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Estado de Cuenta (elige Mes o Total → genera PDF con clave) ── */}
+      {showEstadoCuenta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-900">📄 Estado de Cuenta</h3>
+            <p className="text-sm text-gray-500">
+              Genera el estado de cuenta del titular en PDF. El archivo sale
+              <strong> protegido con contraseña</strong>: la clave para abrirlo es el
+              <strong> número de documento del titular</strong>.
+            </p>
+            <div className="space-y-2">
+              <label className={'flex items-start gap-2 p-3 rounded-lg border cursor-pointer ' +
+                (ecModo === 'mes' ? 'border-primary-400 bg-primary-50' : 'border-gray-200')}>
+                <input type="radio" name="ecModo" checked={ecModo === 'mes'} onChange={() => setEcModo('mes')} className="mt-1" />
+                <span className="text-sm">
+                  <span className="font-semibold text-gray-900">Por mes</span>
+                  <span className="block text-gray-600">Movimientos del mes elegido + próximo pago y último pago.</span>
+                </span>
+              </label>
+              <label className={'flex items-start gap-2 p-3 rounded-lg border cursor-pointer ' +
+                (ecModo === 'total' ? 'border-primary-400 bg-primary-50' : 'border-gray-200')}>
+                <input type="radio" name="ecModo" checked={ecModo === 'total'} onChange={() => setEcModo('total')} className="mt-1" />
+                <span className="text-sm">
+                  <span className="font-semibold text-gray-900">Total (consolidado)</span>
+                  <span className="block text-gray-600">Todos los movimientos del contrato (inscripción + todas las cuotas).</span>
+                </span>
+              </label>
+            </div>
+            {ecModo === 'mes' && (
+              <label className="block">
+                <span className="block text-sm font-medium text-gray-700 mb-1">Mes *</span>
+                <input type="month" value={ecMes} onChange={e => setEcMes(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+              </label>
+            )}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setShowEstadoCuenta(false)}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={generarEstadoCuenta} disabled={ecModo === 'mes' && !ecMes}
+                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50">
+                Generar PDF
               </button>
             </div>
           </div>

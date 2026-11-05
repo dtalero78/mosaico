@@ -85,6 +85,7 @@ export enum PersonPermission {
   PAGOS_FACTURAR_ADMIN   = 'PERSON.FINANCIERA.PAGOS_FACTURAR_ADMIN',
   /** "Leer recibo" en Verificación Inscripción: la IA lee el comprobante y el gestor corrige. */
   LEER_RECIBO            = 'PERSON.FINANCIERA.LEER_RECIBO',
+  ESTADO_CUENTA          = 'PERSON.FINANCIERA.ESTADO_CUENTA',
 
   // Legacy permissions (keeping for backward compatibility)
   ACTIVAR_DESACTIVAR = 'PERSON.ADMIN.ACTIVAR_DESACTIVAR',
@@ -516,6 +517,7 @@ export enum RecaudosPermission {
   AJUSTES_INSCRIPCION  = 'RECAUDOS.AJUSTES.INSCRIPCION',
   AJUSTES_PAGO         = 'RECAUDOS.AJUSTES.PAGO',
   AJUSTES_FACTURACION  = 'RECAUDOS.AJUSTES.FACTURACION',
+  USUARIOS_MORA_VER    = 'RECAUDOS.USUARIOS_MORA.VER',
 }
 
 /**

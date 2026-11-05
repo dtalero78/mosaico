@@ -110,7 +110,7 @@ const nextConfig = {
 
   // Experimental features for better deployment
   experimental: {
-    serverComponentsExternalPackages: ['mongoose', 'mongodb'],
+    serverComponentsExternalPackages: ['mongoose', 'mongodb', 'pdfkit'],
   },
 }
 

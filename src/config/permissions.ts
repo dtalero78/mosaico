@@ -145,6 +145,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'En Verificación Inscripción: la IA lee el recibo de inscripción (medio de pago, fecha, monto, referencia, banco), el gestor corrige lo que haga falta y lo guarda. Precarga esos datos en la cuota de inscripción sin validarla',
   },
   {
+    code: PersonPermission.ESTADO_CUENTA,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Estado de Cuenta"',
+    description: 'Pestaña Financiera del titular: genera el Estado de Cuenta en PDF (con el logo y los colores de MOSAICO), por mes o consolidado. El archivo sale protegido: la clave es el documento del titular',
+  },
+  {
     code: PersonPermission.VER_DOCUMENTACION,
     module: Module.PERSON,
     section: 'Información General',
@@ -1644,6 +1651,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     section: 'Ajustes',
     name: 'Ajustes — Facturación',
     description: 'Pestaña Ajustes del Centro de Validación: corregir el número de factura de un pago ya facturado. Exige motivo y queda auditado en PAGOS_AJUSTES (poner "ADMIN" exige además el permiso de factura ADMIN)',
+  },
+  {
+    code: RecaudosPermission.USUARIOS_MORA_VER,
+    module: Module.RECAUDOS,
+    section: 'Usuarios en mora',
+    name: 'Usuarios en mora',
+    description: 'Informe de titulares aprobados con cuotas vencidas sin registrar (misma regla del indicador En mora de la ficha financiera), con filtros por gestor, plataforma, curso y estado del contrato, y exportación a Excel. Respeta el alcance por plataforma de Recaudos',
   },
 ];
 
