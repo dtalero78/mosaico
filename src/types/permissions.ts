@@ -509,6 +509,8 @@ export enum RecaudosPermission {
   BANCOS_VER           = 'RECAUDOS.BANCOS.VER',
   ASIGNACION_VER       = 'RECAUDOS.ASIGNACION.VER',
   ASIGNACION_EXPORTAR  = 'RECAUDOS.ASIGNACION.EXPORTAR',
+  /** Migrar TODA la cartera de un gestor a otro (retiro / reemplazo). */
+  ASIGNACION_MIGRAR    = 'RECAUDOS.ASIGNACION.MIGRAR',
   APROBACIONES_VER     = 'RECAUDOS.APROBACIONES.VER',
   APROBACIONES_ASIGNAR = 'RECAUDOS.APROBACIONES.ASIGNAR',
   // Aprobar (validar) pagos e inscripciones EN BLOQUE desde el Centro de Validación.

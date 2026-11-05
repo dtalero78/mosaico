@@ -1611,6 +1611,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /dashboard/recaudos/bancos — misma consulta del Centro de Validación pero filtrada/agrupada por Medio de Pago',
   },
   {
+    code: RecaudosPermission.ASIGNACION_MIGRAR,
+    module: Module.RECAUDOS,
+    section: 'Asignación',
+    name: 'Botón "Migrar Cuentas" en Asignación',
+    description: 'Reasigna DE UNA VEZ todos los titulares de un gestor de recaudo a otro — pensado para cuando el gestor anterior se retira. Opcionalmente arrastra también sus pagos PENDIENTES (los ya validados nunca se tocan: son el registro de quién los validó). Acción masiva e irreversible desde la UI, por eso va separada de la asignación individual',
+  },
+  {
     code: RecaudosPermission.APROBACIONES_VER,
     module: Module.RECAUDOS,
     section: 'Aprobaciones',
