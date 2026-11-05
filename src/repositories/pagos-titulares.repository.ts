@@ -45,6 +45,11 @@ export interface PagoTitular {
   numCuota: number | null;
   /** N° de pago: consecutivo por titular, uno por recibo (la inscripción no lleva). */
   numPago: number | null;
+  /**
+   * El pago se respalda con DOS comprobantes (recibo 1 y 2 en documentosAdjuntos) y
+   * su valor lo digita el operador: la IA no lo llena.
+   */
+  dosRecibos: boolean;
   /** El pago fue un abono (no completó su cuota, o la cuota ya tenía abonos). */
   abono: boolean;
   valorCuota: number | null;
@@ -104,14 +109,14 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          "plan", "vlrTotalProg", "numCuota", "cuotasTotal", "valorCuota", "valorPagado",
          "saldo", "descuento", "inscripcion", "medioPago", "numeroReferencia",
          "numeroFactura", "documentosAdjuntos", "validado", "createdBy",
-         "valorAplicado", "vlrpenalidad", "penalidad", "banco", "abono", "numPago"
+         "valorAplicado", "vlrpenalidad", "penalidad", "banco", "abono", "dosRecibos", "numPago"
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, $8, $9, $10,
          $11, $12, $13, $14, $15, $16,
          $17, $18, $19, $20, $21,
          $22, $23::jsonb, $24, $25,
-         $26, $27, $28, $29, $30,
+         $26, $27, $28, $29, $30, $31,
          -- N° de pago consecutivo por titular (sólo cuotas; la inscripción no lleva).
          CASE WHEN COALESCE($13::int, 0) > 0
               THEN (SELECT COALESCE(MAX("numPago"), 0) + 1 FROM "PAGOS_TITULARES" WHERE "idPeople" = $2)
@@ -149,6 +154,7 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
         data.penalidad ?? false,
         data.banco ?? null,
         data.abono ?? false,
+        data.dosRecibos ?? false,
       ]
     );
     return this.parse(row)!;

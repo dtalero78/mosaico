@@ -393,6 +393,21 @@ export const pagosTitularesService = {
     // pero el cliente normalmente la manda explícita igual a su hoy local).
     const fechaReporteDefault = new Date().toISOString().slice(0, 10);
 
+    // Dos recibos: el pago se respalda con DOS comprobantes (recibo 1 y 2 en
+    // documentosAdjuntos) y el valor lo digita el operador. Se exige acá también,
+    // no sólo en el formulario.
+    const dosRecibos = input.dosRecibos === true;
+    if (dosRecibos) {
+      const docs = Array.isArray(input.documentosAdjuntos) ? input.documentosAdjuntos : [];
+      const tiene = (n: number) => docs.some((d: any) => Number(d?.recibo) === n && d?.url);
+      if (!tiene(1) || !tiene(2)) {
+        throw new ValidationError('Marcaste "El pago tiene dos recibos": adjunta el recibo 1 y el recibo 2');
+      }
+      if (toNum(input.valorPagado) <= 0) {
+        throw new ValidationError('Con dos recibos el valor del pago se digita a mano y debe ser mayor a 0');
+      }
+    }
+
     // Abono (automático): el pago no completa solo su cuota, o la cuota ya tenía
     // abonos. Se calcula con TODOS los pagos registrados (validados o no).
     const abono = await esPagoAbono(input.idPeople, (titular as any).contrato, Number(input.numCuota) || 0,
@@ -426,6 +441,7 @@ export const pagosTitularesService = {
       // recalcularlo en cada lectura y para que un ajuste manual quede fijo.
       valorAplicado: valorAplicar,
       abono,
+      dosRecibos,
       // Si el pago es una penalidad, su valor va aparte: mezclarlo con el pago
       // haría que una multa se leyera como abono a la deuda.
       penalidad: input.penalidad ?? false,

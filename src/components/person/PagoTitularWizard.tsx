@@ -9,6 +9,8 @@ import { PersonPermission } from '@/types/permissions'
 import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
 import { getLocalToday } from '@/lib/fecha-local'
 import { asignarPagos, simularPago } from '@/lib/cuotas-pagos'
+import RecibosDobles, { type ReciboArchivo, sumaLeida, fmtPesos as fmtPesosRec } from '@/components/common/RecibosDobles'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface PagoTitularWizardProps {
   isOpen: boolean
@@ -75,6 +77,12 @@ interface DraftState {
    * Mutuamente exclusivo (sólo uno marcado a la vez).
    */
   cambioCartera: '' | 'ultimopago' | 'penalidad'
+  /**
+   * "El pago tiene dos recibos" — el pago se respalda con DOS comprobantes
+   * (recibo 1 y 2) y el valor se digita a mano: la IA no lo llena.
+   */
+  dosRecibos: boolean
+  recibos: (ReciboArchivo | null)[]
 }
 
 const DRAFT_TTL_MS = 72 * 60 * 60 * 1000 // 72 horas
@@ -97,6 +105,8 @@ const empty = (): DraftState => ({
   plataforma: '',
   documentosAdjuntos: [],
   cambioCartera: '',
+  dosRecibos: false,
+  recibos: [null, null],
 })
 
 function toNum(v: string): number {
@@ -397,6 +407,28 @@ export default function PagoTitularWizard({
   // Leer comprobante: sube el archivo, lo adjunta al pago y precarga el formulario
   // con lo que la IA lee. Nunca pisa lo que ya se escribió, y el valor sólo se
   // llena si está vacío: quien registra revisa y confirma.
+  const { hasPermission } = usePermissions()
+  const puedeLeerRecibo = hasPermission(PersonPermission.LEER_RECIBO)
+
+  // Dos recibos: el valor NO lo llena la IA. Del recibo 1 se precargan fecha,
+  // medio, banco y referencia (sin pisar lo ya escrito); del 2 sólo se muestra el monto leído.
+  const toggleDosRecibos = () => setForm(f => f.dosRecibos
+    ? { ...f, dosRecibos: false, recibos: [null, null] }
+    : { ...f, dosRecibos: true, valorPagado: '' })
+  const onReciboLeido = (indice: number, e: any) => {
+    if (indice !== 0) return
+    setForm(f => ({
+      ...f,
+      fechaPago: (typeof e.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.fecha)) ? e.fecha : f.fechaPago,
+      medioPago: f.medioPago || e.medioPago || '',
+      banco: f.banco || e.banco || '',
+      numeroReferencia: f.numeroReferencia || String(e.referencia || '').replace(/[^A-Za-z0-9\-]/g, ''),
+    }))
+  }
+  const sumaRecibos = sumaLeida(form.recibos)
+  const difiereDeSuma = form.dosRecibos && sumaRecibos != null && toNum(form.valorPagado) > 0
+    && Math.round(toNum(form.valorPagado)) !== Math.round(sumaRecibos)
+
   const [leyendo, setLeyendo] = useState(false)
   const leerComprobante = async (file: File) => {
     setLeyendo(true)
@@ -451,7 +483,12 @@ export default function PagoTitularWizard({
 
   const handleSubmit = async () => {
     if (!form.fechaPago) { toast.error('Fecha de pago es requerida'); return }
-    if (toNum(form.valorPagado) <= 0) { toast.error('Valor pagado debe ser mayor a 0'); return }
+    if (form.dosRecibos && (!form.recibos[0] || !form.recibos[1])) {
+      toast.error('Marcaste "El pago tiene dos recibos": adjunta el recibo 1 y el recibo 2'); return
+    }
+    if (toNum(form.valorPagado) <= 0) {
+      toast.error(form.dosRecibos ? 'Digita el valor total del pago (suma de los dos recibos)' : 'Valor pagado debe ser mayor a 0'); return
+    }
     if (form.numCuota && Number(form.numCuota) < 0) { toast.error('Número de cuota no puede ser negativo'); return }
 
     setSubmitting(true)
@@ -475,7 +512,17 @@ export default function PagoTitularWizard({
         medioPago: form.medioPago || null,
         numeroReferencia: form.numeroReferencia || null,
         banco: form.banco.trim() || null,
-        documentosAdjuntos: form.documentosAdjuntos,
+        // Con dos recibos, los comprobantes van como adjuntos marcados recibo 1 y 2.
+        documentosAdjuntos: [
+          ...form.documentosAdjuntos,
+          ...(form.dosRecibos
+            ? form.recibos.flatMap((r, i) => r ? [{
+                url: r.url, nombre: `Recibo ${i + 1} · ${r.nombre}`, tipo: r.tipo,
+                fechaSubida: r.fechaSubida, recibo: i + 1, montoLeido: r.montoLeido ?? null,
+              }] : [])
+            : []),
+        ],
+        dosRecibos: form.dosRecibos,
       })
 
       // Cambio de tipoCartera disparado desde la casilla en el wizard.
@@ -554,6 +601,30 @@ export default function PagoTitularWizard({
               <div className="text-gray-500">Número ID</div>
               <div className="font-medium text-gray-900">{titular.numeroId || '—'}</div>
             </div>
+          </div>
+
+          {/* Dos recibos — el pago viene en DOS comprobantes: se suben ambos y el
+              valor se digita a mano (la IA no lo llena). */}
+          <div className={`rounded-lg border p-3 space-y-3 ${form.dosRecibos ? 'border-emerald-300 bg-emerald-50/40' : 'border-gray-200 bg-gray-50'}`}>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none">
+              <input type="checkbox" checked={form.dosRecibos} onChange={toggleDosRecibos}
+                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500" />
+              El pago tiene dos recibos
+            </label>
+            {form.dosRecibos && (
+              <>
+                <RecibosDobles
+                  carpetaId={titular._id}
+                  recibos={form.recibos}
+                  onChange={recibos => setForm(f => ({ ...f, recibos }))}
+                  leerConIA={puedeLeerRecibo}
+                  onLeido={onReciboLeido}
+                />
+                <p className="text-xs font-medium text-emerald-800">
+                  Digita en <strong>Valor a Pagar</strong> el monto total del pago (los dos recibos juntos).
+                </p>
+              </>
+            )}
           </div>
 
           {/* Fila 1 — Fechas: pago (edit), reporte (edit, default hoy),
@@ -694,6 +765,12 @@ export default function PagoTitularWizard({
               $ {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Math.max(0, cuotaNum - toNum(form.descuento)))}{' '}
               y la cuota queda saldada igual.
             </div>
+          )}
+
+          {difiereDeSuma && sumaRecibos != null && (
+            <p className="-mt-2 text-sm font-medium text-amber-700">
+              El valor digitado ({fmtPesosRec(toNum(form.valorPagado))}) no coincide con la suma leída de los dos recibos ({fmtPesosRec(sumaRecibos)}). Revísalo antes de registrar.
+            </p>
           )}
 
           {/* Cómo queda el pago (regla de src/lib/cuotas-pagos.ts): completa lo que falta
