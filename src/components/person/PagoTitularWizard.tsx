@@ -8,6 +8,7 @@ import { PermissionGuard } from '@/components/permissions'
 import { PersonPermission } from '@/types/permissions'
 import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
 import { getLocalToday } from '@/lib/fecha-local'
+import { asignarPagos, simularPago } from '@/lib/cuotas-pagos'
 
 interface PagoTitularWizardProps {
   isOpen: boolean
@@ -212,8 +213,19 @@ export default function PagoTitularWizard({
       return db.localeCompare(da)
     })
     const ultimo = sorted[0]
-    const nextNumCuota = maxCuota >= 0 ? String(maxCuota + 1) : ''
-    const nextNumCuotaNum = maxCuota >= 0 ? maxCuota + 1 : 1
+    // Cuota sugerida = la primera NO completa (los abonos suman); si no hay plan
+    // para saberlo, la siguiente a la mayor registrada.
+    const planAuto = {
+      inscripcion: toNum(String(cuotaCero?.inscripcion ?? cuotaCero?.valorPagado ?? 0)),
+      valorCuota: toNum(String(cuotaCero?.valorCuota ?? 0)),
+      numeroCuotas: Number(cuotaCero?.cuotasTotal) || 0,
+    }
+    const primeraIncompleta = planAuto.valorCuota > 0 && planAuto.numeroCuotas > 0
+      ? asignarPagos({ ...planAuto, pagos: list }).primeraIncompleta
+      : null
+    const sugerida = primeraIncompleta != null && primeraIncompleta >= 1 ? primeraIncompleta : (maxCuota >= 0 ? maxCuota + 1 : 1)
+    const nextNumCuota = String(sugerida)
+    const nextNumCuotaNum = sugerida
     // Preferir cuota#0.fechaVencimiento (paso 6 de crear-contrato) como base,
     // y avanzar N meses para la cuota actual. Cae a fechaPago si no existe.
     const billingRef = cuotaCero?.fechaVencimiento || cuotaCero?.fechaPago
@@ -297,6 +309,23 @@ export default function PagoTitularWizard({
   const cuotasTotalNum  = Number(cuotaCero?.cuotasTotal) || 0
   const saldoFechaNum   = Math.max(0, Number(saldoActual ?? 0))
 
+  // ── Abonos (src/lib/cuotas-pagos.ts): cada pago EMPIEZA en su cuota y desborda
+  // hacia adelante; dos pagos pueden llevar la misma cuota. ──────────────────
+  const fmtPesos = (n: number) => '$ ' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Math.round(n || 0))
+  const pagosReales: any[] = Array.isArray(existingPagos) ? existingPagos : []
+  const planWizard = {
+    inscripcion: inscripcionNum,
+    valorCuota: toNum(String(cuotaCero?.valorCuota ?? form.valorCuota)),
+    numeroCuotas: cuotasTotalNum,
+  }
+  const asig = planWizard.valorCuota > 0 && planWizard.numeroCuotas > 0
+    ? asignarPagos({ ...planWizard, pagos: pagosReales })
+    : null
+  const numCuotaNum = form.numCuota !== '' ? Number(form.numCuota) : NaN
+  const cuotaElegida = asig && Number.isFinite(numCuotaNum) ? asig.cuotas[numCuotaNum] : undefined
+  // N° de pago = consecutivo por titular (lo asigna el servidor al guardar).
+  const nPago = pagosReales.reduce((m: number, x: any) => Math.max(m, Number(x.numPago) || 0), 0) + 1
+
   // ── Cálculos en vivo de esta captura ──────────────────────────────────
   // El descuento es una REBAJA SOBRE LA CUOTA: se le perdona parte de lo que
   // debía pagar, pero la cuota queda saldada igual. Por eso el descuento SUMA
@@ -315,6 +344,9 @@ export default function PagoTitularWizard({
   // saldo). No se bloquea — un abono adelantado legítimo también excede.
   const cuotaNum = toNum(form.valorCuota)
   const excedeCuota = cuotaNum > 0 && valorAplicar > cuotaNum
+  const simulacion = asig && Number.isFinite(numCuotaNum) && numCuotaNum >= 1 && valorAplicar > 0
+    ? simularPago(asig, numCuotaNum, toNum(form.valorPagado), toNum(form.descuento))
+    : null
 
   // Upload de documentos (mismo flujo que UploadDocButton)
   const uploadFiles = async (files: File[]) => {
@@ -581,7 +613,10 @@ export default function PagoTitularWizard({
               </div>
             </div>
             <div>
-              <label htmlFor="numCuota" className="block text-sm font-medium text-gray-700"># Cuota</label>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="numCuota" className="block text-sm font-medium text-gray-700"># Cuota</label>
+                <span className="text-xs text-gray-500">Pago N° {nPago}</span>
+              </div>
               <input
                 id="numCuota" type="number" min={0}
                 value={form.numCuota}
@@ -589,6 +624,15 @@ export default function PagoTitularWizard({
                 className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-center font-semibold"
                 placeholder="0"
               />
+              {cuotaElegida && numCuotaNum >= 1 && (
+                <p className={'mt-1 text-xs font-medium ' + (cuotaElegida.completa ? 'text-red-700' : cuotaElegida.cubierto > 0.5 ? 'text-amber-700' : 'text-gray-500')}>
+                  {cuotaElegida.completa
+                    ? 'Esta cuota ya está completa'
+                    : cuotaElegida.cubierto > 0.5
+                      ? `Abonado ${fmtPesos(cuotaElegida.cubierto)} · faltan ${fmtPesos(cuotaElegida.falta)}`
+                      : `Valor ${fmtPesos(cuotaElegida.valor)}`}
+                </p>
+              )}
             </div>
           </div>
 
@@ -649,6 +693,38 @@ export default function PagoTitularWizard({
               el titular paga{' '}
               $ {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Math.max(0, cuotaNum - toNum(form.descuento)))}{' '}
               y la cuota queda saldada igual.
+            </div>
+          )}
+
+          {/* Cómo queda el pago (regla de src/lib/cuotas-pagos.ts): completa lo que falta
+              de la cuota y el excedente pasa a las siguientes; el descuento completa
+              la cuota igual que el efectivo. */}
+          {simulacion && simulacion.reparto.length > 0 && (
+            <div className="rounded-lg border border-primary-200 bg-primary-50 p-3 text-sm">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <p className="font-bold text-primary-800">Así queda el pago N° {nPago}</p>
+                {simulacion.esAbono && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">Abono</span>
+                )}
+              </div>
+              <ul className="space-y-1">
+                {simulacion.reparto.map(r => (
+                  <li key={r.n} className="flex justify-between gap-3 text-primary-900">
+                    <span>
+                      {r.completa
+                        ? (asig?.cuotas[r.n]?.cubierto ?? 0) > 0.5 ? `Completa cuota ${r.n}` : `Paga cuota ${r.n}`
+                        : `Abono cuota ${r.n}`}
+                      {!r.completa && <span className="text-amber-700"> (faltan {fmtPesos(r.falta)})</span>}
+                    </span>
+                    <span className="font-semibold tabular-nums">{fmtPesos(r.aplica)}</span>
+                  </li>
+                ))}
+              </ul>
+              {simulacion.sobrante > 0.5 && (
+                <p className="mt-1.5 font-bold text-red-700">
+                  El pago supera en {fmtPesos(simulacion.sobrante)} lo que falta del contrato.
+                </p>
+              )}
             </div>
           )}
 

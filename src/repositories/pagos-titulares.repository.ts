@@ -38,7 +38,15 @@ export interface PagoTitular {
    *  ser un código numérico; el tipo se había quedado en number. */
   plan: string | null;
   vlrTotalProg: number | null;
+  /**
+   * Cuota donde EMPIEZA a aplicarse el pago (0 = inscripción). Puede repetirse:
+   * dos abonos a la cuota 4 llevan cuota 4. Ver src/lib/cuotas-pagos.ts.
+   */
   numCuota: number | null;
+  /** N° de pago: consecutivo por titular, uno por recibo (la inscripción no lleva). */
+  numPago: number | null;
+  /** El pago fue un abono (no completó su cuota, o la cuota ya tenía abonos). */
+  abono: boolean;
   valorCuota: number | null;
   valorPagado: number | null;
   saldo: number | null;
@@ -96,14 +104,18 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          "plan", "vlrTotalProg", "numCuota", "cuotasTotal", "valorCuota", "valorPagado",
          "saldo", "descuento", "inscripcion", "medioPago", "numeroReferencia",
          "numeroFactura", "documentosAdjuntos", "validado", "createdBy",
-         "valorAplicado", "vlrpenalidad", "penalidad", "banco"
+         "valorAplicado", "vlrpenalidad", "penalidad", "banco", "abono", "numPago"
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, $8, $9, $10,
          $11, $12, $13, $14, $15, $16,
          $17, $18, $19, $20, $21,
          $22, $23::jsonb, $24, $25,
-         $26, $27, $28, $29
+         $26, $27, $28, $29, $30,
+         -- N° de pago consecutivo por titular (sólo cuotas; la inscripción no lleva).
+         CASE WHEN COALESCE($13::int, 0) > 0
+              THEN (SELECT COALESCE(MAX("numPago"), 0) + 1 FROM "PAGOS_TITULARES" WHERE "idPeople" = $2)
+         END
        )
        RETURNING *`,
       [
@@ -136,6 +148,7 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
         data.vlrpenalidad ?? null,
         data.penalidad ?? false,
         data.banco ?? null,
+        data.abono ?? false,
       ]
     );
     return this.parse(row)!;

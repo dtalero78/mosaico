@@ -16,7 +16,8 @@ import 'server-only';
 import { PagosTitularesRepository, type PagoTitular } from '@/repositories/pagos-titulares.repository';
 import { PeopleRepository } from '@/repositories/people.repository';
 import { ids } from '@/lib/id-generator';
-import { query, queryOne } from '@/lib/postgres';
+import { query, queryOne, queryMany } from '@/lib/postgres';
+import { asignarPagos, simularPago } from '@/lib/cuotas-pagos';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { FACTURA_ADMIN, esFacturaAdmin } from '@/lib/factura-admin';
 import { spacesClient, SPACES_BUCKET, SPACES_CDN } from '@/lib/spaces';
@@ -90,6 +91,30 @@ function computeValorAplicar(valorPagado: any, descuento: any): number {
 }
 
 /**
+ * ¿El pago nuevo es un abono? (regla de src/lib/cuotas-pagos.ts): no completa
+ * solo su cuota, o la cuota ya tenía abonos. Se calcula con TODOS los pagos
+ * registrados (validados o no). Best-effort: sin plan en FINANCIEROS no se puede
+ * saber y queda en false.
+ */
+async function esPagoAbono(
+  idPeople: string, contrato: string | undefined, numCuota: number, valorPagado: number, descuento: number,
+): Promise<boolean> {
+  if (!contrato || numCuota <= 0) return false;
+  const fin = await queryOne<any>(
+    `SELECT "valorCuota","numeroCuotas","pagoInscripcion" FROM "FINANCIEROS" WHERE "contrato" = $1 LIMIT 1`, [contrato]);
+  const valorCuota = toNum(fin?.valorCuota);
+  if (!fin || valorCuota <= 0) return false;
+  const pagos = await queryMany<any>(
+    `SELECT "_id","numCuota","fechaPago","_createdDate","valorPagado","descuento","inscripcion"
+       FROM "PAGOS_TITULARES" WHERE "idPeople" = $1`, [idPeople]);
+  const asig = asignarPagos({
+    inscripcion: toNum(fin.pagoInscripcion), valorCuota,
+    numeroCuotas: parseInt(String(fin.numeroCuotas ?? 0), 10) || 0, pagos,
+  });
+  return simularPago(asig, numCuota, valorPagado, descuento).esAbono;
+}
+
+/**
  * Sincroniza FINANCIEROS.saldo con la suma de pagos VALIDADOS del titular.
  * Opción 2: sólo los pagos con validado=true cuentan.
  *
@@ -120,12 +145,24 @@ export async function syncFinancieroSaldo(idPeople: string): Promise<void> {
     const cuotasPagadas = parseInt(sumRow?.cuotas_pagadas ?? '0', 10) || 0;
 
     // 3) Leer totalPlan del FINANCIEROS (texto legacy, hay que parsear)
-    const finRow = await queryOne<{ totalPlan: string | null }>(
-      `SELECT "totalPlan" FROM "FINANCIEROS" WHERE "contrato" = $1 LIMIT 1`,
+    const finRow = await queryOne<any>(
+      `SELECT "totalPlan","valorCuota","numeroCuotas","pagoInscripcion" FROM "FINANCIEROS" WHERE "contrato" = $1 LIMIT 1`,
       [contrato]
     );
     if (!finRow) return;
     const totalPlan = toNum(finRow.totalPlan);
+
+    // Cuotas COMPLETAS con los pagos validados (src/lib/cuotas-pagos.ts): dos
+    // abonos a la misma cuota cuentan una vez y una cuota a medias no cuenta.
+    const validados = await queryMany<any>(
+      `SELECT "_id","numCuota","fechaPago","_createdDate","valorPagado","descuento","inscripcion","validado"
+         FROM "PAGOS_TITULARES" WHERE "idPeople" = $1 AND "validado" = true`, [idPeople]);
+    const cuotasCompletas = asignarPagos({
+      inscripcion: toNum(finRow.pagoInscripcion),
+      valorCuota: toNum(finRow.valorCuota),
+      numeroCuotas: parseInt(String(finRow.numeroCuotas ?? 0), 10) || 0,
+      pagos: validados,
+    }).cuotasCompletas;
 
     // 4) Calcular nuevo saldo (sin negativos)
     const nuevoSaldo = Math.max(0, totalPlan - totalValidado);
@@ -139,7 +176,7 @@ export async function syncFinancieroSaldo(idPeople: string): Promise<void> {
            "cuotasPagadas" = $2,
            "_updatedDate" = NOW()
        WHERE "contrato" = $3`,
-      [String(Math.round(nuevoSaldo)), cuotasPagadas, contrato]
+      [String(Math.round(nuevoSaldo)), toNum(finRow.valorCuota) > 0 ? cuotasCompletas : cuotasPagadas, contrato]
     );
   } catch (err: any) {
     console.warn(`[pagos-titulares] syncFinancieroSaldo falló para ${idPeople}:`, err?.message || err);
@@ -356,6 +393,11 @@ export const pagosTitularesService = {
     // pero el cliente normalmente la manda explícita igual a su hoy local).
     const fechaReporteDefault = new Date().toISOString().slice(0, 10);
 
+    // Abono (automático): el pago no completa solo su cuota, o la cuota ya tenía
+    // abonos. Se calcula con TODOS los pagos registrados (validados o no).
+    const abono = await esPagoAbono(input.idPeople, (titular as any).contrato, Number(input.numCuota) || 0,
+      toNum(input.valorPagado), toNum(input.descuento));
+
     const data: Partial<PagoTitular> = {
       _id: ids.payment(),
       idPeople: input.idPeople,
@@ -383,6 +425,7 @@ export const pagosTitularesService = {
       // Lo que este pago descuenta del saldo. Se persiste para no tener que
       // recalcularlo en cada lectura y para que un ajuste manual quede fijo.
       valorAplicado: valorAplicar,
+      abono,
       // Si el pago es una penalidad, su valor va aparte: mezclarlo con el pago
       // haría que una multa se leyera como abono a la deuda.
       penalidad: input.penalidad ?? false,
