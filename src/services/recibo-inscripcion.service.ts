@@ -38,8 +38,8 @@ Analiza el comprobante adjunto y devuelve EXCLUSIVAMENTE un objeto JSON válido 
   "medioPago": string|null,   // normalizado: "Webpay", "Transferencia", "Paypal", "Nequi", "Daviplata", "PSE", "Efectivo", "Tarjeta". Transferencia o depósito bancario → "Transferencia".
   "fecha": string|null,       // fecha del pago en formato YYYY-MM-DD. Interpreta "14 De Septiembre De 2026", "12/9/2026", "14-09-2026", "11/09/2026 13:27" (día/mes/año).
   "monto": number|null,       // valor pagado, SOLO el número sin símbolos ni separadores de miles: 115000, 99, 4000.
-  "referencia": string|null,  // referencia, orden de compra, número de autorización, de operación o de comprobante.
-  "banco": string|null,       // banco emisor o de destino, si aparece.
+  "referencia": string|null,  // referencia, orden de compra, número de autorización, "Nº de operación" o de comprobante. NO el número de cuenta.
+  "banco": string|null,       // banco DESDE el que se pagó (origen/emisor: el del logo de la app bancaria o el "Origen" de la transferencia), NO el banco del destinatario. Ej.: "Banco Falabella".
   "confianza": number         // 0 a 1: qué tan seguro estás de la extracción.
 }
 

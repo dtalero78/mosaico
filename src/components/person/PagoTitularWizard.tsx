@@ -62,6 +62,7 @@ interface DraftState {
   descuento: string
   medioPago: string
   numeroReferencia: string
+  banco: string
   pagoTercero: string
   idTercero: string
   plataforma: string
@@ -89,6 +90,7 @@ const empty = (): DraftState => ({
   descuento: '',
   medioPago: '',
   numeroReferencia: '',
+  banco: '',
   pagoTercero: '',
   idTercero: '',
   plataforma: '',
@@ -360,6 +362,57 @@ export default function PagoTitularWizard({
     input.click()
   }
 
+  // Leer comprobante: sube el archivo, lo adjunta al pago y precarga el formulario
+  // con lo que la IA lee. Nunca pisa lo que ya se escribió, y el valor sólo se
+  // llena si está vacío: quien registra revisa y confirma.
+  const [leyendo, setLeyendo] = useState(false)
+  const leerComprobante = async (file: File) => {
+    setLeyendo(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const up = await fetch(`/api/contracts/${titular._id}/upload-url`, { method: 'POST', body: fd })
+      if (!up.ok) {
+        const e = await up.json().catch(() => ({} as any))
+        throw new Error(e.details || e.error || `Error ${up.status}`)
+      }
+      const { publicUrl } = await up.json()
+      setForm(f => ({
+        ...f,
+        documentosAdjuntos: [...f.documentosAdjuntos,
+          { url: publicUrl, nombre: file.name, tipo: file.type, fechaSubida: new Date().toISOString() }],
+      }))
+      const d = await api.post<{ extraido: any }>('/api/postgres/pagos-titulares/leer-comprobante', { url: publicUrl })
+      const e = d.extraido || {}
+      setForm(f => ({
+        ...f,
+        fechaPago: (typeof e.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.fecha)) ? e.fecha : f.fechaPago,
+        valorPagado: (e.monto != null && !toNum(f.valorPagado)) ? String(Math.round(e.monto)) : f.valorPagado,
+        medioPago: f.medioPago || e.medioPago || '',
+        numeroReferencia: f.numeroReferencia || String(e.referencia || '').replace(/[^A-Za-z0-9\-]/g, ''),
+        banco: f.banco || e.banco || '',
+      }))
+      toast.success('Comprobante leído — revisa los datos antes de guardar')
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo leer el comprobante')
+    } finally {
+      setLeyendo(false)
+    }
+  }
+  const pickComprobante = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/jpeg,image/jpg,image/png,image/webp,application/pdf'
+    input.style.display = 'none'
+    document.body.appendChild(input)
+    input.addEventListener('change', () => {
+      const fl = input.files?.[0]
+      if (fl) leerComprobante(fl)
+      document.body.removeChild(input)
+    })
+    input.click()
+  }
+
   const removeDoc = (idx: number) => {
     setForm(f => ({ ...f, documentosAdjuntos: f.documentosAdjuntos.filter((_, i) => i !== idx) }))
   }
@@ -389,6 +442,7 @@ export default function PagoTitularWizard({
         descuento: form.descuento ? toNum(form.descuento) : 0,
         medioPago: form.medioPago || null,
         numeroReferencia: form.numeroReferencia || null,
+        banco: form.banco.trim() || null,
         documentosAdjuntos: form.documentosAdjuntos,
       })
 
@@ -598,8 +652,8 @@ export default function PagoTitularWizard({
             </div>
           )}
 
-          {/* Fila 5 — Medio de Pago / Referencia */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Fila 5 — Medio de Pago / Banco / Referencia */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label htmlFor="medioPago" className="block text-sm font-medium text-gray-700">Medio de Pago</label>
               <input
@@ -607,6 +661,15 @@ export default function PagoTitularWizard({
                 onChange={e => setForm(f => ({ ...f, medioPago: e.target.value }))}
                 className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                 placeholder="Transferencia, Webpay, PSE, ..."
+              />
+            </div>
+            <div>
+              <label htmlFor="banco" className="block text-sm font-medium text-gray-700">Banco</label>
+              <input
+                id="banco" type="text" value={form.banco} maxLength={80}
+                onChange={e => setForm(f => ({ ...f, banco: e.target.value }))}
+                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                placeholder="Banco desde el que se pagó"
               />
             </div>
             <div>
@@ -688,6 +751,18 @@ export default function PagoTitularWizard({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">Documentos Adjuntos</label>
+              <div className="flex items-center gap-2">
+              <PermissionGuard permission={PersonPermission.LEER_RECIBO}>
+                <button
+                  type="button"
+                  onClick={pickComprobante}
+                  disabled={leyendo || uploadingFiles.length > 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-50 border border-indigo-300 text-indigo-700 rounded-md hover:bg-indigo-100 disabled:opacity-50"
+                  title="Sube el comprobante y precarga fecha, valor, medio y referencia"
+                >
+                  {leyendo ? 'Leyendo…' : '✨ Leer comprobante'}
+                </button>
+              </PermissionGuard>
               <button
                 type="button"
                 onClick={openFileChooser}
@@ -697,6 +772,7 @@ export default function PagoTitularWizard({
                 <ArrowUpTrayIcon className="h-3.5 w-3.5" />
                 {uploadingFiles.length > 0 ? `Subiendo (${uploadingFiles.length})...` : 'Adjuntar'}
               </button>
+              </div>
             </div>
             {form.documentosAdjuntos.length === 0 ? (
               <p className="text-xs text-gray-400 italic">Sin documentos adjuntos</p>

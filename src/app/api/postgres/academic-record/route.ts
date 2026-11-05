@@ -131,7 +131,10 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     // Un "Caso de Atención" queda ABIERTO cuando el guía escribe texto en ese
     // campo; se marca en el booking (estudiante+evento) para el reporte de
     // Servicio › Casos Atención. Se cierra desde ahí (Resuelto).
-    updateData.casoAtencion = !!(advisorAnotaciones && String(advisorAnotaciones).trim());
+    // Sólo se MARCA: un texto vacío no apaga la marca. Cerrar el caso es cosa de
+    // CASOS_ATENCION (Asignar/Cerrar); si guardar la evaluación con el campo
+    // vacío lo cerrara, el caso seguiría abierto y desaparecería de la bandeja.
+    if (advisorAnotaciones && String(advisorAnotaciones).trim()) updateData.casoAtencion = true;
   }
   if (actividadPropuesta !== undefined) updateData.actividadPropuesta = actividadPropuesta;
 

@@ -63,8 +63,23 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
     )
   }
 
+  // Caso sin agendamiento (el curso se regeneró y el agendamiento ya no existe):
+  // la fila de la bandeja trae `caso:<id>` en lugar de un bookingId.
+  const casoDirecto = bookingId.startsWith('caso:') ? bookingId.slice(5) : null
+
   // Datos del caso para el historial (curso, lección, fecha del evento, texto).
-  const info = await queryOne<any>(
+  const info = casoDirecto
+    ? await queryOne<any>(
+        `SELECT (SELECT r."texto" FROM "CASOS_REPORTES" r WHERE r."casoId" = ca."_id" ORDER BY r."_createdDate" ASC LIMIT 1) AS caso,
+                ca."_id" AS "casoId", ca."estado"::text AS "estadoCaso",
+                NULL AS leccion, p."tipoCurso" AS curso, NULL AS "fechaEvento"
+           FROM "CASOS_ATENCION" ca
+           JOIN "ACADEMICA" a ON a."_id" = ca."academicaId"
+           LEFT JOIN "PEOPLE" p ON p."_id" = a."peopleId"
+          WHERE ca."_id" = $1 AND ca."academicaId" = $2 AND ca."estado" = 'EN_GESTION'`,
+        [casoDirecto, academicaId]
+      )
+    : await queryOne<any>(
     `SELECT b."advisorAnotaciones" AS caso,
             ca."_id" AS "casoId", ca."estado"::text AS "estadoCaso",
             COALESCE(c."step", b."step") AS leccion,
@@ -84,7 +99,7 @@ export const POST = handlerWithAuth(async (req, ctx, session) => {
       WHERE b."_id" = $1`,
     [bookingId]
   )
-  if (!info) throw new NotFoundError('Booking', bookingId)
+  if (!info) throw new NotFoundError(casoDirecto ? 'Caso' : 'Booking', bookingId)
 
   const entry = {
     fecha: new Date().toISOString(),

@@ -10,13 +10,55 @@ import { ESTADO_ABIERTO } from '@/lib/casos-atencion-estados'
 /**
  * GET /api/postgres/reports/servicio/casos-atencion?curso&salon&leccion&guia&startDate&endDate
  *
- * Bookings con un Caso de Atención ABIERTO (ACADEMICA_BOOKINGS.casoAtencion=true):
- * el guía escribió un caso en /sesion/[id]. Una fila por (estudiante, evento).
- * Columnas: curso, nombre, salón, lección (+ tema), guía, fecha del evento, el
- * caso (advisorAnotaciones) y conteo de casos abiertos del estudiante. Gateado
- * por SERVICIO.CASOS_ATENCION.VER.
+ * Casos de Atención ABIERTOS y SIN asignar a un área, venga el reporte de un
+ * guía o del equipo (Servicio, asistentes...). Una fila por caso. Columnas:
+ * curso, nombre, salón, lección (+ tema), guía, fecha, el caso y conteo de
+ * casos abiertos del estudiante. Gateado por SERVICIO.CASOS_ATENCION.VER.
  */
 const MAX_ROWS = 5000
+
+/**
+ * Origen de las filas. La pestaña se lee desde el CASO, no desde la marca del
+ * agendamiento: regenerar un curso borra y recrea sus agendamientos (y con ellos
+ * la marca `casoAtencion`) mientras el caso sigue abierto, y 73 de 132 casos
+ * abiertos habían quedado fuera de la lista por eso. El agendamiento es un
+ * dato opcional del caso (aporta lección y fecha cuando existe).
+ *
+ *  A) todo caso abierto y SIN asignar a un área, tenga o no agendamiento;
+ *  B) agendamientos marcados de datos anteriores al módulo, sin caso enlazado.
+ * Si el agendamiento no existe, `bookingId` vale `caso:<id>` para que "Asignar"
+ * pueda actuar sobre el caso directamente.
+ */
+const SRC_SQL = `
+  src AS (
+    SELECT ca."_id" AS "casoId", ca."academicaId" AS "academicaId",
+           ca."eventoOrigenId" AS "eventoId",
+           COALESCE(bk."_id", 'caso:' || ca."_id") AS "bookingId",
+           bk."step" AS "bStep", bk."fechaEvento" AS "bFecha",
+           COALESCE(NULLIF(bk."advisorAnotaciones",''), rep."texto") AS "caso",
+           ca."_createdDate" AS "creado"
+      FROM "CASOS_ATENCION" ca
+      LEFT JOIN LATERAL (
+        SELECT x.* FROM "ACADEMICA_BOOKINGS" x
+         WHERE COALESCE(x."idEstudiante", x."studentId") = ca."academicaId"
+           AND COALESCE(x."eventoId", x."idEvento") = ca."eventoOrigenId"
+         ORDER BY x."casoAtencion" DESC NULLS LAST, x."_createdDate" DESC LIMIT 1
+      ) bk ON true
+      LEFT JOIN LATERAL (
+        SELECT r."texto" FROM "CASOS_REPORTES" r
+         WHERE r."casoId" = ca."_id" ORDER BY r."_createdDate" ASC LIMIT 1
+      ) rep ON true
+     WHERE ca."estado"::text = '${ESTADO_ABIERTO}' AND ca."area" IS NULL
+    UNION ALL
+    SELECT NULL, COALESCE(b."idEstudiante", b."studentId"), COALESCE(b."eventoId", b."idEvento"),
+           b."_id", b."step", b."fechaEvento", b."advisorAnotaciones", b."fechaEvento"
+      FROM "ACADEMICA_BOOKINGS" b
+     WHERE b."casoAtencion" = true
+       AND NOT EXISTS (
+         SELECT 1 FROM "CASOS_ATENCION" y
+          WHERE y."academicaId" = COALESCE(b."idEstudiante", b."studentId")
+            AND y."eventoOrigenId" = COALESCE(b."eventoId", b."idEvento"))
+  )`
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requirePermission(session, ServicioPermission.CASOS_ATENCION_VER)
@@ -32,35 +74,28 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const endDate = (searchParams.get('endDate') || '').trim()
 
   const where: string[] = [
-    `b."casoAtencion" = true`,
     `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
     // Sólo los que ocupan cupo (ver lib/cupo): un contrato retractado ya no es
     // alumno del salón, así que su caso no debe seguir en la bandeja.
     cupoOcupadoSql('p'),
-    // El universo sigue siendo el agendamiento marcado por el guía, pero si su
-    // caso ya se cerró desde la ficha del alumno deja de ser bandeja: pasa al
-    // Histórico. Sin caso enlazado (datos viejos) se considera abierto.
-    // Abierto y SIN asignar: en cuanto se le da un área pasa a la bandeja de esa
-    // área, aunque su estado siga siendo "en gestión".
-    `(ca."estado" IS NULL OR ca."estado"::text = '${ESTADO_ABIERTO}')`,
-    `ca."area" IS NULL`,
   ]
   const params: any[] = []
   let i = 1
   if (campaign) { where.push(`p."campaign" = $${i++}`); params.push(campaign) }
   if (curso)   { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (salon)   { where.push(`p."salon" = $${i++}`); params.push(salon) }
-  if (leccion) { where.push(`COALESCE(c."step", b."step") = $${i++}`); params.push(leccion) }
+  if (leccion) { where.push(`COALESCE(c."step", s."bStep") = $${i++}`); params.push(leccion) }
   if (guia)    { where.push(`cc."guia" = $${i++}`); params.push(guia) }
-  if (startDate) { where.push(`COALESCE(c."dia", b."fechaEvento") >= $${i++}::date`); params.push(startDate) }
-  if (endDate)   { where.push(`COALESCE(c."dia", b."fechaEvento") < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
+  if (startDate) { where.push(`COALESCE(c."dia", s."bFecha", s."creado") >= $${i++}::date`); params.push(startDate) }
+  if (endDate)   { where.push(`COALESCE(c."dia", s."bFecha", s."creado") < ($${i++}::date + INTERVAL '1 day')`); params.push(endDate) }
   if (usuario) {
     const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i, 'p."contrato"')
     where.push(c.sql); params.push(...c.params); i += 2
   }
 
   const rows = (await query(
-    `SELECT b."_id" AS "bookingId",
+    `WITH ${SRC_SQL}
+     SELECT s."bookingId" AS "bookingId",
             a."_id" AS "academicaId",
             p."tipoCurso" AS curso,
             TRIM(REGEXP_REPLACE(CONCAT_WS(' ', p."primerNombre", p."segundoNombre", p."primerApellido", p."segundoApellido"), '\\s+', ' ', 'g')) AS nombre,
@@ -71,10 +106,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             -- beneficiario). LATERAL para quedarnos con uno solo.
             tit."_id" AS "titularId",
             p."salon",
-            COALESCE(c."step", b."step") AS leccion,
+            COALESCE(c."step", s."bStep") AS leccion,
             n."description" AS tema,
             g."nombreCompleto" AS guia,
-            b."advisorAnotaciones" AS caso,
+            s."caso" AS caso,
             COALESCE(ca."estado"::text, '${ESTADO_ABIERTO}') AS estado,
             ca."codigo" AS "codigoCaso",
             -- Tipo del CASO (Asistencia, Conducta, Pago...): va bajo el guia.
@@ -87,25 +122,18 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             -- cada uno): con sólo el último en general, un WhatsApp "Pendiente"
             -- escondería la llamada "Sin respuesta" de un minuto antes.
             COALESCE(ct."porCanal", '[]'::json) AS contactos,
-            COALESCE(c."dia", b."fechaEvento") AS fecha,
+            COALESCE(c."dia", s."bFecha", s."creado") AS fecha,
             COUNT(*) OVER (PARTITION BY a."_id")::int AS conteo
-       FROM "ACADEMICA_BOOKINGS" b
-       JOIN "ACADEMICA" a ON a."_id" = COALESCE(b."idEstudiante", b."studentId")
+       FROM src s
+       JOIN "ACADEMICA" a ON a."_id" = s."academicaId"
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
-       LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+       LEFT JOIN "CALENDARIO" c ON c."_id" = s."eventoId"
        LEFT JOIN "CURSOS_CAMPAIGN" cc
          ON cc."campaign" = p."campaign" AND cc."tipoCurso" = p."tipoCurso" AND cc."horarioCurso" = p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
        LEFT JOIN "GUIAS" g ON g."_id" = cc."guia"
-       LEFT JOIN "NIVELES" n ON n."curso" = p."tipoCurso" AND n."step" = COALESCE(c."step", b."step")
-       -- Estado REAL del caso. El informe lee el agendamiento (marca plana del
-       -- guía) y el estado vive en CASOS_ATENCION: sin este JOIN la columna
-       -- decía siempre "Pendiente" aunque el caso ya estuviera cerrado.
-       LEFT JOIN LATERAL (
-         SELECT x."_id", x."estado", x."codigo", x."area", x."tema", x."origen" FROM "CASOS_ATENCION" x
-          WHERE x."academicaId" = a."_id"
-            AND x."eventoOrigenId" = COALESCE(b."eventoId", b."idEvento")
-          ORDER BY x."_createdDate" DESC LIMIT 1
-       ) ca ON true
+       LEFT JOIN "NIVELES" n ON n."curso" = p."tipoCurso" AND n."step" = COALESCE(c."step", s."bStep")
+       -- Estado REAL del caso (vive en CASOS_ATENCION).
+       LEFT JOIN "CASOS_ATENCION" ca ON ca."_id" = s."casoId"
        LEFT JOIN LATERAL (
          SELECT json_agg(json_build_object(
                   'canal', u.canal, 'resultado', u.resultado, 'fecha', u.fecha, 'intentos', u.intentos
@@ -132,16 +160,17 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   // Opciones de dropdowns (sobre los casos abiertos)
   const opts = (await query(
-    `SELECT DISTINCT p."campaign" AS campaign, p."tipoCurso" AS curso, p."salon" AS salon,
-            COALESCE(c."step", b."step") AS leccion,
+    `WITH ${SRC_SQL}
+     SELECT DISTINCT p."campaign" AS campaign, p."tipoCurso" AS curso, p."salon" AS salon,
+            COALESCE(c."step", s."bStep") AS leccion,
             cc."guia" AS guia_id, g."nombreCompleto" AS guia_nombre
-       FROM "ACADEMICA_BOOKINGS" b
-       JOIN "ACADEMICA" a ON a."_id" = COALESCE(b."idEstudiante", b."studentId")
+       FROM src s
+       JOIN "ACADEMICA" a ON a."_id" = s."academicaId"
        JOIN "PEOPLE" p ON p."_id" = a."peopleId"
-       LEFT JOIN "CALENDARIO" c ON c."_id" = COALESCE(b."eventoId", b."idEvento")
+       LEFT JOIN "CALENDARIO" c ON c."_id" = s."eventoId"
        LEFT JOIN "CURSOS_CAMPAIGN" cc ON cc."campaign"=p."campaign" AND cc."tipoCurso"=p."tipoCurso" AND cc."horarioCurso"=p."horarioCurso" AND cc."salon" IS NOT DISTINCT FROM p."salon"
        LEFT JOIN "GUIAS" g ON g."_id"=cc."guia"
-      WHERE b."casoAtencion" = true AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
+      WHERE COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
         AND ${cupoOcupadoSql('p')}`
   )).rows
   const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean)))

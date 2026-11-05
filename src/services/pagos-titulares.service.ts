@@ -44,6 +44,7 @@ const UPDATABLE_FIELDS = [
   'inscripcion',
   'medioPago',
   'numeroReferencia',
+  'banco',
   'numeroFactura',
   'documentosAdjuntos',
   'tipoCartera',
@@ -376,6 +377,7 @@ export const pagosTitularesService = {
       inscripcion: input.inscripcion ?? null,
       medioPago: input.medioPago ?? null,
       numeroReferencia: input.numeroReferencia ?? null,
+      banco: input.banco ? String(input.banco).trim().slice(0, 80) : null,
       numeroFactura: input.numeroFactura ?? null,
       documentosAdjuntos: Array.isArray(input.documentosAdjuntos) ? input.documentosAdjuntos : [],
       // Lo que este pago descuenta del saldo. Se persiste para no tener que

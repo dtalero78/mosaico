@@ -50,6 +50,8 @@ export interface PagoTitular {
   tipoCartera: string | null;
   medioPago: string | null;
   numeroReferencia: string | null;
+  /** Banco desde el que se pagó (lo captura Recaudos o lo lee la IA del comprobante). */
+  banco: string | null;
   numeroFactura: string | null;
   /** Lo que el pago descuenta del saldo = valorPagado + descuento (regla MOSAICO). */
   valorAplicado: number | null;
@@ -94,14 +96,14 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
          "plan", "vlrTotalProg", "numCuota", "cuotasTotal", "valorCuota", "valorPagado",
          "saldo", "descuento", "inscripcion", "medioPago", "numeroReferencia",
          "numeroFactura", "documentosAdjuntos", "validado", "createdBy",
-         "valorAplicado", "vlrpenalidad", "penalidad"
+         "valorAplicado", "vlrpenalidad", "penalidad", "banco"
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7, $8, $9, $10,
          $11, $12, $13, $14, $15, $16,
          $17, $18, $19, $20, $21,
          $22, $23::jsonb, $24, $25,
-         $26, $27, $28
+         $26, $27, $28, $29
        )
        RETURNING *`,
       [
@@ -133,6 +135,7 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
         data.valorAplicado ?? null,
         data.vlrpenalidad ?? null,
         data.penalidad ?? false,
+        data.banco ?? null,
       ]
     );
     return this.parse(row)!;
