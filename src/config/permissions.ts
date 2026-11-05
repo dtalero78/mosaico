@@ -1624,6 +1624,27 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: 'Aprobación masiva de pagos e inscripciones',
     description: 'Habilita las casillas de selección + botón "Aprobar seleccionados" para validar pagos e inscripciones EN BLOQUE en el Centro de Validación (Gestión / Bancos)',
   },
+  {
+    code: RecaudosPermission.AJUSTES_INSCRIPCION,
+    module: Module.RECAUDOS,
+    section: 'Ajustes',
+    name: 'Ajustes — Inscripciones',
+    description: 'Pestaña Ajustes del Centro de Validación: corregir una inscripción (cuota #0) YA validada — valor, descuento, fecha, medio, banco, referencia. Exige motivo, recalcula el saldo del contrato y queda auditado en PAGOS_AJUSTES',
+  },
+  {
+    code: RecaudosPermission.AJUSTES_PAGO,
+    module: Module.RECAUDOS,
+    section: 'Ajustes',
+    name: 'Ajustes — Pagos',
+    description: 'Pestaña Ajustes del Centro de Validación: corregir un pago de cuota YA validado — cuota, valor, descuento, fecha, medio, banco, referencia. Exige motivo, recalcula el saldo del contrato y queda auditado en PAGOS_AJUSTES',
+  },
+  {
+    code: RecaudosPermission.AJUSTES_FACTURACION,
+    module: Module.RECAUDOS,
+    section: 'Ajustes',
+    name: 'Ajustes — Facturación',
+    description: 'Pestaña Ajustes del Centro de Validación: corregir el número de factura de un pago ya facturado. Exige motivo y queda auditado en PAGOS_AJUSTES (poner "ADMIN" exige además el permiso de factura ADMIN)',
+  },
 ];
 
 // ============================================================================

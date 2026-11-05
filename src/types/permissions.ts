@@ -512,6 +512,10 @@ export enum RecaudosPermission {
   APROBACIONES_ASIGNAR = 'RECAUDOS.APROBACIONES.ASIGNAR',
   // Aprobar (validar) pagos e inscripciones EN BLOQUE desde el Centro de Validación.
   APROBACION_MASIVA    = 'RECAUDOS.APROBACION_MASIVA',
+  // Pestaña Ajustes del Centro de Validación: corregir lo YA validado.
+  AJUSTES_INSCRIPCION  = 'RECAUDOS.AJUSTES.INSCRIPCION',
+  AJUSTES_PAGO         = 'RECAUDOS.AJUSTES.PAGO',
+  AJUSTES_FACTURACION  = 'RECAUDOS.AJUSTES.FACTURACION',
 }
 
 /**
