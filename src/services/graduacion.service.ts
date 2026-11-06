@@ -74,6 +74,28 @@ export async function resolverAlcance(a: AlcanceGraduacion) {
       porSalon.get(k)!.alumnos += 1;
     }
   }
+  // Cursos CERRADOS en Ajuste Cursos: sus alumnos quedaron inactivos y sin curso, pero
+  // son justo a quienes se gradúa. Se reconocen por la bitácora de cupo (la salida
+  // por cierre de ESE curso) y sólo mientras no hayan vuelto a otro salón.
+  const cerrados = await queryMany<any>(
+    `SELECT DISTINCT cc."tipoCurso", cc."salon", cc."horarioCurso", a."_id" AS "academicaId"
+       FROM "CURSOS_CAMPAIGN" cc
+       JOIN "PEOPLE" p ON p."tipoUsuario" = 'BENEFICIARIO' AND p."campaign" IS NULL
+       JOIN LATERAL jsonb_array_elements(COALESCE(p."cupoHistory",'[]'::jsonb)) e ON
+            e->>'campaign' = cc."campaign" AND e->>'tipoCurso' = cc."tipoCurso"
+        AND e->>'horarioCurso' = cc."horarioCurso" AND e->>'salon' IS NOT DISTINCT FROM cc."salon"
+        AND e->>'motivo' ILIKE 'Curso cerrado en Ajuste Cursos%'
+       JOIN "ACADEMICA" a ON a."numeroId" = p."numeroId" AND a."tipoUsuario" = 'BENEFICIARIO'
+      WHERE cc."campaign" = $1 AND cc."guia" = $2 AND cc."activa" = true
+        AND ($3::text[] IS NULL OR cc."tipoCurso" = ANY($3::text[]))
+        AND ($4::text[] IS NULL OR cc."salon" = ANY($4::text[]))`,
+    [a.campaign, a.advisorId, cursos, salones],
+  ).catch(() => [] as any[]);
+  for (const r of cerrados) {
+    const k = `${r.tipoCurso}|${r.salon}|${r.horarioCurso}`;
+    if (!porSalon.has(k)) porSalon.set(k, { tipoCurso: r.tipoCurso, salon: r.salon, horarioCurso: r.horarioCurso, alumnos: 0 });
+    if (r.academicaId && !ids.has(r.academicaId)) { ids.add(r.academicaId); porSalon.get(k)!.alumnos += 1; }
+  }
   return { academicaIds: [...ids], salones: [...porSalon.values()] };
 }
 
@@ -121,6 +143,7 @@ export async function sincronizarAlumnos(
       agendadoPorRol: actor.rol,
       sessionRole: actor.rol,
       masivo: true,
+      permitirInactivos: true,
     });
     agendados = Array.isArray(r?.bookings) ? r.bookings.length : faltan.length;
     canceladas = Array.isArray(r?.cancelados) ? r.cancelados.length : 0;

@@ -38,6 +38,8 @@ interface EnrollInput {
    * siempre para los roles que se saltaban el cupo.
    */
   masivo?: boolean;
+  /** Sólo la Graduación: convoca también a alumnos inactivos por el cierre de su curso. */
+  permitirInactivos?: boolean;
   /**
    * Nivelación que PREVALECE: si el alumno tiene otra clase que se cruza, se cancela
    * ESE agendamiento (sólo para él; el evento sigue) y se agenda la nivelación. Sin
@@ -164,7 +166,7 @@ export async function enrollStudents(input: EnrollInput) {
   // Los bloqueos reales (contrato vencido, OnHold, retractado, toggle) apagan
   // SIEMPRE PEOPLE también, así que ese caso sigue bloqueado. (Verificado: los
   // PEOPLE-activa/ACADEMICA-inactiva son todos 'Aprobado' pre-curso.)
-  const canBypassInactive = input.sessionRole === 'SUPER_ADMIN' || input.sessionRole === 'ADMIN';
+  const canBypassInactive = input.permitirInactivos === true || input.sessionRole === 'SUPER_ADMIN' || input.sessionRole === 'ADMIN';
   if (!canBypassInactive) {
     const inactivos = students.filter((s: any) => s.peopleEstadoInactivo === true);
     if (inactivos.length > 0) {
