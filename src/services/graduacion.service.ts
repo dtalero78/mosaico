@@ -67,10 +67,10 @@ export async function resolverAlcance(a: AlcanceGraduacion) {
   );
 
   const ids = new Set<string>();
-  const porSalon = new Map<string, { tipoCurso: string; salon: string | null; horarioCurso: string; alumnos: number }>();
+  const porSalon = new Map<string, { campaign?: string; tipoCurso: string; salon: string | null; horarioCurso: string; alumnos: number }>();
   for (const r of rows) {
     const k = `${r.campaign}|${r.tipoCurso}|${r.salon}|${r.horarioCurso}`;
-    if (!porSalon.has(k)) porSalon.set(k, { tipoCurso: r.tipoCurso, salon: r.salon, horarioCurso: r.horarioCurso, alumnos: 0 });
+    if (!porSalon.has(k)) porSalon.set(k, { campaign: r.campaign, tipoCurso: r.tipoCurso, salon: r.salon, horarioCurso: r.horarioCurso, alumnos: 0 });
     if (r.academicaId && !ids.has(r.academicaId)) {
       ids.add(r.academicaId);
       porSalon.get(k)!.alumnos += 1;
@@ -95,7 +95,7 @@ export async function resolverAlcance(a: AlcanceGraduacion) {
   ).catch(() => [] as any[]);
   for (const r of cerrados) {
     const k = `${r.campaign}|${r.tipoCurso}|${r.salon}|${r.horarioCurso}`;
-    if (!porSalon.has(k)) porSalon.set(k, { tipoCurso: r.tipoCurso, salon: r.salon, horarioCurso: r.horarioCurso, alumnos: 0 });
+    if (!porSalon.has(k)) porSalon.set(k, { campaign: r.campaign, tipoCurso: r.tipoCurso, salon: r.salon, horarioCurso: r.horarioCurso, alumnos: 0 });
     if (r.academicaId && !ids.has(r.academicaId)) { ids.add(r.academicaId); porSalon.get(k)!.alumnos += 1; }
   }
   return { academicaIds: [...ids], salones: [...porSalon.values()] };

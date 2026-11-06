@@ -88,7 +88,7 @@ export default function EventModal({
   // Graduación en edición: guía dueño del alcance (puede diferir del que la dicta).
   const [guiaAlcanceEdit, setGuiaAlcanceEdit] = useState('')
   // Graduación: a cuántos alumnos del guía convocaría la selección actual.
-  const [graduacionPreview, setGraduacionPreview] = useState<{ total: number; salones: Array<{ tipoCurso: string; salon: string | null; horarioCurso: string; alumnos: number }> } | null>(null)
+  const [graduacionPreview, setGraduacionPreview] = useState<{ total: number; salones: Array<{ campaign?: string; tipoCurso: string; salon: string | null; horarioCurso: string; alumnos: number }> } | null>(null)
   // Graduaciones conjuntas (sólo editando una graduación): las ya enlazadas y las que se pueden unir.
   type GradFila = { _id: string; dia: string; hora: string; guia?: string; campaign?: string; curso?: string; salon?: string; convocados?: number }
   const [gradConj, setGradConj] = useState<{ grupo: GradFila[]; unibles: GradFila[] } | null>(null)
@@ -663,6 +663,13 @@ export default function EventModal({
   const delGuia = (r: { guia?: string | null }) => !esGraduacion || (!!scopeGuia && r.guia === scopeGuia)
   const cursosDeCampania = (campaign: string) =>
     Array.from(new Set(cursosCampaign.filter(r => (!campaign || campaign === TODOS || r.campaign === campaign) && delGuia(r)).map(r => r.tipoCurso).filter(Boolean)))
+  // Prefijo de campaña de un curso (del guía): "ABRIL132026M · SENPAI"; con varias, se listan.
+  const etiquetaCurso = (campaign: string, curso: string) => {
+    const camps = Array.from(new Set(cursosCampaign
+      .filter(r => r.tipoCurso === curso && (!campaign || campaign === TODOS || r.campaign === campaign) && delGuia(r))
+      .map(r => r.campaign).filter(Boolean))).sort()
+    return camps.length ? `${camps.join(', ')} · ${curso}` : curso
+  }
   const salonesDeCurso = (campaign: string, curso: string) => {
     // `curso` puede ser una lista ("YOJI, OKINA") o Todos: la graduación une los
     // salones de todos los cursos elegidos.
@@ -1189,7 +1196,7 @@ export default function EventModal({
                             onChange={() => toggleCurso(c)}
                             className="rounded border-gray-300"
                           />
-                          <span>{c}</span>
+                          <span>{etiquetaCurso(formData.campaign, c)}</span>
                         </label>
                       ))}
                     </div>
@@ -1280,7 +1287,7 @@ export default function EventModal({
                     : <>
                         Se agendarán <b>{graduacionPreview.total}</b> alumno(s) a este evento; si tienen otra clase a esa hora, <b>la graduación prevalece</b> y esa clase se cancela solo para ellos.
                         <span className="block text-xs text-teal-800 mt-1">
-                          {graduacionPreview.salones.map(s => `${s.tipoCurso} ${s.salon ?? ''} (${s.alumnos})`).join(' · ')}
+                          {graduacionPreview.salones.map(s => `${s.campaign ? s.campaign + ' · ' : ''}${s.tipoCurso} ${s.salon ?? ''} (${s.alumnos})`).join(' · ')}
                         </span>
                       </>}
                 </div>
@@ -1294,7 +1301,7 @@ export default function EventModal({
                       <ul className="space-y-1">
                         {gradConj.grupo.map(g => (
                           <li key={g._id} className="flex items-center justify-between gap-2 text-xs bg-white/70 rounded px-2 py-1">
-                            <span>{g.guia || 'Sin guía'} · {g.curso} {g.salon} · {g.convocados ?? 0} alumno(s){g._id === (editingEvent as any)._id ? ' (esta)' : ''}</span>
+                            <span>{g.guia || 'Sin guía'} · {g.campaign} · {g.curso} {g.salon} · {g.convocados ?? 0} alumno(s){g._id === (editingEvent as any)._id ? ' (esta)' : ''}</span>
                             <button type="button" disabled={gradBusy} onClick={() => gradLlamar('DELETE', `?quitar=${g._id}`)}
                               className="text-red-600 hover:underline disabled:opacity-50">Separar</button>
                           </li>
@@ -1312,7 +1319,7 @@ export default function EventModal({
                           <label key={g._id} className="flex items-center gap-2 text-xs bg-white/70 rounded px-2 py-1 cursor-pointer">
                             <input type="checkbox" checked={gradSel.includes(g._id)}
                               onChange={e => setGradSel(prev => e.target.checked ? [...prev, g._id] : prev.filter(x => x !== g._id))} />
-                            <span>{g.guia || 'Sin guía'} · {g.curso} {g.salon} · {g.convocados ?? 0} alumno(s) · {gradFmt(g)}</span>
+                            <span>{g.guia || 'Sin guía'} · {g.campaign} · {g.curso} {g.salon} · {g.convocados ?? 0} alumno(s) · {gradFmt(g)}</span>
                           </label>
                         ))}
                       </div>
