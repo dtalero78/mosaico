@@ -262,3 +262,96 @@ export async function actualizarGraduacion(
   const sync = await sincronizarAlumnos(eventId, academicaIds, { nombre: opts.nombre, email: opts.actor, rol: opts.rol });
   return { total: academicaIds.length, ...sync };
 }
+
+// ───────────────────────── Graduaciones conjuntas ─────────────────────────
+// Varias graduaciones (del mismo guía o de otros) pueden realizarse JUNTAS: se crean
+// de a una y después se unen. Quedan enlazadas con el mismo `eventoCompartidoId`, a la
+// misma fecha, hora, duración y enlace de Zoom. Cada una conserva su guía y sus alumnos.
+
+const esGrad = (e: any) => String(e?.tipo || e?.evento || '').toUpperCase() === 'GRADUACION';
+
+/** Las graduaciones ya enlazadas con ésta (incluida) y las que se le pueden unir. */
+export async function graduacionesParaUnir(eventId: string) {
+  const ev: any = await CalendarioRepository.findById(eventId);
+  if (!ev) throw new NotFoundError('Event', eventId);
+  if (!esGrad(ev)) throw new ValidationError('El evento no es una graduación.');
+  const sel = `SELECT c."_id", c."dia", c."hora", c."duracionMin", c."advisor", g."nombreCompleto" AS "guia",
+                      c."campaign", c."curso", c."salon", c."eventoCompartidoId", c."sesionCerrada",
+                      (SELECT COUNT(*)::int FROM "ACADEMICA_BOOKINGS" b
+                        WHERE (b."eventoId" = c."_id" OR b."idEvento" = c."_id") AND COALESCE(b."cancelo", false) = false) AS "convocados"
+                 FROM "CALENDARIO" c LEFT JOIN "GUIAS" g ON g."_id" = c."advisor"`;
+  const grupo = ev.eventoCompartidoId
+    ? await queryMany<any>(`${sel} WHERE c."eventoCompartidoId" = $1::uuid ORDER BY c."dia", g."nombreCompleto"`, [ev.eventoCompartidoId])
+    : [];
+  const unibles = await queryMany<any>(
+    `${sel} WHERE UPPER(COALESCE(c."tipo",'')) = 'GRADUACION' AND c."_id" <> $1
+        AND COALESCE(c."sesionCerrada", false) = false AND c."dia" >= NOW() - INTERVAL '1 day'
+        AND (c."eventoCompartidoId" IS NULL OR $2::uuid IS NULL OR c."eventoCompartidoId" <> $2::uuid)
+      ORDER BY c."dia", g."nombreCompleto"`,
+    [eventId, ev.eventoCompartidoId || null],
+  );
+  return { grupo, unibles };
+}
+
+/**
+ * Une otras graduaciones a ésta: las lleva a su fecha, hora, duración y Zoom y las deja
+ * enlazadas. Cada una sigue con su guía y sus alumnos.
+ */
+export async function unirGraduaciones(eventId: string, otrosIds: string[], actor: { actor: string }) {
+  const ev: any = await CalendarioRepository.findById(eventId);
+  if (!ev) throw new NotFoundError('Event', eventId);
+  if (!esGrad(ev)) throw new ValidationError('El evento no es una graduación.');
+  const pedidos = Array.from(new Set((otrosIds || []).filter((x) => x && x !== eventId)));
+  if (!pedidos.length) throw new ValidationError('Elige al menos una graduación para unir.');
+  if (ev.sesionCerrada === true) throw new ValidationError('Esta graduación ya se registró; no se puede unir.');
+
+  const diaISO = new Date(ev.dia).toISOString();
+  const dur = Number(ev.duracionMin) > 0 ? Number(ev.duracionMin) : null;
+  let grupo: string = ev.eventoCompartidoId || '';
+  const todos = new Set<string>([eventId]);
+  if (ev.eventoCompartidoId) {
+    (await CalendarioRepository.findGroupSiblings(eventId)).forEach((s: any) => todos.add(s._id));
+  }
+
+  for (const id of pedidos) {
+    const o: any = await CalendarioRepository.findById(id);
+    if (!o) throw new NotFoundError('Event', id);
+    if (!esGrad(o)) throw new ValidationError('Sólo se pueden unir graduaciones.');
+    if (o.sesionCerrada === true) throw new ValidationError('Una de las graduaciones ya se registró; no se puede mover.');
+    // Mueve la graduación a la fecha/hora/duración/Zoom de ésta (valida cruce del guía y festivos).
+    const mueve = new Date(o.dia).getTime() !== new Date(ev.dia).getTime()
+      || String(o.hora) !== String(ev.hora) || (Number(o.duracionMin) || null) !== dur
+      || (ev.linkZoom && o.linkZoom !== ev.linkZoom);
+    if (mueve) {
+      await updateEvent(id, {
+        dia: diaISO, hora: ev.hora, duracionMin: dur,
+        ...(ev.linkZoom ? { linkZoom: ev.linkZoom } : {}), tipo: 'GRADUACION',
+      }, { actor: actor.actor, skipLog: true });
+    }
+    todos.add(id);
+    if (o.eventoCompartidoId) {
+      (await CalendarioRepository.findGroupSiblings(id)).forEach((s: any) => todos.add(s._id));
+      if (!grupo) grupo = o.eventoCompartidoId;
+    }
+  }
+  if (!grupo) grupo = randomUUID();
+  await queryMany(
+    `UPDATE "CALENDARIO" SET "eventoCompartidoId" = $1::uuid, "_updatedDate" = NOW() WHERE "_id" = ANY($2::text[])`,
+    [grupo, [...todos]],
+  );
+  return { grupo, unidas: pedidos.length };
+}
+
+/** Saca una graduación del grupo (conserva su fecha y Zoom). Si queda sola, el grupo se disuelve. */
+export async function separarGraduacion(eventId: string) {
+  const ev: any = await CalendarioRepository.findById(eventId);
+  if (!ev) throw new NotFoundError('Event', eventId);
+  if (!ev.eventoCompartidoId) return { separada: false };
+  const grupo = ev.eventoCompartidoId;
+  await queryMany(`UPDATE "CALENDARIO" SET "eventoCompartidoId" = NULL, "_updatedDate" = NOW() WHERE "_id" = $1`, [eventId]);
+  const quedan = await queryMany<any>(`SELECT "_id" FROM "CALENDARIO" WHERE "eventoCompartidoId" = $1::uuid`, [grupo]);
+  if (quedan.length === 1) {
+    await queryMany(`UPDATE "CALENDARIO" SET "eventoCompartidoId" = NULL, "_updatedDate" = NOW() WHERE "_id" = $1`, [quedan[0]._id]);
+  }
+  return { separada: true };
+}

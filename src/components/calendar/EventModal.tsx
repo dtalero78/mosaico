@@ -89,6 +89,12 @@ export default function EventModal({
   const [guiaAlcanceEdit, setGuiaAlcanceEdit] = useState('')
   // Graduación: a cuántos alumnos del guía convocaría la selección actual.
   const [graduacionPreview, setGraduacionPreview] = useState<{ total: number; salones: Array<{ tipoCurso: string; salon: string | null; horarioCurso: string; alumnos: number }> } | null>(null)
+  // Graduaciones conjuntas (sólo editando una graduación): las ya enlazadas y las que se pueden unir.
+  type GradFila = { _id: string; dia: string; hora: string; guia?: string; campaign?: string; curso?: string; salon?: string; convocados?: number }
+  const [gradConj, setGradConj] = useState<{ grupo: GradFila[]; unibles: GradFila[] } | null>(null)
+  const [gradSel, setGradSel] = useState<string[]>([])
+  const [gradBusy, setGradBusy] = useState(false)
+  const [gradMsg, setGradMsg] = useState<{ ok: boolean; text: string } | null>(null)
   // Caché de módulos POR CURSO (solo crece, nunca se limpia). El dropdown deriva sus
   // opciones de modulosByCurso[cursoActual]; así ningún re-render/efecto puede dejarlo vacío.
   const [modulosByCurso, setModulosByCurso] = useState<Record<string, Array<{ code: string; steps: string[] }>>>({})
@@ -240,6 +246,37 @@ export default function EventModal({
       .catch(() => { if (!cancelado) setGraduacionPreview(null) })
     return () => { cancelado = true }
   }, [isOpen, esGraduacion, formData.campaign, scopeGuia, formData.curso, formData.salon])
+
+  // Graduaciones conjuntas: carga las enlazadas y las que se pueden unir.
+  useEffect(() => {
+    if (!isOpen || !editingEvent || !esGraduacion) { setGradConj(null); setGradSel([]); setGradMsg(null); return }
+    let cancelado = false
+    fetch(`/api/postgres/events/${(editingEvent as any)._id}/graduaciones`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelado && d) setGradConj({ grupo: d.grupo || [], unibles: d.unibles || [] }) })
+      .catch(() => {})
+    return () => { cancelado = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, (editingEvent as any)?._id, esGraduacion])
+
+  const gradLlamar = async (method: 'POST' | 'DELETE', qs = '', body?: any) => {
+    if (!editingEvent) return
+    setGradBusy(true); setGradMsg(null)
+    try {
+      const r = await fetch(`/api/postgres/events/${(editingEvent as any)._id}/graduaciones${qs}`, {
+        method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setGradMsg({ ok: false, text: d?.error || 'No se pudo completar la acción' }); return }
+      setGradConj({ grupo: d.grupo || [], unibles: d.unibles || [] })
+      setGradSel([])
+      setGradMsg({ ok: true, text: method === 'POST' ? 'Graduaciones unidas. Actualiza el calendario para ver los cambios.' : 'Graduación separada del grupo.' })
+    } catch { setGradMsg({ ok: false, text: 'Error de conexión' }) } finally { setGradBusy(false) }
+  }
+  const gradFmt = (g: GradFila) => {
+    const d = new Date(g.dia)
+    return `${d.toLocaleDateString('es', { day: '2-digit', month: 'short' })} ${d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}`
+  }
 
   // Graduación en edición: se lee el guía dueño del alcance.
   useEffect(() => {
@@ -1245,6 +1282,50 @@ export default function EventModal({
                           {graduacionPreview.salones.map(s => `${s.tipoCurso} ${s.salon ?? ''} (${s.alumnos})`).join(' · ')}
                         </span>
                       </>}
+                </div>
+              )}
+              {isEditMode && esGraduacion && gradConj && (
+                <div className="sm:col-span-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900 space-y-2">
+                  <div className="font-medium">Realizar junto con otras graduaciones</div>
+                  {gradConj.grupo.length > 1 && (
+                    <div>
+                      <div className="text-xs text-violet-800 mb-1">Se realizan juntas ({gradConj.grupo.length}):</div>
+                      <ul className="space-y-1">
+                        {gradConj.grupo.map(g => (
+                          <li key={g._id} className="flex items-center justify-between gap-2 text-xs bg-white/70 rounded px-2 py-1">
+                            <span>{g.guia || 'Sin guía'} · {g.curso} {g.salon} · {g.convocados ?? 0} alumno(s){g._id === (editingEvent as any)._id ? ' (esta)' : ''}</span>
+                            <button type="button" disabled={gradBusy} onClick={() => gradLlamar('DELETE', `?quitar=${g._id}`)}
+                              className="text-red-600 hover:underline disabled:opacity-50">Separar</button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {gradConj.unibles.length > 0 ? (
+                    <div>
+                      <div className="text-xs text-violet-800 mb-1">
+                        Unir otras graduaciones (del mismo guía o de otro). Pasan a la fecha, hora, duración y Zoom de ésta; cada una conserva su guía y sus alumnos:
+                      </div>
+                      <div className="max-h-36 overflow-y-auto space-y-1">
+                        {gradConj.unibles.map(g => (
+                          <label key={g._id} className="flex items-center gap-2 text-xs bg-white/70 rounded px-2 py-1 cursor-pointer">
+                            <input type="checkbox" checked={gradSel.includes(g._id)}
+                              onChange={e => setGradSel(prev => e.target.checked ? [...prev, g._id] : prev.filter(x => x !== g._id))} />
+                            <span>{g.guia || 'Sin guía'} · {g.curso} {g.salon} · {g.convocados ?? 0} alumno(s) · {gradFmt(g)}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <button type="button" disabled={gradBusy || gradSel.length === 0}
+                        onClick={() => gradLlamar('POST', '', { eventIds: gradSel })}
+                        className="mt-2 px-3 py-1.5 text-xs font-medium rounded-md text-white bg-violet-700 hover:bg-violet-800 disabled:opacity-50">
+                        {gradBusy ? 'Uniendo…' : `Unir ${gradSel.length || ''} graduación(es)`}
+                      </button>
+                      <p className="text-[11px] text-violet-700 mt-1">Guarda antes los cambios de esta graduación: la unión usa la fecha y hora ya guardadas.</p>
+                    </div>
+                  ) : gradConj.grupo.length <= 1 && (
+                    <p className="text-xs text-violet-800">No hay otras graduaciones próximas para unir.</p>
+                  )}
+                  {gradMsg && <p className={`text-xs ${gradMsg.ok ? 'text-green-700' : 'text-red-700'}`}>{gradMsg.text}</p>}
                 </div>
               )}
               {/* Módulo (Sesión/Nivelación) — o Tipo=clubs (Taller). La graduación no lo lleva. */}
