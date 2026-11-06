@@ -260,12 +260,14 @@ class BookingRepositoryClass extends BaseRepository {
          -- arriba: ese puede resolver al TITULAR cuando comparten numeroId, y se
          -- estaría evaluando el cupo sobre la persona equivocada. Si no hay ficha
          -- de beneficiario, el booking se conserva (comportamiento previo).
-         AND NOT EXISTS (
+         -- GRADUACIÓN: se convoca a quienes TERMINARON el curso (ya sin cupo, a menudo
+         -- inactivos), y el Guía tiene que ver exactamente a quién esperar.
+         AND (UPPER(COALESCE(ev."tipo", ev."evento", '')) = 'GRADUACION' OR NOT EXISTS (
            SELECT 1 FROM "PEOPLE" pb
             WHERE pb."numeroId" = a."numeroId"
               AND pb."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
               AND NOT (${cupoOcupadoSql('pb')})
-         )
+         ))
        ORDER BY b."_id"
        ) t
        ORDER BY UPPER(t."primerApellido") NULLS LAST, UPPER(t."primerNombre") NULLS LAST`,
