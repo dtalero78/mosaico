@@ -2,7 +2,6 @@ import 'server-only'
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers'
 import { requirePermission } from '@/lib/api-permissions'
 import { query } from '@/lib/postgres'
-import { cupoOcupadoSql } from '@/lib/cupo'
 import { ServicioPermission } from '@/types/permissions'
 import { condicionUsuarioSql, exprNombreCompleto } from '@/lib/filtro-usuario'
 import { TIPOS_FUERA_DE_CASOS_SQL } from '@/lib/tipos-sesion'
@@ -52,9 +51,9 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `COALESCE(c."dia", b."fechaEvento") < NOW()`,
     ES_SESION,
     `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
-    // Sólo los que ocupan cupo (ver lib/cupo): a quien ya soltó el salón no se le
-    // reclama la inasistencia.
-    cupoOcupadoSql('p'),
+    // Toda inasistencia se muestra, se repita o no, salvo que el alumno tenga un caso
+    // cerrado con la marca 'No reportar asistencia' (usuario NO continúa con el curso).
+    `NOT EXISTS (SELECT 1 FROM "CASOS_ATENCION" nc WHERE nc."academicaId" = a."_id" AND nc."noContinua" IS TRUE)`,
   ]
   const params: any[] = []
   let i = 1
