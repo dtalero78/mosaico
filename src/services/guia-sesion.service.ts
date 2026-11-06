@@ -1,6 +1,7 @@
 import 'server-only';
 import { queryOne } from '@/lib/postgres';
 import { Role } from '@/types/permissions';
+import { ForbiddenError } from '@/lib/errors';
 import { resolverAlcancePorGuia, type AlcancePorGuia } from '@/lib/alcance-guia';
 
 /**
@@ -56,3 +57,26 @@ export async function alcancePorGuia(session: any, guiaPedido?: string | null): 
     guiaPedido,
   });
 }
+
+/**
+ * El rol GUIA sólo puede consultar SU panel: si [id] no es el guía de la sesión
+ * se rechaza. Los demás roles no cambian (siguen con los permisos de cada ruta).
+ */
+export async function exigirGuiaPropio(session: any, guiaId: string): Promise<void> {
+  if (!esRolGuia(session)) return;
+  const propio = await guiaIdDeSesion((session as any)?.user?.email);
+  if (!propio || propio !== decodeURIComponent(String(guiaId || ''))) {
+    throw new ForbiddenError('Sólo puedes consultar la información de tus propios cursos');
+  }
+}
+
+/**
+ * Fragmento SQL: el alumno cuyo documento es `numeroIdExpr` cursa en un curso
+ * (campaña + curso + horario + salón) asignado al guía que viene en `$idx`.
+ */
+export const alumnoDeGuiaSql = (numeroIdExpr: string, idx: number): string =>
+  `EXISTS (SELECT 1 FROM "PEOPLE" pg
+             JOIN "CURSOS_CAMPAIGN" cg ON cg."campaign" = pg."campaign" AND cg."tipoCurso" = pg."tipoCurso"
+              AND cg."horarioCurso" = pg."horarioCurso" AND cg."salon" IS NOT DISTINCT FROM pg."salon"
+            WHERE UPPER(pg."numeroId") = UPPER(${numeroIdExpr})
+              AND pg."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA') AND cg."guia" = $${idx})`;

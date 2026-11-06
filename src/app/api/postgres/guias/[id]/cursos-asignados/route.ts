@@ -2,6 +2,7 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
 import { cupoOcupadoSql } from '@/lib/cupo';
+import { exigirGuiaPropio } from '@/services/guia-sesion.service';
 
 /**
  * GET /api/postgres/guias/[id]/cursos-asignados
@@ -11,7 +12,8 @@ import { cupoOcupadoSql } from '@/lib/cupo';
  * (En matrícula / Activo / Cerrado) y los filtros se resuelven en el cliente con
  * la MISMA regla que Consulta Cursos (por fecha). Solo lectura.
  */
-export const GET = handlerWithAuth(async (_req, { params }) => {
+export const GET = handlerWithAuth(async (_req, { params }, session) => {
+  await exigirGuiaPropio(session, params.id);
   const result = await query(
     `SELECT "_id", "campaign", "tipoCurso", "horarioCurso", "salon",
             "inicioCurso"::text  AS "inicioCurso",

@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requireAnyPermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
+import { esRolGuia, guiaIdDeSesion, alumnoDeGuiaSql } from '@/services/guia-sesion.service';
 
 /**
  * GET /api/postgres/reports/academico/evaluaciones
@@ -14,7 +15,12 @@ import { query } from '@/lib/postgres';
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requireAnyPermission(session, [AcademicoPermission.EVALUACIONES_VER, AcademicoPermission.ENTRENAMIENTOS_VER]);
   const sp = new URL(request.url).searchParams;
-  const curso = (sp.get('curso') || '').trim();
+  // El rol GUIA ve SÓLO los cursos que dicta (resuelto con su correo en el servidor).
+  const esGuia = esRolGuia(session);
+  const guiaId = esGuia ? await guiaIdDeSesion((session as any)?.user?.email) : null;
+  const vacio = (cursos: string[] = []) => successResponse({ available: true, rows: [], cuestionarios: [], cursos, salones: [], curso: '', salon: '' });
+  if (esGuia && !guiaId) return vacio();
+  let curso = (sp.get('curso') || '').trim();
   const salon = (sp.get('salon') || '').trim();
   const code = (sp.get('code') || '').trim();
   const step = (sp.get('step') || '').trim();
@@ -29,7 +35,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   // resultados — si no, mientras nadie haya rendido una evaluación el selector
   // sale vacío y la pantalla no se puede usar. Se unen con los cursos que sí
   // tengan respuestas, por si alguno quedó fuera del catálogo activo.
-  const cursos = (await query<{ curso: string }>(
+  const cursos = esGuia
+    ? (await query<{ curso: string }>(
+        `SELECT DISTINCT UPPER("tipoCurso") AS curso FROM "CURSOS_CAMPAIGN"
+          WHERE "guia" = $1 AND COALESCE("activa", true) = true AND "tipoCurso" IS NOT NULL ORDER BY 1`, [guiaId])).rows.map(r => r.curso)
+    : (await query<{ curso: string }>(
     `SELECT DISTINCT curso FROM (
        SELECT "tipoCurso" AS curso FROM "CURSOS_CAMPAIGN" WHERE "activa" = true AND "tipoCurso" IS NOT NULL AND "tipoCurso" <> ''
        UNION
@@ -37,10 +47,15 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
      ) x ORDER BY curso`
   )).rows.map(r => r.curso);
 
+  if (esGuia && curso && !cursos.includes(curso.toUpperCase())) curso = '';
   if (!curso) return successResponse({ available: true, rows: [], cuestionarios: [], cursos, salones: [], curso: '', salon: '' });
 
   // Salones del curso elegido (del catálogo + los que tengan resultados).
-  const salones = (await query<{ salon: string }>(
+  const salones = esGuia
+    ? (await query<{ salon: string }>(
+        `SELECT DISTINCT "salon" FROM "CURSOS_CAMPAIGN"
+          WHERE "guia" = $2 AND UPPER("tipoCurso") = UPPER($1) AND "salon" IS NOT NULL AND "salon" <> '' ORDER BY 1`, [curso, guiaId])).rows.map(r => r.salon)
+    : (await query<{ salon: string }>(
     `SELECT DISTINCT salon FROM (
        SELECT cc."salon" FROM "CURSOS_CAMPAIGN" cc
         WHERE cc."activa" = true AND UPPER(cc."tipoCurso") = UPPER($1) AND cc."salon" IS NOT NULL AND cc."salon" <> ''
@@ -55,6 +70,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const where: string[] = [`UPPER(er."curso")=UPPER($1)`, `er."enviadaEn" IS NOT NULL`];
   const params: any[] = [curso];
   let join = '';
+  if (esGuia) { params.push(guiaId); where.push(alumnoDeGuiaSql('er."numeroId"', params.length)); }
   if (filtroTipo) where.push(filtroTipo.replace(/^AND /, ''));
   if (code) { where.push(`er."code"=$${params.length + 1}`); params.push(code); }
   if (step) { where.push(`er."step"=$${params.length + 1}`); params.push(step); }

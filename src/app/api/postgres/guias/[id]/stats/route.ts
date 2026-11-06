@@ -1,5 +1,6 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { query } from '@/lib/postgres';
+import { exigirGuiaPropio } from '@/services/guia-sesion.service';
 
 /**
  * GET /api/postgres/guias/[id]/stats
@@ -7,7 +8,8 @@ import { query } from '@/lib/postgres';
  * Get statistics for a specific advisor.
  * Keeps inline SQL due to complex 4-way parallel stats aggregation.
  */
-export const GET = handlerWithAuth(async (request, { params }) => {
+export const GET = handlerWithAuth(async (request, { params }, session) => {
+  await exigirGuiaPropio(session, params.id);
   const { searchParams } = new URL(request.url);
   const advisorId = decodeURIComponent(params.id);
 

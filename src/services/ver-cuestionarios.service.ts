@@ -30,7 +30,8 @@ export interface ModuloCuestionarios {
 const numDe = (code: string) => (String(code).match(/(\d+)/)?.[1] ?? '')
 
 export async function listarCuestionariosCurso(session: any, tipo: TipoCuestionario, cursoPedido?: string) {
-  const cursos = await nombresTiposCurso()
+  const todosLosCursos = await nombresTiposCurso()
+  let cursos = todosLosCursos
 
   // Curso por defecto: para el GUIA, el primero de los que dicta; si no, el
   // primero del catálogo. El Guía puede mirar cualquier curso: el contenido del
@@ -45,6 +46,8 @@ export async function listarCuestionariosCurso(session: any, tipo: TipoCuestiona
       )).rows.map(r => r.curso)
     }
   }
+  // El rol GUIA sólo ve los cursos que dicta.
+  if (esRolGuia(session)) cursos = todosLosCursos.filter(c => cursosGuia.includes(c.toUpperCase()))
   const pedido = String(cursoPedido || '').trim().toUpperCase()
   const curso = (pedido && cursos.map(c => c.toUpperCase()).includes(pedido))
     ? pedido

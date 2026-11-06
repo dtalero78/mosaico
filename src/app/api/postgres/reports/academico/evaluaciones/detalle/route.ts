@@ -4,6 +4,7 @@ import { requireAnyPermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { query } from '@/lib/postgres';
+import { esRolGuia, guiaIdDeSesion, alumnoDeGuiaSql } from '@/services/guia-sesion.service';
 
 /**
  * GET /api/postgres/reports/academico/evaluaciones/detalle
@@ -26,6 +27,12 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   const where: string[] = [`er."academicaId" = $1`, `er."enviadaEn" IS NOT NULL`];
   const params: any[] = [academicaId];
+  if (esRolGuia(session)) {
+    const gid = await guiaIdDeSesion((session as any)?.user?.email);
+    if (!gid) throw new NotFoundError('Intentos de la evaluación', academicaId);
+    params.push(gid);
+    where.push(alumnoDeGuiaSql('er."numeroId"', params.length));
+  }
   if (code) { where.push(`er."code" = $${params.length + 1}`); params.push(code); }
   if (step) { where.push(`er."step" = $${params.length + 1}`); params.push(step); }
   // cuestionarioId NULL en filas viejas = el primer cuestionario de la lección.

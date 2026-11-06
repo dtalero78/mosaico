@@ -1,10 +1,12 @@
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { getEvents } from '@/services/calendar.service';
+import { exigirGuiaPropio } from '@/services/guia-sesion.service';
 
 /**
  * GET /api/postgres/guias/[id]/events
  */
-export const GET = handlerWithAuth(async (request, { params }) => {
+export const GET = handlerWithAuth(async (request, { params }, session) => {
+  await exigirGuiaPropio(session, params.id);
   const { searchParams } = new URL(request.url);
   const advisorId = decodeURIComponent(params.id);
 

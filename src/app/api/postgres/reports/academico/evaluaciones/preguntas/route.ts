@@ -3,6 +3,7 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requireAnyPermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
+import { esRolGuia, guiaIdDeSesion, alumnoDeGuiaSql } from '@/services/guia-sesion.service';
 
 /**
  * GET /api/postgres/reports/academico/evaluaciones/preguntas?curso=&salon=&code=&step=
@@ -23,6 +24,9 @@ const TOP = 3;
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   await requireAnyPermission(session, [AcademicoPermission.EVALUACIONES_VER, AcademicoPermission.ENTRENAMIENTOS_VER]);
   const sp = new URL(request.url).searchParams;
+  const esGuia = esRolGuia(session);
+  const guiaId = esGuia ? await guiaIdDeSesion((session as any)?.user?.email) : null;
+  if (esGuia && !guiaId) return successResponse({ available: true, evaluaciones: [], curso: '', salon: '' });
   const curso = (sp.get('curso') || '').trim();
   const salon = (sp.get('salon') || '').trim();
   const code = (sp.get('code') || '').trim();
@@ -34,6 +38,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const where: string[] = [`UPPER(er."curso") = UPPER($1)`, `er."enviadaEn" IS NOT NULL`, `er."respuestas" IS NOT NULL`];
   const params: any[] = [curso];
   let join = '';
+  if (esGuia) { params.push(guiaId); where.push(alumnoDeGuiaSql('er."numeroId"', params.length)); }
   if (tipo === 'evaluacion') where.push(`er."code" ILIKE '%evaluac%'`);
   else if (tipo === 'entrenamiento') where.push(`er."code" ILIKE '%entren%'`);
   if (code) { where.push(`er."code" = $${params.length + 1}`); params.push(code); }
