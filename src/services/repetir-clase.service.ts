@@ -1,4 +1,5 @@
 import 'server-only';
+import { cupoOcupadoSql } from '@/lib/cupo';
 import { query, queryMany, queryOne } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { parseHorario, fechasEntre } from '@/lib/cursos-campaign';
@@ -171,6 +172,63 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
 }
 
 /**
+ * Si tras re-mapear quedan lecciones de la secuencia sin sesión (el salón retrocedió),
+ * agrega SEMANAS COMPLETAS al final del curso —con sus agendamientos para los
+ * alumnos del salón— hasta cubrirlas, y mueve `finalCurso` a la última.
+ */
+export async function extenderCursoSiFaltan(cursoCampaignId: string, totalLecciones: number) {
+  const ev = await queryOne<any>(
+    `SELECT cc."tipoCurso", cc."campaign", cc."salon", cc."horarioCurso", cc."numeroUsuarios", cc."guia",
+            (SELECT c."advisor" FROM "CALENDARIO" c WHERE c."cursoCampaignId"=cc."_id" ORDER BY c."dia" DESC LIMIT 1) AS advisor,
+            (SELECT c."linkZoom" FROM "CALENDARIO" c WHERE c."cursoCampaignId"=cc."_id" ORDER BY c."dia" DESC LIMIT 1) AS "linkZoom"
+       FROM "CURSOS_CAMPAIGN" cc WHERE cc."_id"=$1`, [cursoCampaignId]);
+  const parsed = ev ? parseHorario(ev.horarioCurso) : null;
+  if (!ev || !parsed) return { sesionesCreadas: 0, nuevoFinalCurso: null as string | null };
+  const faltan = async () => {
+    const u = await queryOne<any>(
+      `SELECT "fecha"::text AS fecha, "leccionOrden" AS lo, "sesionLeccion2" AS l2 FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 ORDER BY "dia" DESC LIMIT 1`, [cursoCampaignId]);
+    if (!u || u.lo == null) return { n: 0, fecha: u?.fecha as string | undefined };
+    return { n: totalLecciones - (u.lo + (u.l2 ? 1 : 0)), fecha: u.fecha as string };
+  };
+  const students = await queryMany<any>(
+    `SELECT DISTINCT b."idEstudiante" AS acaid, a."primerNombre", a."primerApellido", a."numeroId", a."celular", a."plataforma"
+       FROM "ACADEMICA_BOOKINGS" b
+       JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento")
+       JOIN "ACADEMICA" a ON a."_id" = b."idEstudiante"
+       JOIN "PEOPLE" p ON p."_id" = a."peopleId"
+      WHERE c."cursoCampaignId" = $1 AND ${cupoOcupadoSql('p')}`, [cursoCampaignId]);
+  const hora = parsed.hora.length === 4 ? `0${parsed.hora}` : parsed.hora;
+  const titulo = [ev.campaign, ev.tipoCurso, ev.salon].filter(Boolean).join(' - ');
+  let creadas = 0; let final: string | null = null;
+  for (let vuelta = 0; vuelta < 15; vuelta++) {
+    const f = await faltan();
+    if (f.n <= 0 || !f.fecha) break;
+    const nuevas = fechasEntre(addDaysISO(f.fecha, 1), addDaysISO(f.fecha, 7), parsed.dias);
+    // La semana siguiente a la última sesión; si no cae ninguna, se avanza otra.
+    let cursor = f.fecha; let g = 0; let fechas = nuevas;
+    while (!fechas.length && g++ < 4) { cursor = addDaysISO(cursor, 7); fechas = fechasEntre(addDaysISO(cursor, 1), addDaysISO(cursor, 7), parsed.dias); }
+    for (const fecha of fechas) {
+      const eid = ids.event();
+      await query(
+        `INSERT INTO "CALENDARIO" ("_id","tipo","evento","fecha","hora","dia","advisor","nivel","titulo","tituloONivel","nombreEvento","linkZoom","limiteUsuarios","cursoCampaignId","inscritos","origen","sesionCerrada","_createdDate","_updatedDate")
+         VALUES ($1,'SESSION','SESSION',$2,$3,$4::timestamp AT TIME ZONE 'America/Santiago',$5,$6,$7,$7,$8,$9,$10,$11,$12,'POSTGRES',false,NOW(),NOW())`,
+        [eid, fecha, hora, `${fecha} ${hora}:00`, ev.advisor || '', ev.tipoCurso, titulo, ev.horarioCurso, ev.linkZoom || null, ev.numeroUsuarios || 12, cursoCampaignId, students.length]);
+      for (const st of students) {
+        await query(
+          `INSERT INTO "ACADEMICA_BOOKINGS" ("_id","eventoId","idEvento","studentId","idEstudiante","primerNombre","primerApellido","numeroId","celular","plataforma","nivel","step","advisor","fecha","fechaEvento","hora","tipo","tipoEvento","nombreEvento","tituloONivel","asistio","asistencia","participacion","noAprobo","cancelo","agendadoPor","fechaAgendamiento","origen","_createdDate","_updatedDate")
+           VALUES ($1,$2,$2,$3,$3,$4,$5,$6,$7,$8,$9,NULL,$10,$11,$11,$12,'SESSION','SESSION',$13,$13,false,false,false,false,false,'Sistema (extensión por ajuste)',NOW(),'POSTGRES',NOW(),NOW())`,
+          [ids.booking(), eid, st.acaid, st.primerNombre || null, st.primerApellido || null, st.numeroId || null, st.celular || null, st.plataforma || null, ev.tipoCurso, ev.advisor || null, `${fecha} ${hora}:00`, hora, titulo]);
+      }
+      creadas++; final = fecha;
+    }
+    await mapearLeccionesSalon(cursoCampaignId);
+    if (!fechas.length) break;
+  }
+  if (final) await query(`UPDATE "CURSOS_CAMPAIGN" SET "finalCurso"=$2::date, "_updatedDate"=NOW() WHERE "_id"=$1`, [cursoCampaignId, final]);
+  return { sesionesCreadas: creadas, nuevoFinalCurso: final };
+}
+
+/**
  * Reposiciona el CALENDARIO del salón: desde su próxima sesión sin terminar, la
  * secuencia sigue en `modulo · leccion`. Es lo que ve el guía en la sesión (la
  * lección de una clase la fija el calendario, no la posición de cada alumno).
@@ -178,7 +236,7 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
  */
 export async function registrarSaltoSalon(
   cursoCampaignId: string, modulo: string, leccion: string, actor?: string | null
-): Promise<{ aplicado: boolean; desde?: string }> {
+): Promise<{ aplicado: boolean; desde?: string; sesionesCreadas?: number; nuevoFinalCurso?: string | null }> {
   const cc = await queryOne<{ tipoCurso: string; historicRepet: any; sinteticas: boolean }>(
     `SELECT "tipoCurso","historicRepet", COALESCE("evalSinteticaPorModulo", false) AS "sinteticas" FROM "CURSOS_CAMPAIGN" WHERE "_id"=$1`, [cursoCampaignId]
   ).catch(() => null);
@@ -206,7 +264,9 @@ export async function registrarSaltoSalon(
         SET "saltosLeccion" = COALESCE("saltosLeccion",'[]'::jsonb) || $2::jsonb, "_updatedDate" = NOW()
       WHERE "_id" = $1`, [cursoCampaignId, entrada]);
   await mapearLeccionesSalon(cursoCampaignId);
-  return { aplicado: true, desde };
+  // Si el salto fue hacia atrás sobran lecciones: se extiende el curso.
+  const ext = await extenderCursoSiFaltan(cursoCampaignId, seq.length);
+  return { aplicado: true, desde, ...ext };
 }
 
 /**
