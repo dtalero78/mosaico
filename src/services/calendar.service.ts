@@ -441,8 +441,7 @@ export async function updateEvent(
   // operativa (1 sola clase real del advisor).
   if ((updated as any).eventoCompartidoId) {
     const sharedUpdates: Record<string, any> = {};
-    // En graduaciones conjuntas cada una conserva SU guía.
-    if (data.advisor && data.advisor !== event.advisor && String((updated as any).tipo || event.tipo || '').toUpperCase() !== 'GRADUACION') sharedUpdates.advisor = data.advisor;
+    if (data.advisor && data.advisor !== event.advisor) sharedUpdates.advisor = data.advisor;
     if (data.dia && data.dia !== event.dia) sharedUpdates.dia = data.dia;
     if (data.hora && data.hora !== event.hora) sharedUpdates.hora = data.hora;
     if (data.linkZoom && data.linkZoom !== event.linkZoom) sharedUpdates.linkZoom = data.linkZoom;

@@ -38,11 +38,13 @@ export interface AlcanceGraduacion {
 /** Salones del guía en la campaña que entran en el alcance, con su conteo de alumnos. */
 export async function resolverAlcance(a: AlcanceGraduacion) {
   if (!a.campaign || !a.advisorId) return { academicaIds: [] as string[], salones: [] as any[] };
+  // 'Todos'/'Todas' = todas las campañas del guía.
+  const campana = COMODIN.test(String(a.campaign).trim()) ? null : a.campaign;
   const cursos = lista(a.curso);
   const salones = lista(a.salon);
 
   const rows = await queryMany<any>(
-    `SELECT cc."tipoCurso", cc."salon", cc."horarioCurso",
+    `SELECT cc."campaign", cc."tipoCurso", cc."salon", cc."horarioCurso",
             a."_id" AS "academicaId"
        FROM "CURSOS_CAMPAIGN" cc
        LEFT JOIN "PEOPLE" p
@@ -55,19 +57,19 @@ export async function resolverAlcance(a: AlcanceGraduacion) {
              AND ${cupoOcupadoSql('p')}
        LEFT JOIN "ACADEMICA" a
               ON a."numeroId" = p."numeroId" AND a."tipoUsuario" = 'BENEFICIARIO'
-      WHERE cc."campaign" = $1
+      WHERE ($1::text IS NULL OR cc."campaign" = $1)
         AND cc."guia" = $2
         AND cc."activa" = true
         AND ($3::text[] IS NULL OR cc."tipoCurso" = ANY($3::text[]))
         AND ($4::text[] IS NULL OR cc."salon" = ANY($4::text[]))
       ORDER BY cc."tipoCurso", cc."salon", cc."horarioCurso"`,
-    [a.campaign, a.advisorId, cursos, salones],
+    [campana, a.advisorId, cursos, salones],
   );
 
   const ids = new Set<string>();
   const porSalon = new Map<string, { tipoCurso: string; salon: string | null; horarioCurso: string; alumnos: number }>();
   for (const r of rows) {
-    const k = `${r.tipoCurso}|${r.salon}|${r.horarioCurso}`;
+    const k = `${r.campaign}|${r.tipoCurso}|${r.salon}|${r.horarioCurso}`;
     if (!porSalon.has(k)) porSalon.set(k, { tipoCurso: r.tipoCurso, salon: r.salon, horarioCurso: r.horarioCurso, alumnos: 0 });
     if (r.academicaId && !ids.has(r.academicaId)) {
       ids.add(r.academicaId);
@@ -78,7 +80,7 @@ export async function resolverAlcance(a: AlcanceGraduacion) {
   // son justo a quienes se gradúa. Se reconocen por la bitácora de cupo (la salida
   // por cierre de ESE curso) y sólo mientras no hayan vuelto a otro salón.
   const cerrados = await queryMany<any>(
-    `SELECT DISTINCT cc."tipoCurso", cc."salon", cc."horarioCurso", a."_id" AS "academicaId"
+    `SELECT DISTINCT cc."campaign", cc."tipoCurso", cc."salon", cc."horarioCurso", a."_id" AS "academicaId"
        FROM "CURSOS_CAMPAIGN" cc
        JOIN "PEOPLE" p ON p."tipoUsuario" = 'BENEFICIARIO' AND p."campaign" IS NULL
        JOIN LATERAL jsonb_array_elements(COALESCE(p."cupoHistory",'[]'::jsonb)) e ON
@@ -86,13 +88,13 @@ export async function resolverAlcance(a: AlcanceGraduacion) {
         AND e->>'horarioCurso' = cc."horarioCurso" AND e->>'salon' IS NOT DISTINCT FROM cc."salon"
         AND e->>'motivo' ILIKE 'Curso cerrado en Ajuste Cursos%'
        JOIN "ACADEMICA" a ON a."numeroId" = p."numeroId" AND a."tipoUsuario" = 'BENEFICIARIO'
-      WHERE cc."campaign" = $1 AND cc."guia" = $2 AND cc."activa" = true
+      WHERE ($1::text IS NULL OR cc."campaign" = $1) AND cc."guia" = $2 AND cc."activa" = true
         AND ($3::text[] IS NULL OR cc."tipoCurso" = ANY($3::text[]))
         AND ($4::text[] IS NULL OR cc."salon" = ANY($4::text[]))`,
-    [a.campaign, a.advisorId, cursos, salones],
+    [campana, a.advisorId, cursos, salones],
   ).catch(() => [] as any[]);
   for (const r of cerrados) {
-    const k = `${r.tipoCurso}|${r.salon}|${r.horarioCurso}`;
+    const k = `${r.campaign}|${r.tipoCurso}|${r.salon}|${r.horarioCurso}`;
     if (!porSalon.has(k)) porSalon.set(k, { tipoCurso: r.tipoCurso, salon: r.salon, horarioCurso: r.horarioCurso, alumnos: 0 });
     if (r.academicaId && !ids.has(r.academicaId)) { ids.add(r.academicaId); porSalon.get(k)!.alumnos += 1; }
   }
@@ -266,7 +268,7 @@ export async function actualizarGraduacion(
 // ───────────────────────── Graduaciones conjuntas ─────────────────────────
 // Varias graduaciones (del mismo guía o de otros) pueden realizarse JUNTAS: se crean
 // de a una y después se unen. Quedan enlazadas con el mismo `eventoCompartidoId`, a la
-// misma fecha, hora, duración y enlace de Zoom. Cada una conserva su guía y sus alumnos.
+// misma fecha, hora, duración, guía y enlace de Zoom. Cada una conserva sus alumnos.
 
 const esGrad = (e: any) => String(e?.tipo || e?.evento || '').toUpperCase() === 'GRADUACION';
 
@@ -294,8 +296,8 @@ export async function graduacionesParaUnir(eventId: string) {
 }
 
 /**
- * Une otras graduaciones a ésta: las lleva a su fecha, hora, duración y Zoom y las deja
- * enlazadas. Cada una sigue con su guía y sus alumnos.
+ * Une otras graduaciones a ésta: las lleva a su fecha, hora, duración y Zoom, las pasa al
+ * guía de ésta y las deja enlazadas. Los alumnos convocados NO cambian.
  */
 export async function unirGraduaciones(eventId: string, otrosIds: string[], actor: { actor: string }) {
   const ev: any = await CalendarioRepository.findById(eventId);
@@ -318,13 +320,17 @@ export async function unirGraduaciones(eventId: string, otrosIds: string[], acto
     if (!o) throw new NotFoundError('Event', id);
     if (!esGrad(o)) throw new ValidationError('Sólo se pueden unir graduaciones.');
     if (o.sesionCerrada === true) throw new ValidationError('Una de las graduaciones ya se registró; no se puede mover.');
-    // Mueve la graduación a la fecha/hora/duración/Zoom de ésta (valida cruce del guía y festivos).
-    const mueve = new Date(o.dia).getTime() !== new Date(ev.dia).getTime()
+    // El alcance (alumnos) pertenece al guía ORIGINAL: se fija antes de cambiar de guía.
+    if (!o.guiaAlcance && o.advisor) {
+      await CalendarioRepository.updateEvent(id, { guiaAlcance: String(o.advisor) }, ['guiaAlcance']);
+    }
+    // Mueve la graduación a la fecha/hora/duración/Zoom de ésta y pasa a este guía.
+    const mueve = String(o.advisor || '') !== String(ev.advisor || '') || new Date(o.dia).getTime() !== new Date(ev.dia).getTime()
       || String(o.hora) !== String(ev.hora) || (Number(o.duracionMin) || null) !== dur
       || (ev.linkZoom && o.linkZoom !== ev.linkZoom);
     if (mueve) {
       await updateEvent(id, {
-        dia: diaISO, hora: ev.hora, duracionMin: dur,
+        dia: diaISO, hora: ev.hora, duracionMin: dur, advisor: ev.advisor,
         ...(ev.linkZoom ? { linkZoom: ev.linkZoom } : {}), tipo: 'GRADUACION',
       }, { actor: actor.actor, skipLog: true });
     }

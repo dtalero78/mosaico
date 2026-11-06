@@ -217,7 +217,7 @@ export default function EventModal({
   useEffect(() => {
     // Sólo al CREAR: al editar, cambiar de guía no toca cursos ni salones.
     if (isEditMode || !esGraduacion || !formData.advisor || cursosCampaign.length === 0) return
-    const propios = cursosCampaign.filter(r => r.campaign === formData.campaign && r.guia === formData.advisor)
+    const propios = cursosCampaign.filter(r => (formData.campaign === TODOS || r.campaign === formData.campaign) && r.guia === formData.advisor)
     const cursosV = new Set(propios.map(r => r.tipoCurso))
     setFormData(prev => {
       const cursoNuevo = prev.curso === TODOS ? TODOS
@@ -662,13 +662,13 @@ export default function EventModal({
   // En Graduación sólo cuentan los cursos DEL GUÍA elegido.
   const delGuia = (r: { guia?: string | null }) => !esGraduacion || (!!scopeGuia && r.guia === scopeGuia)
   const cursosDeCampania = (campaign: string) =>
-    Array.from(new Set(cursosCampaign.filter(r => (!campaign || r.campaign === campaign) && delGuia(r)).map(r => r.tipoCurso).filter(Boolean)))
+    Array.from(new Set(cursosCampaign.filter(r => (!campaign || campaign === TODOS || r.campaign === campaign) && delGuia(r)).map(r => r.tipoCurso).filter(Boolean)))
   const salonesDeCurso = (campaign: string, curso: string) => {
     // `curso` puede ser una lista ("YOJI, OKINA") o Todos: la graduación une los
     // salones de todos los cursos elegidos.
     const lista = curso === TODOS ? null : curso.split(',').map(c => c.trim()).filter(Boolean)
     return Array.from(new Set(cursosCampaign
-      .filter(r => (!campaign || r.campaign === campaign) && delGuia(r) && (!lista || lista.includes(r.tipoCurso)))
+      .filter(r => (!campaign || campaign === TODOS || r.campaign === campaign) && delGuia(r) && (!lista || lista.includes(r.tipoCurso)))
       .map(r => r.salon).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true })) as string[]
   }
   // ── Curso en Graduación: todos, uno o varios ──
@@ -1141,6 +1141,7 @@ export default function EventModal({
                   className="input w-full" required
                 >
                   <option value="">Seleccionar campaña</option>
+                  {esGraduacion && <option value={TODOS}>Todas las campañas</option>}
                   {Array.from(new Set(cursosCampaign.map(r => r.campaign).filter(Boolean))).map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
@@ -1193,7 +1194,7 @@ export default function EventModal({
                       ))}
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {todosLosCursos ? 'Todos los cursos de la campaña.' : cursosElegidos.length > 0 ? `Cursos: ${cursosElegidos.join(', ')}` : 'Marca uno o varios cursos, o "Todos".'}
+                      {todosLosCursos ? (formData.campaign === TODOS ? 'Todos los cursos del guía en todas las campañas.' : 'Todos los cursos de la campaña.') : cursosElegidos.length > 0 ? `Cursos: ${cursosElegidos.join(', ')}` : 'Marca uno o varios cursos, o "Todos".'}
                     </p>
                   </>
                 ) : (
@@ -1304,7 +1305,7 @@ export default function EventModal({
                   {gradConj.unibles.length > 0 ? (
                     <div>
                       <div className="text-xs text-violet-800 mb-1">
-                        Unir otras graduaciones (del mismo guía o de otro). Pasan a la fecha, hora, duración y Zoom de ésta; cada una conserva su guía y sus alumnos:
+                        Unir otras graduaciones (del mismo guía o de otro). Pasan a la fecha, hora, duración y Zoom de ésta y las dicta el guía de ésta; sus alumnos no cambian:
                       </div>
                       <div className="max-h-36 overflow-y-auto space-y-1">
                         {gradConj.unibles.map(g => (
