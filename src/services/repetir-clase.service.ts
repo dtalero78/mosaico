@@ -141,7 +141,7 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
   for (const s of sesiones) {
     while (si < saltos.length && s.fecha >= String(saltos[si].desde).slice(0, 10)) {
       const idx = seq.findIndex(l => !l.esEvaluacion && nrm(l.code) === nrm(saltos[si].modulo) && nrm(l.step) === nrm(saltos[si].leccion));
-      if (idx > k) k = idx;
+      if (idx !== k) k = idx; // adelante o atrás: el salto es una decisión explícita
       si++;
     }
     const cuantas = leccionesDeSesion(s.fecha, cc.horarioCurso, cc.inicioCurso, cc.dosDesde);
@@ -174,7 +174,7 @@ export async function mapearLeccionesSalon(cursoCampaignId: string): Promise<num
  * Reposiciona el CALENDARIO del salón: desde su próxima sesión sin terminar, la
  * secuencia sigue en `modulo · leccion`. Es lo que ve el guía en la sesión (la
  * lección de una clase la fija el calendario, no la posición de cada alumno).
- * Sólo adelanta: si el salón ya va en esa lección o más allá, no hace nada.
+ * Adelanta o retrocede (Ajuste masivo); si el salón ya va en esa lección, no hace nada.
  */
 export async function registrarSaltoSalon(
   cursoCampaignId: string, modulo: string, leccion: string, actor?: string | null
@@ -197,7 +197,7 @@ export async function registrarSaltoSalon(
     `SELECT "fecha"::text AS fecha, "dia"::text AS dia, "tipo", "nombreEvento", "duracionMin", "leccionOrden" AS lo
        FROM "CALENDARIO" WHERE "cursoCampaignId"=$1 AND "dia" >= NOW() - INTERVAL '12 hours' ORDER BY "dia" ASC LIMIT 3`, [cursoCampaignId]);
   const prox = proximas.find(s => eventEndDate(new Date(s.dia), s.tipo, s.nombreEvento, s.duracionMin).getTime() > ahora.getTime());
-  if (!prox || prox.lo == null || idx + 1 <= prox.lo) return { aplicado: false };
+  if (!prox || prox.lo == null || idx + 1 === prox.lo) return { aplicado: false };
 
   const desde = String(prox.fecha).slice(0, 10);
   const entrada = JSON.stringify([{ desde, modulo, leccion, fecha: ahora.toISOString(), por: actor || null }]);

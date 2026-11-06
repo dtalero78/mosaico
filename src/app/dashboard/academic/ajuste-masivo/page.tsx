@@ -379,7 +379,7 @@ function AjusteMasivoContent() {
               ? 'bg-green-50 border-green-200 text-green-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
               {calendario.aplicado
                 ? `Calendario del salón actualizado: desde la sesión del ${calendario.desde} el guía verá esta lección.`
-                : 'El calendario del salón NO se movió (el destino no queda por delante de su próxima sesión). El guía seguirá viendo la lección que ya tenía.'}
+                : 'El calendario del salón no cambió: ya iba en esa lección.'}
             </p>
           )}
           <ul className="space-y-1 text-sm">
