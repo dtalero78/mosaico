@@ -3,7 +3,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AcademicoPermission } from '@/types/permissions';
 import { createEvent } from '@/services/calendar.service';
 import { enrollStudents } from '@/services/enrollment.service';
-import { resolverAlcance } from '@/services/graduacion.service';
+import { resolverAlcance, mensajeSinAlumnos } from '@/services/graduacion.service';
 import { ValidationError } from '@/lib/errors';
 
 /**
@@ -132,7 +132,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       campaign: String(body.campaign), advisorId: String(body.advisor), curso: body.curso, salon: body.salon,
     });
     if (alc.academicaIds.length === 0) {
-      throw new ValidationError('Con esa selección no hay alumnos del guía para convocar a la graduación.');
+      throw new ValidationError(mensajeSinAlumnos(alc, String(body.campaign)));
     }
     alumnosGraduacion = alc.academicaIds;
   }

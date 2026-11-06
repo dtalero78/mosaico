@@ -77,6 +77,15 @@ export async function resolverAlcance(a: AlcanceGraduacion) {
   return { academicaIds: [...ids], salones: [...porSalon.values()] };
 }
 
+/** Por qué un alcance no convoca a nadie: dice qué se encontró para poder corregir la selección. */
+export function mensajeSinAlumnos(alc: { salones: Array<{ tipoCurso: string; salon: string | null; alumnos: number }> }, campaign: string) {
+  if (!alc.salones.length) {
+    return `El guía no tiene cursos activos en la campaña ${campaign} con esa selección de cursos y salones. Revisa la campaña, el guía o los salones elegidos.`;
+  }
+  const det = alc.salones.map(x => `${x.tipoCurso} ${x.salon || '—'}`).join(', ');
+  return `Los cursos del guía en ${campaign} (${det}) no tienen alumnos activos que ocupen cupo, así que no hay a quién convocar a la graduación.`;
+}
+
 /**
  * Deja agendados EXACTAMENTE los alumnos del alcance: agenda a los que faltan (la
  * graduación prevalece sobre sus otras clases) y da de baja del evento a los que ya
@@ -160,9 +169,10 @@ export async function actualizarGraduacion(
   // El alcance pertenece al guía ORIGINAL: si otro guía la reemplaza, se respetan los
   // cursos, salones y alumnos convocados.
   const guiaAlcance = String(ev.guiaAlcance || ev.advisor || advisorId);
-  const { academicaIds } = await resolverAlcance({ campaign, advisorId: guiaAlcance, curso, salon });
+  const alc0 = await resolverAlcance({ campaign, advisorId: guiaAlcance, curso, salon });
+  const { academicaIds } = alc0;
   if (academicaIds.length === 0) {
-    throw new ValidationError('Con esa selección no hay alumnos del guía para convocar a la graduación.');
+    throw new ValidationError(mensajeSinAlumnos(alc0, campaign));
   }
 
   // 1) Lo que ya sabe validar el servicio de calendario: cruce del guía, festivos,
