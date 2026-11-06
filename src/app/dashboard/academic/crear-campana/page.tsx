@@ -73,6 +73,7 @@ function CrearCampanaContent() {
   const [gestionSel, setGestionSel] = useState('')
   // Filtro de curso de la pestaña Gestión ('' = todos)
   const [gestionCurso, setGestionCurso] = useState('')
+  const [gestionGuia, setGestionGuia] = useState('')
   const [showCursoModal, setShowCursoModal] = useState(false)
   // Curso con alumnos al que le cambian horario/salón/tipo: hay que explicar las
   // consecuencias antes de mover sus fichas.
@@ -491,11 +492,18 @@ function CrearCampanaContent() {
   // Filas de Gestión acotadas por el filtro de tipo de curso ('' = todos)
   const cursosGestion = (nombre: string) => {
     const rows = cursosDeCampania(nombre)
-    return gestionCurso ? rows.filter((r: any) => String(r.tipoCurso || '') === gestionCurso) : rows
+    return rows.filter((r: any) =>
+      (!gestionCurso || String(r.tipoCurso || '') === gestionCurso) &&
+      (!gestionGuia || String(r.guia || '') === gestionGuia))
   }
+  // Guías con cursos en la campaña (el filtro sólo ofrece los que dejan filas)
+  const guiasDeCampania = (nombre: string) =>
+    Array.from(new Set(cursosDeCampania(nombre).map((r: any) => String(r.guia || '')).filter(Boolean)))
+      .map(id => ({ id, nombre: String(guiaNombre(id) || id) }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
   // Al cambiar de campaña (o volver a las tarjetas) se limpia el filtro de curso
   useEffect(() => { setDetalleCurso('') }, [detalleCampaign])
-  useEffect(() => { setGestionCurso('') }, [gestionSel])
+  useEffect(() => { setGestionCurso(''); setGestionGuia('') }, [gestionSel])
 
   // Abrir el modal "Agregar/Editar curso". mode 'existing' agrega a la campaña
   // seleccionada (POST inmediato); 'draft' arma la lista de una campaña nueva.
@@ -644,6 +652,17 @@ function CrearCampanaContent() {
                 {tiposDeCampania(gestionSel).map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             )}
+            {gestionSel && gestionSel !== '__NEW__' && (
+              <select
+                value={gestionGuia}
+                onChange={e => setGestionGuia(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm min-w-[220px] focus:ring-2 focus:ring-primary-500"
+                title="Filtrar por guía"
+              >
+                <option value="">Todos los guías</option>
+                {guiasDeCampania(gestionSel).map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+              </select>
+            )}
             {gestionSel && gestionSel !== '__NEW__' && existing.length > 0 && (
               <button type="button" onClick={handleCSV}
                 className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
@@ -731,7 +750,7 @@ function CrearCampanaContent() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">
                 Cursos de {gestionSel} ({cursosGestion(gestionSel).length}
-                {gestionCurso ? ` de ${cursosDeCampania(gestionSel).length}` : ''})
+                {(gestionCurso || gestionGuia) ? ` de ${cursosDeCampania(gestionSel).length}` : ''})
               </h2>
               <button type="button" onClick={() => openCursoModal('existing')}
                 className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700">
