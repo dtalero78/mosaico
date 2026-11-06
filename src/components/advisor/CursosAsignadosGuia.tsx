@@ -57,10 +57,9 @@ export default function CursosAsignadosGuia({ guiaId }: { guiaId: string }) {
       .then(r => r.json())
       .then(j => {
         const rs: Row[] = Array.isArray(j.rows) ? j.rows : []
+        // Sin filtro por defecto: el guía ve sus cursos En matrícula, Activos y Cerrados.
+        // (Antes abría filtrado por la campaña en matrícula y escondía el resto.)
         setRows(rs)
-        // Default: campaña actual (la que está en matrícula), si existe.
-        const enMat = Array.from(new Set(rs.filter(r => rowEstado(r) === 'matricula').map(r => r.campaign))).sort()
-        if (enMat.length) setFCampana(enMat[0])
       })
       .catch(() => setError('No se pudieron cargar los cursos asignados'))
       .finally(() => setLoading(false))
@@ -68,6 +67,13 @@ export default function CursosAsignadosGuia({ guiaId }: { guiaId: string }) {
 
   const campanas = useMemo(() => Array.from(new Set(rows.map(r => r.campaign).filter(Boolean))).sort(), [rows])
   const cursos = useMemo(() => Array.from(new Set(rows.map(r => r.tipoCurso).filter(Boolean))), [rows])
+
+  const ORDEN_ESTADO: Record<Estado, number> = { matricula: 0, activo: 1, cerrado: 2 }
+  const conteo = useMemo(() => {
+    const c: Record<Estado, number> = { matricula: 0, activo: 0, cerrado: 0 }
+    rows.forEach(r => { c[rowEstado(r)]++ })
+    return c
+  }, [rows])
 
   const filtered = useMemo(() => rows.filter(r => {
     if (fCampana && r.campaign !== fCampana) return false
@@ -77,7 +83,11 @@ export default function CursosAsignadosGuia({ guiaId }: { guiaId: string }) {
     if (fDesde && ini && ini < fDesde) return false
     if (fHasta && ini && ini > fHasta) return false
     return true
-  }), [rows, fCampana, fCurso, fEstado, fDesde, fHasta])
+  }).sort((a, b) =>
+    ORDEN_ESTADO[rowEstado(a)] - ORDEN_ESTADO[rowEstado(b)]
+    || String(b.inicioCurso || '').localeCompare(String(a.inicioCurso || ''))
+    || String(a.tipoCurso).localeCompare(String(b.tipoCurso))
+    || String(a.salon || '').localeCompare(String(b.salon || ''))), [rows, fCampana, fCurso, fEstado, fDesde, fHasta])
 
   const limpiar = () => { setFCampana(''); setFCurso(''); setFEstado('todos'); setFDesde(''); setFHasta('') }
 
@@ -125,10 +135,10 @@ export default function CursosAsignadosGuia({ guiaId }: { guiaId: string }) {
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
           <select value={fEstado} onChange={e => setFEstado(e.target.value as any)} className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white">
-            <option value="todos">Todos</option>
-            <option value="matricula">En matrícula</option>
-            <option value="activo">Activo</option>
-            <option value="cerrado">Cerrado</option>
+            <option value="todos">Todos ({rows.length})</option>
+            <option value="matricula">En matrícula ({conteo.matricula})</option>
+            <option value="activo">Activo ({conteo.activo})</option>
+            <option value="cerrado">Cerrado ({conteo.cerrado})</option>
           </select>
         </div>
         <div>
