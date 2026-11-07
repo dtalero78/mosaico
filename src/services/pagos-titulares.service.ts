@@ -317,6 +317,7 @@ export const pagosTitularesService = {
       gestorRecaudo?: string | null;
       medioPago?: string | null;
       plataforma?: string | null;
+      filial?: string | null;
       page?: number;
       pageSize?: number;
     },
@@ -343,6 +344,7 @@ export const pagosTitularesService = {
       gestorRecaudo: opts.gestorRecaudo ?? null,
       medioPago: opts.medioPago ?? null,
       plataforma: opts.plataforma ?? null,
+      filial: opts.filial ?? null,
       plataformaScope,
       limit: pageSize,
       offset,

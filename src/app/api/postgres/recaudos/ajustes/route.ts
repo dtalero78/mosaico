@@ -27,6 +27,6 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
 
   if (!tipo) throw new ValidationError('tipo debe ser INSCRIPCION, PAGO o FACTURA');
   await requirePermission(session, permisoAjuste(tipo));
-  const pagos = await pagosAjustesService.buscar(sessionInfo(session), tipo, searchParams.get('q'));
+  const pagos = await pagosAjustesService.buscar(sessionInfo(session), tipo, searchParams.get('q'), searchParams.get('filial'));
   return successResponse({ pagos });
 });

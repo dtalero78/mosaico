@@ -41,6 +41,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
   const gestorRecaudo  = searchParams.get('gestorRecaudo') || null;
   const medioPago      = searchParams.get('medioPago')     || null;
   const plataforma     = searchParams.get('plataforma')    || null;
+  const filial         = searchParams.get('filial')        || null;
   const page           = parseInt(searchParams.get('page') || '1', 10) || 1;
   const pageSize       = parseInt(searchParams.get('pageSize') || '50', 10) || 50;
 
@@ -59,6 +60,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
       gestorRecaudo,
       medioPago,
       plataforma,
+      filial,
       page,
       pageSize,
     },

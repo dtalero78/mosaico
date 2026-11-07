@@ -17,6 +17,7 @@
  * aún no separa N° de pago de cuota aplicada.
  */
 import 'server-only';
+import { condicionFilial } from '@/lib/filial-filtro';
 import { queryMany, transaction } from '@/lib/postgres';
 import { ids } from '@/lib/id-generator';
 import { NotFoundError, ValidationError } from '@/lib/errors';
@@ -81,7 +82,7 @@ function comparable(campo: string, valor: any): any {
 
 export const pagosAjustesService = {
   /** Pagos validados del tipo, filtrados por titular / documento / contrato. */
-  async buscar(session: SessionInfo, tipo: TipoAjuste, q: string | null) {
+  async buscar(session: SessionInfo, tipo: TipoAjuste, q: string | null, filial: string | null = null) {
     const params: any[] = [];
     let where = `pt."validado" = true AND ${condicionTipo(tipo)} AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`;
     const texto = (q || '').trim();
@@ -91,6 +92,8 @@ export const pagosAjustesService = {
       where += ` AND (p."contrato" ILIKE $${i} OR p."numeroId" ILIKE $${i} OR pt."numeroFactura" ILIKE $${i}
         OR (COALESCE(p."primerNombre",'') || ' ' || COALESCE(p."primerApellido",'') || ' ' || COALESCE(p."segundoApellido",'')) ILIKE $${i})`;
     }
+    const cf = condicionFilial(filial, 'p."filial"', params.length + 1);
+    if (cf.sql) { where += ` AND ${cf.sql}`; params.push(...cf.params); }
     const sc = await scopeSql(session, params.length + 1);
     params.push(...sc.params);
     return queryMany(

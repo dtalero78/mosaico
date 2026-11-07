@@ -12,6 +12,7 @@
  * y saldo por cuota) y queda en el historial (PAGOS_AJUSTES).
  */
 import { useCallback, useEffect, useState } from 'react'
+import FilialSelect from './FilialSelect'
 import toast from 'react-hot-toast'
 import { MagnifyingGlassIcon, PencilSquareIcon, XMarkIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 import { RecaudosPermission } from '@/types/permissions'
@@ -89,6 +90,7 @@ export default function AjustesRecaudosPanel() {
   const subtabs = SUBTABS.filter(s => hasPermission(s.permiso))
   const [tipo, setTipo] = useState<Tipo | null>(null)
   const [q, setQ] = useState('')
+  const [filial, setFilial] = useState('')
   const [filas, setFilas] = useState<Fila[]>([])
   const [historial, setHistorial] = useState<Ajuste[]>([])
   const [loading, setLoading] = useState(false)
@@ -104,6 +106,7 @@ export default function AjustesRecaudosPanel() {
     try {
       const qs = new URLSearchParams({ tipo })
       if (q.trim()) qs.set('q', q.trim())
+      if (filial) qs.set('filial', filial)
       const [r, h] = await Promise.all([
         api.get<{ pagos: Fila[] }>(`/api/postgres/recaudos/ajustes?${qs}`),
         api.get<{ ajustes: Ajuste[] }>(`/api/postgres/recaudos/ajustes?historial=1&tipo=${tipo}`),
@@ -115,7 +118,7 @@ export default function AjustesRecaudosPanel() {
     } finally {
       setLoading(false)
     }
-  }, [tipo, q])
+  }, [tipo, q, filial])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { cargar() }, [tipo])
@@ -153,6 +156,7 @@ export default function AjustesRecaudosPanel() {
               placeholder="Ej: 01-15221-26" className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md text-sm" />
           </div>
         </div>
+        <div className="w-48"><FilialSelect id="ajustes-filial" value={filial} onChange={setFilial} /></div>
         <button type="button" onClick={cargar} disabled={loading}
           className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50">
           {loading ? 'Buscando…' : 'Buscar'}

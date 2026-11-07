@@ -26,6 +26,7 @@ import { formatCurrency } from '@/lib/utils'
 import { mediosPagoPara } from '@/lib/medios-pago'
 import { api, handleApiError } from '@/hooks/use-api'
 import { usePermissions } from '@/hooks/usePermissions'
+import FilialSelect from './FilialSelect'
 import { exportToExcel } from '@/lib/export-excel'
 import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
 import { montoCoincide, type ReciboInscripcion } from '@/lib/recibo-inscripcion'
@@ -202,6 +203,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
   const [gestorFiltro, setGestorFiltro] = useState('')
   const [medioFiltro, setMedioFiltro] = useState('')
   const [plataformaFiltro, setPlataformaFiltro] = useState('')
+  const [filialFiltro, setFilialFiltro] = useState('')
 
   // Datos
   const [pagos, setPagos] = useState<PagoRow[]>([])
@@ -257,6 +259,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
       if (isGestor) { if (gestorFiltro) qs.set('gestorRecaudo', gestorFiltro) }
       else { if (medioFiltro) qs.set('medioPago', medioFiltro) }
       if (plataformaFiltro) qs.set('plataforma', plataformaFiltro)
+      if (filialFiltro) qs.set('filial', filialFiltro)
       qs.set('page', String(pageToUse))
       qs.set('pageSize', String(PAGE_SIZE))
       const data = await api.get<{ pagos: PagoRow[]; total: number }>(`/api/postgres/recaudos/pagos?${qs.toString()}`)
@@ -269,7 +272,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
     } finally {
       setLoading(false)
     }
-  }, [tab, cuotaTipo, isFacturacion, estado, search, fechaInicio, fechaFin, isGestor, gestorFiltro, medioFiltro, plataformaFiltro, page])
+  }, [tab, cuotaTipo, isFacturacion, estado, search, fechaInicio, fechaFin, isGestor, gestorFiltro, medioFiltro, plataformaFiltro, filialFiltro, page])
 
   // Carga de catálogos según variante
   useEffect(() => {
@@ -289,7 +292,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
 
   const handleAplicarFiltros = () => fetchPagos(true)
   const handleLimpiar = () => {
-    setEstado('pendiente'); setSearch(''); setFechaInicio(''); setFechaFin(''); setGestorFiltro(''); setMedioFiltro(''); setPlataformaFiltro('')
+    setEstado('pendiente'); setSearch(''); setFechaInicio(''); setFechaFin(''); setGestorFiltro(''); setMedioFiltro(''); setPlataformaFiltro(''); setFilialFiltro('')
     setTimeout(() => fetchPagos(true), 0)
   }
 
@@ -645,7 +648,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
       </div>
 
       {/* Filtros */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 grid grid-cols-1 md:grid-cols-7 gap-3 items-end">
+      <div className="bg-white border border-gray-200 rounded-lg p-4 grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-3 items-end">
         <div className="md:col-span-2">
           <label htmlFor="search" className="block text-xs font-medium text-gray-700">Buscar (titular, ID, contrato)</label>
           <div className="mt-1 relative">
@@ -688,6 +691,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
             {PLATAFORMAS.map(pf => (<option key={pf} value={pf}>{pf}</option>))}
           </select>
         </div>
+        <FilialSelect id="filialFiltro" value={filialFiltro} onChange={setFilialFiltro} />
         <div>
           <label htmlFor="fechaInicio" className="block text-xs font-medium text-gray-700">Fecha desde</label>
           <input id="fechaInicio" type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
@@ -696,7 +700,7 @@ export default function PagosValidacionPanel({ variant }: { variant: Variant }) 
           <label htmlFor="fechaFin" className="block text-xs font-medium text-gray-700">Fecha hasta</label>
           <input id="fechaFin" type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
         </div>
-        <div className="md:col-span-7 flex items-center justify-end gap-2 pt-2">
+        <div className="col-span-full flex items-center justify-end gap-2 pt-2">
           <button type="button" onClick={handleLimpiar} className="px-3 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50">Limpiar filtros</button>
           <button type="button" onClick={handleAplicarFiltros} className="px-3 py-1.5 text-xs font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700">Aplicar</button>
         </div>

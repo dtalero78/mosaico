@@ -10,6 +10,7 @@
  */
 
 import 'server-only';
+import { condicionFilial } from '@/lib/filial-filtro';
 import { queryOne, queryMany } from '@/lib/postgres';
 import { BaseRepository } from './base.repository';
 import { buildDynamicUpdate } from '@/lib/query-builder';
@@ -200,6 +201,7 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
     medioPago?: string | null;
     /** Filtro explícito de plataforma elegido por el usuario (dropdown). */
     plataforma?: string | null;
+    filial?: string | null;
     /** Scope de plataforma del usuario logueado (filtra titulares.plataforma) */
     plataformaScope?: PlataformaScope | null;
     limit: number;
@@ -249,6 +251,9 @@ class PagosTitularesRepositoryClass extends BaseRepository<PagoTitular> {
       conds.push(`LOWER(p."plataforma") = LOWER($${i})`);
       params.push(opts.plataforma.trim()); i++;
     }
+
+    const cf = condicionFilial(opts.filial, 'p."filial"', i);
+    if (cf.sql) { conds.push(cf.sql); params.push(...cf.params); i += cf.params.length; }
 
     if (opts.search && opts.search.trim()) {
       const term = `%${opts.search.trim()}%`;
