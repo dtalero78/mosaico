@@ -371,8 +371,9 @@ export default function EventModal({
         fecha: format(eventDate, 'yyyy-MM-dd'),
         hora: format(eventDate, 'HH:mm'),
         evento: (editingEvent.evento || editingEvent.tipo || 'SESSION') as 'SESSION' | 'CLUB' | 'WELCOME' | 'NIVELACION' | 'OLIMPIADA' | 'RECUPERACION' | 'GRADUACION',
-        tituloONivel: resolvedNivel,
-        nombreEvento: nombreEventoValue,
+        // Eventos de un curso de campaña: el módulo y la lección salen del calendario del salón.
+        tituloONivel: (editingEvent as any).sesionModulo || resolvedNivel,
+        nombreEvento: (editingEvent as any).sesionLeccion || nombreEventoValue,
         advisor: advisorId,
         observaciones: editingEvent.observaciones || '',
         limiteUsuarios: editingEvent.limiteUsuarios,

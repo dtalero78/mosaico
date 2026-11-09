@@ -147,7 +147,7 @@ class CalendarioRepositoryClass extends BaseRepository {
               COALESCE(NULLIF(c."campaign", ''), cc."campaign") AS "campaign",
               COALESCE(NULLIF(c."curso", ''), cc."tipoCurso") AS "curso",
               COALESCE(NULLIF(c."salon", ''), cc."salon") AS "salon",
-              c."eventoCompartidoId",
+              c."eventoCompartidoId", c."sesionModulo", c."sesionLeccion",
               c."sesionCerrada",
               c."_createdDate", c."_updatedDate",
               a."primerNombre" as "advisorPrimerNombre",
