@@ -7,6 +7,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { usePermissions } from '@/hooks/usePermissions'
 import { AcademicoPermission, Role } from '@/types/permissions'
 import RptAcademicoSinGestionTab from '@/components/academic/RptAcademicoSinGestionTab'
+import EventosRegistradosTab from '@/components/academic/EventosRegistradosTab'
 import {
   ExclamationTriangleIcon,
   ArrowPathIcon,
@@ -71,7 +72,7 @@ interface AdminItem extends FilaAutorizable {
   advisorEmail: string | null
 }
 
-type Tab = 'academicas' | 'admin' | 'reporte'
+type Tab = 'academicas' | 'admin' | 'reporte' | 'registrados'
 
 const PAD = (n: number) => String(n).padStart(2, '0')
 
@@ -328,6 +329,12 @@ export default function SesionesSinGestionPage() {
                 Eventos administrativos ({adminItems.length})
               </button>
             )}
+            {verSesiones && !esGuia && (
+              <button type="button" onClick={() => setTab('registrados')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'registrados' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                Eventos registrados
+              </button>
+            )}
             {verReporte && (
               <button type="button" onClick={() => setTab('reporte')}
                 className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'reporte' ? 'border-amber-600 text-amber-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -336,7 +343,7 @@ export default function SesionesSinGestionPage() {
             )}
           </div>
 
-          {tab !== 'reporte' && (
+          {tab !== 'reporte' && tab !== 'registrados' && (
           <>
           {/* Filtros */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
@@ -440,6 +447,8 @@ export default function SesionesSinGestionPage() {
               <RptAcademicoSinGestionTab onCount={setRptCount} soloPropios={esGuia} />
             </div>
           )}
+
+          {verSesiones && !esGuia && tab === 'registrados' && <EventosRegistradosTab />}
 
           {/* Tabla — render condicional según tab */}
           {verSesiones && tab === 'admin' && (

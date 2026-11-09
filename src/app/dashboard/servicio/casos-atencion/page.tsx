@@ -241,6 +241,9 @@ function FirmaCierre() {
 
 interface Row {
   bookingId: string
+  /** Falta justificada: se muestra, pero marcada. */
+  justificada?: boolean
+  motivoJustificacion?: string | null
   academicaId: string
   curso: string | null
   nombre: string
@@ -559,6 +562,7 @@ function CasosAtencionContent() {
     ] : [
       { header: 'Curso', accessor: (r: Row) => r.curso || '' },
       { header: 'Nombre', accessor: (r: Row) => r.nombre || '' },
+      { header: 'Justificada', accessor: (r: Row) => (r.justificada ? 'Sí' : 'No') },
       { header: 'ID', accessor: (r: Row) => r.numeroId || '' },
       { header: 'Salón', accessor: (r: Row) => r.salon || '' },
       { header: 'Lección', accessor: (r: Row) => r.leccion || '' },
@@ -1099,6 +1103,10 @@ function CasosAtencionContent() {
                         {r.nombre}
                       </button>
                     ) : <span className="text-gray-900">—</span>}
+                    {r.justificada && (
+                      <span className="ml-2 inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700"
+                        title={r.motivoJustificacion || 'Falta justificada'}>Justificada</span>
+                    )}
                     {r.numeroId && <span className="block text-xs text-gray-400">{r.numeroId}</span>}
                   </td>
                   <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>

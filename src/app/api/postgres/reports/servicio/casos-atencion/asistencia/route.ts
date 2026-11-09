@@ -47,8 +47,6 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `COALESCE(b."asistio", false) = false`,
     `COALESCE(b."asistencia", false) = false`,
     `COALESCE(b."cancelo", false) = false`,
-    // Falta JUSTIFICADA: no se marca asistencia, pero no es inasistencia (no genera caso ni reclamo).
-    `COALESCE(b."escusa", false) = false`,
     // La sesión ya ocurrió.
     `COALESCE(c."dia", b."fechaEvento") < NOW()`,
     ES_SESION,
@@ -100,6 +98,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
             p."apoderado", p."apoderadoTelefono", p."celular",
             COALESCE(ig."contactadoApoderado", false) AS "contactadoApoderado",
             ig."contactadoEn", ig."contactadoPor",
+            COALESCE(b."escusa", false) AS "justificada", b."justificaescusa" AS "motivoJustificacion",
             COALESCE(ig."recordatorioEnviado", false) AS "recordatorioEnviado",
             ig."recordatorioEn"
        FROM "ACADEMICA_BOOKINGS" b
