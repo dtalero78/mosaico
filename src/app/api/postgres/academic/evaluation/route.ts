@@ -3,6 +3,7 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { autoAdvanceStep } from '@/services/student.service';
 import { autoAvanceModuloPorBooking } from '@/services/modulo-avance.service';
+import { assertPuedeMarcarAsistencia } from '@/services/asistencia-guard.service';
 
 const EVALUATION_FIELDS = [
   'calificacion', 'advisorAnotaciones', 'comentarios',
@@ -14,9 +15,10 @@ const EVALUATION_FIELDS = [
  *
  * Save evaluation for a student booking.
  */
-export const PUT = handlerWithAuth(async (request) => {
+export const PUT = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
   if (!body.bookingId) throw new ValidationError('bookingId is required');
+  await assertPuedeMarcarAsistencia(session, body.bookingId);
 
   const booking = await BookingRepository.updateFields(body.bookingId, body, EVALUATION_FIELDS);
   if (!booking) throw new NotFoundError('Booking', body.bookingId);
@@ -32,9 +34,10 @@ export const PUT = handlerWithAuth(async (request) => {
  *
  * Combined attendance + evaluation update.
  */
-export const POST = handlerWithAuth(async (request) => {
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
   if (!body.bookingId) throw new ValidationError('bookingId is required');
+  await assertPuedeMarcarAsistencia(session, body.bookingId);
 
   // Build combined fields: attendance + evaluation
   const allFields = ['asistio', 'asistencia', ...EVALUATION_FIELDS];
