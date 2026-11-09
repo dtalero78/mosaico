@@ -6,6 +6,7 @@ import { autoAvanceModuloPorBooking } from '@/services/modulo-avance.service';
 import { cerrarNivelacionSiRealizada } from '@/services/nivelacion.service';
 import { NotFoundError } from '@/lib/errors';
 import { queryOne } from '@/lib/postgres';
+import { assertPuedeMarcarAsistencia } from '@/services/asistencia-guard.service';
 
 const ALLOWED_BOOKING_FIELDS = [
   'asistio', 'asistencia', 'participacion', 'evaluacion',
@@ -36,6 +37,11 @@ export const GET = handlerWithAuth(async (request, { params }) => {
  */
 export const PUT = handlerWithAuth(async (request, { params }, session) => {
   const body = await request.json();
+
+  // Escribir asistencia (o su justificación) exige permiso, ventana y sesión abierta.
+  if (body.asistio !== undefined || body.asistencia !== undefined || body.escusa !== undefined) {
+    await assertPuedeMarcarAsistencia(session, params.id);
+  }
 
   // El módulo/lección sólo se puede reasignar en una NIVELACIÓN, y se escribe
   // en el agendamiento de ESE alumno: una nivelación en grupo comparte horario,

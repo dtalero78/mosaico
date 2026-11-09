@@ -3,18 +3,20 @@ import { BookingRepository } from '@/repositories/booking.repository';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { autoAdvanceStep } from '@/services/student.service';
 import { autoAvanceModuloPorBooking } from '@/services/modulo-avance.service';
+import { assertPuedeMarcarAsistencia } from '@/services/asistencia-guard.service';
 
 /**
  * POST /api/postgres/academic/attendance
  *
  * Mark single student attendance.
  */
-export const POST = handlerWithAuth(async (request) => {
+export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
 
   if (!body.bookingId) throw new ValidationError('bookingId is required');
   if (body.asistio === undefined) throw new ValidationError('asistio is required');
 
+  await assertPuedeMarcarAsistencia(session, body.bookingId);
   const booking = await BookingRepository.markAttendance(body.bookingId, body.asistio, body.fecha);
   if (!booking) throw new NotFoundError('Booking', body.bookingId);
 
@@ -39,13 +41,16 @@ export const POST = handlerWithAuth(async (request) => {
  *
  * Bulk attendance update.
  */
-export const PUT = handlerWithAuth(async (request) => {
+export const PUT = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
 
   if (!body.bookings || !Array.isArray(body.bookings) || body.bookings.length === 0) {
     throw new ValidationError('bookings array is required and cannot be empty');
   }
 
+  for (const b of body.bookings) {
+    if (b?.bookingId) await assertPuedeMarcarAsistencia(session, b.bookingId);
+  }
   const results = await BookingRepository.markAttendanceBulk(body.bookings);
 
   // Trigger auto-advance for each booking marked as attended

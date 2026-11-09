@@ -297,6 +297,13 @@ export default function SessionStudentsTab({
   const [showNivelNoAsistio, setShowNivelNoAsistio] = useState(false)
   // Aviso al guardar sin marcar nada (evento normal).
   const [showEmptyWarn, setShowEmptyWarn] = useState(false)
+  /** Resumen de cómo quedó el alumno, mostrado al guardar. */
+  const [resumenGuardado, setResumenGuardado] = useState<null | {
+    alumno: string; asistio: boolean; cumplidas: string[]; noCumplidas: string[];
+    justificada: boolean; motivo: string; comentario: string; nivelacion: boolean; caso: boolean;
+  }>(null)
+  /** Alumnos para los que se reportó un caso de atención en esta pantalla. */
+  const [casosReportados, setCasosReportados] = useState<Set<string>>(new Set())
   const [savingNivelClose, setSavingNivelClose] = useState(false)
 
   // Cargar lecciones del curso del evento (evento.nivel = tipoCurso en MOSAICO)
@@ -490,7 +497,23 @@ export default function SessionStudentsTab({
 
       const data = await response.json()
       if (data.success) {
-        alert('Datos guardados exitosamente')
+        const metricas: Array<[string, boolean]> = [
+          ['Participó activamente', participacion], ['Llegó puntual', hePuntualidad],
+          ['Cumplió la asignación anterior', heAsignacion], ['Demostró dominio', daDominio],
+          ['Completó el Desafío Mosaico', daDesafio], ['Permaneció activo', acPermanencia],
+          ['Respetó turnos', acRespeto], ['Cámara', acDisposicion], ['Micrófono', acMicrofono],
+        ]
+        setResumenGuardado({
+          alumno: `${selectedStudent.primerNombre || ''} ${selectedStudent.primerApellido || ''}`.trim(),
+          asistio: asistencia,
+          cumplidas: asistencia ? metricas.filter(m => m[1]).map(m => m[0]) : [],
+          noCumplidas: asistencia ? metricas.filter(m => !m[1]).map(m => m[0]) : [],
+          justificada: !asistencia && escusa,
+          motivo: justificaescusa,
+          comentario: comentarios.trim(),
+          nivelacion: nivelacion || !!nivelViva,
+          caso: casosReportados.has(selectedStudent._id),
+        })
         onDataUpdate()
       } else {
         throw new Error(data.error)
@@ -1176,6 +1199,53 @@ export default function SessionStudentsTab({
       )}
 
       {/* Aviso: guardar sin marcar nada */}
+      {resumenGuardado && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">✅ Registro guardado</h3>
+            <p className="text-sm text-gray-600 mb-4">{resumenGuardado.alumno}</p>
+            <div className="space-y-3 text-sm">
+              {resumenGuardado.asistio ? (
+                <>
+                  <p><span className="font-semibold text-green-700">Asistió.</span></p>
+                  <div>
+                    <p className="font-medium text-gray-700">Métricas cumplidas ({resumenGuardado.cumplidas.length})</p>
+                    <p className="text-gray-600">{resumenGuardado.cumplidas.join(', ') || 'Ninguna'}</p>
+                  </div>
+                  {resumenGuardado.noCumplidas.length > 0 && (
+                    <div>
+                      <p className="font-medium text-gray-700">No cumplidas ({resumenGuardado.noCumplidas.length})</p>
+                      <p className="text-amber-700">{resumenGuardado.noCumplidas.join(', ')}</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div>
+                  <p><span className="font-semibold text-red-700">No asistió.</span></p>
+                  {resumenGuardado.justificada ? (
+                    <p className="text-gray-700">Falta <b>justificada</b>{resumenGuardado.motivo ? `: ${resumenGuardado.motivo}` : ''}. No cuenta como inasistencia.</p>
+                  ) : (
+                    <p className="text-gray-700">Falta <b>sin justificar</b>.</p>
+                  )}
+                </div>
+              )}
+              <p className="text-gray-700">Nivelación: <b>{resumenGuardado.nivelacion ? 'Requiere / solicitada' : 'No requiere'}</b></p>
+              <p className="text-gray-700">Caso de atención: <b>{resumenGuardado.caso ? 'Reportado' : 'No reportado'}</b></p>
+              <div>
+                <p className="font-medium text-gray-700">Comentario</p>
+                <p className="text-gray-600 whitespace-pre-wrap">{resumenGuardado.comentario || 'Sin comentario'}</p>
+              </div>
+            </div>
+            <div className="flex justify-end mt-5">
+              <button type="button" onClick={() => setResumenGuardado(null)}
+                className="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded hover:bg-primary-700">
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showEmptyWarn && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
           <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
@@ -1209,9 +1279,9 @@ export default function SessionStudentsTab({
             ? `Sesión del ${new Date(evento.dia).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}${evento?.step ? ` · ${evento.step}` : ''}`
             : undefined}
           onClose={() => setReportarCaso(false)}
-          onEnviado={(r) => toast.success(
+          onEnviado={(r) => { setCasosReportados(prev => new Set(prev).add(selectedStudent._id)); toast.success(
             r.abrioCaso ? `Reporte enviado. Se abrió el caso ${r.codigo}.` : `Reporte agregado al caso ${r.codigo}.`
-          )}
+          ) }}
         />
       )}
     </div>
