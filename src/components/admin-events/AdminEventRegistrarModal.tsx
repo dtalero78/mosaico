@@ -190,7 +190,7 @@ export default function AdminEventRegistrarModal({
           <>
             {ws.isCoordinator && ws.minutesElapsed > REGISTER_CLOSE_MIN ? (
               <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-3 mb-4 text-sm text-blue-900">
-                <strong>Gestionando como Coordinador</strong>: la ventana del advisor venció (
+                <strong>Gestionando como Coordinador</strong>: la ventana del guía venció (
                 {ws.minutesElapsed} min desde el inicio). Quedará con motivo
                 <code className="mx-1 bg-blue-100 px-1 rounded">GESTION_COORDINADOR</code>.
               </div>

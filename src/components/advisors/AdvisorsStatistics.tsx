@@ -131,7 +131,7 @@ export default function AdvisorsStatistics({ advisors }: AdvisorsStatisticsProps
     }
 
     if (selectedAdvisors.length >= CHART_COLORS.length) {
-      alert(`Máximo ${CHART_COLORS.length} advisors pueden ser comparados`)
+      alert(`Máximo ${CHART_COLORS.length} guías pueden ser comparados`)
       return
     }
 
@@ -193,7 +193,7 @@ export default function AdvisorsStatistics({ advisors }: AdvisorsStatisticsProps
         {/* Selected Advisors */}
         {selectedAdvisors.length > 0 && (
           <div className="mt-4 pt-4 border-t border-gray-200">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">Advisors seleccionados:</h4>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Guías seleccionados:</h4>
             <div className="flex flex-wrap gap-2">
               {selectedAdvisors.map((advisor) => (
                 <div
@@ -240,8 +240,8 @@ export default function AdvisorsStatistics({ advisors }: AdvisorsStatisticsProps
         {!loading && !error && selectedAdvisors.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-gray-500">
             <CalendarIcon className="h-12 w-12 mb-4" />
-            <p className="text-lg font-medium mb-2">No hay advisors seleccionados</p>
-            <p className="text-sm">Selecciona uno o más advisors para ver sus estadísticas</p>
+            <p className="text-lg font-medium mb-2">No hay guías seleccionados</p>
+            <p className="text-sm">Selecciona uno o más guías para ver sus estadísticas</p>
           </div>
         )}
 

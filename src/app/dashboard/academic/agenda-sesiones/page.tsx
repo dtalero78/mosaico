@@ -1030,7 +1030,7 @@ export default function AgendaSesionesPage() {
         {/* Modal eliminar evento con checkbox de confirmación (Ctrl Horas hook) */}
         {deleteTarget && (() => {
           const adv = advisors.find(a => a._id === (deleteTarget as any).advisor)
-          const advName = adv ? `${adv.primerNombre ?? ''} ${adv.primerApellido ?? ''}`.trim() : 'el advisor asignado'
+          const advName = adv ? `${adv.primerNombre ?? ''} ${adv.primerApellido ?? ''}`.trim() : 'el guía asignado'
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
               <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
@@ -1102,7 +1102,7 @@ export default function AgendaSesionesPage() {
                       Restructuración
                       <span className="block text-xs text-gray-500 mt-0.5">
                         Borrado limpio: el evento se elimina pero <strong>NO queda registro</strong> de suspensión
-                        en Ctrl Horas del advisor.
+                        en Ctrl Horas del guía.
                       </span>
                     </span>
                   </label>

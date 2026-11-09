@@ -93,7 +93,7 @@ export default function AdvisorDashboard() {
         }
       })
       .catch(() => {
-        setError('No se pudo cargar tu perfil de advisor')
+        setError('No se pudo cargar tu perfil de guía')
         setLoading(false)
       })
   }, [email])
@@ -354,7 +354,7 @@ function AdvisorAvatar({ fotoUrl, inicial }: { fotoUrl: string | null; inicial: 
   return (
     <div className="flex-shrink-0 w-16 h-16 rounded-full overflow-hidden bg-gray-100 border-2 border-blue-200">
       {fotoUrl
-        ? <img src={fotoUrl} alt="Foto advisor" className="w-full h-full object-cover" />
+        ? <img src={fotoUrl} alt="Foto guía" className="w-full h-full object-cover" />
         : <div className="w-full h-full flex items-center justify-center bg-blue-100">
             <span className="text-2xl font-bold text-blue-600">{inicial}</span>
           </div>}

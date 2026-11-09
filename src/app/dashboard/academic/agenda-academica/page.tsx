@@ -501,7 +501,7 @@ export default function AgendaAcademicaPage() {
                 onChange={(e) => setFilterAdvisor(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">Todos los advisors</option>
+                <option value="">Todos los guías</option>
                 {advisors.map((advisor) => (
                   <option key={advisor._id} value={advisor._id}>
                     {advisor.primerNombre} {advisor.primerApellido}

@@ -185,7 +185,7 @@ export default function AdvisorResumenReportPage() {
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Resumen de Advisors</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Resumen de Guías</h1>
           <p className="text-sm text-gray-500 mt-1">
             Totales por advisor: Sesiones, Jumps, Training, Essential y Welcome
           </p>
@@ -208,7 +208,7 @@ export default function AdvisorResumenReportPage() {
               <label htmlFor="ar-advisor" className="block text-xs text-gray-500 mb-1">Guía</label>
               <select id="ar-advisor" value={advisorId} onChange={e => setAdvisorId(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]">
-                <option value="">Todos los advisors</option>
+                <option value="">Todos los guías</option>
                 {advisors.map(a => <option key={a._id} value={a._id}>{a.nombreCompleto}</option>)}
               </select>
             </div>
@@ -274,7 +274,7 @@ export default function AdvisorResumenReportPage() {
 
           {/* Stacked bar — all advisors */}
           <div className="xl:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Sesiones por Advisor y Tipo</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Sesiones por Guía y Tipo</h3>
             {loading ? (
               <div className="h-64 bg-gray-100 rounded animate-pulse" />
             ) : !data?.charts.stackedByAdvisor.length ? (
@@ -326,7 +326,7 @@ export default function AdvisorResumenReportPage() {
           /* Modo resumen: tabla consolidada por advisor */
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
             <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-800">Detalle por Advisor</h3>
+              <h3 className="text-sm font-semibold text-gray-800">Detalle por Guía</h3>
               <p className="text-xs text-gray-400 mt-0.5">{(data?.table.length ?? 0).toLocaleString()} advisors</p>
             </div>
             {loading ? (

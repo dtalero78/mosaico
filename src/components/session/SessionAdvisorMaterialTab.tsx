@@ -196,7 +196,7 @@ function MaterialDeLeccion({ step, nivel, curso }: { step: string; nivel: string
         <div className="bg-amber-600 px-6 py-4">
           <div className="flex items-center gap-3">
             <BookOpenIcon className="h-6 w-6 text-white" />
-            <h3 className="text-lg font-bold text-white">Material del Advisor — {label}</h3>
+            <h3 className="text-lg font-bold text-white">Material del Guía — {label}</h3>
             <span className="ml-auto px-3 py-1 bg-white text-amber-600 rounded-full text-sm font-semibold">
               {materials.length} {materials.length === 1 ? 'archivo' : 'archivos'}
             </span>

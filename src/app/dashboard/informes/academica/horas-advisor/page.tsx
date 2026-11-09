@@ -235,7 +235,7 @@ export default function HorasAdvisorPage() {
               <label htmlFor="ha-advisor" className="block text-xs text-gray-500 mb-1">Guía</label>
               <select id="ha-advisor" value={advisorId} onChange={e => setAdvisorId(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]">
-                <option value="">Todos los advisors</option>
+                <option value="">Todos los guías</option>
                 {advisorOptions.map(a => <option key={a._id} value={a._id}>{a.nombreCompleto}</option>)}
               </select>
             </div>
@@ -285,7 +285,7 @@ export default function HorasAdvisorPage() {
 
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <KpiCard label="Advisors Activos" value={(totals?.advisorsActivos ?? 0).toLocaleString()} color="#6366f1" />
+          <KpiCard label="Guías Activos" value={(totals?.advisorsActivos ?? 0).toLocaleString()} color="#6366f1" />
           <KpiCard label="Total Sesiones" value={(totals?.total ?? 0).toLocaleString()} color="#3b82f6" />
           <KpiCard label="Conducted" value={(totals?.conducted ?? 0).toLocaleString()} color={STATE_COLORS.conducted} />
           <KpiCard label="Suspendidas" value={(totals?.suspended ?? 0).toLocaleString()} color={STATE_COLORS.suspended} />
@@ -295,7 +295,7 @@ export default function HorasAdvisorPage() {
         {/* Fila 1: barras horizontales por advisor (izq) + dona por estado (der) */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           <div className="xl:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">Sesiones por Advisor y Estado</h3>
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Sesiones por Guía y Estado</h3>
             {loading ? (
               <div className="h-64 bg-gray-100 rounded animate-pulse" />
             ) : !data?.charts.barByAdvisor.length ? (
@@ -364,7 +364,7 @@ export default function HorasAdvisorPage() {
         {/* Detalle */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-800">Detalle por Advisor</h3>
+            <h3 className="text-sm font-semibold text-gray-800">Detalle por Guía</h3>
             <p className="text-xs text-gray-400 mt-0.5">
               {(data?.table.length ?? 0).toLocaleString()} advisors con actividad
               {' · '}
@@ -377,7 +377,7 @@ export default function HorasAdvisorPage() {
               )}
             </p>
             <p className="text-[11px] text-gray-400 mt-1">
-              <span className="text-red-600 font-medium">Nombre en rojo</span> = advisor inactivo que tuvo agendamientos en el período.
+              <span className="text-red-600 font-medium">Nombre en rojo</span> = guía inactivo que tuvo agendamientos en el período.
             </p>
           </div>
           {loading ? (

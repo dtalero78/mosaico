@@ -63,10 +63,10 @@ export default function DashboardStats() {
       description: 'Registros en CLASSES para hoy'
     },
     {
-      name: 'Advisors Agendados Hoy',
+      name: 'Guías Agendados Hoy',
       value: statsData.advisorsHoy.toLocaleString(),
       icon: CheckCircleIcon,
-      description: 'Advisors únicos con eventos hoy'
+      description: 'Guías únicos con eventos hoy'
     },
   ]
 

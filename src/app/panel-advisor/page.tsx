@@ -144,11 +144,11 @@ function PanelAdvisorContent() {
       if (first?.email) {
         router.replace(`/panel-advisor?email=${encodeURIComponent(first.email)}`)
       } else {
-        setError('No hay advisors disponibles')
+        setError('No hay guías disponibles')
         setLoading(false)
       }
     } else if (!canPickOtherAdvisor) {
-      setError('No se proporcionó un email de advisor en la URL')
+      setError('No se proporcionó un email de guía en la URL')
       setLoading(false)
     }
     // Si tiene permiso y availableAdvisors aún cargando, esperar al siguiente render
@@ -189,7 +189,7 @@ function PanelAdvisorContent() {
             .catch(() => {})
         }
       } else {
-        throw new Error(data.error || 'Advisor no encontrado')
+        throw new Error(data.error || 'Guía no encontrado')
       }
     } catch (error) {
       console.error('Error loading advisor:', error)
@@ -437,7 +437,7 @@ function PanelAdvisorContent() {
           {/* Advisor photo */}
           <div className="flex-shrink-0 w-16 h-16 rounded-full overflow-hidden bg-gray-100 border-2 border-blue-200">
             {fotoUrl
-              ? <img src={fotoUrl} alt="Foto advisor" className="w-full h-full object-cover" />
+              ? <img src={fotoUrl} alt="Foto guía" className="w-full h-full object-cover" />
               : <div className="w-full h-full flex items-center justify-center bg-blue-100">
                   <span className="text-2xl font-bold text-blue-600">
                     {advisor?.primerNombre?.[0]?.toUpperCase() || 'A'}

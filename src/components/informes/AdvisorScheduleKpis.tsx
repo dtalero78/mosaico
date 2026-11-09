@@ -44,7 +44,7 @@ export default function AdvisorScheduleKpis({ kpis, loading, kpiLabel = 'Total S
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
       <KpiCard label={kpiLabel}           value={kpis.totalSesiones.toLocaleString()}     color="#3b82f6" />
-      <KpiCard label="Total Advisors"    value={kpis.totalAdvisors.toLocaleString()}     color="#8b5cf6" />
+      <KpiCard label="Total Guías"    value={kpis.totalAdvisors.toLocaleString()}     color="#8b5cf6" />
       <KpiCard label="Usuarios Agendados" value={kpis.totalAgendados.toLocaleString()}   color="#6366f1" />
       <KpiCard label="Asistieron"         value={kpis.totalAsistieron.toLocaleString()}  color="#10b981" />
       <KpiCard label="No Asistieron"      value={kpis.totalNoAsistieron.toLocaleString()} color="#ef4444" />

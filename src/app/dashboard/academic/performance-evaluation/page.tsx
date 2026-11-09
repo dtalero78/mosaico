@@ -116,7 +116,7 @@ export default function PerformanceEvaluationPage() {
               <p className="text-sm text-gray-500">
                 {view === 'general'
                   ? 'Vista global de evaluaciones — Top 5 / 5 Promedios Más Bajos.'
-                  : 'Vista por advisor — métricas individuales comparadas contra el promedio general.'}
+                  : 'Vista por guía — métricas individuales comparadas contra el promedio general.'}
               </p>
             </div>
           </div>
@@ -281,11 +281,11 @@ export default function PerformanceEvaluationPage() {
             />
             <RankingCard
               title="⚠ 5 Promedios Más Bajos"
-              subtitle="advisors con promedio < 4 ★ · clic para ver desglose"
+              subtitle="guías con promedio < 4 ★ · clic para ver desglose"
               rows={bot5.filter((r: any) => Number(r.promedio) < 4)}
               color="red"
               onClickRow={setRadarAdvisor}
-              emptyMessage="No hay advisors con promedios por debajo de 4 ★"
+              emptyMessage="No hay guías con promedios por debajo de 4 ★"
             />
           </div>
 
@@ -666,7 +666,7 @@ function ByAdvisorView({
           </select>
         </div>
         <div>
-          <label htmlFor="bya-status" className="block text-xs text-gray-500 mb-1">Estado advisor</label>
+          <label htmlFor="bya-status" className="block text-xs text-gray-500 mb-1">Estado guía</label>
           <select id="bya-status" value={advisorFilter}
             onChange={e => setAdvisorFilter(e.target.value as 'activos' | 'inactivos' | 'todos')}
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
@@ -677,12 +677,12 @@ function ByAdvisorView({
         </div>
         <div className="flex-1 min-w-[260px]">
           <label htmlFor="bya-advisor" className="block text-xs text-gray-500 mb-1">
-            Advisor <span className="text-gray-400">({advisorsList.length} disponibles)</span>
+            Guía <span className="text-gray-400">({advisorsList.length} disponibles)</span>
           </label>
           <select id="bya-advisor" value={advisorId}
             onChange={e => setAdvisorId(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-            <option value="">— Selecciona un advisor —</option>
+            <option value="">— Selecciona un guía —</option>
             {advisorsList.map(a => (
               <option key={a._id} value={a._id}>
                 {a.nombre} ({a.evaluaciones} evals){a.activo === false ? ' · Inactivo' : ''}
@@ -695,7 +695,7 @@ function ByAdvisorView({
       {!advisorId && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-8 text-center">
           <UserCircleIcon className="h-12 w-12 text-indigo-400 mx-auto mb-2" />
-          <p className="text-sm text-indigo-900 font-medium">Selecciona un advisor para ver sus métricas</p>
+          <p className="text-sm text-indigo-900 font-medium">Selecciona un guía para ver sus métricas</p>
           <p className="text-xs text-indigo-700 mt-1">El dropdown filtra por estado ({advisorsList.length} {advisorFilter}).</p>
         </div>
       )}
@@ -761,8 +761,8 @@ function ByAdvisorView({
           {/* Métricas por dimensión — advisor vs general */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-800">Métricas por dimensión · advisor vs promedio general</h3>
-              <p className="text-[11px] text-gray-400">Promedio del advisor en barra sólida; el promedio general aparece debajo como referencia.</p>
+              <h3 className="text-sm font-semibold text-gray-800">Métricas por dimensión · guía vs promedio general</h3>
+              <p className="text-[11px] text-gray-400">Promedio del guía en barra sólida; el promedio general aparece debajo como referencia.</p>
             </div>
             <div className="p-4">
               {advPorDim.length === 0 ? <p className="text-sm text-gray-400 text-center py-4">Sin datos</p> : (

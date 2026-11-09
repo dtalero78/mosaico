@@ -354,11 +354,11 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
                   <HoraChart data={charts.clubesPorHora ?? []} />
                 </ChartCard>
 
-                <ChartCard title="Ranking Advisors — Training" accent={tColor}>
+                <ChartCard title="Ranking Guías — Training" accent={tColor}>
                   <RankingChart data={charts.rankingAdvisorsTraining ?? []} />
                 </ChartCard>
 
-                <ChartCard title="Ranking Advisors — Talleres" accent={cColor}>
+                <ChartCard title="Ranking Guías — Talleres" accent={cColor}>
                   <RankingChart data={charts.rankingAdvisorsClub ?? []} />
                 </ChartCard>
               </div>
@@ -468,11 +468,11 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
           <AsistenciaChart data={charts.jumpsAsistencia ?? []} gradId="jmp" />
         </ChartCard>
 
-        <ChartCard title="Ranking Advisors — Sessions">
+        <ChartCard title="Ranking Guías — Sessions">
           <RankingChart data={charts.rankingAdvisorsSesiones ?? []} />
         </ChartCard>
 
-        <ChartCard title="Ranking Advisors — Jumps">
+        <ChartCard title="Ranking Guías — Jumps">
           <RankingChart data={charts.rankingAdvisorsJumps ?? []} />
         </ChartCard>
 
@@ -521,7 +521,7 @@ export default function EventReportCharts({ charts, config, loading }: Props) {
         <AsistenciaChart data={charts.asistenciaVsInscritos} gradId="welcome" />
       </ChartCard>
 
-      <ChartCard title="Ranking Advisors por Eventos">
+      <ChartCard title="Ranking Guías por Eventos">
         <RankingChart data={charts.rankingAdvisors} />
       </ChartCard>
 

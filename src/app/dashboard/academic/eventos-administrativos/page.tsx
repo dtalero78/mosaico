@@ -251,7 +251,7 @@ export default function EventosAdministrativosPage() {
 
   const handleCheckConflicts = async () => {
     if (targetAdvisorIds.length === 0) {
-      toast.error('Selecciona al menos un advisor'); return
+      toast.error('Selecciona al menos un guía'); return
     }
     if (!fechaInicioISO) { toast.error('Fecha/hora inválida'); return }
     setConflictsChecking(true)
@@ -579,12 +579,12 @@ export default function EventosAdministrativosPage() {
                     <label className="flex items-center gap-2 text-sm">
                       <input type="radio" checked={form.asignarTodos}
                         onChange={() => { setForm(f => ({ ...f, asignarTodos: true })); setConflictsChecked(false) }} />
-                      Todos los advisors activos ({advisors.length})
+                      Todos los guías activos ({advisors.length})
                     </label>
                     <label className="flex items-center gap-2 text-sm">
                       <input type="radio" checked={!form.asignarTodos}
                         onChange={() => { setForm(f => ({ ...f, asignarTodos: false })); setConflictsChecked(false) }} />
-                      Seleccionar advisors específicos
+                      Seleccionar guías específicos
                     </label>
                     {!form.asignarTodos && (
                       <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto p-2 bg-gray-50">
@@ -609,7 +609,7 @@ export default function EventosAdministrativosPage() {
                       </div>
                     )}
                     <p className="text-[11px] text-gray-500">
-                      {targetAdvisorIds.length} advisor{targetAdvisorIds.length !== 1 ? 's' : ''} seleccionado{targetAdvisorIds.length !== 1 ? 's' : ''}.
+                      {targetAdvisorIds.length} guía{targetAdvisorIds.length !== 1 ? 's' : ''} seleccionado{targetAdvisorIds.length !== 1 ? 's' : ''}.
                     </p>
                   </div>
                 </div>
@@ -771,11 +771,11 @@ export default function EventosAdministrativosPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-60">
             <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {deleteTarget.kind === 'group' ? 'Eliminar grupo entero' : 'Eliminar este advisor'}
+                {deleteTarget.kind === 'group' ? 'Eliminar grupo entero' : 'Eliminar este guía'}
               </h3>
               <p className="text-sm text-gray-600 mb-4">
                 {deleteTarget.kind === 'group'
-                  ? `Se eliminarán TODAS las filas del grupo (todos los advisors asignados al mismo evento de ${ADMIN_EVENT_TIPO_META[deleteTarget.item.tipo].label}).`
+                  ? `Se eliminarán TODAS las filas del grupo (todos los guías asignados al mismo evento de ${ADMIN_EVENT_TIPO_META[deleteTarget.item.tipo].label}).`
                   : `Se eliminará solo la fila de ${deleteTarget.item.advisorNombre || deleteTarget.item.advisorId}. El resto del grupo permanece.`
                 }
               </p>

@@ -924,7 +924,7 @@ export default function StudentAcademic({ student, classes: initialClasses, view
               onChange={(e) => setAdvisorFilter(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
             >
-              <option value="">Todos los advisors</option>
+              <option value="">Todos los guías</option>
               {uniqueAdvisors.map(({ id, name }) => (
                 <option key={id} value={id}>{name}</option>
               ))}

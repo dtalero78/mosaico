@@ -87,7 +87,7 @@ export default function CrearUsuariosHub() {
             <Card
               accent="green"
               icon={<UserGroupIcon className="w-6 h-6" />}
-              title="Advisor / Guía"
+              title="Guía"
               desc="Crea un guía (GUIAS + login). Abre el formulario de alta de guía."
               onClick={() => openTab('/nuevo-guia')}
             />
