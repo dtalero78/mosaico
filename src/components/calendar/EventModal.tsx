@@ -1802,7 +1802,7 @@ export default function EventModal({
             </h3>
             <p className="text-sm text-gray-700 mb-4">
               Vas a cambiar el nivel/step del evento. Esta acción <strong>NO queda registrada</strong>
-              en Ctrl Horas (no es una cancelación para el advisor).
+              en Ctrl Horas (no es una cancelación para el guía).
             </p>
             <div className="bg-gray-50 border border-gray-200 rounded p-3 mb-4 text-sm space-y-2">
               <div>
