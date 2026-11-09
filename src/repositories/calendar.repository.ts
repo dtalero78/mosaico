@@ -142,7 +142,11 @@ class CalendarioRepositoryClass extends BaseRepository {
               -- queda de respaldo (eventos sin guía o guía sin sala cargada).
               ${enlaceClaseSql('a', 'c."linkZoom"')} as "linkZoom",
               c."inscritos", c."origen", c."dia", c."evento", c."nombreEvento", c."tituloONivel",
-              c."campaign", c."curso", c."salon",
+              -- Los eventos generados por un curso de campaña no guardan estos tres
+              -- campos: se toman del curso, para que el modal de edición los muestre.
+              COALESCE(NULLIF(c."campaign", ''), cc."campaign") AS "campaign",
+              COALESCE(NULLIF(c."curso", ''), cc."tipoCurso") AS "curso",
+              COALESCE(NULLIF(c."salon", ''), cc."salon") AS "salon",
               c."eventoCompartidoId",
               c."sesionCerrada",
               c."_createdDate", c."_updatedDate",
@@ -152,6 +156,7 @@ class CalendarioRepositoryClass extends BaseRepository {
               a."email" as "advisorEmail"
        FROM "CALENDARIO" c
        LEFT JOIN "GUIAS" a ON c."advisor" = a."_id"
+       LEFT JOIN "CURSOS_CAMPAIGN" cc ON cc."_id" = c."cursoCampaignId"
        ${whereClause}
        ORDER BY c."dia" ASC, c."_createdDate" ASC
        ${limitClause}`,
