@@ -110,12 +110,14 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const campaign = String(f.campaign || '').trim();
   const tipoCurso = String(f.tipoCurso || '').trim();
   const salon = String(f.salon || '').trim();
+  const salones: string[] = Array.isArray(f.salones) ? f.salones.map((s: any) => String(s).trim()).filter(Boolean) : [];
 
   const conds = [`p."tipoUsuario" = 'BENEFICIARIO'`];
   const params: any[] = [];
   if (campaign) { params.push(campaign); conds.push(`p."campaign" = $${params.length}`); }
   if (tipoCurso) { params.push(tipoCurso); conds.push(`p."tipoCurso" = $${params.length}`); }
   if (salon) { params.push(salon); conds.push(`p."salon" = $${params.length}`); }
+  if (salones.length) { params.push(salones); conds.push(`p."salon" = ANY($${params.length}::text[])`); }
   const where = conds.join(' AND ');
 
   // Cuenta de VÁLIDOS (con teléfono de apoderado) para el tope de 300.

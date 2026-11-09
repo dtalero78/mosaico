@@ -183,7 +183,7 @@ export default function EnvioMensajesPage() {
   const [cursoRows, setCursoRows] = useState<CursoRow[]>([])
   const [filtroCampaign, setFiltroCampaign] = useState('')
   const [filtroCurso, setFiltroCurso] = useState('')
-  const [filtroSalon, setFiltroSalon] = useState('')
+  const [filtroSalon, setFiltroSalon] = useState<string[]>([])
   const [filtroExcede, setFiltroExcede] = useState<number | null>(null)
 
   // Por evento: día + tipo → evento → inscritos (con filtro de asistencia)
@@ -361,7 +361,7 @@ export default function EnvioMensajesPage() {
     try {
       const r = await fetch('/api/admin/envio-mensajes/lookup-apoderados', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filtro: { campaign: filtroCampaign, tipoCurso: filtroCurso, salon: filtroSalon } }),
+        body: JSON.stringify({ filtro: { campaign: filtroCampaign, tipoCurso: filtroCurso, salones: filtroSalon } }),
       })
       const j = await r.json()
       if (!r.ok || !j.success) throw new Error(j?.error || `Error ${r.status}`)
@@ -583,7 +583,7 @@ export default function EnvioMensajesPage() {
     setSelectedNumeroIds(new Set())
     setResults(null)
     setAttachFile(null)
-    setFiltroCampaign(''); setFiltroCurso(''); setFiltroSalon(''); setFiltroExcede(null)
+    setFiltroCampaign(''); setFiltroCurso(''); setFiltroSalon([]); setFiltroExcede(null)
     setEventoFecha(getLocalToday()); setEventoTipo(''); setEventos(null); setEventoId(''); setEventoAsistencia('todos')
   }
 
@@ -901,7 +901,7 @@ export default function EnvioMensajesPage() {
                   <label className="block text-xs font-medium text-gray-500 mb-1">Campaña</label>
                   <select
                     value={filtroCampaign}
-                    onChange={e => { setFiltroCampaign(e.target.value); setFiltroCurso(''); setFiltroSalon(''); setFiltroExcede(null) }}
+                    onChange={e => { setFiltroCampaign(e.target.value); setFiltroCurso(''); setFiltroSalon([]); setFiltroExcede(null) }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="">Todas las campañas</option>
@@ -912,7 +912,7 @@ export default function EnvioMensajesPage() {
                   <label className="block text-xs font-medium text-gray-500 mb-1">Curso</label>
                   <select
                     value={filtroCurso}
-                    onChange={e => { setFiltroCurso(e.target.value); setFiltroSalon(''); setFiltroExcede(null) }}
+                    onChange={e => { setFiltroCurso(e.target.value); setFiltroSalon([]); setFiltroExcede(null) }}
                     disabled={!filtroCampaign}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50"
                   >
@@ -922,15 +922,23 @@ export default function EnvioMensajesPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Salón</label>
-                  <select
-                    value={filtroSalon}
-                    onChange={e => { setFiltroSalon(e.target.value); setFiltroExcede(null) }}
-                    disabled={!filtroCurso}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50"
-                  >
-                    <option value="">Todos los salones</option>
-                    {filtroSalones.map(s => <option key={s} value={s}>Salón {s}</option>)}
-                  </select>
+                  <div className={`border border-gray-300 rounded-lg px-3 py-2 text-sm max-h-40 overflow-y-auto ${!filtroCurso ? 'bg-gray-50 opacity-60' : ''}`}>
+                    <label className="flex items-center gap-2 py-0.5 font-medium">
+                      <input type="checkbox" disabled={!filtroCurso} checked={filtroSalon.length === 0}
+                        onChange={() => { setFiltroSalon([]); setFiltroExcede(null) }} />
+                      Todos los salones
+                    </label>
+                    {filtroSalones.map(s => (
+                      <label key={s} className="flex items-center gap-2 py-0.5">
+                        <input type="checkbox" disabled={!filtroCurso} checked={filtroSalon.includes(s)}
+                          onChange={e => {
+                            setFiltroSalon(prev => e.target.checked ? [...prev, s] : prev.filter(x => x !== s))
+                            setFiltroExcede(null)
+                          }} />
+                        Salón {s}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
               {filtroExcede != null && (
