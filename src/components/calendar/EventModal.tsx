@@ -1687,12 +1687,12 @@ export default function EventModal({
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-60">
           <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              ⚠️ Confirmar cambio de advisor
+              ⚠️ Confirmar cambio de guía
             </h3>
             <p className="text-sm text-gray-700 mb-4">
               Esta acción registrará en el historial de <strong>{pendingAdvisorChange.oldAdvisorName}</strong> que
               la sesión fue cancelada para él/ella y se reasigna a <strong>{pendingAdvisorChange.newAdvisorName}</strong>.
-              Las notas (Time Out y observaciones) que haya escrito el advisor anterior quedarán congeladas en su historial.
+              Las notas (Time Out y observaciones) que haya escrito el guía anterior quedarán congeladas en su historial.
             </p>
             <label className="flex items-start gap-2 mb-3 cursor-pointer">
               <input
@@ -1718,7 +1718,7 @@ export default function EventModal({
               <span className="text-sm text-gray-800">
                 Restructuración
                 <span className="block text-xs text-gray-500 mt-0.5">
-                  La reasignación se aplica pero <strong>NO queda registro</strong> en Ctrl Horas del advisor original.
+                  La reasignación se aplica pero <strong>NO queda registro</strong> en Ctrl Horas del guía original.
                 </span>
               </span>
             </label>
@@ -1732,7 +1732,7 @@ export default function EventModal({
                 onChange={(e) => setReassignMotivo(e.target.value)}
                 rows={2}
                 className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
-                placeholder="Ej: el advisor original tuvo un imprevisto familiar"
+                placeholder="Ej: el guía original tuvo un imprevisto familiar"
               />
             </div>
             <div className="flex justify-end gap-2">
