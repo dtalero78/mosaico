@@ -939,8 +939,9 @@ export default function EventModal({
       // con la lección nueva. El backend valida lo mismo como autoridad final
       // (y mira además participación y evaluación, que aquí no se conocen).
       if (editingEvent) {
-        const oldNivel = (editingEvent as any).nivel || (editingEvent as any).tituloONivel || ''
-        const oldStep  = (editingEvent as any).step  || (editingEvent as any).nombreEvento || ''
+        // Debe coincidir con lo que precarga el formulario (módulo/lección del salón en eventos de curso).
+        const oldNivel = (editingEvent as any).sesionModulo || (editingEvent as any).nivel || (editingEvent as any).tituloONivel || ''
+        const oldStep  = (editingEvent as any).sesionLeccion || (editingEvent as any).step  || (editingEvent as any).nombreEvento || ''
         const newNivel = formData.tituloONivel || ''
         const newStep  = formData.nombreEvento || ''
         const nivelChanged = !esGraduacion && oldNivel && newNivel && oldNivel !== newNivel
