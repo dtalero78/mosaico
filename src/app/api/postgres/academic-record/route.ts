@@ -57,10 +57,15 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   // verificar que estamos dentro de [0..+300min] o que el rol es coordinador.
   // Si el evento no está en CALENDARIO (datos legacy de Wix sin link), no
   // bloqueamos — comportamiento previo.
-  const evt = await queryOne<{ dia: Date | null; tipo: string | null; advisor: string | null }>(
-    `SELECT "dia", "tipo", "advisor" FROM "CALENDARIO" WHERE "_id" = $1`,
+  const evt = await queryOne<{ dia: Date | null; tipo: string | null; advisor: string | null; sesionCerrada: boolean | null }>(
+    `SELECT "dia", "tipo", "advisor", "sesionCerrada" FROM "CALENDARIO" WHERE "_id" = $1`,
     [idEvento],
   );
+  // Sesión cerrada: sólo Coordinación/Admin la modifican.
+  if (evt?.sesionCerrada === true && !['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN'].includes(String(sessionRole || '').toUpperCase())) {
+    throw new ValidationError('La sesión ya está cerrada: sólo un administrador puede modificar la asistencia.');
+  }
+
   if (evt?.dia) {
     let ws = getSessionWindow(evt.dia, sessionRole, new Date());
     // Plazo vencido: sólo pasa si Coordinación autorizó ESTA sesión (columna

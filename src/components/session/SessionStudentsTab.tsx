@@ -101,9 +101,6 @@ interface SessionStudentsTabProps {
   canMarkAttendance?: boolean
   /** Mensaje a mostrar en el banner cuando `!canMarkAttendance`. */
   attendanceLockedReason?: string | null
-  /** Si es true, un registro sin rúbrica guardada se abre con las 9 casillas
-   *  marcadas. La página lo apaga en sesiones cerradas o vencidas. */
-  aplicarPorDefecto?: boolean
 }
 
 /**
@@ -208,7 +205,6 @@ export default function SessionStudentsTab({
   onDataUpdate,
   canMarkAttendance = true,
   attendanceLockedReason = null,
-  aplicarPorDefecto = false,
 }: SessionStudentsTabProps) {
   const isLocked = !canMarkAttendance
   // Form states
@@ -407,25 +403,12 @@ export default function SessionStudentsTab({
       setAcRespeto(cr.acRespeto || false)
       setAcDisposicion(cr.acDisposicion || false)
       setAcMicrofono(cr.acMicrofono || false)
-      // Valor por defecto (sólo en sesiones por empezar o abiertas; cerrada o
-      // vencida se muestra lo guardado):
-      //  - Nunca guardado desde el panel (rubricaEvaluada null) y sin falta
-      //    justificada → las 9 marcadas.
-      //  - Asistencia ya guardada pero rúbrica nunca evaluada → los 8 criterios.
-      // Si el guía ya guardó (true = presente, false = ausente) se respeta.
-      if (aplicarPorDefecto) {
-        const nuncaGuardado = cr.rubricaEvaluada === null || cr.rubricaEvaluada === undefined
-        if (nuncaGuardado && !cr.escusa) {
-          setAsistencia(true)
-          fijarRubrica(true)
-        } else if (selectedStudent.classRecord.asistencia && cr.rubricaEvaluada !== true) {
-          fijarRubrica(true)
-        }
-      }
+      // Sin valores por defecto: asistencia y métricas se muestran tal como están
+      // guardadas (sin marcar si el guía aún no las registró).
     } else {
       resetForm()
     }
-  }, [selectedStudent, aplicarPorDefecto])
+  }, [selectedStudent])
 
   const resetForm = () => {
     setAsistencia(false)

@@ -47,6 +47,8 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `COALESCE(b."asistio", false) = false`,
     `COALESCE(b."asistencia", false) = false`,
     `COALESCE(b."cancelo", false) = false`,
+    // Falta JUSTIFICADA: no se marca asistencia, pero no es inasistencia (no genera caso ni reclamo).
+    `COALESCE(b."escusa", false) = false`,
     // La sesión ya ocurrió.
     `COALESCE(c."dia", b."fechaEvento") < NOW()`,
     ES_SESION,

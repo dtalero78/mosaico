@@ -488,13 +488,11 @@ export default function SesionPage() {
                   selectedStudent={selectedStudent}
                   onStudentSelect={setSelectedStudent}
                   onDataUpdate={loadStudents}
-                  canMarkAttendance={windowState.canMarkAttendance && !sesionCerrada}
-                  // Las 9 casillas vienen marcadas sólo mientras la sesión está por
-                  // empezar o abierta: cerrada o vencida se muestra lo guardado.
-                  aplicarPorDefecto={!sesionCerrada && !windowState.isExpired && windowState.minutesElapsed >= 0}
+                  // Sesión cerrada: sólo Coordinación/Admin pueden modificarla.
+                  canMarkAttendance={windowState.canMarkAttendance && (!sesionCerrada || windowState.isCoordinator)}
                   attendanceLockedReason={
-                    sesionCerrada
-                      ? 'La sesión ya está cerrada — los registros son de solo lectura.'
+                    sesionCerrada && !windowState.isCoordinator
+                      ? 'La sesión ya está cerrada — los registros son de solo lectura. Sólo un administrador puede modificarlos.'
                       : windowState.isExpired
                         ? EXPIRED_MESSAGE
                         : (windowState.minutesElapsed < ATTENDANCE_OPEN_MIN)
