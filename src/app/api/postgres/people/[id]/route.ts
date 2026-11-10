@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '@/lib/errors';
 import { buildDynamicUpdate } from '@/lib/query-builder';
 import { normalizeTelefonoOrNull } from '@/lib/telefono-normalize';
 import { registrarEventoContrato, diffCampos } from '@/lib/contrato-eventos';
+import { vigenciaValida, mensajeVigenciaInvalida } from '@/lib/vigencia-modulo';
 import { registrarCambioAprobacion, nombreDe } from '@/lib/aprobacion-audit';
 
 /**
@@ -312,6 +313,14 @@ export const PATCH = handlerWithAuth(async (
   //     (esos estados sólo aplican pre-aprobación).
   //   - 'Pendiente' y 'Retractado' SÍ se permiten (con alerta en frontend).
   // Pre-aprobación cualquier transición es libre.
+  // Vigencia: si cambia, debe cumplir la regla comercial (3–9 meses; 3 fijos en Módulo).
+  // Antes este PATCH la aceptaba sin validar y se podía dejar un contrato en 1 mes.
+  if (body.vigencia !== undefined && String(body.vigencia ?? '').trim() !== String((currentPerson as any).vigencia ?? '').trim()) {
+    if (!vigenciaValida(body.vigencia, (currentPerson as any).modulo === true)) {
+      throw new ValidationError(mensajeVigenciaInvalida((currentPerson as any).modulo === true));
+    }
+  }
+
   if (body.aprobacion && currentPerson.aprobacion === 'Aprobado') {
     const blockedPostApproval = ['Contrato nulo', 'Devuelto', 'Rechazado'];
     if (blockedPostApproval.includes(body.aprobacion)) {
