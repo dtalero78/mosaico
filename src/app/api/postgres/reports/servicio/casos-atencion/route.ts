@@ -39,8 +39,8 @@ const SRC_SQL = `
       FROM "CASOS_ATENCION" ca
       LEFT JOIN LATERAL (
         SELECT x.* FROM "ACADEMICA_BOOKINGS" x
-         WHERE COALESCE(x."idEstudiante", x."studentId") = ca."academicaId"
-           AND COALESCE(x."eventoId", x."idEvento") = ca."eventoOrigenId"
+         WHERE (x."idEstudiante" = ca."academicaId" OR x."studentId" = ca."academicaId")
+           AND (x."eventoId" = ca."eventoOrigenId" OR x."idEvento" = ca."eventoOrigenId")
          ORDER BY x."casoAtencion" DESC NULLS LAST, x."_createdDate" DESC LIMIT 1
       ) bk ON true
       LEFT JOIN LATERAL (
@@ -55,8 +55,8 @@ const SRC_SQL = `
      WHERE b."casoAtencion" = true
        AND NOT EXISTS (
          SELECT 1 FROM "CASOS_ATENCION" y
-          WHERE y."academicaId" = COALESCE(b."idEstudiante", b."studentId")
-            AND y."eventoOrigenId" = COALESCE(b."eventoId", b."idEvento"))
+          WHERE y."academicaId" IN (b."idEstudiante", b."studentId")
+            AND y."eventoOrigenId" IN (b."eventoId", b."idEvento"))
   )`
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
