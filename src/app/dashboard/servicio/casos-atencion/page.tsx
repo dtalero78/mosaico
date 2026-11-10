@@ -45,7 +45,7 @@ const TABS: TabCfg[] = [
     id: 'asistencia', label: 'Asistencia',
     endpoint: '/api/postgres/reports/servicio/casos-atencion/asistencia',
     vacio: 'No hubo inasistentes',
-    descripcion: 'Estudiantes que no asistieron a las sesiones de la semana.',
+    descripcion: 'Estudiantes con dos faltas consecutivas a sesiones (un sábado de dos lecciones cuenta como dos).',
   },
   {
     id: 'vacias', label: 'Sesiones vacías',
