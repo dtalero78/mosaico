@@ -89,6 +89,15 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Ajuste masivo', href: '/dashboard/academic/ajuste-masivo', newTab: true },
         ],
       },
+      // Submenú Gestión Cursos — consultas para vigilar que los cursos no se vacíen
+      // ni se desbalanceen entre guías. Cada ítem se filtra por su propio permiso.
+      {
+        name: 'Gestión Cursos', isSubmenu: true, children: [
+          { name: 'Ausencias', href: '/dashboard/academic/gestion-cursos/ausencias', newTab: true },
+          { name: 'Seguimiento Cursos', href: '/dashboard/academic/gestion-cursos/seguimiento', newTab: true },
+          { name: 'Curso Guía', href: '/dashboard/academic/gestion-cursos/curso-guia', newTab: true },
+        ],
+      },
       { name: 'Crear IMPULSA', href: '/dashboard/academic/crear-impulsa', newTab: true },
       // "Evaluaciones Jump" (/dashboard/academic/jump-evaluaciones) se retiró del
       // menú: es del motor de Jumps de LGS, que MOSAICO no usa (JUMP_EVALUATIONS
@@ -322,6 +331,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/academic/ajuste-masivo': [
       AcademicoPermission.AJUSTE_MASIVO,
     ],
+    '/dashboard/academic/gestion-cursos/ausencias': [AcademicoPermission.GESTION_CURSOS_AUSENCIAS],
+    '/dashboard/academic/gestion-cursos/seguimiento': [AcademicoPermission.GESTION_CURSOS_SEGUIMIENTO],
+    '/dashboard/academic/gestion-cursos/curso-guia': [AcademicoPermission.GESTION_CURSOS_CURSO_GUIA],
     '/dashboard/academic/tipos-curso': [
       AcademicoPermission.TIPOS_CURSO_GESTION,
     ],
@@ -579,6 +591,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       AcademicoPermission.HORARIOS_GESTION,
       AcademicoPermission.TIPOS_CURSO_GESTION,
       AcademicoPermission.AJUSTE_MASIVO,
+      // Submenú Gestión Cursos: con sólo una de sus pantallas el grupo debe verse.
+      AcademicoPermission.GESTION_CURSOS_AUSENCIAS,
+      AcademicoPermission.GESTION_CURSOS_SEGUIMIENTO,
+      AcademicoPermission.GESTION_CURSOS_CURSO_GUIA,
       // Páginas con permiso propio: con sólo una de ellas el grupo debe verse.
       AcademicoPermission.VER_EVALUACION,
       AcademicoPermission.VER_ENTRENAMIENTO,

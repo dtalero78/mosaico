@@ -238,6 +238,13 @@ export enum AcademicoPermission {
   // aplicado a todo un salón (sólo hacia adelante).
   AJUSTE_MASIVO = 'ACADEMICO.AJUSTE_MASIVO.APLICAR',
 
+  // Académico › Gestión Cursos: tres consultas (sólo lectura) para vigilar que los
+  // cursos no se vacíen y que no haya desbalance entre guías.
+  GESTION_CURSOS_AUSENCIAS   = 'ACADEMICO.GESTION_CURSOS.AUSENCIAS',
+  GESTION_CURSOS_SEGUIMIENTO = 'ACADEMICO.GESTION_CURSOS.SEGUIMIENTO',
+  GESTION_CURSOS_CURSO_GUIA  = 'ACADEMICO.GESTION_CURSOS.CURSO_GUIA',
+  GESTION_CURSOS_EXPORTAR    = 'ACADEMICO.GESTION_CURSOS.EXPORTAR',
+
   // Lista de Usuarios — reporte de estudiantes (Académico › Guías)
   LISTA_USUARIOS_VER      = 'ACADEMICO.LISTA_USUARIOS.VER',
   LISTA_USUARIOS_EXPORTAR = 'ACADEMICO.LISTA_USUARIOS.EXPORTAR',

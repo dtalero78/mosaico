@@ -172,6 +172,15 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/ajuste-masivo': [
     'ACADEMICO.AJUSTE_MASIVO.APLICAR' as Permission,
   ],
+  '/dashboard/academic/gestion-cursos/ausencias': [
+    'ACADEMICO.GESTION_CURSOS.AUSENCIAS' as Permission,
+  ],
+  '/dashboard/academic/gestion-cursos/seguimiento': [
+    'ACADEMICO.GESTION_CURSOS.SEGUIMIENTO' as Permission,
+  ],
+  '/dashboard/academic/gestion-cursos/curso-guia': [
+    'ACADEMICO.GESTION_CURSOS.CURSO_GUIA' as Permission,
+  ],
   '/dashboard/academic/tipos-curso': [
     'ACADEMICO.TIPOS_CURSO.GESTION' as Permission,
   ],
