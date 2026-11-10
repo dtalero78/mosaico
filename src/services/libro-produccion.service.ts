@@ -21,6 +21,7 @@ import { ValidationError, NotFoundError } from '@/lib/errors';
 import { ids } from '@/lib/id-generator';
 import { armarVigenciasAnio, semanaDe, type Vigencia } from '@/lib/vigencias-comerciales';
 import { resolverEscalera } from '@/lib/crm';
+import { registrarEventoContrato, diffCampos } from '@/lib/contrato-eventos';
 
 /** Expresión SQL de la zona horaria del país del contrato (alias p). Igual a zonaHorariaPais(). */
 const TZ_SQL = `CASE WHEN p."plataforma" ILIKE 'chile%' THEN 'America/Santiago'
@@ -375,4 +376,151 @@ export async function guardarTipoPlan(datos: any, actor: string, id?: string) {
     `INSERT INTO "PLANES_TIPOS" ("_id","pais","cuotas","nombre","inscripcion","valorCuota","total","descripcion","activo","creadoPor")
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [nuevo, ...vals, actor]);
   return nuevo;
+}
+
+// ── Ajuste de la escala comercial (botón "Ajuste Escala" del detalle) ───────────────
+
+/**
+ * Campos editables: la escalera comercial del contrato. El "Ej. Training" NO se edita
+ * aquí: en MOSAICO es PEOPLE.asesor, que además decide el alcance comercial del contrato
+ * (quién lo ve en Gestión Contrato) y sale en el PDF; se cambia desde el contrato.
+ */
+export const CAMPOS_ESCALERA = {
+  fullExecutive: { l: 'Full Executive', max: 150 },
+  jefeGrupo: { l: 'Jefe de grupo', max: 150 },
+  gerente: { l: 'Gerente', max: 150 },
+  gerenteDivision: { l: 'Gerente división', max: 150 },
+  salesManager: { l: 'Sales Manager', max: 150 },
+  filial: { l: 'Filial', max: 150 },
+  origenMatricula: { l: 'Origen matrícula', max: 200 },
+} as const;
+type CampoEscalera = keyof typeof CAMPOS_ESCALERA;
+
+/** Valores actuales + sugerencias (los ya usados en titulares del mismo país) + filiales del catálogo. */
+export async function opcionesEscalera(titularId: string) {
+  const cols = Object.keys(CAMPOS_ESCALERA).map(c => `"${c}"`).join(',');
+  const t = await queryOne<any>(`SELECT "plataforma", ${cols} FROM "PEOPLE" WHERE "_id" = $1 AND "tipoUsuario" = 'TITULAR'`, [titularId]);
+  if (!t) throw new NotFoundError('Titular', titularId);
+  const campos = Object.keys(CAMPOS_ESCALERA).filter(c => c !== 'filial');
+  const usados = await queryMany<{ campo: string; valor: string }>(
+    `SELECT DISTINCT x.campo, x.valor FROM "PEOPLE" p,
+            LATERAL (VALUES ${campos.map(c => `('${c}', TRIM(p."${c}"))`).join(',')}) AS x(campo, valor)
+      WHERE p."tipoUsuario" = 'TITULAR' AND p."plataforma" = $1 AND COALESCE(x.valor, '') <> ''
+        AND p."_createdDate" > NOW() - INTERVAL '12 months'
+      ORDER BY 1, 2`, [t.plataforma]);
+  let filiales = (await queryMany<{ nombre: string }>(
+    `SELECT "nombre" FROM "FILIALES" WHERE "activo" = true AND LOWER(TRIM("plataforma")) = LOWER(TRIM($1)) ORDER BY 1`,
+    [t.plataforma || ''])).map(f => f.nombre);
+  // Si el catálogo de filiales aún no está cargado, se ofrecen las ya usadas en contratos del país.
+  if (!filiales.length) {
+    filiales = (await queryMany<{ nombre: string }>(
+      `SELECT DISTINCT TRIM("filial") AS nombre FROM "PEOPLE" WHERE "tipoUsuario" = 'TITULAR' AND "plataforma" = $1 AND COALESCE(TRIM("filial"), '') <> '' ORDER BY 1`,
+      [t.plataforma || ''])).map(f => f.nombre);
+  }
+  const sugerencias: Record<string, string[]> = {};
+  for (const u of usados) (sugerencias[u.campo] ||= []).push(u.valor);
+  const actual = Object.fromEntries(Object.keys(CAMPOS_ESCALERA).map(c => [c, t[c] ?? '']));
+  return { pais: t.plataforma, actual, sugerencias, filiales };
+}
+
+/** Guarda la escalera del titular; motivo obligatorio; queda en el Seguimiento con antes/después. */
+export async function actualizarEscalera(titularId: string, datos: Record<string, any>, motivo: string, session: any) {
+  const m = String(motivo || '').trim();
+  if (m.length < 10) throw new ValidationError('Indica el motivo del ajuste (mínimo 10 caracteres).');
+  const cols0 = Object.keys(CAMPOS_ESCALERA).map(c => `"${c}"`).join(',');
+  const antes = await queryOne<any>(`SELECT "plataforma", ${cols0} FROM "PEOPLE" WHERE "_id" = $1 AND "tipoUsuario" = 'TITULAR'`, [titularId]);
+  if (!antes) throw new NotFoundError('Titular', titularId);
+
+  const nuevos: Partial<Record<CampoEscalera, string | null>> = {};
+  for (const [c, def] of Object.entries(CAMPOS_ESCALERA) as [CampoEscalera, { l: string; max: number }][]) {
+    if (datos?.[c] === undefined) continue;
+    nuevos[c] = String(datos[c] ?? '').replace(/\s+/g, ' ').trim().slice(0, def.max) || null;
+  }
+  if (nuevos.filial) {
+    // Con catálogo cargado para el país, la filial debe ser una del catálogo; sin catálogo se acepta el valor.
+    const cat = await queryMany<{ nombre: string }>(
+      `SELECT "nombre" FROM "FILIALES" WHERE "activo" = true AND LOWER(TRIM("plataforma")) = LOWER(TRIM($1))`, [antes.plataforma || '']);
+    if (cat.length) {
+      const f = cat.find(x => x.nombre.trim().toLowerCase() === String(nuevos.filial).toLowerCase());
+      if (!f) throw new ValidationError(`La filial "${nuevos.filial}" no pertenece a ${antes.plataforma}.`);
+      nuevos.filial = f.nombre;
+    }
+  }
+  const cambios = diffCampos(antes, nuevos);
+  if (!Object.keys(cambios).length) throw new ValidationError('No hay cambios en la escala.');
+
+  const cols = Object.keys(cambios);
+  await query(
+    `UPDATE "PEOPLE" SET ${cols.map((c, i) => `"${c}" = $${i + 2}`).join(', ')}, "_updatedDate" = NOW() WHERE "_id" = $1`,
+    [titularId, ...cols.map(c => (nuevos as any)[c])]);
+  await registrarEventoContrato({
+    personaId: titularId, categoria: 'MATRICULA', accion: 'Ajuste de escala comercial',
+    detalle: `${cols.map(c => CAMPOS_ESCALERA[c as CampoEscalera].l).join(', ')} · ${m}`, datos: { cambios }, session,
+  });
+  return { comercial: Object.fromEntries(Object.keys(CAMPOS_ESCALERA).map(c => [c, c in nuevos ? (nuevos as any)[c] : antes[c]])) };
+}
+
+/**
+ * "Leer correo" del Ajuste Escala: la IA saca la "Escala de matrícula" del correo de la
+ * matrícula (texto pegado o captura). Sólo PROPONE: el formulario se llena, la persona revisa
+ * y guarda con actualizarEscalera. El Sales Manager ya registrado no se propone cambiar
+ * (manda el del CRM).
+ */
+const PROMPT_ESCALERA = `Eres un extractor de datos de correos de matrícula de una academia.
+Del correo adjunto (texto o imagen) extrae la "escala de matrícula" y el número de contrato.
+Devuelve SOLO este JSON:
+{
+  "contrato": string|null,              // número de matrícula/contrato, p. ej. "01-M5-2341-26"
+  "fullExecutive": string|null,         // "Ejecutivo Full" / "Full Executive"
+  "jefeGrupo": string|null,             // "Jefe de Grupo" / "Team Manager"
+  "gerente": string|null,               // "Gerente"
+  "gerenteDivision": string|null,       // "Gerente Div" / "Gerente División"
+  "salesManager": string|null,          // "Sales" / "Sales Manager"
+  "filial": string|null,                // "Filial"
+  "origenMatricula": string|null        // "Origen" / "Origen matrícula" / campaña
+}
+Reglas: copia los nombres tal como aparecen (sin títulos como "Don"), null si un campo no aparece,
+NUNCA inventes. Ignora "Internacional" y la firma de quien envía el correo.`;
+
+const normContrato = (s: any) => String(s ?? '').replace(/\s+/g, '').toUpperCase();
+
+export async function leerEscaleraCorreo(titularId: string, entrada: { texto?: string; imagen?: string }) {
+  const t = await queryOne<any>(`SELECT "contrato", "salesManager" FROM "PEOPLE" WHERE "_id" = $1 AND "tipoUsuario" = 'TITULAR'`, [titularId]);
+  if (!t) throw new NotFoundError('Titular', titularId);
+  const texto = String(entrada?.texto || '').trim().slice(0, 20000);
+  const imagen = String(entrada?.imagen || '');
+  if (!texto && !imagen) throw new ValidationError('Pega el texto del correo o una captura.');
+  if (imagen && (!/^data:image\/(png|jpe?g|webp);base64,/i.test(imagen) || imagen.length > 7_000_000)) {
+    throw new ValidationError('La captura debe ser PNG, JPG o WEBP de hasta 5 MB.');
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new ValidationError('La lectura de correos no está configurada (falta OPENAI_API_KEY).');
+  const contenido: any = imagen ? { type: 'image_url', image_url: { url: imagen } } : { type: 'text', text: `CORREO:\n${texto}` };
+  const OpenAI = (await import('openai')).default;
+  const client = new OpenAI({ apiKey });
+  let r: any;
+  try {
+    const resp: any = await client.chat.completions.create({
+      model: 'gpt-4o-mini', max_tokens: 1024, response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: [{ type: 'text', text: PROMPT_ESCALERA }, contenido] }],
+    } as any);
+    const raw = String(resp?.choices?.[0]?.message?.content ?? '').replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+    r = JSON.parse(raw);
+  } catch (e: any) {
+    throw new ValidationError(`El lector de correos falló: ${e?.message || e}`);
+  }
+
+  const campos: Record<string, string> = {};
+  for (const c of Object.keys(CAMPOS_ESCALERA)) {
+    const v = String(r?.[c] ?? '').replace(/\s+/g, ' ').trim();
+    if (v) campos[c] = v;
+  }
+  const omitidos: string[] = [];
+  if (campos.salesManager && String(t.salesManager || '').trim()) { omitidos.push(`Sales Manager del correo: ${campos.salesManager}`); delete campos.salesManager; }
+  const contratoCorreo = r?.contrato ? normContrato(r.contrato) : null;
+  return {
+    contratoCorreo,
+    coincideContrato: contratoCorreo ? contratoCorreo === normContrato(t.contrato) : null,
+    campos, omitidos,
+  };
 }

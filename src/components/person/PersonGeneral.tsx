@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { Person } from '@/types'
 import { formatDate } from '@/lib/utils'
-import { ArrowDownTrayIcon, PaperClipIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
+import { ArrowDownTrayIcon, PaperClipIcon, ClipboardDocumentListIcon, ClockIcon } from '@heroicons/react/24/outline'
 import { PermissionGuard } from '@/components/permissions'
 import { ComercialPermission, PersonPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import PersonContractViewer from './PersonContractViewer'
 import SuspendidaBadge from '@/components/common/SuspendidaBadge'
 import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
+import SeguimientoContratoModal from '@/components/common/SeguimientoContratoModal'
 
 interface PersonGeneralProps {
   person: Person
@@ -22,6 +23,7 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
   // "Documentación y recibo": el mismo modal del detalle del contrato. Reemplaza
   // los dos botones que había ("Ver Documentación" y "Agregar Documentación").
   const [showDocumentos, setShowDocumentos] = useState(false)
+  const [showSeguimiento, setShowSeguimiento] = useState(false)
 
   // Descargar contrato PDF
   const downloadContrato = () => {
@@ -56,6 +58,16 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
             Resumen
           </a>
         )}
+        {/* Seguimiento del contrato: bitácora de titular + beneficiarios (carga al abrir). */}
+        {hasPermission(PersonPermission.SEGUIMIENTO as any) && (
+          <button type="button" onClick={() => setShowSeguimiento(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-primary-700 border border-primary-300 rounded-md hover:bg-primary-50 text-sm font-medium"
+            title="Ver todo lo que ha pasado con el contrato: quién y cuándo">
+            <ClockIcon className="h-4 w-4" />
+            Seguimiento
+          </button>
+        )}
+        {showSeguimiento && <SeguimientoContratoModal personaId={person._id} onClose={() => setShowSeguimiento(false)} />}
         <PermissionGuard permission={PersonPermission.VER_CONTRATO}>
           <PersonContractViewer person={person as any} />
         </PermissionGuard>

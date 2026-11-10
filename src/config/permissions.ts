@@ -33,6 +33,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Botón para descargar el PDF del contrato del titular',
   },
   {
+    code: PersonPermission.SEGUIMIENTO,
+    module: Module.PERSON,
+    section: 'Información General',
+    name: 'Botón "Seguimiento"',
+    description: 'Botón "Seguimiento" de la ficha del titular y del detalle del Libro de Producción: abre la bitácora del contrato (matrícula, documentos, firma, aprobación, beneficiarios, pagos y recaudos, vigencia, cupo, académico y comentarios) con quién y cuándo hizo cada cosa.',
+  },
+  {
+    code: PersonPermission.SEGUIMIENTO_COMENTAR,
+    module: Module.PERSON,
+    section: 'Información General',
+    name: '↳ Comentar en el Seguimiento',
+    description: 'Escribir comentarios en la ventana Seguimiento del contrato (sobre el contrato o sobre una persona). Quedan con quién y cuándo, y no se pueden editar ni borrar. Requiere también el botón "Seguimiento".',
+  },
+  {
     code: PersonPermission.VER_CONTRATO,
     module: Module.PERSON,
     section: 'Información General',
@@ -1381,6 +1395,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     section: 'Libro de Producción',
     name: "Pestaña \"Vigencias\"",
     description: "Generar y modificar el calendario anual de vigencias comerciales (inicio de enero y último día de cada mes, corte 9:00 hora local de cada país)",
+  },
+  {
+    code: AprobacionPermission.LIBRO_PRODUCCION_ESCALERA,
+    module: Module.APROBACION,
+    section: 'Libro de Producción',
+    name: 'Botón "Ajuste Escala"',
+    description: 'Corregir la escala comercial del contrato desde el detalle del libro (Full Executive, Jefe de grupo, Gerente, Gerente división, Sales Manager, Filial del catálogo del país y Origen matrícula), con la opción "Leer correo" que propone los valores desde el correo de la matrícula. Pide motivo y queda en el Seguimiento del contrato con el antes y el después.',
   },
   {
     code: AprobacionPermission.LIBRO_PRODUCCION_CASILLAS,
