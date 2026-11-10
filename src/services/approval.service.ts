@@ -5,6 +5,7 @@ import { ids } from '@/lib/id-generator';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
 import { resolverDestinoBienvenida } from '@/lib/destino-bienvenida';
 import { generarBookingsBeneficiario } from '@/services/cursos-campaign-eventos.service';
+import { registrarCambioAprobacion, nombreDe } from '@/lib/aprobacion-audit';
 
 /**
  * Aprobación de personas (titular + beneficiarios). Extraído desde
@@ -37,6 +38,10 @@ export interface ApproveOpts {
   soloFuturos?: boolean;
   /** Quién genera los agendamientos (registro del booking). */
   agendadoPor?: string;
+  /** Sesión de quien aprueba: la aprobación queda en el Seguimiento del contrato con su nombre. */
+  session?: any;
+  /** De dónde viene la aprobación (por defecto APROBAR; la cascada usa APROBAR_CASCADA). */
+  origenAprobacion?: 'APROBAR' | 'APROBAR_CASCADA' | 'PANTALLA_APROBACION' | 'SISTEMA';
 }
 
 /**
@@ -214,6 +219,12 @@ export async function approveOnePerson(
     );
   }
   console.log(`✅ [Approve] PEOPLE.aprobacion='Aprobado' + estado='ACTIVA' + estadoInactivo=false`);
+  // Seguimiento: quién aprobó, cuándo y de qué estado venía.
+  await registrarCambioAprobacion({
+    personId, contrato: effectiveContrato, tipoUsuario: person.tipoUsuario, nombre: nombreDe(person),
+    estadoAnterior: person.aprobacion, estadoNuevo: 'Aprobado', origen: opts.origenAprobacion || 'APROBAR',
+    session: opts.session, actor: opts.session ? null : 'sistema',
+  });
 
   // Check/Create ACADEMICA record — SÓLO para BENEFICIARIO.
   // Los TITULARES no son estudiantes (no toman clases); su rol es contractual.
@@ -401,7 +412,7 @@ export async function approveContract(
         continue;
       }
       try {
-        const result = await approveOnePerson(ben._id, contrato, titularInicioContrato, opts);
+        const result = await approveOnePerson(ben._id, contrato, titularInicioContrato, { ...opts, origenAprobacion: 'APROBAR_CASCADA' });
         beneficiaryResults.push(result);
       } catch (err: any) {
         console.error(`⚠️ [Approve] Error aprobando beneficiario ${i + 1} (${ben._id}):`, err.message);

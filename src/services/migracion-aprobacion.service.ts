@@ -222,6 +222,7 @@ export async function aprobarContratoMigrado(
   // 3) Aprobación: titular + beneficiarios, sólo clases futuras.
   const agendadoPor = `Migración (${opts.actorEmail})`;
   const { beneficiaryResults, skippedBeneficiaries } = await approveContract(titularId, {
+    session: { user: { email: opts.actorEmail, name: opts.actorNombre } },
     sendWhatsApp: opts.enviarWhatsApp,
     soloFuturos: true,
     agendadoPor,

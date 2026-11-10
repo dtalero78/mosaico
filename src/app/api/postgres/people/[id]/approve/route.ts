@@ -48,7 +48,7 @@ export const POST = handlerWithAuth(async (
 
   // ─── TITULAR: aprobación en cascada (titular + beneficiarios) ───
   if (person.tipoUsuario === 'TITULAR' && contrato) {
-    const { mainResult, beneficiaryResults, skippedBeneficiaries, clasesCompletadas } = await approveContract(personId);
+    const { mainResult, beneficiaryResults, skippedBeneficiaries, clasesCompletadas } = await approveContract(personId, { session });
     return successResponse({
       message: skippedBeneficiaries.length
         ? `Titular aprobado. ${beneficiaryResults.length} beneficiario(s) aprobado(s); ${skippedBeneficiaries.length} sin aprobar por no tener salón.`
@@ -75,7 +75,7 @@ export const POST = handlerWithAuth(async (
   }
 
   // Approve the person themselves (beneficiario suelto)
-  const mainResult = await approveOnePerson(personId, contrato);
+  const mainResult = await approveOnePerson(personId, contrato, null, { session });
 
   // ─── BENEFICIARIO: hereda inicioContrato del titular (al titular NO se le toca) ───
   // Se mantiene en la respuesta por compatibilidad con el frontend; hoy siempre false.

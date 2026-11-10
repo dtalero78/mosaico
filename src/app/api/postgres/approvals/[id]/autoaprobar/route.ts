@@ -72,6 +72,7 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
 
   // ── 2) Aprobar el contrato (titular + beneficiarios) SIN WhatsApp ──
   const { mainResult, beneficiaryResults, skippedBeneficiaries } = await approveContract(titularId, {
+    session,
     sendWhatsApp: false,
   });
 

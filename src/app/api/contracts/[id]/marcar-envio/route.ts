@@ -2,6 +2,7 @@ import 'server-only';
 import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { ValidationError, NotFoundError } from '@/lib/errors';
 import { query, queryOne } from '@/lib/postgres';
+import { registrarEventoContrato } from '@/lib/contrato-eventos';
 
 /**
  * Deja constancia de las acciones de cierre del contrato.
@@ -23,7 +24,13 @@ const CAMPOS: Record<string, string> = {
   impreso: 'contratoImpresoEn',
 };
 
-export const POST = handlerWithAuth(async (request, { params }) => {
+const ACCION: Record<string, string> = {
+  firma: 'Firma solicitada por WhatsApp',
+  pdf: 'PDF del contrato enviado',
+  impreso: 'Contrato impreso',
+};
+
+export const POST = handlerWithAuth(async (request, { params }, session) => {
   const body = await request.json().catch(() => ({}));
   const tipo = String(body?.tipo || '').trim();
 
@@ -32,8 +39,8 @@ export const POST = handlerWithAuth(async (request, { params }) => {
     throw new ValidationError(`tipo debe ser uno de: ${Object.keys(CAMPOS).join(', ')}`);
   }
 
-  const persona = await queryOne<{ _id: string }>(
-    'SELECT "_id" FROM "PEOPLE" WHERE "_id" = $1',
+  const persona = await queryOne<Record<string, any>>(
+    `SELECT "_id", "${columna}" AS "previo" FROM "PEOPLE" WHERE "_id" = $1`,
     [params.id]
   );
   if (!persona) throw new NotFoundError('Titular', params.id);
@@ -48,6 +55,11 @@ export const POST = handlerWithAuth(async (request, { params }) => {
     `UPDATE "PEOPLE" SET ${set} WHERE "_id" = $1 RETURNING "${columna}"`,
     [params.id]
   );
+
+  // Queda en el Seguimiento la primera vez (o cada reenvío explícito).
+  if (!persona.previo || body?.rehacer === true) {
+    await registrarEventoContrato({ personaId: params.id, categoria: 'FIRMA', accion: ACCION[tipo], session });
+  }
 
   return successResponse({ tipo, [columna]: res.rows[0]?.[columna] ?? null });
 });

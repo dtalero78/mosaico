@@ -1,4 +1,5 @@
 import 'server-only';
+import { registrarEventoContrato } from '@/lib/contrato-eventos';
 import { query, queryOne } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { requirePermission } from '@/lib/api-permissions';
@@ -113,6 +114,14 @@ export async function dejarContratoListo(session: any, opts: DejarListoOpts): Pr
         WHERE "_id" = $1`,
       [titularId, email]
     );
+  }
+
+  if (!yaEstabaListo || r.confirmados > 0) {
+    await registrarEventoContrato({
+      personaId: titularId, categoria: 'APROBACION', accion: 'Dejado listo para aprobación',
+      detalle: [`${r.confirmados} beneficiario(s) con el cupo tomado`, r.movidos.length ? `${r.movidos.length} cambiado(s) de horario` : null, r.sobrecupos ? `${r.sobrecupos} con sobrecupo autorizado` : null].filter(Boolean).join(' · '),
+      session,
+    });
   }
 
   const partes = [`${r.confirmados} beneficiario(s) con el cupo tomado`];

@@ -6,6 +6,7 @@ import { query, queryOne, transaction } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { assertPuedeInscribirBeneficiario } from '@/services/inscripcion-beneficiario.service';
 import { resolverCurso } from '@/services/curso-resolver.service';
+import { registrarEventoContrato } from '@/lib/contrato-eventos';
 import {
   insertBeneficiarioTx,
   incrementarCupoCurso,
@@ -128,6 +129,11 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
   const academica = await queryOne<any>(
     `SELECT "_id" FROM "ACADEMICA" WHERE "numeroId" = $1 LIMIT 1`, [b.numeroId]
   );
+
+  await registrarEventoContrato({
+    personaId: person._id, categoria: 'BENEFICIARIOS', accion: 'Beneficiario agregado',
+    detalle: [`Documento ${b.numeroId || '—'}`, curso.campaign, curso.tipoCurso, curso.salon && `Salón ${curso.salon}`].filter(Boolean).join(' · '), session,
+  });
 
   return successResponse({
     message: 'Beneficiario creado exitosamente',

@@ -107,7 +107,7 @@ export async function seguimientoContrato(personaId: string): Promise<Seguimient
     `SELECT "_id","tipoUsuario","titularId","numeroId","primerNombre","primerApellido","asesor",
             "fechaCreacion","_createdDate","plataforma","filial","origenMatricula","fullExecutive","modulo",
             "documentacion","reciboInscripcion","consentimientoDeclarativo","listoAprobacion","listoAprobacionPor",
-            "onHoldHistory","extensionHistory","suspenddata","cupoHistory",
+            "onHoldHistory","extensionHistory","suspenddata","cupoHistory","firmaSolicitadaEn","pdfEnviadoEn","contratoImpresoEn",
             "comentarios"::text AS "comentarios"
        FROM "PEOPLE"
       WHERE ${contrato ? `"contrato" = $1` : `"_id" = $1`}
@@ -186,6 +186,15 @@ export async function seguimientoContrato(personaId: string): Promise<Seguimient
     if (conTitular.includes(b) || accionesPorPersona.has(`${b._id}|Beneficiario agregado`)) continue;
     add({ id: `benef-${b._id}`, fecha: b._createdDate, categoria: 'BENEFICIARIOS', accion: 'Beneficiario agregado',
       detalle: `Documento ${b.numeroId || '—'}`, personaId: b._id });
+  }
+
+  // ── Envíos del contrato (marcas del checklist de cierre). Si ya hay un registro con quién
+  // lo hizo en CONTRATO_EVENTOS, ése manda; estas marcas cubren lo anterior y el envío del PDF
+  // que hace el servidor.
+  for (const [col, accion] of [['firmaSolicitadaEn', 'Firma solicitada por WhatsApp'], ['pdfEnviadoEn', 'PDF del contrato enviado'], ['contratoImpresoEn', 'Contrato impreso']] as const) {
+    if (titular[col] && !accionesPorPersona.has(`${titularId}|${accion}`)) {
+      add({ id: `${col}-${titularId}`, fecha: titular[col], categoria: 'FIRMA', accion, personaId: titularId });
+    }
   }
 
   // ── Documentos y recibo de inscripción ─────────────────────────────────────────

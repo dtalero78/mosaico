@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-permissions';
 import { AprobacionPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
+import { registrarCambioAprobacion, nombreDe } from '@/lib/aprobacion-audit';
 
 export const GET = handlerWithAuth(async (request, { params }) => {
   const result = await query(
@@ -43,8 +44,9 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
     throw new ValidationError(`estado must be one of: ${validEstados.join(', ')}`);
   }
 
-  const check = await query(`SELECT "_id" FROM "PEOPLE" WHERE "_id" = $1`, [params.id]);
+  const check = await query(`SELECT "_id", "aprobacion", "contrato", "tipoUsuario", "primerNombre", "primerApellido" FROM "PEOPLE" WHERE "_id" = $1`, [params.id]);
   if (check.rowCount === 0) throw new NotFoundError('Person');
+  const antes = check.rows[0];
 
   const estadoOperativo = APROBACION_TO_ESTADO[estadoFinal] ?? null;
 
@@ -56,6 +58,11 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
      WHERE "_id" = $3 RETURNING *`,
     [estadoFinal, estadoOperativo, params.id]
   );
+
+  await registrarCambioAprobacion({
+    personId: params.id, contrato: antes.contrato, tipoUsuario: antes.tipoUsuario, nombre: nombreDe(antes),
+    estadoAnterior: antes.aprobacion, estadoNuevo: estadoFinal, origen: 'PANTALLA_APROBACION', session,
+  });
 
   return successResponse({ message: `Aprobación actualizada a: ${estadoFinal}`, approval: result.rows[0] });
 });

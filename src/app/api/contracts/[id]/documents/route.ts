@@ -7,6 +7,7 @@ import { ComercialPermission, PersonPermission } from '@/types/permissions';
 import { spacesClient, SPACES_BUCKET } from '@/lib/spaces';
 import { keyDeNuestroBucket } from '@/services/recibo-inscripcion.service';
 import { DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { registrarEventoContrato } from '@/lib/contrato-eventos';
 
 /**
  * Documentación del contrato (PEOPLE.documentacion).
@@ -37,6 +38,8 @@ export const POST = handlerWithAuth(async (request, { params }, session) => {
      WHERE "_id" = $2`,
     [JSON.stringify([doc]), titularId]
   );
+
+  await registrarEventoContrato({ personaId: titularId, categoria: 'DOCUMENTOS', accion: 'Documento subido', detalle: nombre, datos: { url }, session });
 
   // Return updated list
   const updated = await queryOne(`SELECT "documentacion" FROM "PEOPLE" WHERE "_id" = $1`, [titularId]);
@@ -73,6 +76,11 @@ export const DELETE = handlerWithAuth(async (request, { params }, session) => {
       await spacesClient.send(new DeleteObjectCommand({ Bucket: SPACES_BUCKET, Key: key }));
     } catch { /* la BD es la fuente de verdad */ }
   }
+
+  await registrarEventoContrato({
+    personaId: titularId, categoria: 'DOCUMENTOS', accion: 'Documento eliminado',
+    detalle: docs.find((d: any) => d.url === url)?.nombre || null, datos: { url }, session,
+  });
 
   return successResponse({ documentacion: filtered });
 });

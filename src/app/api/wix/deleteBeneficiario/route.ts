@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { query } from '@/lib/postgres'
+import { registrarEventoContrato } from '@/lib/contrato-eventos'
 
 async function isAuthorized(request: NextRequest): Promise<boolean> {
   const wixSecret = request.headers.get('x-wix-secret');
@@ -68,6 +69,20 @@ export async function POST(request: NextRequest) {
         { success: false, error: 'Beneficiary not found' },
         { status: 404 }
       )
+    }
+
+    // Seguimiento: la persona ya no existe, así que se pasan sus datos.
+    {
+      const borrado = result.rows[0] as any
+      const sesion = await getServerSession(authOptions).catch(() => null)
+      await registrarEventoContrato({
+        personaId: id, categoria: 'BENEFICIARIOS', accion: 'Beneficiario eliminado',
+        detalle: `Documento ${borrado?.numeroId || '—'}`, session: sesion,
+        persona: {
+          titularId: borrado?.titularId ?? null, contrato: borrado?.contrato ?? null,
+          nombre: [borrado?.primerNombre, borrado?.primerApellido].filter(Boolean).join(' ').trim() || null, tipoUsuario: borrado?.tipoUsuario ?? null,
+        },
+      })
     }
 
     console.log('✅ [PostgreSQL] Beneficiary deleted successfully')

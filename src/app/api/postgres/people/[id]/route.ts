@@ -4,6 +4,8 @@ import { handler, handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { buildDynamicUpdate } from '@/lib/query-builder';
 import { normalizeTelefonoOrNull } from '@/lib/telefono-normalize';
+import { registrarEventoContrato, diffCampos } from '@/lib/contrato-eventos';
+import { registrarCambioAprobacion, nombreDe } from '@/lib/aprobacion-audit';
 
 /**
  * GET /api/postgres/people/[id]
@@ -273,7 +275,8 @@ const PEOPLE_UPDATE_FIELDS = [
  */
 export const PATCH = handlerWithAuth(async (
   request: Request,
-  { params }: { params: Record<string, string> }
+  { params }: { params: Record<string, string> },
+  session
 ) => {
   const personId = params.id;
   const body = await request.json();
@@ -298,7 +301,7 @@ export const PATCH = handlerWithAuth(async (
     estado: string | null;
     contrato: string | null;
   }>(
-    `SELECT "email", "numeroId", "tipoUsuario", "aprobacion", "estado", "contrato" FROM "PEOPLE" WHERE "_id" = $1`,
+    `SELECT * FROM "PEOPLE" WHERE "_id" = $1`,
     [personId]
   );
   if (!currentPerson) throw new NotFoundError('Person', personId);
@@ -408,6 +411,32 @@ export const PATCH = handlerWithAuth(async (
 
   const result = await queryOne(built.query, built.values);
   if (!result) throw new NotFoundError('Person', personId);
+
+  // ── Seguimiento del contrato ──
+  // Aprobación: queda en APROBACION_AUDIT (quién, cuándo y de qué estado a cuál).
+  if (body.aprobacion !== undefined && (body.aprobacion || null) !== (currentPerson.aprobacion || null)) {
+    await registrarCambioAprobacion({
+      personId, contrato: currentPerson.contrato, tipoUsuario: currentPerson.tipoUsuario, nombre: nombreDe(currentPerson),
+      estadoAnterior: currentPerson.aprobacion, estadoNuevo: body.aprobacion || null, origen: 'FICHA_ESTADO_TITULAR', session,
+    });
+  }
+  // Resto de los campos: edición de datos (con antes / después) y gestor de recaudo.
+  {
+    const sinSeguimiento = ['aprobacion', 'estado', 'estadoInactivo', 'gestorRecaudo', 'comentarios'];
+    const cambios = diffCampos(currentPerson as any, Object.fromEntries(Object.entries(body).filter(([k]) => PEOPLE_UPDATE_FIELDS.includes(k as any) && !sinSeguimiento.includes(k))));
+    if (Object.keys(cambios).length) {
+      await registrarEventoContrato({
+        personaId: personId, categoria: 'MATRICULA', accion: 'Datos editados',
+        detalle: Object.keys(cambios).join(', '), datos: { cambios }, session,
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'gestorRecaudo') && (body.gestorRecaudo || null) !== ((currentPerson as any).gestorRecaudo || null)) {
+      await registrarEventoContrato({
+        personaId: personId, categoria: 'RECAUDOS', accion: body.gestorRecaudo ? 'Gestor de recaudo asignado' : 'Gestor de recaudo quitado',
+        datos: { cambios: { gestorRecaudo: { antes: (currentPerson as any).gestorRecaudo ?? null, despues: body.gestorRecaudo ?? null } } }, session,
+      });
+    }
+  }
 
   // Parse JSONB fields
   const parsedPerson = parseJsonbFields(result, [
