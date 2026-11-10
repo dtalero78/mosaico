@@ -7,6 +7,8 @@ import { query, queryOne } from '@/lib/postgres';
 import { getSessionWindow, EXPIRED_MESSAGE, ATTENDANCE_OPEN_MIN } from '@/lib/session-window';
 import { estaAutorizado } from '@/services/autorizacion-gestion.service';
 import { guiaIdDeSesion } from '@/services/guia-sesion.service';
+import { tienePermiso } from '@/lib/api-permissions';
+import { AcademicoPermission } from '@/types/permissions';
 
 // Criterios de evaluación de la sesión (además de asistencia/participacion, que se
 // reusan como HE_ASISTENCIA / DA_PARTICIPACION).
@@ -45,7 +47,10 @@ const UPDATABLE_FIELDS = [
  */
 export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const body = await request.json();
-  const sessionRole = (session?.user as any)?.role;
+  // Quien tiene el permiso de corregir asistencia se trata como Coordinación (sin ventana).
+  const sessionRole = (await tienePermiso(session, AcademicoPermission.ASISTENCIA_CORREGIR))
+    ? 'COORDINADOR_ACADEMICO'
+    : (session?.user as any)?.role;
 
   const { idEstudiante, idEvento, asistencia, participacion, noAprobo, calificacion, comentarios, advisorAnotaciones, actividadPropuesta, escusa, justificaescusa } = body;
 

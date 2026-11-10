@@ -10,6 +10,7 @@ import { formatEventTimeRange } from '@/lib/event-duration'
 import { es } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 import { PermissionGuard } from '@/components/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
 import { AcademicoPermission } from '@/types/permissions'
 import SessionTabs from '@/components/session/SessionTabs'
 import SessionActividadIA from '@/components/session/SessionActividadIA'
@@ -132,11 +133,13 @@ export default function SesionPage() {
   // Estado de la ventana — visible para todos los hijos. Coordinator bypassea
   // todo (canMark/canRegister=true, isExpired=false). Si aún no carga el evento,
   // todo cae a defaults seguros (no se renderizan acciones hasta tener fecha).
+  const { hasPermission } = usePermissions()
+  const puedeCorregirAsistencia = hasPermission(AcademicoPermission.ASISTENCIA_CORREGIR as any)
   const windowState = useMemo(
     // `autorizadoGestion` reabre los controles cuando el plazo ya venció; el
     // servidor lo vuelve a comprobar en cada guardado.
-    () => getSessionWindow(evento?.dia ?? null, role, now, evento?.autorizadoGestion === true),
-    [evento?.dia, role, now, evento?.autorizadoGestion],
+    () => getSessionWindow(evento?.dia ?? null, puedeCorregirAsistencia ? 'COORDINADOR_ACADEMICO' : role, now, evento?.autorizadoGestion === true),
+    [evento?.dia, role, puedeCorregirAsistencia, now, evento?.autorizadoGestion],
   )
 
   useEffect(() => {

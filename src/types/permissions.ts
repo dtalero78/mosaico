@@ -168,6 +168,9 @@ export enum AcademicoPermission {
   // Botón "Actividad IA" de /sesion/[id]: genera la actividad del grupo y la
   // envía por WhatsApp a los apoderados de los inscritos.
   SESION_ACTIVIDAD_IA = 'ACADEMICO.SESION.ACTIVIDAD_IA',
+  // Marcar/corregir asistencia SIN la ventana del guía (antes de +15 min, pasadas las
+  // 24 h, o con la sesión ya cerrada). Sin él, sólo el guía del evento, dentro de su ventana.
+  ASISTENCIA_CORREGIR = 'ACADEMICO.ASISTENCIA.CORREGIR',
 
   // Agenda Académica
   VER = 'ACADEMICO.ACADEMICA.VER',

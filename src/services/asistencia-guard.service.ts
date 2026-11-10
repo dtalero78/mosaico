@@ -7,8 +7,7 @@ import { guiaIdDeSesion } from '@/services/guia-sesion.service';
 import { tienePermiso } from '@/lib/api-permissions';
 import { StudentPermission, AcademicoPermission } from '@/types/permissions';
 
-// El asistente académico corrige asistencia desde la ficha igual que Coordinación.
-const BYPASS = ['COORDINADOR_ACADEMICO', 'ASISTENTE_ACADEMICO', 'SUPER_ADMIN', 'ADMIN'];
+const BYPASS = ['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN'];
 
 /**
  * Barrera común para TODA ruta que escribe asistencia de un agendamiento
@@ -23,7 +22,8 @@ const BYPASS = ['COORDINADOR_ACADEMICO', 'ASISTENTE_ACADEMICO', 'SUPER_ADMIN', '
 export async function assertPuedeMarcarAsistencia(session: any, bookingId: string): Promise<void> {
   const role = String(session?.user?.role || '').toUpperCase();
   const email = session?.user?.email;
-  const esAdmin = BYPASS.includes(role);
+  // Sin ventana ni bloqueo por sesión cerrada: Coordinación/Admin o quien tenga el permiso.
+  const esAdmin = BYPASS.includes(role) || await tienePermiso(session, AcademicoPermission.ASISTENCIA_CORREGIR);
 
   const b = await queryOne<{ dia: Date | null; advisor: string | null; cerrada: boolean | null }>(
     `SELECT c."dia", c."advisor", c."sesionCerrada" AS "cerrada", c."_id" AS "eventoId"

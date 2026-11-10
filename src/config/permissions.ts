@@ -742,6 +742,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Cuando el evento está lleno, permite agendar igual: sale un modal con el cupo y los inscritos, se marca "Autorizo el sobrecupo" y el agendamiento guarda quién lo autorizó. Sin este permiso el evento lleno se rechaza. No aplica al alumno, que nunca puede pasarse del cupo.',
   },
   {
+    code: AcademicoPermission.ASISTENCIA_CORREGIR,
+    module: Module.ACADEMICO,
+    section: 'Sesión',
+    name: 'Marcar/corregir asistencia sin ventana',
+    description: 'Permite marcar o corregir la asistencia (y sus métricas) de cualquier sesión sin las restricciones del guía: antes de los 15 minutos del inicio, pasadas las 24 horas y con la sesión ya cerrada. Rige en la sesión, en la ficha del alumno y en las rutas de asistencia. Sin este permiso sólo el guía del evento marca, dentro de su ventana.',
+  },
+  {
     code: AcademicoPermission.SESION_ACTIVIDAD_IA,
     module: Module.ACADEMICO,
     section: 'Sesión',
