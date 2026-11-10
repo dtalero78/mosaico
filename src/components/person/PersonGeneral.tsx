@@ -61,7 +61,7 @@ export default function PersonGeneral({ person, isSuspendida }: PersonGeneralPro
         {/* Seguimiento del contrato: bitácora de titular + beneficiarios (carga al abrir). */}
         {hasPermission(PersonPermission.SEGUIMIENTO as any) && (
           <button type="button" onClick={() => setShowSeguimiento(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-primary-700 border border-primary-300 rounded-md hover:bg-primary-50 text-sm font-medium"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-400 text-yellow-950 border border-yellow-500 rounded-md hover:bg-yellow-500 text-sm font-medium"
             title="Ver todo lo que ha pasado con el contrato: quién y cuándo">
             <ClockIcon className="h-4 w-4" />
             Seguimiento
