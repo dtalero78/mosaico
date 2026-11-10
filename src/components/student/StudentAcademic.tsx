@@ -737,7 +737,9 @@ export default function StudentAcademic({ student, classes: initialClasses, view
         }
       } else {
         console.error('❌ Error HTTP:', response.status)
-        alert('Error al guardar los cambios')
+        // Muestra el motivo real (ventana de asistencia, sesión cerrada, permiso…).
+        const err = await response.json().catch(() => null)
+        alert('Error al guardar los cambios' + (err?.error ? ': ' + err.error : ''))
       }
     } catch (error) {
       console.error('❌ Error al guardar cambios:', error)
