@@ -7,7 +7,8 @@ import { guiaIdDeSesion } from '@/services/guia-sesion.service';
 import { tienePermiso } from '@/lib/api-permissions';
 import { StudentPermission, AcademicoPermission } from '@/types/permissions';
 
-const BYPASS = ['COORDINADOR_ACADEMICO', 'SUPER_ADMIN', 'ADMIN'];
+// El asistente académico corrige asistencia desde la ficha igual que Coordinación.
+const BYPASS = ['COORDINADOR_ACADEMICO', 'ASISTENTE_ACADEMICO', 'SUPER_ADMIN', 'ADMIN'];
 
 /**
  * Barrera común para TODA ruta que escribe asistencia de un agendamiento
@@ -46,14 +47,14 @@ export async function assertPuedeMarcarAsistencia(session: any, bookingId: strin
   }
   if (!b.dia) return;
 
-  let ws = getSessionWindow(b.dia, role, new Date());
+  let ws = getSessionWindow(b.dia, esAdmin ? 'COORDINADOR_ACADEMICO' : role, new Date());
   if (!ws.canMarkAttendance && ws.isExpired && esGuiaDelEvento) {
     const { queryOne: q } = await import('@/lib/postgres');
     const ev = await q<{ id: string }>(
       `SELECT c."_id" AS id FROM "ACADEMICA_BOOKINGS" b LEFT JOIN "CALENDARIO" c ON (c."_id" = b."eventoId" OR c."_id" = b."idEvento") WHERE b."_id" = $1`,
       [bookingId],
     );
-    if (ev?.id && await estaAutorizado('SESION', ev.id)) ws = getSessionWindow(b.dia, role, new Date(), true);
+    if (ev?.id && await estaAutorizado('SESION', ev.id)) ws = getSessionWindow(b.dia, esAdmin ? 'COORDINADOR_ACADEMICO' : role, new Date(), true);
   }
   if (!ws.canMarkAttendance) {
     if (ws.isExpired) throw new ValidationError(EXPIRED_MESSAGE);
