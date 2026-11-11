@@ -67,6 +67,8 @@ export interface RegistroLibro {
   suscripcionPago: boolean; prixus: boolean; factura: string | null; listo: boolean;
   /** Estado mostrado: el "Estado Actual" de la ficha, o "Pendiente aprobación" / "Sin firmar" si aún no tiene estado. */
   aprobacion: string; aprobacionFicha: string | null; firmado: boolean;
+  /** Lo que falta de la carpeta del contrato: documentos anexos, recibo de inscripción, PDF en Drive. */
+  faltantes: ('DOCUMENTOS' | 'RECIBO' | 'DRIVE')[];
   estado: string | null; modulo: boolean; extemporanea: boolean; migrado: boolean; observaciones: string | null; pais: string | null;
   titular: { nombre: string; documento: string; telefono: string; correo: string; direccion: string; ciudad: string };
   referencias: { nombre: string; telefono: string; parentesco: string }[];
@@ -148,6 +150,9 @@ async function construir(
               p."fullExecutive", p."jefeGrupo", p."gerente", p."gerenteDivision", p."salesManager", p."filial",
               p."gestionContratoListo", p."altaMigracion", p."origenMatricula", p."suscripcionPago", p."prixus", p."tipoPlanId", p."modulo", p."extemporanea",
               (COALESCE(p."hashConsentimiento",'') <> '') AS firmado,
+              (CASE WHEN jsonb_typeof(p."documentacion") = 'array' THEN jsonb_array_length(p."documentacion") ELSE 0 END) > 0 AS con_docs,
+              (p."reciboInscripcion" IS NOT NULL) AS con_recibo,
+              (p."driveArchivadoEn" IS NOT NULL) AS con_drive,
               to_char(p."fechaCreacion" AT TIME ZONE (${TZ_SQL}), 'YYYY-MM-DD"T"HH24:MI') AS creado_local
          FROM "PEOPLE" p
         WHERE p."tipoUsuario" = 'TITULAR' AND COALESCE(p."contrato",'') <> '' AND p."contrato" NOT LIKE 'PRB-%'
@@ -244,6 +249,11 @@ async function construir(
       aprobacion: estadoLibro(t.aprobacion, t.firmado === true),
       aprobacionFicha: t.aprobacion || null,
       firmado: t.firmado === true,
+      faltantes: [
+        ...(t.con_docs === true ? [] : ['DOCUMENTOS' as const]),
+        ...(t.con_recibo === true ? [] : ['RECIBO' as const]),
+        ...(t.con_drive === true ? [] : ['DRIVE' as const]),
+      ],
       estado: t.estado || null, modulo: t.modulo === true, extemporanea: t.extemporanea === true, migrado: t.altaMigracion === true,
       observaciones: t.observacionesContrato || null,
       pais: t.plataforma || null,

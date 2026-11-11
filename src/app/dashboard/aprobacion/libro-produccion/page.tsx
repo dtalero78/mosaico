@@ -42,7 +42,7 @@ interface Registro {
   plan: number | null; tipoPlan: string | null; inscripcionPagada: number | null; valorCuota: number | null
   saldo: number | null; totalPlan: number | null; fechaPrimeraCuota: string | null
   suscripcionPago: boolean; prixus: boolean; factura: string | null
-  aprobacion: string; aprobacionFicha: string | null; firmado: boolean; listo?: boolean
+  aprobacion: string; aprobacionFicha: string | null; firmado: boolean; listo?: boolean; faltantes?: ('DOCUMENTOS' | 'RECIBO' | 'DRIVE')[]
   estado: string | null; modulo: boolean; extemporanea: boolean; migrado?: boolean; observaciones: string | null; pais: string | null
   titular: { nombre: string; documento: string; telefono: string; correo: string; direccion: string; ciudad: string }
   referencias: { nombre: string; telefono: string; parentesco: string }[]
@@ -63,7 +63,13 @@ const estadoCls = (a: string | null) => {
   return 'bg-red-100 text-red-800'
 }
 /** Por qué el contrato está en "Por resolver" (lo que le falta para pasar al Libro). */
+const FALTANTE_TXT = { DOCUMENTOS: 'Sin documentos', RECIBO: 'Sin recibo', DRIVE: 'Sin contrato en Drive' } as const
 const motivoPorResolver = (r: Registro): string => {
+  const base = motivoBase(r)
+  const f = (r.faltantes || []).map(k => FALTANTE_TXT[k])
+  return f.length ? `${base} · ${f.join(' · ')}` : base
+}
+const motivoBase = (r: Registro): string => {
   const a = String(r.aprobacionFicha || '').trim().toLowerCase()
   if (a.startsWith('rechaz')) return 'Rechazado'
   if (a.startsWith('devuel')) return 'Devuelto (hay que corregirlo y volver a aprobar)'

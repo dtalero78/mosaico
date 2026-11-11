@@ -1,5 +1,5 @@
 import 'server-only';
-import { queryOne, queryMany } from '@/lib/postgres';
+import { query, queryOne, queryMany } from '@/lib/postgres';
 import { ValidationError } from '@/lib/errors';
 import { htmlToPdfBuffer } from '@/lib/pdf';
 import { putBuffer, deleteObject, getPresignedGetUrl } from '@/lib/spaces';
@@ -26,6 +26,19 @@ const API2PDF_KEY = process.env.API2PDF_KEY || '9450b12a-4c5f-4e8e-a605-2b61fe48
 const BSL_UPLOAD_URL = 'https://bsl-utilidades-yp78a.ondigitalocean.app/subir-pdf-directo';
 
 /**
+ * Deja constancia (PEOPLE.driveArchivadoEn) de que el PDF del contrato quedó en el Drive propio:
+ * el Libro de Producción lo usa para el motivo "Sin Drive". `filenameBase` = MOS_<contrato>.
+ * Best-effort: un fallo aquí nunca debe romper el archivado.
+ */
+async function marcarContratoEnDrive(filenameBase: string): Promise<void> {
+  const m = /^MOS_(.+)$/.exec(filenameBase);
+  if (!m || m[1].startsWith('SIN-CONTRATO')) return;
+  try {
+    await query(`UPDATE "PEOPLE" SET "driveArchivadoEn" = NOW() WHERE "tipoUsuario" = 'TITULAR' AND "contrato" = $1`, [m[1]]);
+  } catch (e) { console.error('marcarContratoEnDrive:', e); }
+}
+
+/**
  * Archiva un PDF ya generado (dado por su URL de API2PDF) en el destino vigente.
  * Sólo descarga los bytes cuando hay Drive configurado (para no gastar ancho de
  * banda cuando aún se usa BSL, que sólo necesita la URL). `filenameBase` =
@@ -40,6 +53,7 @@ export async function archiveContractPdfFromUrl(
     if (!res.ok) throw new Error(`descarga del PDF falló: ${res.status}`);
     const bytes = Buffer.from(await res.arrayBuffer());
     const up = await uploadPdfToDrive(bytes, `${filenameBase}.pdf`);
+    await marcarContratoEnDrive(filenameBase);
     return { via: 'drive', driveUpload: up, webViewLink: up.webViewLink };
   }
   // BSL sólo acepta una URL (no bytes) → le pasamos la de API2PDF directamente.
@@ -162,6 +176,7 @@ export async function regenerarContratoEnDrive(titularId: string): Promise<Regen
 
   if (isDriveConfigured()) {
     const driveUpload = await uploadPdfToDrive(pdf, `${baseName}.pdf`);
+    await marcarContratoEnDrive(baseName);
     return { destino: 'DRIVE_MOSAICO', archivo: `${baseName}.pdf`, driveUpload, pdfBytes: pdf.length, contrato: built.contrato };
   }
 
