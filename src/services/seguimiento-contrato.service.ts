@@ -40,6 +40,8 @@ export interface EventoSeguimiento {
   cambios?: Record<string, { antes: any; despues: any }> | null;
   /** Etiqueta resaltada de un comentario (ver ETIQUETAS_COMENTARIO). */
   etiqueta?: EtiquetaComentario | null;
+  /** Cambio automático del sistema (sin usuario). */
+  sistema?: boolean;
 }
 
 /**
@@ -282,10 +284,11 @@ export async function seguimientoContrato(personaId: string): Promise<Seguimient
 
   // ── Aprobación ─────────────────────────────────────────────────────────────────
   for (const a of aud) {
-    add({ id: a._id, fecha: a._createdDate, categoria: 'APROBACION',
+    const sistema = a.origen === 'SISTEMA' || String(a.usuarioEmail || '').toLowerCase() === 'sistema';
+    add({ id: a._id, fecha: a._createdDate, categoria: 'APROBACION', sistema,
       accion: `${a.estadoAnterior || 'Sin estado'} → ${a.estadoNuevo || 'Sin estado'}`,
       detalle: [a.origen === 'APROBAR_CASCADA' ? 'En cascada al aprobar el contrato' : null, a.motivo].filter(Boolean).join(' · ') || null,
-      usuario: a.usuarioNombre || a.usuarioEmail, usuarioEmail: a.usuarioEmail,
+      usuario: sistema ? 'Sistema (automático)' : (a.usuarioNombre || a.usuarioEmail), usuarioEmail: a.usuarioEmail,
       personaId: a.personId, personaNombre: porId.has(a.personId) ? undefined : a.nombre, tipoUsuario: a.tipoUsuario });
   }
 

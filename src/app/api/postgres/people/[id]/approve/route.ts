@@ -3,7 +3,8 @@ import { handlerWithAuth, successResponse } from '@/lib/api-helpers';
 import { requirePermission } from '@/lib/api-permissions';
 import { PersonPermission } from '@/types/permissions';
 import { query, queryOne } from '@/lib/postgres';
-import { NotFoundError, ConflictError } from '@/lib/errors';
+import { NotFoundError, ConflictError, ValidationError } from '@/lib/errors';
+import { exigeComentarioEstado, comentarioValido, mensajeComentarioEstado } from '@/lib/comentario-aprobacion';
 import { approveOnePerson, approveContract } from '@/services/approval.service';
 
 /**
@@ -44,11 +45,19 @@ export const POST = handlerWithAuth(async (
     throw new ConflictError('La persona ya está aprobada');
   }
 
+  // Comentario (lib/comentario-aprobacion): aprobar el contrato (titular) no lo pide —
+  // queda quién, fecha y hora—; aprobar un BENEFICIARIO sí (adición o reemplazo).
+  const body = await _request.json().catch(() => ({} as any));
+  const motivo = String(body?.motivo ?? '').trim() || null;
+  if (exigeComentarioEstado('Aprobado', person.tipoUsuario) && !comentarioValido(motivo)) {
+    throw new ValidationError(mensajeComentarioEstado('Aprobado'));
+  }
+
   const contrato = person.contrato;
 
   // ─── TITULAR: aprobación en cascada (titular + beneficiarios) ───
   if (person.tipoUsuario === 'TITULAR' && contrato) {
-    const { mainResult, beneficiaryResults, skippedBeneficiaries, clasesCompletadas } = await approveContract(personId, { session });
+    const { mainResult, beneficiaryResults, skippedBeneficiaries, clasesCompletadas } = await approveContract(personId, { session, motivo });
     return successResponse({
       message: skippedBeneficiaries.length
         ? `Titular aprobado. ${beneficiaryResults.length} beneficiario(s) aprobado(s); ${skippedBeneficiaries.length} sin aprobar por no tener salón.`
@@ -75,7 +84,7 @@ export const POST = handlerWithAuth(async (
   }
 
   // Approve the person themselves (beneficiario suelto)
-  const mainResult = await approveOnePerson(personId, contrato, null, { session });
+  const mainResult = await approveOnePerson(personId, contrato, null, { session, motivo });
 
   // ─── BENEFICIARIO: hereda inicioContrato del titular (al titular NO se le toca) ───
   // Se mantiene en la respuesta por compatibilidad con el frontend; hoy siempre false.

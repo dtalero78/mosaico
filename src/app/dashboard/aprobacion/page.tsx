@@ -331,13 +331,15 @@ export default function AprobacionPage() {
   }
 
   // Cambiar estado de aprobación
-  const updateAprobacion = async (contratoId: string, nuevoEstado: string) => {
+  // `motivo`: obligatorio salvo al aprobar el contrato (lib/comentario-aprobacion; el servidor lo exige).
+  const updateAprobacion = async (contratoId: string, nuevoEstado: string, motivo?: string) => {
     try {
       const response = await fetch(`/api/postgres/approvals/${contratoId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          estado: nuevoEstado === 'Aprobado' ? 'APROBADO' : 'RECHAZADO'
+          estado: nuevoEstado === 'Aprobado' ? 'APROBADO' : 'RECHAZADO',
+          motivo,
         })
       })
 

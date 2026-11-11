@@ -21,6 +21,7 @@ interface Evento {
   usuario?: string | null; usuarioEmail?: string | null; personaId?: string | null; personaNombre?: string | null
   tipoUsuario?: string | null; cambios?: Record<string, { antes: any; despues: any }> | null
   etiqueta?: Etiqueta | null
+  sistema?: boolean
 }
 type Etiqueta = 'SOBRE_APROBACION' | 'PARA_APROBACION'
 interface Seguimiento {
@@ -59,12 +60,16 @@ const fmtFecha = (e: Evento) => {
   }
   return d.toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
+/** Filtro "tipo de mensaje": '' = todos; una categoría; una etiqueta ★; o 'SISTEMA' (automáticos). */
+const coincideTipo = (e: Evento, t: string) =>
+  !t || (t in ETIQUETAS ? e.etiqueta === t : t === 'SISTEMA' ? !!e.sistema : e.categoria === t)
 const valor = (v: any) => (v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v))
 
 export default function SeguimientoContratoModal({ personaId, onClose }: { personaId: string; onClose: () => void }) {
   const [data, setData] = useState<Seguimiento | null>(null)
   const [loading, setLoading] = useState(true)
-  const [cats, setCats] = useState<string[]>([])
+  // Tipo de mensaje (uno solo): una categoría, una etiqueta (★) o los automáticos del sistema.
+  const [tipo, setTipo] = useState('')
   const [persona, setPersona] = useState('')
   const [buscar, setBuscar] = useState('')
 
@@ -85,12 +90,12 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
 
-  const [tags, setTags] = useState<Etiqueta[]>([])
   const conteo = useMemo(() => {
     const m: Record<string, number> = {}
     for (const e of data?.eventos || []) {
       m[e.categoria] = (m[e.categoria] || 0) + 1
       if (e.etiqueta) m[e.etiqueta] = (m[e.etiqueta] || 0) + 1
+      if (e.sistema) m.SISTEMA = (m.SISTEMA || 0) + 1
     }
     return m
   }, [data])
@@ -98,12 +103,11 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
   const visibles = useMemo(() => {
     const q = buscar.trim().toLowerCase()
     return (data?.eventos || []).filter(e =>
-      (!cats.length || cats.includes(e.categoria)) &&
-      (!tags.length || (e.etiqueta && tags.includes(e.etiqueta))) &&
+      coincideTipo(e, tipo) &&
       (!persona || e.personaId === persona) &&
       (!q || [e.accion, e.detalle, e.usuario, e.personaNombre, e.etiqueta && ETIQUETAS[e.etiqueta]?.l]
         .some(x => x && String(x).toLowerCase().includes(q))))
-  }, [data, cats, tags, persona, buscar])
+  }, [data, tipo, persona, buscar])
 
   // ── Comentar (permiso PERSON.INFO.SEGUIMIENTO_COMENTAR) ──
   const { hasPermission } = usePermissions()
@@ -128,7 +132,7 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
     }
   }
 
-  const toggleCat = (c: string) => setCats(s => (s.includes(c) ? s.filter(x => x !== c) : [...s, c]))
+  const elegirTipo = (t: string) => setTipo(s => (s === t ? '' : t))
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 p-2 sm:p-6 text-left text-gray-900 normal-case font-normal" onClick={onClose}>
@@ -153,21 +157,34 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
           <div className="space-y-2 border-b border-gray-100 bg-gray-50/60 px-5 py-2.5">
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(CATEGORIAS).filter(([k]) => conteo[k]).map(([k, c]) => (
-                <button key={k} type="button" onClick={() => toggleCat(k)}
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 transition ${cats.includes(k) ? `${c.chip} ring-current` : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-100'}`}>
+                <button key={k} type="button" onClick={() => elegirTipo(k)}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 transition ${tipo === k ? `${c.chip} ring-current` : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-100'}`}>
                   {c.l} <span className="opacity-60">{conteo[k]}</span>
                 </button>
               ))}
               {(Object.keys(ETIQUETAS) as Etiqueta[]).filter(k => conteo[k]).map(k => (
-                <button key={k} type="button" onClick={() => setTags(s => (s.includes(k) ? s.filter(x => x !== k) : [...s, k]))}
+                <button key={k} type="button" onClick={() => elegirTipo(k)}
                   title={`Comentarios de ${ETIQUETAS[k].quien}`}
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 transition ${tags.includes(k) ? `${ETIQUETAS[k].chip} ring-current` : 'bg-white text-gray-700 ring-gray-300 hover:bg-gray-100'}`}>
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 transition ${tipo === k ? `${ETIQUETAS[k].chip} ring-current` : 'bg-white text-gray-700 ring-gray-300 hover:bg-gray-100'}`}>
                   ★ {ETIQUETAS[k].l} <span className="opacity-70">{conteo[k]}</span>
                 </button>
               ))}
-              {(cats.length > 0 || tags.length > 0) && <button type="button" onClick={() => { setCats([]); setTags([]) }} className="px-1 text-xs text-gray-500 hover:underline">Quitar</button>}
+              {conteo.SISTEMA > 0 && (
+                <button type="button" onClick={() => elegirTipo('SISTEMA')} title="Cambios automáticos del sistema"
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 transition ${tipo === 'SISTEMA' ? 'bg-gray-700 text-white ring-current' : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-100'}`}>
+                  ⚙ Sistema <span className="opacity-60">{conteo.SISTEMA}</span>
+                </button>
+              )}
+              {tipo && <button type="button" onClick={() => setTipo('')} className="px-1 text-xs text-gray-500 hover:underline">Quitar</button>}
             </div>
             <div className="flex flex-wrap gap-2">
+              <select value={tipo} onChange={e => setTipo(e.target.value)} title="Ver solo un tipo de mensaje"
+                className={`rounded-md border px-2 py-1 text-xs ${tipo ? 'border-indigo-400 bg-indigo-50 font-semibold text-indigo-800' : 'border-gray-300 bg-white'}`}>
+                <option value="">Todos los tipos de mensaje</option>
+                {Object.entries(CATEGORIAS).filter(([k]) => conteo[k]).map(([k, c]) => <option key={k} value={k}>{c.l} ({conteo[k]})</option>)}
+                {(Object.keys(ETIQUETAS) as Etiqueta[]).filter(k => conteo[k]).map(k => <option key={k} value={k}>★ {ETIQUETAS[k].l} ({conteo[k]})</option>)}
+                {conteo.SISTEMA > 0 && <option value="SISTEMA">⚙ Automáticos del sistema ({conteo.SISTEMA})</option>}
+              </select>
               <select value={persona} onChange={e => setPersona(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs">
                 <option value="">Todas las personas</option>
                 {data.personas.map(p => <option key={p._id} value={p._id}>{p.nombre} · {p.tipoUsuario === 'TITULAR' ? 'Titular' : 'Beneficiario'}</option>)}

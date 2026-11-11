@@ -7,6 +7,7 @@ import { normalizeTelefonoOrNull } from '@/lib/telefono-normalize';
 import { registrarEventoContrato, diffCampos } from '@/lib/contrato-eventos';
 import { vigenciaValida, mensajeVigenciaInvalida } from '@/lib/vigencia-modulo';
 import { registrarCambioAprobacion, nombreDe } from '@/lib/aprobacion-audit';
+import { exigeComentarioEstado, comentarioValido, mensajeComentarioEstado } from '@/lib/comentario-aprobacion';
 
 /**
  * GET /api/postgres/people/[id]
@@ -321,6 +322,16 @@ export const PATCH = handlerWithAuth(async (
     }
   }
 
+  // ── Comentario del cambio de aprobación (lib/comentario-aprobacion) ──
+  // Todo cambio manual a un estado distinto de Aprobado exige el motivo; queda en
+  // APROBACION_AUDIT. `aprobacionMotivo` no es columna de PEOPLE: se saca del body.
+  const aprobacionMotivo = String(body.aprobacionMotivo ?? '').trim();
+  delete body.aprobacionMotivo;
+  if (body.aprobacion !== undefined && (body.aprobacion || null) !== (currentPerson.aprobacion || null)
+      && exigeComentarioEstado(body.aprobacion || null, currentPerson.tipoUsuario) && !comentarioValido(aprobacionMotivo)) {
+    throw new ValidationError(mensajeComentarioEstado(body.aprobacion || null));
+  }
+
   if (body.aprobacion && currentPerson.aprobacion === 'Aprobado') {
     const blockedPostApproval = ['Contrato nulo', 'Devuelto', 'Rechazado'];
     if (blockedPostApproval.includes(body.aprobacion)) {
@@ -426,7 +437,8 @@ export const PATCH = handlerWithAuth(async (
   if (body.aprobacion !== undefined && (body.aprobacion || null) !== (currentPerson.aprobacion || null)) {
     await registrarCambioAprobacion({
       personId, contrato: currentPerson.contrato, tipoUsuario: currentPerson.tipoUsuario, nombre: nombreDe(currentPerson),
-      estadoAnterior: currentPerson.aprobacion, estadoNuevo: body.aprobacion || null, origen: 'FICHA_ESTADO_TITULAR', session,
+      estadoAnterior: currentPerson.aprobacion, estadoNuevo: body.aprobacion || null, origen: 'FICHA_ESTADO_TITULAR',
+      motivo: aprobacionMotivo || null, session,
     });
   }
   // Resto de los campos: edición de datos (con antes / después) y gestor de recaudo.

@@ -16,6 +16,8 @@ import { normalizeTelefono } from '@/lib/telefono-normalize'
 import { ofreceReactivar, fueInactivadoPorAdmin, type TipoSalidaCupo } from '@/lib/tipo-salida-cupo'
 import { estadoContratoTitular, estadoContratoBadgeClass, ESTADO_EN_GESTION } from '@/lib/estado-contrato'
 import { esAprobado } from '@/lib/estados'
+import ComentarioEstadoModal from '@/components/common/ComentarioEstadoModal'
+import { exigeComentarioEstado, comentarioValido, MIN_COMENTARIO_ESTADO } from '@/lib/comentario-aprobacion'
 
 interface PersonAdminProps {
   person: Person
@@ -149,6 +151,9 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
   const [isDeletingBeneficiary, setIsDeletingBeneficiary] = useState(false)
   const [showEstadoModal, setShowEstadoModal] = useState(false)
   const [pendingEstado, setPendingEstado] = useState<string | null>(null)
+  const [estadoMotivo, setEstadoMotivo] = useState('')
+  // Aprobar un beneficiario exige comentario (adición o reemplazo) — lib/comentario-aprobacion.
+  const [benefAprobar, setBenefAprobar] = useState<{ id: string; nombre: string } | null>(null)
   const [originalEstado, setOriginalEstado] = useState<string>(person.aprobacion || 'Pendiente')
   const [isUpdatingEstado, setIsUpdatingEstado] = useState(false)
   const [isTogglingContract, setIsTogglingContract] = useState(false)
@@ -269,7 +274,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
     }
   }
 
-  const handleApproveSpecificBeneficiary = async (beneficiaryId: string) => {
+  const handleApproveSpecificBeneficiary = async (beneficiaryId: string, motivo: string) => {
     if (!beneficiaryId) return
 
     setApprovingBeneficiaries(prev => new Set(prev).add(beneficiaryId))
@@ -279,6 +284,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
       const response = await fetch(`/api/postgres/people/${beneficiaryId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo }),
       })
 
       const data = await response.json()
@@ -503,6 +509,8 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
 
   const confirmEstadoChange = async () => {
     if (!pendingEstado) return
+    // Cualquier estado distinto de Aprobado exige el motivo (lib/comentario-aprobacion).
+    if (exigeComentarioEstado(pendingEstado, person.tipoUsuario) && !comentarioValido(estadoMotivo)) return
 
     console.log('=== CONFIRMACIÓN DE CAMBIO DE ESTADO INICIADA ===')
     console.log('Estado a aplicar:', pendingEstado)
@@ -526,7 +534,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
         response = await fetch(`/api/postgres/people/${person._id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ aprobacion: pendingEstado })
+          body: JSON.stringify({ aprobacion: pendingEstado, aprobacionMotivo: estadoMotivo.trim() || undefined })
         })
         data = await response.json()
       }
@@ -536,6 +544,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
         setOriginalEstado(pendingEstado as any)
         setShowEstadoModal(false)
         setPendingEstado(null)
+        setEstadoMotivo('')
 
         // Show WhatsApp feedback for approve action
         if (pendingEstado === 'Aprobado') {
@@ -609,6 +618,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
 
   const cancelEstadoChange = () => {
     console.log('=== CANCELANDO CAMBIO DE ESTADO ===')
+    setEstadoMotivo('')
 
     // Restaurar estado original
     setSelectedEstado(originalEstado as any)
@@ -1353,7 +1363,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                   {(!isBeneficiaryApproved(beneficiary) || approvingBeneficiaries.has(beneficiary._id)) && (
                     <PermissionGuard permission={PersonPermission.APROBAR}>
                       <button
-                        onClick={() => handleApproveSpecificBeneficiary(beneficiary._id)}
+                        onClick={() => setBenefAprobar({ id: beneficiary._id, nombre: `${(beneficiary as any).nombre || ''} ${(beneficiary as any).apellido || ''}`.trim() })}
                         disabled={approvingBeneficiaries.has(beneficiary._id)}
                         className="inline-flex items-center px-4 py-1.5 border border-black text-sm font-medium rounded text-black bg-white hover:bg-black hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         title="Aprobar solo a este beneficiario"
@@ -2033,6 +2043,17 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
         </div>
       )}
 
+      {/* Aprobar beneficiario — comentario obligatorio (adición o reemplazo) */}
+      {benefAprobar && (
+        <ComentarioEstadoModal
+          titulo={`Aprobar beneficiario: ${benefAprobar.nombre || 'beneficiario'}`}
+          descripcion="Indica el motivo: adición de un beneficiario nuevo, reemplazo de uno existente (¿a quién reemplaza?), etc."
+          estadoNuevo="Aprobado"
+          onClose={() => setBenefAprobar(null)}
+          onConfirm={async (c) => { const b = benefAprobar; setBenefAprobar(null); await handleApproveSpecificBeneficiary(b.id, c) }}
+        />
+      )}
+
       {/* Estado Change Confirmation Modal */}
       {showEstadoModal && pendingEstado && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -2069,6 +2090,25 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
                   que el contrato no tenga OnHold o extensión en curso antes de confirmar.
                 </div>
               )}
+              {pendingEstado === 'Aprobado' ? (
+                <p className="mt-3 text-xs text-gray-600">Queda registrado en el Seguimiento quién aprobó, con fecha y hora.</p>
+              ) : exigeComentarioEstado(pendingEstado, person.tipoUsuario) && (
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Motivo del cambio <span className="text-red-600">*</span>
+                  </label>
+                  <textarea
+                    value={estadoMotivo}
+                    onChange={(e) => setEstadoMotivo(e.target.value)}
+                    rows={3}
+                    placeholder={`¿Por qué pasa a "${pendingEstado}"? (mínimo ${MIN_COMENTARIO_ESTADO} caracteres)`}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-red-400 focus:border-red-400"
+                  />
+                  <p className={`text-[11px] mt-0.5 ${comentarioValido(estadoMotivo) ? 'text-gray-400' : 'text-red-500'}`}>
+                    {estadoMotivo.trim().length}/{MIN_COMENTARIO_ESTADO} caracteres mínimos · queda en el Seguimiento con tu usuario, fecha y hora.
+                  </p>
+                </div>
+              )}
               <p className="text-sm text-gray-500 mt-2">
                 Este cambio se aplicará en la base de datos y será visible inmediatamente.
               </p>
@@ -2084,7 +2124,7 @@ export default function PersonAdmin({ person, beneficiaries }: PersonAdminProps)
               </button>
               <button
                 onClick={confirmEstadoChange}
-                disabled={isUpdatingEstado}
+                disabled={isUpdatingEstado || (exigeComentarioEstado(pendingEstado, person.tipoUsuario) && !comentarioValido(estadoMotivo))}
                 className="flex-1 bg-blue-600 border border-transparent rounded-md px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
                 {isUpdatingEstado ? (

@@ -40,6 +40,8 @@ export interface ApproveOpts {
   agendadoPor?: string;
   /** Sesión de quien aprueba: la aprobación queda en el Seguimiento del contrato con su nombre. */
   session?: any;
+  /** Comentario de la aprobación (obligatorio al aprobar un beneficiario suelto — lib/comentario-aprobacion). */
+  motivo?: string | null;
   /** De dónde viene la aprobación (por defecto APROBAR; la cascada usa APROBAR_CASCADA). */
   origenAprobacion?: 'APROBAR' | 'APROBAR_CASCADA' | 'PANTALLA_APROBACION' | 'SISTEMA';
 }
@@ -223,6 +225,7 @@ export async function approveOnePerson(
   await registrarCambioAprobacion({
     personId, contrato: effectiveContrato, tipoUsuario: person.tipoUsuario, nombre: nombreDe(person),
     estadoAnterior: person.aprobacion, estadoNuevo: 'Aprobado', origen: opts.origenAprobacion || 'APROBAR',
+    motivo: opts.motivo ?? null,
     session: opts.session, actor: opts.session ? null : 'sistema',
   });
 

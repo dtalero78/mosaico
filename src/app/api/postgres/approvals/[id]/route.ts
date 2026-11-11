@@ -5,6 +5,7 @@ import { AprobacionPermission } from '@/types/permissions';
 import { query } from '@/lib/postgres';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import { registrarCambioAprobacion, nombreDe } from '@/lib/aprobacion-audit';
+import { exigeComentarioEstado, comentarioValido, mensajeComentarioEstado } from '@/lib/comentario-aprobacion';
 
 export const GET = handlerWithAuth(async (request, { params }) => {
   const result = await query(
@@ -27,7 +28,8 @@ const APROBACION_TO_ESTADO: Record<string, string> = {
 
 export const PUT = handlerWithAuth(async (request, { params }, session) => {
   await requirePermission(session, AprobacionPermission.ACTUALIZAR);
-  const { estado } = await request.json();
+  const body = await request.json();
+  const { estado } = body || {};
   if (!estado) throw new ValidationError('estado is required');
 
   const validEstados = ['Aprobado', 'Rechazado', 'Pendiente', 'Contrato nulo', 'Devuelto', 'Retractado'];
@@ -48,6 +50,13 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
   if (check.rowCount === 0) throw new NotFoundError('Person');
   const antes = check.rows[0];
 
+  // Comentario obligatorio salvo al aprobar el contrato (lib/comentario-aprobacion).
+  const motivo = String(body?.motivo ?? '').trim() || null;
+  if ((antes.aprobacion || null) !== estadoFinal
+      && exigeComentarioEstado(estadoFinal, antes.tipoUsuario) && !comentarioValido(motivo)) {
+    throw new ValidationError(mensajeComentarioEstado(estadoFinal));
+  }
+
   const estadoOperativo = APROBACION_TO_ESTADO[estadoFinal] ?? null;
 
   const result = await query(
@@ -61,7 +70,7 @@ export const PUT = handlerWithAuth(async (request, { params }, session) => {
 
   await registrarCambioAprobacion({
     personId: params.id, contrato: antes.contrato, tipoUsuario: antes.tipoUsuario, nombre: nombreDe(antes),
-    estadoAnterior: antes.aprobacion, estadoNuevo: estadoFinal, origen: 'PANTALLA_APROBACION', session,
+    estadoAnterior: antes.aprobacion, estadoNuevo: estadoFinal, origen: 'PANTALLA_APROBACION', motivo, session,
   });
 
   return successResponse({ message: `Aprobación actualizada a: ${estadoFinal}`, approval: result.rows[0] });
