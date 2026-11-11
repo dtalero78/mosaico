@@ -43,7 +43,7 @@ interface Registro {
   saldo: number | null; totalPlan: number | null; fechaPrimeraCuota: string | null
   suscripcionPago: boolean; prixus: boolean; factura: string | null
   aprobacion: string; aprobacionFicha: string | null; firmado: boolean; listo?: boolean
-  estado: string | null; modulo: boolean; extemporanea: boolean; observaciones: string | null; pais: string | null
+  estado: string | null; modulo: boolean; extemporanea: boolean; migrado?: boolean; observaciones: string | null; pais: string | null
   titular: { nombre: string; documento: string; telefono: string; correo: string; direccion: string; ciudad: string }
   referencias: { nombre: string; telefono: string; parentesco: string }[]
   comercial: Record<'ejecutivo' | 'fullExecutive' | 'jefeGrupo' | 'gerente' | 'gerenteDivision' | 'salesManager' | 'filial' | 'origenMatricula', string>
@@ -61,6 +61,18 @@ const estadoCls = (a: string | null) => {
   if (s.startsWith('pendiente')) return 'bg-amber-100 text-amber-800'
   if (s === 'sin firmar') return 'bg-slate-200 text-slate-700'
   return 'bg-red-100 text-red-800'
+}
+/** Por qué el contrato está en "Por resolver" (lo que le falta para pasar al Libro). */
+const motivoPorResolver = (r: Registro): string => {
+  const a = String(r.aprobacionFicha || '').trim().toLowerCase()
+  if (a.startsWith('rechaz')) return 'Rechazado'
+  if (a.startsWith('devuel')) return 'Devuelto (hay que corregirlo y volver a aprobar)'
+  if (a.startsWith('retract')) return 'Retractado por el cliente'
+  if (a.startsWith('contrato nulo')) return 'Contrato nulo'
+  if (a && a !== 'pendiente') return `Estado: ${r.aprobacionFicha}`
+  if (!r.firmado) return 'Sin firmar: el titular aún no firma el contrato'
+  if (!r.listo) return 'Firmado, falta dejarlo listo (tomar el cupo del salón)'
+  return '—'
 }
 const resumenSsbb = (r: Registro) => {
   if (!r.beneficiarios.length) return '—'
@@ -108,6 +120,7 @@ const COLS: Col[] = [
   { key: 'susc', header: 'Suscripción de pago', w: 110, titular: r => r.suscripcionPago ? 'SI' : 'NO' },
   { key: 'fact', header: 'Factura/Bol', w: 110, titular: r => r.factura || '—' },
   { key: 'aprob', header: 'Aprobación', w: 120, titular: r => <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${estadoCls(r.aprobacion)}`}>{r.aprobacion}</span>, benef: b => b.aprobacion || 'Pendiente' },
+  { key: 'motivo', header: 'Motivo (por qué está aquí)', w: 260, titular: r => <span className="line-clamp-2" title={motivoPorResolver(r)}>{motivoPorResolver(r)}</span> },
   { key: 'obs', header: 'Observaciones', w: 260, titular: r => <span className="line-clamp-2" title={r.observaciones || ''}>{r.observaciones || ''}</span> },
   { key: 'prog', header: 'Curso', w: 130, titular: r => resumenPrograma(r), benef: b => <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-800">{b.curso}</span> },
   { key: 'ssbb', header: 'Asistió SSBB', w: 96, titular: r => <SsbbPill texto={resumenSsbb(r)} ok={ssbbCompleto(r)} />, benef: b => <SsbbPill texto={b.welcome} ok={b.welcome === 'SI' ? true : b.welcome === 'NA' ? null : false} /> },
@@ -197,6 +210,8 @@ const esDelLibro = (r: Registro) => {
 function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
   const { hasPermission } = usePermissions()
   const puedeExportar = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_EXPORTAR)
+  // La columna "Motivo" solo existe en Por resolver.
+  const cols = useMemo(() => (modo === 'resolver' ? COLS : COLS.filter(k => k.key !== 'motivo')), [modo])
   const [vigencias, setVigencias] = useState<Vigencia[]>([])
   const [vigencia, setVigencia] = useState<Vigencia | null>(null)
   const [sinVigencia, setSinVigencia] = useState(0)
@@ -279,6 +294,8 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
       { header: 'Suscripción de pago', accessor: x => x.b ? '' : (x.r.suscripcionPago ? 'SI' : 'NO') },
       { header: 'Factura/Bol', accessor: x => x.b ? '' : x.r.factura },
       { header: 'Aprobación', accessor: x => x.b ? (x.b.aprobacion || 'Pendiente') : x.r.aprobacion },
+      ...(modo === 'resolver' ? [{ header: 'Motivo (por qué está en Por resolver)', accessor: (x: Fila) => x.b ? '' : motivoPorResolver(x.r) }] : []),
+      { header: 'Migrado', accessor: x => x.b ? '' : (x.r.migrado ? 'SI' : '') },
       { header: 'Observaciones', accessor: x => x.b ? '' : x.r.observaciones },
       { header: 'Curso', accessor: x => x.b ? x.b.curso : '' },
       { header: 'Asistió SSBB', accessor: x => x.b ? x.b.welcome : '' },
@@ -378,10 +395,10 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
         <p className="p-10 text-center text-sm text-gray-500">No hay vigencias configuradas. Genere el calendario en la pestaña <b>Vigencias</b>.</p>
       ) : (
         <div className="overflow-auto max-h-[70vh] rounded-lg border border-gray-300 bg-white">
-          <table className="border-separate border-spacing-0 text-xs" style={{ width: COLS.reduce((s, c) => s + c.w, 0) }}>
+          <table className="border-separate border-spacing-0 text-xs" style={{ width: cols.reduce((s, c) => s + c.w, 0) }}>
             <thead>
               <tr>
-                {COLS.map((c, i) => (
+                {cols.map((c, i) => (
                   <th key={c.key} style={{ width: c.w, minWidth: c.w, left: i < FIJAS ? LEFTS[i] : undefined }}
                     className={`sticky top-0 z-20 bg-blue-900 text-white font-semibold px-2 py-2 text-left border-b border-r border-blue-800 whitespace-nowrap ${i < FIJAS ? 'z-30' : ''} ${i === FIJAS - 1 ? 'shadow-[2px_0_0_0_rgba(0,0,0,0.25)]' : ''}`}>
                     {c.header}
@@ -395,7 +412,7 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
                 return (
                   <Fragment key={r.titularId}>
                     <tr className="group">
-                      {COLS.map((c, i) => (
+                      {cols.map((c, i) => (
                         <td key={c.key} style={{ width: c.w, minWidth: c.w, left: i < FIJAS ? LEFTS[i] : undefined }}
                           className={`px-2 py-1.5 border-b border-r border-gray-200 align-top ${i < FIJAS ? 'sticky z-10 bg-white group-hover:bg-indigo-50' : 'group-hover:bg-indigo-50/60'} ${i === FIJAS - 1 ? 'shadow-[2px_0_0_0_rgba(0,0,0,0.12)]' : ''}`}>
                           {c.key === 'item' ? (
@@ -412,14 +429,17 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
                               {r.item}
                             </span>
                           ) : c.key === 'contrato' || c.key === 'titular' ? (
-                            <button type="button" onClick={() => setDetalle(r.titularId)} className="text-left font-medium text-indigo-700 hover:underline">{c.titular(r)}</button>
+                            <>
+                              <button type="button" onClick={() => setDetalle(r.titularId)} className="text-left font-medium text-indigo-700 hover:underline">{c.titular(r)}</button>
+                              {c.key === 'contrato' && r.migrado && <span title="Contrato cargado por migración (no lo creó un comercial)" className="mt-0.5 block w-fit rounded-full bg-fuchsia-100 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-800">Migrado</span>}
+                            </>
                           ) : c.titular(r)}
                         </td>
                       ))}
                     </tr>
                     {abierto && r.beneficiarios.map(b => (
                       <tr key={b.id} className="text-gray-600">
-                        {COLS.map((c, i) => (
+                        {cols.map((c, i) => (
                           <td key={c.key} style={{ width: c.w, minWidth: c.w, left: i < FIJAS ? LEFTS[i] : undefined }}
                             className={`px-2 py-1 border-b border-r border-gray-100 ${i < FIJAS ? 'sticky z-10 bg-slate-50' : 'bg-slate-50/70'} ${i === FIJAS - 1 ? 'shadow-[2px_0_0_0_rgba(0,0,0,0.12)]' : ''}`}>
                             {c.key === 'titular' ? <span className="pl-3">↳ {b.nombre}</span> : c.benef ? c.benef(b) : ''}
@@ -431,7 +451,7 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
                 )
               })}
               {!visibles.length && (
-                <tr><td colSpan={COLS.length} className="p-8 text-center text-sm text-gray-400">No hay contratos con esos filtros.</td></tr>
+                <tr><td colSpan={cols.length} className="p-8 text-center text-sm text-gray-400">No hay contratos con esos filtros.</td></tr>
               )}
             </tbody>
           </table>
