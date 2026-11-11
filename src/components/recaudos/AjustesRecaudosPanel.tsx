@@ -11,7 +11,7 @@
  * Cada ajuste pide motivo, recalcula los saldos del contrato ("Saldo a la Fecha"
  * y saldo por cuota) y queda en el historial (PAGOS_AJUSTES).
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import FilialSelect from './FilialSelect'
 import toast from 'react-hot-toast'
 import { MagnifyingGlassIcon, PencilSquareIcon, XMarkIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
@@ -95,6 +95,10 @@ export default function AjustesRecaudosPanel() {
   const [historial, setHistorial] = useState<Ajuste[]>([])
   const [loading, setLoading] = useState(false)
   const [editando, setEditando] = useState<Fila | null>(null)
+  // Cada búsqueda lleva un número: sólo la última pinta, y su versión se usa como `key` de la tabla
+  // para que React la rehaga entera (evita que quede una fila vieja de la carga anterior).
+  const reqRef = useRef(0)
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     if (!tipo && subtabs.length) setTipo(subtabs[0].key)
@@ -102,6 +106,7 @@ export default function AjustesRecaudosPanel() {
 
   const cargar = useCallback(async () => {
     if (!tipo) return
+    const mia = ++reqRef.current
     setLoading(true)
     try {
       const qs = new URLSearchParams({ tipo })
@@ -111,12 +116,14 @@ export default function AjustesRecaudosPanel() {
         api.get<{ pagos: Fila[] }>(`/api/postgres/recaudos/ajustes?${qs}`),
         api.get<{ ajustes: Ajuste[] }>(`/api/postgres/recaudos/ajustes?historial=1&tipo=${tipo}`),
       ])
+      if (mia !== reqRef.current) return
       setFilas(r.pagos || [])
       setHistorial(h.ajustes || [])
+      setVersion(v => v + 1)
     } catch (e) {
-      handleApiError(e, 'Error cargando registros')
+      if (mia === reqRef.current) handleApiError(e, 'Error cargando registros')
     } finally {
-      setLoading(false)
+      if (mia === reqRef.current) setLoading(false)
     }
   }, [tipo, q, filial])
 
@@ -183,7 +190,7 @@ export default function AjustesRecaudosPanel() {
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody key={version} className="divide-y divide-gray-100">
             {!loading && filas.length === 0 && (
               <tr><td colSpan={10} className="px-3 py-6 text-center text-gray-500">Sin registros. Busque por titular, documento o contrato.</td></tr>
             )}
