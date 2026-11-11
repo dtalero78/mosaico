@@ -297,6 +297,79 @@ async function contarSinVigencia(): Promise<number> {
   return r?.n || 0;
 }
 
+// ── Gestión Comercial (pestaña "Gestión" del libro) ───────────────────────────
+
+/** Grupo de estado para los conteos de Gestión Comercial. */
+export type GrupoGestion = 'aprobada' | 'rechazada' | 'devuelta' | 'firmadaSinAprobar' | 'pendiente';
+function grupoGestion(aprobacion: string | null, firmado: boolean): GrupoGestion {
+  const a = String(aprobacion || '').trim().toLowerCase();
+  if (a.startsWith('aprobad') || a.startsWith('finaliz')) return 'aprobada';
+  if (a.startsWith('rechaz')) return 'rechazada';
+  if (a.startsWith('devuel')) return 'devuelta';
+  if ((!a || a === 'pendiente') && firmado) return 'firmadaSinAprobar';
+  return 'pendiente'; // sin firmar, contrato nulo, retractado u otro estado
+}
+
+export interface FilaGestion {
+  anio: number; mes: number; semana: number | null; pais: string; filial: string; grupo: GrupoGestion;
+  estado: string;
+  escala: { ejTraining: string; fullExecutive: string; jefeGrupo: string; gerente: string; gerenteDivision: string; salesManager: string };
+  /** N° de contrato y _id del titular (lista de matrículas al pulsar un número). */
+  contrato: string; titularId: string;
+  /** Nombre del titular: solo si quien consulta tiene APROBACION.LIBRO_PRODUCCION.VER. */
+  titular?: string;
+}
+
+/**
+ * Contratos de un año comercial (o de un mes) con lo mínimo para Gestión Comercial:
+ * mes y semana de su vigencia, país, filial, grupo de estado y escala. Una sola consulta
+ * (solo titulares; sin finanzas ni beneficiarios). Mismas reglas de vigencia que el libro.
+ */
+export async function gestionComercial(anio: number, mes: number | null, opts: { conTitular?: boolean } = {}) {
+  const todas = await listarVigencias();
+  const anios = Array.from(new Set(todas.map((v) => v.anio))).sort((a, b) => b - a);
+  const vigs = todas.filter((v) => v.anio === anio && (!mes || v.mes === mes)).sort((a, b) => a.mes - b.mes);
+  if (!vigs.length) return { anios, vigencias: [] as Vigencia[], filas: [] as FilaGestion[] };
+  const desde = vigs[0].inicio, hasta = vigs[vigs.length - 1].fin;
+
+  const rows = await queryMany<any>(
+    `SELECT * FROM (
+       SELECT DISTINCT ON (p."contrato") p."_id" AS titular_id, p."contrato", p."plataforma", p."aprobacion", p."filial",
+              CONCAT_WS(' ', NULLIF(TRIM(p."primerNombre"),''), NULLIF(TRIM(p."segundoNombre"),''), NULLIF(TRIM(p."primerApellido"),''), NULLIF(TRIM(p."segundoApellido"),'')) AS titular_nombre,
+              p."asesor", p."fullExecutive", p."jefeGrupo", p."gerente", p."gerenteDivision", p."salesManager",
+              (COALESCE(p."hashConsentimiento",'') <> '') AS firmado,
+              to_char(p."fechaCreacion" AT TIME ZONE (${TZ_SQL}), 'YYYY-MM-DD"T"HH24:MI') AS creado_local
+         FROM "PEOPLE" p
+        WHERE p."tipoUsuario" = 'TITULAR' AND COALESCE(p."contrato",'') <> '' AND p."contrato" NOT LIKE 'PRB-%'
+          AND p."fechaCreacion" >= ($1::timestamp AT TIME ZONE 'UTC') - INTERVAL '1 day'
+          AND p."fechaCreacion" <  ($2::timestamp AT TIME ZONE 'UTC') + INTERVAL '1 day'
+        ORDER BY p."contrato", (COALESCE(p."hashConsentimiento",'') <> '') DESC, (p."aprobacion" IS NOT NULL) DESC, p."_createdDate" ASC
+     ) t
+     WHERE t.creado_local >= to_char($1::timestamp,'YYYY-MM-DD"T"HH24:MI') AND t.creado_local < to_char($2::timestamp,'YYYY-MM-DD"T"HH24:MI')`,
+    [desde, hasta]);
+
+  const limpio = (s: any) => String(s || '').replace(/\s+/g, ' ').trim();
+  const filas: FilaGestion[] = [];
+  for (const t of rows) {
+    const v = vigs.find((x) => x.inicio <= t.creado_local && t.creado_local < x.fin);
+    if (!v) continue;
+    filas.push({
+      anio: v.anio, mes: v.mes, semana: semanaDe(v, t.creado_local),
+      pais: limpio(t.plataforma) || 'Sin país', filial: limpio(t.filial) || 'Sin filial',
+      grupo: grupoGestion(t.aprobacion, t.firmado === true),
+      estado: estadoLibro(t.aprobacion, t.firmado === true),
+      escala: {
+        ejTraining: limpio(t.asesor), fullExecutive: limpio(t.fullExecutive),
+        jefeGrupo: limpio(t.jefeGrupo), gerente: limpio(t.gerente), gerenteDivision: limpio(t.gerenteDivision),
+        salesManager: limpio(t.salesManager),
+      },
+      contrato: t.contrato, titularId: t.titular_id,
+      ...(opts.conTitular ? { titular: limpio(t.titular_nombre) } : {}),
+    });
+  }
+  return { anios, vigencias: vigs, filas };
+}
+
 /** Un contrato del libro (vista detallada), ubicado en su vigencia/semana si existe. */
 export async function registroLibro(titularId: string) {
   const [r] = await construir({ titularId });

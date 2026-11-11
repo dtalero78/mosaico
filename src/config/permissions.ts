@@ -1418,6 +1418,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: "Crear, editar y desactivar los planes y tipos de plan por país",
   },
   {
+    code: AprobacionPermission.LIBRO_PRODUCCION_GESTION,
+    module: Module.APROBACION,
+    section: 'Libro de Producción',
+    name: "Pestaña \"Gestión\" (Gestión Comercial)",
+    description: "Conteos de contratos por semana, filial y asesor de la escala; ver las matrículas de cada número",
+  },
+  {
     code: AprobacionPermission.LIBRO_PRODUCCION_DEPURAR,
     module: Module.APROBACION,
     section: 'Libro de Producción',

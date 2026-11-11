@@ -13,7 +13,9 @@ import toast from 'react-hot-toast'
 import {
   ArrowPathIcon, ArrowDownTrayIcon, ChevronDownIcon, ChevronRightIcon, ChevronLeftIcon, MagnifyingGlassIcon, FunnelIcon,
   XMarkIcon, ArrowTopRightOnSquareIcon, CalendarDaysIcon, TableCellsIcon, RectangleStackIcon, ClockIcon, PencilSquareIcon,
+  PresentationChartBarIcon,
 } from '@heroicons/react/24/outline'
+import GestionComercialPanel from '@/components/aprobacion/GestionComercialPanel'
 import { useRouter } from 'next/navigation'
 import { PermissionGuard } from '@/components/permissions'
 import { AprobacionPermission, PersonPermission } from '@/types/permissions'
@@ -134,7 +136,9 @@ export default function LibroProduccionPage() {
   const { hasPermission } = usePermissions()
   const puedeVigencias = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_VIGENCIAS)
   const puedePlanes = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_PLANES)
-  const [tab, setTab] = useState<'libro' | 'resolver' | 'vigencias' | 'planes'>('libro')
+  const puedeGestion = hasPermission(AprobacionPermission.LIBRO_PRODUCCION_GESTION)
+  const [tab, setTab] = useState<'libro' | 'resolver' | 'gestion' | 'vigencias' | 'planes'>('libro')
+  const [detalleGestion, setDetalleGestion] = useState<{ id: string; ids: string[] } | null>(null)
 
   // Página completa, sin menú lateral: se abre en pestaña nueva, así que si no hay historial
   // previo "Volver" lleva al Centro de Aprobaciones.
@@ -158,6 +162,7 @@ export default function LibroProduccionPage() {
           </div>
           <div className="flex gap-2 border-b border-gray-200">
             {([['libro', 'Libro', TableCellsIcon], ['resolver', 'Por resolver', ClockIcon],
+              ...(puedeGestion ? [['gestion', 'Gestión', PresentationChartBarIcon]] : []),
               ...(puedeVigencias ? [['vigencias', 'Vigencias', CalendarDaysIcon]] : []),
               ...(puedePlanes ? [['planes', 'Planes', RectangleStackIcon]] : [])] as const).map(([k, label, Icon]: any) => (
               <button key={k} type="button" onClick={() => setTab(k)}
@@ -166,8 +171,16 @@ export default function LibroProduccionPage() {
               </button>
             ))}
           </div>
-          {tab === 'libro' || tab === 'resolver' ? <Libro key={tab} modo={tab} /> : tab === 'vigencias' ? <Vigencias /> : <PlanesTiposPanel />}
+          {tab === 'libro' || tab === 'resolver' ? <Libro key={tab} modo={tab} />
+            : tab === 'gestion' ? <GestionComercialPanel onAbrirContrato={(id, ids) => setDetalleGestion({ id, ids })} />
+            : tab === 'vigencias' ? <Vigencias /> : <PlanesTiposPanel />}
         </div>
+        {/* Contrato abierto desde la lista de matrículas de la pestaña Gestión */}
+        {detalleGestion && (
+          <Detalle titularId={detalleGestion.id} ids={detalleGestion.ids}
+            onNavegar={id => setDetalleGestion(d => (d ? { ...d, id } : d))} onClose={() => setDetalleGestion(null)}
+            onCasillas={() => {}} onComercial={() => {}} />
+        )}
       </PermissionGuard>
     </div>
   )

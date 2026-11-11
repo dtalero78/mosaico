@@ -567,6 +567,8 @@ export enum AprobacionPermission {
   // Botón "Ajuste Escala" del detalle del Libro (corregir la escala comercial del contrato).
   LIBRO_PRODUCCION_ESCALERA = 'APROBACION.LIBRO_PRODUCCION.ESCALERA',
   LIBRO_PRODUCCION_PLANES = 'APROBACION.LIBRO_PRODUCCION.PLANES',
+  // Pestaña "Gestión" (Gestión Comercial: conteos por semana, filial y asesor).
+  LIBRO_PRODUCCION_GESTION = 'APROBACION.LIBRO_PRODUCCION.GESTION',
   // Depurar (borrar) un contrato desde el libro y ratificar por correo el que no se firmó.
   LIBRO_PRODUCCION_DEPURAR = 'APROBACION.LIBRO_PRODUCCION.DEPURAR',
   LIBRO_PRODUCCION_RATIFICAR = 'APROBACION.LIBRO_PRODUCCION.RATIFICAR',
