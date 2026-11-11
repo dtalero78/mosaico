@@ -62,6 +62,10 @@ export enum PersonPermission {
   // Botón "Seguimiento": la bitácora del contrato (quién hizo qué y cuándo).
   SEGUIMIENTO = 'PERSON.INFO.SEGUIMIENTO',
   SEGUIMIENTO_COMENTAR = 'PERSON.INFO.SEGUIMIENTO_COMENTAR',
+  /** Etiqueta "Sobre la aprobación" en un comentario del Seguimiento (equipo de Aprobación). */
+  SEGUIMIENTO_SOBRE_APROBACION = 'PERSON.INFO.SEGUIMIENTO_SOBRE_APROBACION',
+  /** Etiqueta "Para aprobación" (directores comerciales; el ejecutivo del contrato la tiene en los suyos). */
+  SEGUIMIENTO_PARA_APROBACION = 'PERSON.INFO.SEGUIMIENTO_PARA_APROBACION',
   RESUMEN = 'PERSON.INFO.RESUMEN',
   VER_DOCUMENTACION = 'PERSON.INFO.VER_DOCUMENTACION',
   ADICION_DOCUMENTACION = 'PERSON.INFO.ADICION_DOCUMENTACION',

@@ -1,7 +1,9 @@
 import 'server-only';
 import { queryMany, queryOne } from '@/lib/postgres';
-import { NotFoundError, ValidationError } from '@/lib/errors';
+import { NotFoundError, ValidationError, ForbiddenError } from '@/lib/errors';
 import { registrarEventoContrato } from '@/lib/contrato-eventos';
+import { tienePermiso } from '@/lib/api-permissions';
+import { PersonPermission } from '@/types/permissions';
 
 /**
  * Seguimiento del contrato: bitácora de todo lo que le pasó al contrato y a sus personas
@@ -36,13 +38,46 @@ export interface EventoSeguimiento {
   personaNombre?: string | null;
   tipoUsuario?: string | null;
   cambios?: Record<string, { antes: any; despues: any }> | null;
+  /** Etiqueta resaltada de un comentario (ver ETIQUETAS_COMENTARIO). */
+  etiqueta?: EtiquetaComentario | null;
 }
+
+/**
+ * Etiquetas de los comentarios del Seguimiento:
+ *  - SOBRE_APROBACION: la escribe Aprobación (permiso PERSON.INFO.SEGUIMIENTO_SOBRE_APROBACION).
+ *  - PARA_APROBACION: la escribe Comercial — el ejecutivo que hizo el contrato (PEOPLE.asesor del
+ *    titular = su correo) o quien tenga PERSON.INFO.SEGUIMIENTO_PARA_APROBACION (directores).
+ * Se guarda en CONTRATO_EVENTOS.datos.etiqueta.
+ */
+export const ETIQUETAS_COMENTARIO = ['SOBRE_APROBACION', 'PARA_APROBACION'] as const;
+export type EtiquetaComentario = typeof ETIQUETAS_COMENTARIO[number];
 
 export interface SeguimientoContrato {
   titularId: string;
   contrato: string | null;
   personas: { _id: string; nombre: string; tipoUsuario: string | null }[];
   eventos: EventoSeguimiento[];
+  /** Etiquetas que quien consulta puede poner en un comentario de este contrato. */
+  etiquetasPermitidas?: EtiquetaComentario[];
+}
+
+/** Etiquetas de comentario que la sesión puede usar en el contrato de `id` (titular o beneficiario). */
+export async function etiquetasPermitidas(id: string, session: any): Promise<EtiquetaComentario[]> {
+  const out: EtiquetaComentario[] = [];
+  if (await tienePermiso(session, PersonPermission.SEGUIMIENTO_SOBRE_APROBACION)) out.push('SOBRE_APROBACION');
+  let para = await tienePermiso(session, PersonPermission.SEGUIMIENTO_PARA_APROBACION);
+  if (!para) {
+    const email = String(session?.user?.email || '').trim().toLowerCase();
+    if (email) {
+      const t = await queryOne<{ asesor: string | null }>(
+        `SELECT t."asesor" FROM "PEOPLE" b
+           JOIN "PEOPLE" t ON t."_id" = CASE WHEN b."tipoUsuario" = 'TITULAR' THEN b."_id" ELSE COALESCE(b."titularId", b."_id") END
+          WHERE b."_id" = $1`, [id]);
+      para = !!t?.asesor && t.asesor.trim().toLowerCase() === email;
+    }
+  }
+  if (para) out.push('PARA_APROBACION');
+  return out;
 }
 
 const json = (v: any) => {
@@ -80,7 +115,16 @@ async function leer<T extends Record<string, any> = any>(sql: string, params: an
  * cuándo. `personaId` opcional: una persona del MISMO contrato; si no, queda sobre el titular.
  * A diferencia de los registros automáticos, aquí un fallo SÍ se informa al usuario.
  */
-export async function comentarSeguimiento(id: string, texto: any, personaId: any, session: any): Promise<void> {
+export async function comentarSeguimiento(id: string, texto: any, personaId: any, session: any, etiqueta?: any): Promise<void> {
+  let tag: EtiquetaComentario | null = null;
+  if (etiqueta) {
+    if (!ETIQUETAS_COMENTARIO.includes(etiqueta)) throw new ValidationError('Etiqueta de comentario no válida.');
+    if (!(await etiquetasPermitidas(id, session)).includes(etiqueta))
+      throw new ForbiddenError(etiqueta === 'SOBRE_APROBACION'
+        ? 'Solo el equipo de Aprobación puede marcar un comentario "Sobre la aprobación".'
+        : 'Solo el ejecutivo que hizo el contrato o un director comercial puede marcar un comentario "Para aprobación".');
+    tag = etiqueta;
+  }
   const t = String(texto ?? '').trim();
   if (t.length < 3) throw new ValidationError('Escribe el comentario (mínimo 3 caracteres).');
   if (t.length > 2000) throw new ValidationError('El comentario no puede pasar de 2.000 caracteres.');
@@ -94,7 +138,10 @@ export async function comentarSeguimiento(id: string, texto: any, personaId: any
     if (!p) throw new ValidationError('La persona elegida no pertenece a este contrato.');
     destino = p._id;
   }
-  await registrarEventoContrato({ personaId: destino, categoria: 'COMENTARIO', accion: 'Comentario de seguimiento', detalle: t, session, estricto: true });
+  await registrarEventoContrato({
+    personaId: destino, categoria: 'COMENTARIO', accion: 'Comentario de seguimiento', detalle: t, session, estricto: true,
+    ...(tag ? { datos: { etiqueta: tag } } : {}),
+  });
 }
 
 export async function seguimientoContrato(personaId: string): Promise<SeguimientoContrato> {
@@ -162,6 +209,7 @@ export async function seguimientoContrato(personaId: string): Promise<Seguimient
       usuario: c.usuarioNombre || c.usuarioEmail, usuarioEmail: c.usuarioEmail,
       personaId: c.personaId, personaNombre: porId.has(c.personaId) ? undefined : c.personaNombre, tipoUsuario: c.tipoUsuario,
       cambios: d?.cambios || null,
+      etiqueta: ETIQUETAS_COMENTARIO.includes(d?.etiqueta) ? d.etiqueta : null,
     });
   }
 

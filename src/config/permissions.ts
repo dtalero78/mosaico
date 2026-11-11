@@ -47,6 +47,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Escribir comentarios en la ventana Seguimiento del contrato (sobre el contrato o sobre una persona). Quedan con quién y cuándo, y no se pueden editar ni borrar. Requiere también el botón "Seguimiento".',
   },
   {
+    code: PersonPermission.SEGUIMIENTO_SOBRE_APROBACION,
+    module: Module.PERSON,
+    section: 'Información General',
+    name: '↳ Comentario "Sobre la aprobación"',
+    description: 'Marcar un comentario del Seguimiento con la etiqueta resaltada "Sobre la aprobación". Pensado para el equipo de Aprobación. Requiere también "Comentar en el Seguimiento".',
+  },
+  {
+    code: PersonPermission.SEGUIMIENTO_PARA_APROBACION,
+    module: Module.PERSON,
+    section: 'Información General',
+    name: '↳ Comentario "Para aprobación"',
+    description: 'Marcar un comentario del Seguimiento con la etiqueta resaltada "Para aprobación". Pensado para directores comerciales; el ejecutivo que hizo el contrato puede usarla en sus propios contratos sin este permiso. Requiere también "Comentar en el Seguimiento".',
+  },
+  {
     code: PersonPermission.VER_CONTRATO,
     module: Module.PERSON,
     section: 'Información General',

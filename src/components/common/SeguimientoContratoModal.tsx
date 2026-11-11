@@ -20,11 +20,20 @@ interface Evento {
   id: string; fecha: string; soloFecha?: boolean; categoria: string; accion: string; detalle?: string | null
   usuario?: string | null; usuarioEmail?: string | null; personaId?: string | null; personaNombre?: string | null
   tipoUsuario?: string | null; cambios?: Record<string, { antes: any; despues: any }> | null
+  etiqueta?: Etiqueta | null
 }
+type Etiqueta = 'SOBRE_APROBACION' | 'PARA_APROBACION'
 interface Seguimiento {
   titularId: string; contrato: string | null
   personas: { _id: string; nombre: string; tipoUsuario: string | null }[]
   eventos: Evento[]
+  etiquetasPermitidas?: Etiqueta[]
+}
+
+/** Etiquetas resaltadas de los comentarios: Aprobación escribe "Sobre la aprobación"; Comercial, "Para aprobación". */
+const ETIQUETAS: Record<Etiqueta, { l: string; quien: string; badge: string; fila: string; chip: string }> = {
+  SOBRE_APROBACION: { l: 'Sobre la aprobación', quien: 'Aprobación', badge: 'bg-emerald-600 text-white', fila: 'bg-emerald-50 ring-1 ring-emerald-200', chip: 'bg-emerald-600 text-white' },
+  PARA_APROBACION:  { l: 'Para aprobación',     quien: 'Comercial',  badge: 'bg-amber-500 text-white',   fila: 'bg-amber-50 ring-1 ring-amber-200',     chip: 'bg-amber-500 text-white' },
 }
 
 const CATEGORIAS: Record<string, { l: string; chip: string; dot: string }> = {
@@ -76,9 +85,13 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
 
+  const [tags, setTags] = useState<Etiqueta[]>([])
   const conteo = useMemo(() => {
     const m: Record<string, number> = {}
-    for (const e of data?.eventos || []) m[e.categoria] = (m[e.categoria] || 0) + 1
+    for (const e of data?.eventos || []) {
+      m[e.categoria] = (m[e.categoria] || 0) + 1
+      if (e.etiqueta) m[e.etiqueta] = (m[e.etiqueta] || 0) + 1
+    }
     return m
   }, [data])
 
@@ -86,22 +99,27 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
     const q = buscar.trim().toLowerCase()
     return (data?.eventos || []).filter(e =>
       (!cats.length || cats.includes(e.categoria)) &&
+      (!tags.length || (e.etiqueta && tags.includes(e.etiqueta))) &&
       (!persona || e.personaId === persona) &&
-      (!q || [e.accion, e.detalle, e.usuario, e.personaNombre].some(x => x && String(x).toLowerCase().includes(q))))
-  }, [data, cats, persona, buscar])
+      (!q || [e.accion, e.detalle, e.usuario, e.personaNombre, e.etiqueta && ETIQUETAS[e.etiqueta]?.l]
+        .some(x => x && String(x).toLowerCase().includes(q))))
+  }, [data, cats, tags, persona, buscar])
 
   // ── Comentar (permiso PERSON.INFO.SEGUIMIENTO_COMENTAR) ──
   const { hasPermission } = usePermissions()
   const puedeComentar = hasPermission(PersonPermission.SEGUIMIENTO_COMENTAR as any)
   const [comentario, setComentario] = useState('')
   const [sobre, setSobre] = useState('')
+  const [etiqueta, setEtiqueta] = useState<Etiqueta | ''>('')
+  const permitidas = data?.etiquetasPermitidas || []
   const [enviando, setEnviando] = useState(false)
   const comentar = async () => {
     setEnviando(true)
     try {
       setData(await api.post<Seguimiento>(`/api/postgres/people/${encodeURIComponent(personaId)}/seguimiento`,
-        { texto: comentario, personaId: sobre || undefined }))
+        { texto: comentario, personaId: sobre || undefined, etiqueta: etiqueta || undefined }))
       setComentario('')
+      setEtiqueta('')
       toast.success('Comentario agregado')
     } catch (e) {
       handleApiError(e, 'No se pudo guardar el comentario')
@@ -140,7 +158,14 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
                   {c.l} <span className="opacity-60">{conteo[k]}</span>
                 </button>
               ))}
-              {cats.length > 0 && <button type="button" onClick={() => setCats([])} className="px-1 text-xs text-gray-500 hover:underline">Quitar</button>}
+              {(Object.keys(ETIQUETAS) as Etiqueta[]).filter(k => conteo[k]).map(k => (
+                <button key={k} type="button" onClick={() => setTags(s => (s.includes(k) ? s.filter(x => x !== k) : [...s, k]))}
+                  title={`Comentarios de ${ETIQUETAS[k].quien}`}
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 transition ${tags.includes(k) ? `${ETIQUETAS[k].chip} ring-current` : 'bg-white text-gray-700 ring-gray-300 hover:bg-gray-100'}`}>
+                  ★ {ETIQUETAS[k].l} <span className="opacity-70">{conteo[k]}</span>
+                </button>
+              ))}
+              {(cats.length > 0 || tags.length > 0) && <button type="button" onClick={() => { setCats([]); setTags([]) }} className="px-1 text-xs text-gray-500 hover:underline">Quitar</button>}
             </div>
             <div className="flex flex-wrap gap-2">
               <select value={persona} onChange={e => setPersona(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs">
@@ -163,10 +188,19 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
                 placeholder="Escribe un comentario de seguimiento…"
                 className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <select value={sobre} onChange={e => setSobre(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs">
-                  <option value="">Sobre el contrato (titular)</option>
-                  {data.personas.filter(p => p.tipoUsuario !== 'TITULAR').map(p => <option key={p._id} value={p._id}>Sobre {p.nombre} · beneficiario</option>)}
-                </select>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select value={sobre} onChange={e => setSobre(e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs">
+                    <option value="">Sobre el contrato (titular)</option>
+                    {data.personas.filter(p => p.tipoUsuario !== 'TITULAR').map(p => <option key={p._id} value={p._id}>Sobre {p.nombre} · beneficiario</option>)}
+                  </select>
+                  {permitidas.length > 0 && (
+                    <select value={etiqueta} onChange={e => setEtiqueta(e.target.value as Etiqueta | '')} title="Etiqueta resaltada del comentario"
+                      className={`rounded-md border px-2 py-1 text-xs font-semibold ${etiqueta ? `${ETIQUETAS[etiqueta].chip} border-transparent` : 'border-gray-300 bg-white text-gray-700'}`}>
+                      <option value="">Sin etiqueta</option>
+                      {permitidas.map(k => <option key={k} value={k}>★ {ETIQUETAS[k].l}</option>)}
+                    </select>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-gray-400">Queda con tu nombre, fecha y hora; no se puede editar.</span>
                   <button type="button" onClick={comentar} disabled={enviando || comentario.trim().length < 3}
@@ -186,11 +220,13 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
               {visibles.map(e => {
                 const c = CATEGORIAS[e.categoria] || CATEGORIAS.COMENTARIO
                 const cambios = e.cambios ? Object.entries(e.cambios) : []
+                const tg = e.etiqueta ? ETIQUETAS[e.etiqueta] : null
                 return (
-                  <li key={e.id} className="mb-4 ml-5">
+                  <li key={e.id} className={`mb-4 ml-5 ${tg ? `rounded-lg px-3 py-2 ${tg.fila}` : ''}`}>
                     <span className={`absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-white ${c.dot}`} />
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                       <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${c.chip}`}>{c.l}</span>
+                      {tg && <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${tg.badge}`} title={`Comentario de ${tg.quien}`}>★ {tg.l}</span>}
                       <span className="font-medium text-gray-900">{e.accion}</span>
                       <span className="text-xs text-gray-400">{fmtFecha(e)}</span>
                       {e.usuario && <span className="text-xs text-gray-500" title={e.usuarioEmail || undefined}>· {e.usuario}</span>}
