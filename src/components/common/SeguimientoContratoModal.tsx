@@ -60,9 +60,11 @@ const fmtFecha = (e: Evento) => {
   }
   return d.toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-/** Filtro "tipo de mensaje": '' = todos; una categoría; una etiqueta ★; o 'SISTEMA' (automáticos). */
+/** Filtro "tipo de mensaje": '' = todos; una categoría; una etiqueta ★; 'GESTION_APROBACION'
+ *  (las dos etiquetas juntas: Sobre la aprobación + Para aprobación); o 'SISTEMA' (automáticos). */
 const coincideTipo = (e: Evento, t: string) =>
-  !t || (t in ETIQUETAS ? e.etiqueta === t : t === 'SISTEMA' ? !!e.sistema : e.categoria === t)
+  !t || (t === 'GESTION_APROBACION' ? !!e.etiqueta
+    : t in ETIQUETAS ? e.etiqueta === t : t === 'SISTEMA' ? !!e.sistema : e.categoria === t)
 const valor = (v: any) => (v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v))
 
 export default function SeguimientoContratoModal({ personaId, onClose }: { personaId: string; onClose: () => void }) {
@@ -94,7 +96,10 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
     const m: Record<string, number> = {}
     for (const e of data?.eventos || []) {
       m[e.categoria] = (m[e.categoria] || 0) + 1
-      if (e.etiqueta) m[e.etiqueta] = (m[e.etiqueta] || 0) + 1
+      if (e.etiqueta) {
+        m[e.etiqueta] = (m[e.etiqueta] || 0) + 1
+        m.GESTION_APROBACION = (m.GESTION_APROBACION || 0) + 1
+      }
       if (e.sistema) m.SISTEMA = (m.SISTEMA || 0) + 1
     }
     return m
@@ -162,6 +167,11 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
                   {c.l} <span className="opacity-60">{conteo[k]}</span>
                 </button>
               ))}
+              <button type="button" onClick={() => elegirTipo('GESTION_APROBACION')}
+                title="Solo los comentarios ★ Sobre la aprobación y ★ Para aprobación"
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 transition ${tipo === 'GESTION_APROBACION' ? 'bg-amber-500 text-white ring-current' : 'bg-white text-amber-800 ring-amber-300 hover:bg-amber-50'}`}>
+                ★ Gestión de Aprobación <span className="opacity-70">{conteo.GESTION_APROBACION || 0}</span>
+              </button>
               {(Object.keys(ETIQUETAS) as Etiqueta[]).filter(k => conteo[k]).map(k => (
                 <button key={k} type="button" onClick={() => elegirTipo(k)}
                   title={`Comentarios de ${ETIQUETAS[k].quien}`}
@@ -181,6 +191,7 @@ export default function SeguimientoContratoModal({ personaId, onClose }: { perso
               <select value={tipo} onChange={e => setTipo(e.target.value)} title="Ver solo un tipo de mensaje"
                 className={`rounded-md border px-2 py-1 text-xs ${tipo ? 'border-indigo-400 bg-indigo-50 font-semibold text-indigo-800' : 'border-gray-300 bg-white'}`}>
                 <option value="">Todos los tipos de mensaje</option>
+                <option value="GESTION_APROBACION">★ Gestión de Aprobación ({conteo.GESTION_APROBACION || 0})</option>
                 {Object.entries(CATEGORIAS).filter(([k]) => conteo[k]).map(([k, c]) => <option key={k} value={k}>{c.l} ({conteo[k]})</option>)}
                 {(Object.keys(ETIQUETAS) as Etiqueta[]).filter(k => conteo[k]).map(k => <option key={k} value={k}>★ {ETIQUETAS[k].l} ({conteo[k]})</option>)}
                 {conteo.SISTEMA > 0 && <option value="SISTEMA">⚙ Automáticos del sistema ({conteo.SISTEMA})</option>}
