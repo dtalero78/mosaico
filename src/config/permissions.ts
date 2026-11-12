@@ -180,6 +180,20 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Pestaña Financiera del titular: abre el formulario de Pago Especial. Hoy permite registrar UN pago de un titular que tiene más de una matrícula, repartido entre los contratos que se marquen (un pago por contrato, con uno o dos recibos). Requiere además el permiso de registrar pagos',
   },
   {
+    code: PersonPermission.PAGO_ESPECIAL_PENALIDAD,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Pago Especial › Activar penalidad',
+    description: 'Permite activar y aprobar el plan de penalidad (30% del saldo en cuotas): el contrato pasa a "Cierre a cuotas" y se deshabilita Registrar Pago. Máximo dos penalidades por contrato. Requiere además "Pago Especial" y registrar pagos',
+  },
+  {
+    code: PersonPermission.PAGO_ESPECIAL_CANCELAR_PENALIDAD,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Pago Especial › Cancelar penalidad',
+    description: 'Cancela una penalidad activa: lo ya pagado pasa a abonos del saldo original, el contrato vuelve a su estado anterior y se habilita de nuevo Registrar Pago. Exige motivo. Pensado para jefatura',
+  },
+  {
     code: PersonPermission.ESTADO_CUENTA,
     module: Module.PERSON,
     section: 'Financiera',

@@ -111,7 +111,7 @@ export const moraService = {
     const pagosPorTitular = new Map<string, any[]>();
     const idsTit = rows.map(r => r._id);
     if (idsTit.length) {
-      for (const p of await queryMany<any>(`${SQL_PAGOS} WHERE "idPeople" = ANY($1::text[])`, [idsTit])) {
+      for (const p of await queryMany<any>(`${SQL_PAGOS} WHERE "idPeople" = ANY($1::text[]) AND "penalidadPlanId" IS NULL`, [idsTit])) {
         const arr = pagosPorTitular.get(p.idPeople);
         if (arr) arr.push(p); else pagosPorTitular.set(p.idPeople, [p]);
       }

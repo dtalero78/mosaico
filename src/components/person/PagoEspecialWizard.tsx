@@ -19,6 +19,7 @@ import { getLocalToday } from '@/lib/fecha-local'
 import { ACCEPT_DOCUMENTOS } from '@/lib/documentos-adjuntos'
 import { mediosPagoPara } from '@/lib/medios-pago'
 import RecibosDobles, { type ReciboArchivo } from '@/components/common/RecibosDobles'
+import PenalidadPanel from './PenalidadPanel'
 
 interface Props {
   isOpen: boolean
@@ -222,9 +223,10 @@ export default function PagoEspecialWizard({ isOpen, onClose, titular, onCreated
                 className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
               <span className="text-sm font-semibold text-purple-800">Pago Titular con más de una matrícula</span>
             </label>
-            <label className="inline-flex items-center gap-2 opacity-50 cursor-not-allowed" title="Disponible en la siguiente entrega">
-              <input type="checkbox" disabled checked={false} className="h-4 w-4 rounded border-gray-300" />
-              <span className="text-sm font-semibold text-orange-800">Última Penalidad en pagos <em className="font-normal">(próximamente)</em></span>
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={modo === 'penalidad'} onChange={e => setModo(e.target.checked ? 'penalidad' : '')}
+                className="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" />
+              <span className="text-sm font-semibold text-orange-800">Última Penalidad en pagos</span>
             </label>
           </div>
         </div>
@@ -233,6 +235,8 @@ export default function PagoEspecialWizard({ isOpen, onClose, titular, onCreated
           {modo === '' && (
             <p className="text-sm text-gray-500 italic text-center py-8">Elige una opción en el encabezado.</p>
           )}
+
+          {modo === 'penalidad' && <PenalidadPanel titular={titular} onChanged={onCreated} />}
 
           {modo === 'multi' && (
             <>

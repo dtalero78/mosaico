@@ -27,6 +27,7 @@ const META: Record<string, { label: string; cls: string }> = {
   ACTIVA:          { label: 'ACTIVA',         cls: 'bg-green-100 text-green-800' },
   'On Hold':       { label: 'On Hold',        cls: 'bg-sky-100 text-sky-800' },
   'CON EXTENSION': { label: 'CON EXTENSION',  cls: 'bg-emerald-200 text-emerald-900' },
+  'CIERRE A CUOTAS': { label: 'CIERRE A CUOTAS', cls: 'bg-amber-200 text-amber-900' },
   FINALIZADA:      { label: 'FINALIZADA',     cls: 'bg-red-500 text-white' },
   PENDIENTE:       { label: 'PENDIENTE',      cls: 'bg-orange-200 text-orange-900' },
   RETRACTADO:      { label: 'RETRACTADO',     cls: 'bg-gray-300 text-gray-800' },

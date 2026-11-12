@@ -95,6 +95,10 @@ export enum PersonPermission {
   ESTADO_CUENTA          = 'PERSON.FINANCIERA.ESTADO_CUENTA',
   /** Botón "Pago Especial": pago de un titular con varias matrículas (y, después, la penalidad). */
   PAGO_ESPECIAL          = 'PERSON.FINANCIERA.PAGO_ESPECIAL',
+  /** Pago Especial › Última Penalidad: activar y aprobar el plan del 30% del saldo. */
+  PAGO_ESPECIAL_PENALIDAD = 'PERSON.FINANCIERA.PAGO_ESPECIAL_PENALIDAD',
+  /** Pago Especial › Última Penalidad: cancelar el plan y volver al plan inicial (jefatura). */
+  PAGO_ESPECIAL_CANCELAR_PENALIDAD = 'PERSON.FINANCIERA.PAGO_ESPECIAL_CANCELAR_PENALIDAD',
 
   // Legacy permissions (keeping for backward compatibility)
   ACTIVAR_DESACTIVAR = 'PERSON.ADMIN.ACTIVAR_DESACTIVAR',

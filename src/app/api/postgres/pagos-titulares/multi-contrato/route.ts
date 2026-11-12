@@ -59,7 +59,7 @@ async function contratosDelTitular(numeroId: string, session: any) {
 
     const pagos = await queryMany<any>(
       `SELECT "_id","numCuota","fechaPago","_createdDate","valorPagado","descuento","inscripcion","validado"
-         FROM "PAGOS_TITULARES" WHERE "idPeople" = $1`, [t._id]);
+         FROM "PAGOS_TITULARES" WHERE "idPeople" = $1 AND "penalidadPlanId" IS NULL`, [t._id]);
     const valorCuota = toNum(f.valorCuota);
     const numeroCuotas = parseInt(String(f.numeroCuotas ?? 0), 10) || 0;
     const asig = valorCuota > 0 && numeroCuotas > 0

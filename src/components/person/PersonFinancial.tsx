@@ -70,6 +70,15 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   const [loadingPagos, setLoadingPagos] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
   const [showEspecial, setShowEspecial] = useState(false)
+  // Penalidad activa (Cierre a cuotas): se deshabilita «Registrar Pago»; los pagos van por Pago Especial.
+  const [penalidadActiva, setPenalidadActiva] = useState<any>(null)
+  const loadPenalidad = async () => {
+    try {
+      const d: any = await api.get(`/api/postgres/pagos-titulares/penalidad?idPeople=${encodeURIComponent(person._id)}`)
+      setPenalidadActiva(d?.activa || null)
+    } catch { /* sin permiso o sin tabla: no bloquea */ }
+  }
+  useEffect(() => { if (person.tipoUsuario === 'TITULAR') loadPenalidad() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [person._id])
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; nombre: string } | null>(null)
   const [validateModal, setValidateModal] = useState<{ id: string; numCuota: number | null } | null>(null)
   const [facturaInput, setFacturaInput] = useState('')
@@ -319,7 +328,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
     numeroCuotas: parseInt((financialData as any)?.numeroCuotas) || 0,
   }
   const cuotasPagadasReales = planCuotas.valorCuota > 0 && planCuotas.numeroCuotas > 0
-    ? asignarPagos({ ...planCuotas, pagos: pagos.filter((p: any) => p.validado === true) }).cuotasCompletas
+    ? asignarPagos({ ...planCuotas, pagos: pagos.filter((p: any) => p.validado === true && !p.penalidadPlanId) }).cuotasCompletas
     : pagos.filter((p: any) => p.validado === true && Number(p.numCuota) > 0).length
   // Estado Cartera: leído del registro cuota #0 (donde se guarda el tipo de
   // cartera del contrato). Default 'normal' si no hay cuota #0.
@@ -355,7 +364,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
         inscripcion: monto((financialData as any)?.pagoInscripcion),
         valorCuota: monto((financialData as any)?.valorCuota),
         numeroCuotas: parseInt((financialData as any)?.numeroCuotas) || 0,
-        pagos,
+        pagos: pagos.filter((x: any) => !x.penalidadPlanId),
       }).cuotasCompletas,
       saldo: (financialData as any)?.saldo,
     })
@@ -591,7 +600,9 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                 <button
                   type="button"
                   onClick={() => setShowWizard(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                  disabled={!!penalidadActiva}
+                  title={penalidadActiva ? 'Penalidad activa (Cierre a cuotas): registra los pagos por Pago Especial' : undefined}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <PlusIcon className="h-4 w-4" /> Registrar Pago
                 </button>
@@ -789,7 +800,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
             fechaContrato: (person as any).fechaContrato ?? null,
           }}
           gestorLabel={currentGestor ? `${currentGestor.nombre} · ${ROLE_LABEL[currentGestor.rol] || currentGestor.rol}` : null}
-          existingPagos={pagos}
+          existingPagos={pagos.filter((p: any) => !p.penalidadPlanId)}
           // "Saldo a la Fecha" del wizard = FINANCIEROS.saldo dinámico
           // (lo que queda debiendo HOY, ya mantenido por syncFinancieroSaldo).
           // El wizard lo usa para mostrar el campo read-only y computar
@@ -810,7 +821,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
             primerNombre: person.primerNombre,
             primerApellido: person.primerApellido,
           }}
-          onCreated={loadPagos}
+          onCreated={() => { loadPagos(); loadPenalidad() }}
         />
       )}
 

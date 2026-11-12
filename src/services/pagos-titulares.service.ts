@@ -111,7 +111,7 @@ async function esPagoAbono(
   if (!fin || valorCuota <= 0) return false;
   const pagos = await queryMany<any>(
     `SELECT "_id","numCuota","fechaPago","_createdDate","valorPagado","descuento","inscripcion"
-       FROM "PAGOS_TITULARES" WHERE "idPeople" = $1`, [idPeople]);
+       FROM "PAGOS_TITULARES" WHERE "idPeople" = $1 AND "penalidadPlanId" IS NULL`, [idPeople]);
   const asig = asignarPagos({
     inscripcion: toNum(fin.pagoInscripcion), valorCuota,
     numeroCuotas: parseInt(String(fin.numeroCuotas ?? 0), 10) || 0, pagos,
@@ -143,7 +143,7 @@ export async function syncFinancieroSaldo(idPeople: string): Promise<void> {
          COALESCE(SUM(COALESCE("valorPagado", 0) + COALESCE("descuento", 0)), 0)::text AS total,
          COALESCE(SUM(CASE WHEN COALESCE("numCuota", 0) > 0 THEN 1 ELSE 0 END), 0)::text AS cuotas_pagadas
        FROM "PAGOS_TITULARES"
-       WHERE "idPeople" = $1 AND "validado" = true`,
+       WHERE "idPeople" = $1 AND "validado" = true AND "penalidadPlanId" IS NULL`,
       [idPeople]
     );
     const totalValidado = parseFloat(sumRow?.total ?? '0') || 0;
@@ -161,7 +161,7 @@ export async function syncFinancieroSaldo(idPeople: string): Promise<void> {
     // abonos a la misma cuota cuentan una vez y una cuota a medias no cuenta.
     const validados = await queryMany<any>(
       `SELECT "_id","numCuota","fechaPago","_createdDate","valorPagado","descuento","inscripcion","validado"
-         FROM "PAGOS_TITULARES" WHERE "idPeople" = $1 AND "validado" = true`, [idPeople]);
+         FROM "PAGOS_TITULARES" WHERE "idPeople" = $1 AND "validado" = true AND "penalidadPlanId" IS NULL`, [idPeople]);
     const cuotasCompletas = asignarPagos({
       inscripcion: toNum(finRow.pagoInscripcion),
       valorCuota: toNum(finRow.valorCuota),
@@ -170,7 +170,10 @@ export async function syncFinancieroSaldo(idPeople: string): Promise<void> {
     }).cuotasCompletas;
 
     // 4) Calcular nuevo saldo (sin negativos)
-    const nuevoSaldo = Math.max(0, totalPlan - totalValidado);
+    // Penalidad COMPLETADA: el 70% restante se condonó, el contrato queda en 0.
+    const cerrada = await queryOne<any>(
+      `SELECT 1 FROM "PENALIDADES" WHERE "idPeople" = $1 AND "estado" = 'COMPLETADA' LIMIT 1`, [idPeople]);
+    const nuevoSaldo = cerrada ? 0 : Math.max(0, totalPlan - totalValidado);
 
     // 5) Update saldo (entero, sin decimales — el frontend parsea con
     //    parseCurrency() que asume punto = separador de miles; ".00" daría
@@ -358,11 +361,21 @@ export const pagosTitularesService = {
     return row;
   },
 
-  async create(input: Partial<PagoTitular>, createdBy: string): Promise<PagoTitular> {
+  async create(input: Partial<PagoTitular>, createdBy: string, opts: { viaPenalidad?: boolean } = {}): Promise<PagoTitular> {
     if (!input.idPeople) throw new ValidationError('idPeople es requerido');
 
     const titular = await PeopleRepository.findById(input.idPeople);
     if (!titular) throw new NotFoundError('PEOPLE', input.idPeople);
+
+    // Con una penalidad ACTIVA el contrato está en "Cierre a cuotas": sólo se paga por
+    // Pago Especial › Última Penalidad (que llama a este método con viaPenalidad).
+    if (!opts.viaPenalidad) {
+      const activa = await queryOne<any>(
+        `SELECT 1 FROM "PENALIDADES" WHERE "idPeople" = $1 AND "estado" = 'ACTIVA' LIMIT 1`, [input.idPeople]);
+      if (activa) {
+        throw new ValidationError('Este contrato tiene una penalidad activa (Cierre a cuotas): los pagos se registran por Pago Especial › Última Penalidad');
+      }
+    }
 
     if (input.numCuota !== undefined && input.numCuota !== null && Number(input.numCuota) < 0) {
       throw new ValidationError('numCuota debe ser >= 0');

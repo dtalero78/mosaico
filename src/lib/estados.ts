@@ -66,6 +66,8 @@ export const ESTADO = {
   ANULADO: 'ANULADO',
   ON_HOLD: 'On Hold',
   CON_EXTENSION: 'CON EXTENSION',
+  /** Penalidad activa (Pago Especial): el contrato se cierra pagando el 30% del saldo en cuotas. */
+  CIERRE_A_CUOTAS: 'CIERRE A CUOTAS',
   FINALIZADA: 'FINALIZADA',
 } as const;
 
