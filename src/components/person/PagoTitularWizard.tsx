@@ -12,6 +12,8 @@ import { asignarPagos, simularPago } from '@/lib/cuotas-pagos'
 import { resolveRealizadoPor, diasDesdeBase, fechaBaseContrato as calcFechaBase, VENTANA_COMERCIAL_DIAS } from '@/lib/cambio-contado'
 import RecibosDobles, { type ReciboArchivo, sumaLeida, fmtPesos as fmtPesosRec } from '@/components/common/RecibosDobles'
 import { usePermissions } from '@/hooks/usePermissions'
+import { mediosPagoPara } from '@/lib/medios-pago'
+import { medioDelCatalogo, type ReciboExtraido } from '@/lib/recibo-inscripcion'
 
 interface PagoTitularWizardProps {
   isOpen: boolean
@@ -450,6 +452,8 @@ export default function PagoTitularWizard({
   const realizadoPorPreview = resolveRealizadoPor(fechaBaseCC, form.fechaPago)
 
   const [leyendo, setLeyendo] = useState(false)
+  // Lo leído del comprobante espera la confirmación de quien registra el pago.
+  const [lectura, setLectura] = useState<ReciboExtraido | null>(null)
   const leerComprobante = async (file: File) => {
     setLeyendo(true)
     try {
@@ -467,16 +471,8 @@ export default function PagoTitularWizard({
           { url: publicUrl, nombre: file.name, tipo: file.type, fechaSubida: new Date().toISOString() }],
       }))
       const d = await api.post<{ extraido: any }>('/api/postgres/pagos-titulares/leer-comprobante', { url: publicUrl })
-      const e = d.extraido || {}
-      setForm(f => ({
-        ...f,
-        fechaPago: (typeof e.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.fecha)) ? e.fecha : f.fechaPago,
-        valorPagado: (e.monto != null && !toNum(f.valorPagado)) ? String(Math.round(e.monto)) : f.valorPagado,
-        medioPago: f.medioPago || e.medioPago || '',
-        numeroReferencia: f.numeroReferencia || String(e.referencia || '').replace(/[^A-Za-z0-9\-]/g, ''),
-        banco: f.banco || e.banco || '',
-      }))
-      toast.success('Comprobante leído — revisa los datos antes de guardar')
+      setLectura(d.extraido || {})
+      toast.success('Comprobante leído — confirma los datos')
     } catch (err: any) {
       toast.error(err?.message || 'No se pudo leer el comprobante')
     } finally {
@@ -1049,6 +1045,149 @@ export default function PagoTitularWizard({
             {submitting ? 'Guardando…' : 'Registrar Pago'}
           </button>
         </div>
+      </div>
+      {lectura && (
+        <ConfirmarLectura
+          e={lectura} plataforma={titular.plataforma}
+          onCancel={() => { setLectura(null); toast('Lectura descartada: el comprobante quedó adjunto, digita los datos'); }}
+          onConfirm={v => {
+            setForm(f => ({
+              ...f,
+              fechaPago: v.fecha,
+              valorPagado: String(Math.round(v.monto)),
+              medioPago: v.medio,
+              numeroReferencia: v.referencia,
+              banco: v.banco,
+            }))
+            setLectura(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+const TIPO_DOC_TXT: Record<string, string> = {
+  APP_TRANSFERENCIA: 'Pantalla de transferencia de una app',
+  DEPOSITO_CAJA: 'Boleta de depósito en caja',
+  PAPELETA_MANUSCRITA: 'Papeleta de depósito llenada a mano',
+  PASARELA: 'Comprobante de pasarela de pago',
+  OTRO: 'Otro tipo de comprobante',
+}
+
+/**
+ * Confirmación de lo que la IA leyó del comprobante. Nada se carga al pago hasta que
+ * quien lo registra confirma: si se detectó una app (Mach...) se le pregunta; lo que
+ * no se pudo leer (o se escribió a mano) se resalta y lo digita la persona.
+ */
+function ConfirmarLectura({ e, plataforma, onConfirm, onCancel }: {
+  e: ReciboExtraido
+  plataforma?: string
+  onConfirm: (v: { fecha: string; monto: number; medio: string; referencia: string; banco: string }) => void
+  onCancel: () => void
+}) {
+  const medios = mediosPagoPara(plataforma)
+  const medioInicial = medioDelCatalogo(e.medioPago, plataforma) || ''
+  const ileg = new Set<string>(e.ilegibles || [])
+  const [appOk, setAppOk] = useState<boolean | null>(e.app ? null : true)
+  const [fecha, setFecha] = useState(e.fecha || '')
+  const [monto, setMonto] = useState(e.monto != null ? String(Math.round(e.monto)) : '')
+  const [medio, setMedio] = useState(medioInicial)
+  const [referencia, setReferencia] = useState(String(e.referencia || '').replace(/[^A-Za-z0-9\-]/g, ''))
+  const [banco, setBanco] = useState(e.banco || '')
+
+  const montoNum = Number(String(monto).replace(/[^\d]/g, '')) || 0
+  const faltaFecha = !/^\d{4}-\d{2}-\d{2}$/.test(fecha)
+  const faltaMonto = !(montoNum > 0)
+  const faltaMedio = !medio
+  const bloqueado = appOk === null || faltaFecha || faltaMonto || faltaMedio
+  // Un campo se resalta si la IA lo marcó ilegible, no lo encontró, o el documento es manuscrito.
+  const dudoso = (k: string, vacio: boolean) => ileg.has(k) || vacio || (e.manuscrito && (k === 'monto' || k === 'fecha'))
+  const cls = (k: string, vacio: boolean) =>
+    `mt-1 w-full rounded-md border px-3 py-2 text-sm ${dudoso(k, vacio) ? 'border-amber-400 bg-amber-50' : 'border-gray-300'}`
+  const nota = (k: string, vacio: boolean) => dudoso(k, vacio) && (
+    <p className="mt-0.5 text-[11px] text-amber-700">
+      {ileg.has(k) ? 'No se pudo leer con certeza: digítalo.' : vacio ? 'No apareció en el comprobante: digítalo.' : 'Escrito a mano: verifícalo.'}
+    </p>
+  )
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <h4 className="text-base font-bold text-gray-900">Confirma lo leído del comprobante</h4>
+        <p className="mt-1 text-xs text-gray-500">
+          {e.tipoDocumento ? TIPO_DOC_TXT[e.tipoDocumento] : 'Comprobante'}
+          {e.confianza != null ? ` · confianza ${Math.round(e.confianza * 100)}%` : ''}
+        </p>
+
+        {e.manuscrito && (
+          <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+            ✋ Este documento tiene datos escritos a mano: compara el monto y la fecha con el papel antes de confirmar.
+          </div>
+        )}
+
+        {e.app && (
+          <div className="mt-3 rounded-md border border-indigo-200 bg-indigo-50 p-3">
+            <p className="text-sm font-medium text-indigo-900">¿Es un pago con {e.app}?</p>
+            <div className="mt-2 flex gap-2">
+              <button type="button" onClick={() => { setAppOk(true); if (!banco) setBanco(e.app || '') }}
+                className={`rounded-md border px-3 py-1 text-sm ${appOk === true ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300 bg-white text-gray-700'}`}>
+                Sí, es {e.app}
+              </button>
+              <button type="button" onClick={() => { setAppOk(false); if (banco === e.app) setBanco('') }}
+                className={`rounded-md border px-3 py-1 text-sm ${appOk === false ? 'border-red-500 bg-red-500 text-white' : 'border-gray-300 bg-white text-gray-700'}`}>
+                No
+              </button>
+            </div>
+            {appOk === false && <p className="mt-1 text-[11px] text-indigo-800">Digita abajo el banco o app desde la que se pagó.</p>}
+          </div>
+        )}
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Fecha del pago *</label>
+            <input type="date" value={fecha} onChange={x => setFecha(x.target.value)} className={cls('fecha', faltaFecha)} />
+            {nota('fecha', faltaFecha)}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Valor pagado *</label>
+            <input type="text" inputMode="numeric" value={monto ? new Intl.NumberFormat('es-CL').format(montoNum) : ''}
+              onChange={x => setMonto(x.target.value.replace(/[^\d]/g, ''))} className={cls('monto', faltaMonto)} />
+            {nota('monto', faltaMonto)}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Medio de pago *</label>
+            <select value={medio} onChange={x => setMedio(x.target.value)} className={cls('medioPago', faltaMedio)}>
+              <option value="">Selecciona…</option>
+              {medios.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            {nota('medioPago', faltaMedio)}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700">Banco / app de origen</label>
+            <input type="text" value={banco} onChange={x => setBanco(x.target.value)} className={cls('banco', false)} />
+            {ileg.has('banco') && nota('banco', false)}
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-700"># Referencia</label>
+            <input type="text" value={referencia} onChange={x => setReferencia(x.target.value.replace(/[^A-Za-z0-9\-]/g, ''))} className={cls('referencia', false)} />
+            {ileg.has('referencia')
+              ? nota('referencia', false)
+              : !referencia && <p className="mt-0.5 text-[11px] text-gray-500">El comprobante no trae número de operación; déjalo vacío si no lo tienes.</p>}
+          </div>
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onCancel} className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            Descartar lectura
+          </button>
+          <button type="button" disabled={bloqueado}
+            onClick={() => onConfirm({ fecha, monto: montoNum, medio, referencia, banco })}
+            className="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50">
+            Confirmar y cargar
+          </button>
+        </div>
+        {bloqueado && <p className="mt-1 text-right text-[11px] text-gray-500">Responde la pregunta de la app y completa fecha, valor y medio.</p>}
       </div>
     </div>
   )

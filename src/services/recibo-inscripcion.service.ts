@@ -29,23 +29,33 @@ import {
   normalizarExtraido, montoCoincide, medioDelCatalogo, aNumero, urlsDeRecibo,
 } from '@/lib/recibo-inscripcion';
 
-const OPENAI_MODEL = 'gpt-4o-mini';
+// gpt-4o y no mini: en papeletas de depósito a mano, mini confundía las denominaciones impresas
+// (20.000, 10.000...) con el monto. Son pocas lecturas por día: la exactitud pesa más que el costo.
+const OPENAI_MODEL = 'gpt-4o';
 
 const PROMPT = `Eres un extractor de datos de COMPROBANTES DE PAGO de Latinoamérica (Chile, Colombia, Ecuador, Perú): Webpay/Transbank, Nequi, Daviplata, PSE, transferencias bancarias (Banco Estado, Santander, Bancolombia, Banco Pichincha, Banco Guayaquil, etc.), Paypal, depósitos.
 
 Analiza el comprobante adjunto y devuelve EXCLUSIVAMENTE un objeto JSON válido (sin texto adicional, sin markdown) con EXACTAMENTE estas claves:
 {
-  "medioPago": string|null,   // normalizado: "Webpay", "Transferencia", "Paypal", "Nequi", "Daviplata", "PSE", "Efectivo", "Tarjeta". Transferencia o depósito bancario → "Transferencia".
+  "medioPago": string|null,   // normalizado: "Webpay", "Transferencia", "Paypal", "Nequi", "Daviplata", "PSE", "Efectivo", "Tarjeta". Transferencia electrónica (app o web) → "Transferencia". Depósito EN EFECTIVO en caja/ventanilla (boleta de caja o papeleta de depósito) → "Efectivo".
   "fecha": string|null,       // fecha del pago en formato YYYY-MM-DD. Interpreta "14 De Septiembre De 2026", "12/9/2026", "14-09-2026", "11/09/2026 13:27" (día/mes/año).
   "monto": number|null,       // valor pagado, SOLO el número sin símbolos ni separadores de miles: 115000, 99, 4000.
   "referencia": string|null,  // referencia, orden de compra, número de autorización, "Nº de operación" o de comprobante. NO el número de cuenta.
   "banco": string|null,       // banco DESDE el que se pagó (origen/emisor: el del logo de la app bancaria o el "Origen" de la transferencia), NO el banco del destinatario. Ej.: "Banco Falabella".
-  "confianza": number         // 0 a 1: qué tan seguro estás de la extracción.
+  "confianza": number,        // 0 a 1: qué tan seguro estás de la extracción.
+  "tipoDocumento": string,    // "APP_TRANSFERENCIA" (pantalla de app o banco), "DEPOSITO_CAJA" (boleta impresa de caja), "PAPELETA_MANUSCRITA" (formulario de depósito llenado a mano), "PASARELA" (Webpay/PSE...) u "OTRO".
+  "app": string|null,         // app o billetera SOLO si su nombre o logo se ve en el comprobante (Mach, Mercado Pago, Tenpo, Fpay, Nequi, Daviplata, BancoEstado, etc.). Si no se ve, null. NO la adivines.
+  "manuscrito": boolean,      // true si el monto o la fecha están escritos A MANO.
+  "ilegibles": string[]       // claves entre "medioPago","fecha","monto","referencia","banco" que SÍ existen en el documento pero no puedes leer con certeza (borroso, tachado, cortado, trazo dudoso). Si un dato simplemente no aparece, va null y NO en esta lista.
 }
 
 Reglas ESTRICTAS:
 - En Chile, Colombia y Perú el PUNTO separa los MILES y la coma los decimales: "$125.000" son 125000 (ciento veinticinco mil), "$1.150.000" son 1150000. Los pesos no llevan decimales: nunca devuelvas 125 por "$125.000".
 - Si un campo no aparece en el comprobante, usa null. NUNCA inventes datos.
+- Ante un dígito dudoso (sobre todo en letra manuscrita) NO adivines: pon el campo en null y su clave en "ilegibles".
+- PAPELETAS DE DEPÓSITO (formulario "Comprobante de depósito" de BancoEstado u otro banco, llenado a mano): son "PAPELETA_MANUSCRITA". La columna "Detalle efectivo" con 20.000, 10.000, 5.000, 2.000, 1.000, 500, 100, 50, 10 son DENOMINACIONES IMPRESAS, NUNCA el monto. El monto es lo escrito a mano en "TOTAL DEPÓSITO" (o su casilla de monto). Si esa casilla no se ve (foto recortada) o está en blanco, "monto": null y "monto" en "ilegibles".
+- La fecha escrita a mano (día / mes / año en casillas) se interpreta como día/mes/año; si el año es dudoso, pon "fecha" en "ilegibles".
+- "app" va SOLO si el nombre o logo de la app aparece como texto o ícono reconocible. Una ilustración sin nombre NO basta: usa null.
 - Si el archivo NO es un comprobante de pago, pon "confianza": 0 y todo lo demás null.
 - Responde ÚNICAMENTE el objeto JSON.`;
 
@@ -120,7 +130,7 @@ export async function extraerJsonConVision(buf: Buffer, tipo: string, prompt: st
     try {
       respuesta = await client.chat.completions.create({
         model: OPENAI_MODEL,
-        max_tokens: 600,
+        max_tokens: 800,
         temperature: 0,
         response_format: { type: 'json_object' },
         messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, archivo] as any }],

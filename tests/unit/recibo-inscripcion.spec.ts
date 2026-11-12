@@ -63,3 +63,21 @@ test('resumenRecibo arma la línea que se ve en el modal', () => {
     .toBe('Webpay · $115.000 · 2026-09-30 · ref 123')
   expect(resumenRecibo(null)).toBe('')
 })
+
+test('papeleta a mano: un monto igual a una denominación impresa se descarta y se pide digitarlo', () => {
+  const e = normalizarExtraido({ monto: 20000, manuscrito: true, tipoDocumento: 'DEPOSITO_CAJA', ilegibles: [] })
+  expect(e.monto).toBeNull()
+  expect(e.ilegibles).toContain('monto')
+  expect(e.tipoDocumento).toBe('PAPELETA_MANUSCRITA')
+})
+
+test('un comprobante de app no se toca: monto 115.000 y sin ilegibles', () => {
+  const e = normalizarExtraido({ monto: 115000, tipoDocumento: 'APP_TRANSFERENCIA', app: 'Mach' })
+  expect(e.monto).toBe(115000)
+  expect(e.ilegibles).toEqual([])
+  expect(e.app).toBe('Mach')
+})
+
+test('campos ilegibles inventados se ignoran', () => {
+  expect(normalizarExtraido({ ilegibles: ['fecha', 'cualquiera'] }).ilegibles).toEqual(['fecha'])
+})

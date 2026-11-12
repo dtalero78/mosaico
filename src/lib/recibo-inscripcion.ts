@@ -18,7 +18,21 @@ export interface ReciboExtraido {
   referencia: string | null;
   banco: string | null;
   confianza: number | null;    // 0..1
+  /** Cómo es el documento: pantalla de app/transferencia, depósito en caja, papeleta a mano... */
+  tipoDocumento?: TipoDocumentoPago | null;
+  /** App o billetera detectada en el comprobante (Mach, Mercado Pago, Tenpo...). Se CONFIRMA con la persona. */
+  app?: string | null;
+  /** Monto o fecha escritos a mano: la lectura es menos fiable. */
+  manuscrito?: boolean;
+  /** Campos que están en el documento pero no se leyeron con certeza. La persona los digita. */
+  ilegibles?: CampoLeido[];
 }
+
+export type TipoDocumentoPago = 'APP_TRANSFERENCIA' | 'DEPOSITO_CAJA' | 'PAPELETA_MANUSCRITA' | 'PASARELA' | 'OTRO';
+export type CampoLeido = 'medioPago' | 'fecha' | 'monto' | 'referencia' | 'banco';
+const TIPOS_DOC: TipoDocumentoPago[] = ['APP_TRANSFERENCIA', 'DEPOSITO_CAJA', 'PAPELETA_MANUSCRITA', 'PASARELA', 'OTRO'];
+const DENOMINACIONES = [10, 50, 100, 500, 1000, 2000, 5000, 10000, 20000];
+const CAMPOS_LEIDOS: CampoLeido[] = ['medioPago', 'fecha', 'monto', 'referencia', 'banco'];
 
 export type EstadoLectura = 'PENDIENTE' | 'OK' | 'FALLIDA';
 
@@ -134,13 +148,29 @@ export function normalizarExtraido(c: Partial<Record<keyof ReciboExtraido, unkno
   };
   const fecha = typeof x.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha.trim()) ? x.fecha.trim() : null;
   const conf = aNumero(x.confianza);
+  const ilegibles: CampoLeido[] = Array.isArray(x.ilegibles) ? (x.ilegibles.filter((k: any) => CAMPOS_LEIDOS.includes(k)) as CampoLeido[]) : [];
+  let monto = aNumero(x.monto);
+  let tipoDocumento: TipoDocumentoPago | null = TIPOS_DOC.includes(x.tipoDocumento as any) ? (x.tipoDocumento as TipoDocumentoPago) : null;
+  const manuscrito = x.manuscrito === true;
+  // Red de seguridad: en un depósito a mano, un "monto" igual a una denominación impresa del
+  // formulario (20.000, 10.000...) casi seguro es la columna de billetes, no el total.
+  if (manuscrito && monto !== null && DENOMINACIONES.includes(monto)) {
+    monto = null;
+    if (!ilegibles.includes('monto')) ilegibles.push('monto');
+  }
+  if (manuscrito && tipoDocumento === 'DEPOSITO_CAJA') tipoDocumento = 'PAPELETA_MANUSCRITA';
+  if (monto === null && !ilegibles.includes('monto') && manuscrito) ilegibles.push('monto');
   return {
     medioPago: texto(x.medioPago),
     fecha,
-    monto: aNumero(x.monto),
+    monto,
     referencia: texto(x.referencia),
     banco: texto(x.banco),
     confianza: conf === null ? null : Math.max(0, Math.min(1, conf)),
+    tipoDocumento,
+    app: texto(x.app),
+    manuscrito,
+    ilegibles,
   };
 }
 
