@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import {
-  aNumero, montoCoincide, medioDelCatalogo, normalizarExtraido, reciboPermitido, resumenRecibo,
+  aNumero, montoCoincide, medioDelCatalogo, normalizarExtraido, reciboPermitido, resumenRecibo, avisoDestino,
 } from '../../src/lib/recibo-inscripcion'
 
 /**
@@ -80,4 +80,17 @@ test('un comprobante de app no se toca: monto 115.000 y sin ilegibles', () => {
 
 test('campos ilegibles inventados se ignoran', () => {
   expect(normalizarExtraido({ ilegibles: ['fecha', 'cualquiera'] }).ilegibles).toEqual(['fecha'])
+})
+
+test('avisoDestino: coincide por RUT o por cuenta de MOSAICO; avisa si es otro destinatario', () => {
+  const ok = { medioPago: null, fecha: null, monto: null, referencia: null, banco: null, confianza: 1 } as any
+  expect(avisoDestino({ ...ok, destino: { titular: 'Mosaico Chile Spa', rut: '77.744.966-4', cuenta: null } }, 'Chile')).toBeNull()
+  expect(avisoDestino({ ...ok, destino: { titular: null, rut: null, cuenta: '23572272630' } }, 'Chile')).toBeNull()
+  expect(avisoDestino({ ...ok, destino: { titular: 'Otra SpA', rut: '76.111.222-3', cuenta: '999' } }, 'Chile')).toContain('no coincide')
+  expect(avisoDestino({ ...ok, destino: { titular: 'Otra SpA', rut: '76.111.222-3', cuenta: null } }, 'Colombia')).toBeNull()
+  expect(avisoDestino({ ...ok, destino: { titular: null, rut: null, cuenta: null } }, 'Chile')).toBeNull()
+})
+
+test('Efectivo existe en el catálogo de medios de Chile', () => {
+  expect(medioDelCatalogo('Efectivo', 'Chile')).toBe('Efectivo')
 })

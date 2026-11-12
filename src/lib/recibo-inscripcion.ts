@@ -26,6 +26,8 @@ export interface ReciboExtraido {
   manuscrito?: boolean;
   /** Campos que están en el documento pero no se leyeron con certeza. La persona los digita. */
   ilegibles?: CampoLeido[];
+  /** A quién se pagó, según el comprobante (para verificar que fue a una cuenta de MOSAICO). */
+  destino?: { titular: string | null; rut: string | null; cuenta: string | null } | null;
 }
 
 export type TipoDocumentoPago = 'APP_TRANSFERENCIA' | 'DEPOSITO_CAJA' | 'PAPELETA_MANUSCRITA' | 'PASARELA' | 'OTRO';
@@ -171,6 +173,9 @@ export function normalizarExtraido(c: Partial<Record<keyof ReciboExtraido, unkno
     app: texto(x.app),
     manuscrito,
     ilegibles,
+    destino: x.destino && typeof x.destino === 'object'
+      ? { titular: texto((x.destino as any).titular), rut: texto((x.destino as any).rut), cuenta: texto((x.destino as any).cuenta) }
+      : null,
   };
 }
 
@@ -183,4 +188,35 @@ export function resumenRecibo(e: ReciboExtraido | null | undefined): string {
   if (e.fecha) partes.push(e.fecha);
   if (e.referencia) partes.push(`ref ${e.referencia}`);
   return partes.join(' · ');
+}
+
+/**
+ * Cuentas de MOSAICO donde SÍ deben llegar los pagos, por plataforma. Sólo Chile está
+ * cargada (RUT de MOSAICO CHILE SPA y su cuenta vista BancoEstado); el resto no se verifica.
+ * Para agregar un país: sumar su RUT/NIT y cuentas aquí.
+ */
+export const CUENTAS_MOSAICO: Record<string, { ruts: string[]; cuentas: string[] }> = {
+  chile: { ruts: ['777449664'], cuentas: ['23572272630'] },
+};
+
+const soloAlfaNum = (s: string | null | undefined) => String(s || '').replace(/[^0-9kK]/g, '').toUpperCase();
+
+/**
+ * Avisa si el comprobante muestra un destinatario que NO es de MOSAICO. Devuelve null si
+ * coincide, si no hay datos de destino legibles o si la plataforma no tiene cuentas cargadas.
+ * Es sólo un aviso: nunca bloquea el registro.
+ */
+export function avisoDestino(e: ReciboExtraido | null | undefined, plataforma?: string | null): string | null {
+  const conf = CUENTAS_MOSAICO[(plataforma || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()];
+  const d = e?.destino;
+  if (!conf || !d) return null;
+  // Si el comprobante nombra a MOSAICO como destinatario no se avisa: un dígito mal leído del RUT
+  // o de la cuenta no debe dar una falsa alarma.
+  if (/mosaico/i.test(String(d.titular || ''))) return null;
+  const rut = soloAlfaNum(d.rut), cuenta = soloAlfaNum(d.cuenta);
+  if (!rut && !cuenta) return null;
+  if (rut && conf.ruts.includes(rut)) return null;
+  if (cuenta && conf.cuentas.includes(cuenta)) return null;
+  const visto = [d.titular, d.rut, d.cuenta].filter(Boolean).join(' · ');
+  return 'El comprobante muestra un destinatario que no coincide con las cuentas de MOSAICO (' + visto + '). Verifica que el pago llegó a la cuenta correcta.';
 }

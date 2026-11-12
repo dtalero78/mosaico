@@ -46,6 +46,7 @@ Analiza el comprobante adjunto y devuelve EXCLUSIVAMENTE un objeto JSON válido 
   "tipoDocumento": string,    // "APP_TRANSFERENCIA" (pantalla de app o banco), "DEPOSITO_CAJA" (boleta impresa de caja), "PAPELETA_MANUSCRITA" (formulario de depósito llenado a mano), "PASARELA" (Webpay/PSE...) u "OTRO".
   "app": string|null,         // app o billetera SOLO si su nombre o logo se ve en el comprobante (Mach, Mercado Pago, Tenpo, Fpay, Nequi, Daviplata, BancoEstado, etc.). Si no se ve, null. NO la adivines.
   "manuscrito": boolean,      // true si el monto o la fecha están escritos A MANO.
+  "destino": { "titular": string|null, "rut": string|null, "cuenta": string|null },  // a quién se pagó (destinatario): nombre, RUT/NIT y número de cuenta, tal como aparecen. null si no aparecen.
   "ilegibles": string[]       // claves entre "medioPago","fecha","monto","referencia","banco" que SÍ existen en el documento pero no puedes leer con certeza (borroso, tachado, cortado, trazo dudoso). Si un dato simplemente no aparece, va null y NO en esta lista.
 }
 
@@ -54,6 +55,7 @@ Reglas ESTRICTAS:
 - Si un campo no aparece en el comprobante, usa null. NUNCA inventes datos.
 - Ante un dígito dudoso (sobre todo en letra manuscrita) NO adivines: pon el campo en null y su clave en "ilegibles".
 - PAPELETAS DE DEPÓSITO (formulario "Comprobante de depósito" de BancoEstado u otro banco, llenado a mano): son "PAPELETA_MANUSCRITA". La columna "Detalle efectivo" con 20.000, 10.000, 5.000, 2.000, 1.000, 500, 100, 50, 10 son DENOMINACIONES IMPRESAS, NUNCA el monto. El monto es lo escrito a mano en "TOTAL DEPÓSITO" (o su casilla de monto). Si esa casilla no se ve (foto recortada) o está en blanco, "monto": null y "monto" en "ilegibles".
+- "destino" es SOLO el DESTINATARIO (a quien se pagó). En una boleta o papeleta de depósito, el "RUT depositante" / "Rut Dep." es de quien PAGA: NO lo pongas en destino.rut (va null). El titular de la cuenta destino sí va en destino.titular.
 - La fecha escrita a mano (día / mes / año en casillas) se interpreta como día/mes/año; si el año es dudoso, pon "fecha" en "ilegibles".
 - "app" va SOLO si el nombre o logo de la app aparece como texto o ícono reconocible. Una ilustración sin nombre NO basta: usa null.
 - Si el archivo NO es un comprobante de pago, pon "confianza": 0 y todo lo demás null.

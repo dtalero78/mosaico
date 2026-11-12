@@ -13,7 +13,7 @@ import { resolveRealizadoPor, diasDesdeBase, fechaBaseContrato as calcFechaBase,
 import RecibosDobles, { type ReciboArchivo, sumaLeida, fmtPesos as fmtPesosRec } from '@/components/common/RecibosDobles'
 import { usePermissions } from '@/hooks/usePermissions'
 import { mediosPagoPara } from '@/lib/medios-pago'
-import { medioDelCatalogo, type ReciboExtraido } from '@/lib/recibo-inscripcion'
+import { medioDelCatalogo, avisoDestino, type ReciboExtraido } from '@/lib/recibo-inscripcion'
 
 interface PagoTitularWizardProps {
   isOpen: boolean
@@ -454,6 +454,7 @@ export default function PagoTitularWizard({
   const [leyendo, setLeyendo] = useState(false)
   // Lo leído del comprobante espera la confirmación de quien registra el pago.
   const [lectura, setLectura] = useState<ReciboExtraido | null>(null)
+  const [duplicados, setDuplicados] = useState<any[]>([])
   const leerComprobante = async (file: File) => {
     setLeyendo(true)
     try {
@@ -470,7 +471,8 @@ export default function PagoTitularWizard({
         documentosAdjuntos: [...f.documentosAdjuntos,
           { url: publicUrl, nombre: file.name, tipo: file.type, fechaSubida: new Date().toISOString() }],
       }))
-      const d = await api.post<{ extraido: any }>('/api/postgres/pagos-titulares/leer-comprobante', { url: publicUrl })
+      const d = await api.post<{ extraido: any; duplicados?: any[] }>('/api/postgres/pagos-titulares/leer-comprobante', { url: publicUrl })
+      setDuplicados(d.duplicados || [])
       setLectura(d.extraido || {})
       toast.success('Comprobante leído — confirma los datos')
     } catch (err: any) {
@@ -1048,7 +1050,7 @@ export default function PagoTitularWizard({
       </div>
       {lectura && (
         <ConfirmarLectura
-          e={lectura} plataforma={titular.plataforma}
+          e={lectura} plataforma={titular.plataforma} duplicados={duplicados}
           onCancel={() => { setLectura(null); toast('Lectura descartada: el comprobante quedó adjunto, digita los datos'); }}
           onConfirm={v => {
             setForm(f => ({
@@ -1080,9 +1082,10 @@ const TIPO_DOC_TXT: Record<string, string> = {
  * quien lo registra confirma: si se detectó una app (Mach...) se le pregunta; lo que
  * no se pudo leer (o se escribió a mano) se resalta y lo digita la persona.
  */
-function ConfirmarLectura({ e, plataforma, onConfirm, onCancel }: {
+function ConfirmarLectura({ e, plataforma, duplicados, onConfirm, onCancel }: {
   e: ReciboExtraido
   plataforma?: string
+  duplicados: any[]
   onConfirm: (v: { fecha: string; monto: number; medio: string; referencia: string; banco: string }) => void
   onCancel: () => void
 }) {
@@ -1120,6 +1123,19 @@ function ConfirmarLectura({ e, plataforma, onConfirm, onCancel }: {
           {e.confianza != null ? ` · confianza ${Math.round(e.confianza * 100)}%` : ''}
         </p>
 
+        {avisoDestino(e, plataforma) && (
+          <div className="mt-3 rounded-md border border-red-300 bg-red-50 p-2 text-xs text-red-800">⚠ {avisoDestino(e, plataforma)}</div>
+        )}
+        {duplicados.length > 0 && (
+          <div className="mt-3 rounded-md border border-orange-300 bg-orange-50 p-2 text-xs text-orange-900">
+            <p className="font-semibold">Posible pago duplicado: ya hay registros con la misma referencia o el mismo valor y fecha.</p>
+            <ul className="mt-1 list-disc pl-4">
+              {duplicados.map((d: any) => (
+                <li key={d._id}>{d.titular} · contrato {d.contrato} · ${Number(d.valorPagado).toLocaleString('es-CL')} · {String(d.fechaPago || '').slice(0, 10)}{d.numeroReferencia ? ' · ref ' + d.numeroReferencia : ''}{d.validado ? ' · validado' : ''}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {e.manuscrito && (
           <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
             ✋ Este documento tiene datos escritos a mano: compara el monto y la fecha con el papel antes de confirmar.

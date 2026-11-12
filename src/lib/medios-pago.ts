@@ -7,10 +7,10 @@
  */
 
 export const MEDIOS_PAGO_POR_PLATAFORMA: Record<string, string[]> = {
-  chile:    ['Transferencia', 'Banco Estado', 'Banco Santander', 'Paypal', 'Webpay'],
-  colombia: ['Transferencia', 'Bancolombia', 'EPAYCO', 'Paypal'],
-  ecuador:  ['Transferencia', 'Banco Pichincha', 'Banco Guayaquil', 'Banco del Barrio / Guayaquil', 'Paypal', 'Datafast'],
-  peru:     ['Transferencia', 'Banco BBVA Academic', 'Banco BBVA Rel', 'Paypal', 'Niubiz'],
+  chile:    ['Transferencia', 'Efectivo', 'Banco Estado', 'Banco Santander', 'Paypal', 'Webpay'],
+  colombia: ['Transferencia', 'Efectivo', 'Bancolombia', 'EPAYCO', 'Paypal'],
+  ecuador:  ['Transferencia', 'Efectivo', 'Banco Pichincha', 'Banco Guayaquil', 'Banco del Barrio / Guayaquil', 'Paypal', 'Datafast'],
+  peru:     ['Transferencia', 'Efectivo', 'Banco BBVA Academic', 'Banco BBVA Rel', 'Paypal', 'Niubiz'],
 };
 
 /** Normaliza la plataforma para el lookup (sin acentos, minúsculas): "Perú" → "peru". */
