@@ -24,20 +24,19 @@ export const POST = handlerWithAuth(async (req: NextRequest, _ctx, session) => {
   const url = String(body?.url || '').trim()
   if (!url) throw new ValidationError('url del comprobante es requerida.')
   const extraido = await leerRecibo(url)
-  // Posibles duplicados: SÓLO entre los pagos de ESTE contrato (idPeople del titular): misma
-  // referencia, o mismo monto y misma fecha. Sin idPeople no se busca (otros titulares pagan
-  // montos iguales el mismo día y daban falsas alarmas). Es sólo un aviso: no bloquea.
+  // Posibles duplicados: SÓLO entre los pagos de ESTE contrato (idPeople del titular) y SÓLO por
+  // número de referencia. El valor no sirve: cada cuota del contrato vale lo mismo, así que el
+  // mismo valor (aun con la misma fecha) es lo normal. Es sólo un aviso: no bloquea.
   const idPeople = String(body?.idPeople || '').trim()
   const ref = String(extraido.referencia || '').trim()
-  const duplicados = (idPeople && (ref || (extraido.monto && extraido.fecha)))
+  const duplicados = (idPeople && ref.length >= 4)
     ? await queryMany<any>(
         'SELECT pt."_id", pt."numeroReferencia", pt."valorPagado", pt."fechaPago"::text AS "fechaPago", pt."validado", p."contrato", ' +
         'CONCAT_WS(\' \', p."primerNombre", p."primerApellido") AS titular ' +
         'FROM "PAGOS_TITULARES" pt JOIN "PEOPLE" p ON p."_id" = pt."idPeople" ' +
-        'WHERE pt."idPeople" = $4 AND ((length($1) >= 4 AND lower(trim(pt."numeroReferencia")) = lower($1)) ' +
-        'OR ($2::numeric > 0 AND $3::date IS NOT NULL AND pt."valorPagado" = $2::numeric AND pt."fechaPago" = $3::date)) ' +
+        'WHERE pt."idPeople" = $2 AND lower(trim(pt."numeroReferencia")) = lower($1) ' +
         'ORDER BY pt."_createdDate" DESC LIMIT 3',
-        [ref, extraido.monto ?? 0, extraido.fecha || null, idPeople],
+        [ref, idPeople],
       )
     : []
   return successResponse({ extraido, duplicados })
