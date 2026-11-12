@@ -325,15 +325,15 @@ export default function EventModal({
     }
   }, [formData.clubStep, formData.tituloONivel, formData.evento])
 
-  // Generar opciones de horas (6:00 AM - 10:00 PM) en pasos de 30 minutos.
+  // Generar opciones de horas (6:00 AM - 10:00 PM) en pasos de 15 minutos.
   // Los eventos de Nivelación duran 30 min, así que se necesitan slots :30
   // para poder agendar dos por hora (ej. 6:00 y 6:30). Para los demás tipos
   // (1 hora) el admin igual puede elegir en punto.
   const generateHourOptions = () => {
     const hours: { value: string; label: string }[] = []
     for (let i = 6; i <= 22; i++) {
-      for (const m of [0, 30]) {
-        if (i === 22 && m === 30) continue // tope en 22:00 (10:00 PM)
+      for (const m of [0, 15, 30, 45]) {
+        if (i === 22 && m > 0) continue // tope en 22:00 (10:00 PM)
         const mm = m.toString().padStart(2, '0')
         const value = `${i.toString().padStart(2, '0')}:${mm}`
         const h12 = i % 12 === 0 ? 12 : i % 12
