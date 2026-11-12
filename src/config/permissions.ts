@@ -173,6 +173,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'En Verificación Inscripción: la IA lee el recibo de inscripción (medio de pago, fecha, monto, referencia, banco), el gestor corrige lo que haga falta y lo guarda. Precarga esos datos en la cuota de inscripción sin validarla',
   },
   {
+    code: PersonPermission.PAGO_ESPECIAL,
+    module: Module.PERSON,
+    section: 'Financiera',
+    name: 'Botón "Pago Especial"',
+    description: 'Pestaña Financiera del titular: abre el formulario de Pago Especial. Hoy permite registrar UN pago de un titular que tiene más de una matrícula, repartido entre los contratos que se marquen (un pago por contrato, con uno o dos recibos). Requiere además el permiso de registrar pagos',
+  },
+  {
     code: PersonPermission.ESTADO_CUENTA,
     module: Module.PERSON,
     section: 'Financiera',

@@ -11,6 +11,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { api, handleApiError } from '@/hooks/use-api'
 import { getLocalToday } from '@/lib/fecha-local'
 import PagoTitularWizard from './PagoTitularWizard'
+import PagoEspecialWizard from './PagoEspecialWizard'
 import { calcularMora } from '@/lib/mora'
 import { asignarPagos } from '@/lib/cuotas-pagos'
 
@@ -68,6 +69,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
   const [pagos, setPagos] = useState<any[]>([])
   const [loadingPagos, setLoadingPagos] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [showEspecial, setShowEspecial] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; nombre: string } | null>(null)
   const [validateModal, setValidateModal] = useState<{ id: string; numCuota: number | null } | null>(null)
   const [facturaInput, setFacturaInput] = useState('')
@@ -575,6 +577,16 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-gray-900">📑 Pagos del Titular</h3>
+              <div className="flex items-center gap-2">
+              <PermissionGuard allPermissions={[PersonPermission.PAGOS_REGISTRAR, PersonPermission.PAGO_ESPECIAL]}>
+                <button
+                  type="button"
+                  onClick={() => setShowEspecial(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-500 text-white rounded-md hover:bg-amber-600"
+                >
+                  ⭐ Pago Especial
+                </button>
+              </PermissionGuard>
               <PermissionGuard permission={PersonPermission.PAGOS_REGISTRAR}>
                 <button
                   type="button"
@@ -584,6 +596,7 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
                   <PlusIcon className="h-4 w-4" /> Registrar Pago
                 </button>
               </PermissionGuard>
+              </div>
             </div>
 
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -782,6 +795,21 @@ export default function PersonFinancial({ person, financialData }: PersonFinanci
           // El wizard lo usa para mostrar el campo read-only y computar
           // "Saldo después de pago" en vivo.
           saldoActual={Number(financial?.saldo ?? 0)}
+          onCreated={loadPagos}
+        />
+      )}
+
+      {showEspecial && (
+        <PagoEspecialWizard
+          isOpen={showEspecial}
+          onClose={() => setShowEspecial(false)}
+          titular={{
+            _id: person._id,
+            numeroId: person.numeroId,
+            plataforma: person.plataforma,
+            primerNombre: person.primerNombre,
+            primerApellido: person.primerApellido,
+          }}
           onCreated={loadPagos}
         />
       )}

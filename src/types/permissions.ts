@@ -93,6 +93,8 @@ export enum PersonPermission {
   /** "Leer recibo" en Verificación Inscripción: la IA lee el comprobante y el gestor corrige. */
   LEER_RECIBO            = 'PERSON.FINANCIERA.LEER_RECIBO',
   ESTADO_CUENTA          = 'PERSON.FINANCIERA.ESTADO_CUENTA',
+  /** Botón "Pago Especial": pago de un titular con varias matrículas (y, después, la penalidad). */
+  PAGO_ESPECIAL          = 'PERSON.FINANCIERA.PAGO_ESPECIAL',
 
   // Legacy permissions (keeping for backward compatibility)
   ACTIVAR_DESACTIVAR = 'PERSON.ADMIN.ACTIVAR_DESACTIVAR',
