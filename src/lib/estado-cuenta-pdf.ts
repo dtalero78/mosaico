@@ -19,7 +19,7 @@ export interface EstadoCuentaMov {
   pago: string | null;       // ISO (fecha en que pagó) o null
   valor: number;
   canal: string;
-  estado: 'Pagado' | 'Parcial' | 'En mora' | 'Por vencer' | 'Pendiente' | 'Descuento';
+  estado: 'Pagado' | 'Parcial' | 'En mora' | 'Por vencer' | 'Pendiente' | 'Descuento' | 'Arreglo penalidad';
   /** Cómo se pagó (Pago normal, Pago con abonos, …). Ver src/lib/cuotas-pagos.ts. */
   etiqueta?: string | null;
   /** Abonos que la cubrieron (solo cuotas con 2+ pagos o parciales). */
@@ -102,6 +102,7 @@ const ESTADO_STYLE: Record<string, { fg: string; bg: string }> = {
   'Por vencer':{ fg: C.amber,     bg: C.amberBg },
   Pendiente:   { fg: C.gray,      bg: C.grayBg },
   Descuento:   { fg: C.gray,      bg: C.grayBg },
+  'Arreglo penalidad': { fg: C.amber, bg: C.amberBg },
 };
 
 const MARGIN = 40;

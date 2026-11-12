@@ -104,11 +104,16 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     : [];
 
   // 4. Pagos REGISTRADOS (validados o no)
-  const pagos = await queryMany<any>(
-    `SELECT "_id","numCuota","fechaPago","_createdDate","valorPagado","descuento","medioPago","banco","numeroReferencia","validado","inscripcion"
+  const todosLosPagos = await queryMany<any>(
+    `SELECT "_id","numCuota","fechaPago","_createdDate","valorPagado","descuento","medioPago","banco","numeroReferencia","validado","inscripcion","penalidadPlanId"
      FROM "PAGOS_TITULARES" WHERE "idPeople" = $1`,
     [idPeople],
   );
+
+  // Los pagos de un arreglo de penalidad (Pago Especial) NO son pagos del plan: no cubren
+  // cuotas ni bajan el saldo del plan; se muestran aparte como «Pago arreglo penalidad».
+  const pagos = todosLosPagos.filter(p => !p.penalidadPlanId);
+  const pagosPenalidad = todosLosPagos.filter(p => !!p.penalidadPlanId);
 
   // 5. Quien firma el Estado de Cuenta: María Palacios (Jefe de Recaudos), con su
   //    firma manuscrita (public/firmas/maria-palacios.png). Es la misma para todas
@@ -217,6 +222,16 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     });
   }
 
+  // Pagos del arreglo de penalidad: una fila por pago, fuera de las cuotas y de los conteos.
+  pagosPenalidad
+    .sort((a, b) => String(a.fechaPago || '').localeCompare(String(b.fechaPago || '')))
+    .forEach((p, i) => {
+      todos.push({
+        n: 'PEN', concepto: `Pago arreglo penalidad${pagosPenalidad.length > 1 ? ' ' + (i + 1) : ''}`, vence: null,
+        pago: p.fechaPago || null, valor: num(p.valorPagado), canal: canalDe(p), estado: 'Arreglo penalidad',
+      });
+    });
+
   // ── Resumen: efectivo + descuento cubren la deuda ───────────────────────
   const pagado = Math.min(totalPlan, abonado);
   const descuento = Math.min(totalPlan, descontado);
@@ -224,7 +239,7 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
   const avancePct = totalPlan > 0 ? Math.min(100, (cubiertoTotal / totalPlan) * 100) : 0;
 
   const insMov = todos.find(m => m.n === 'CI');
-  const cuotaMovs = todos.filter(m => m.n !== 'CI' && m.n !== 'DESC');
+  const cuotaMovs = todos.filter(m => m.n !== 'CI' && m.n !== 'DESC' && m.n !== 'PEN');
   const mora = cuotaMovs.filter(m => m.estado === 'En mora').reduce((s, m) => s + m.valor, 0);
   const porVencer = cuotaMovs.filter(m => m.estado === 'Por vencer').reduce((s, m) => s + m.valor, 0);
 
@@ -263,11 +278,11 @@ export const GET = handlerWithAuth(async (req, _ctx, session) => {
     });
     // Próximo pago = primera cuota no pagada por fecha de vencimiento
     proximoPago = [...todos]
-      .filter(m => m.n !== 'DESC' && m.estado !== 'Pagado' && m.vence)
+      .filter(m => m.n !== 'DESC' && m.n !== 'PEN' && m.estado !== 'Pagado' && m.vence)
       .sort((a, b) => new Date(a.vence!).getTime() - new Date(b.vence!).getTime())[0] || null;
     // Último pago = movimiento pagado con la fecha de pago más reciente
     ultimoPago = [...todos]
-      .filter(m => m.n !== 'DESC' && m.pago)
+      .filter(m => m.n !== 'DESC' && m.n !== 'PEN' && m.pago)
       .sort((a, b) => new Date(b.pago!).getTime() - new Date(a.pago!).getTime())[0] || null;
   }
 
