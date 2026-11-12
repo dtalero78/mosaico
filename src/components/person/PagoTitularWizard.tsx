@@ -471,7 +471,7 @@ export default function PagoTitularWizard({
         documentosAdjuntos: [...f.documentosAdjuntos,
           { url: publicUrl, nombre: file.name, tipo: file.type, fechaSubida: new Date().toISOString() }],
       }))
-      const d = await api.post<{ extraido: any; duplicados?: any[] }>('/api/postgres/pagos-titulares/leer-comprobante', { url: publicUrl })
+      const d = await api.post<{ extraido: any; duplicados?: any[] }>('/api/postgres/pagos-titulares/leer-comprobante', { url: publicUrl, idPeople: titular._id })
       setDuplicados(d.duplicados || [])
       setLectura(d.extraido || {})
       toast.success('Comprobante leído — confirma los datos')
@@ -1128,7 +1128,7 @@ function ConfirmarLectura({ e, plataforma, duplicados, onConfirm, onCancel }: {
         )}
         {duplicados.length > 0 && (
           <div className="mt-3 rounded-md border border-orange-300 bg-orange-50 p-2 text-xs text-orange-900">
-            <p className="font-semibold">Posible pago duplicado: ya hay registros con la misma referencia o el mismo valor y fecha.</p>
+            <p className="font-semibold">Posible pago duplicado: este contrato ya tiene un pago con la misma referencia o con el mismo valor y fecha. Es solo un aviso: puedes continuar.</p>
             <ul className="mt-1 list-disc pl-4">
               {duplicados.map((d: any) => (
                 <li key={d._id}>{d.titular} · contrato {d.contrato} · ${Number(d.valorPagado).toLocaleString('es-CL')} · {String(d.fechaPago || '').slice(0, 10)}{d.numeroReferencia ? ' · ref ' + d.numeroReferencia : ''}{d.validado ? ' · validado' : ''}</li>
