@@ -1623,6 +1623,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /admin/contratos-prueba. Lista los contratos creados como prueba (prefijo PRB-) y permite purgarlos en cascada (PEOPLE + ACADEMICA + ACADEMICA_BOOKINGS + FINANCIEROS + PAGOS_TITULARES + STEP_OVERRIDES + COMPLEMENTARIA_ATTEMPTS + USUARIOS_ROLES). Cada purga deja snapshot completo en PURGE_LOG (reversible si se identifica error). Acción destructiva — recomendado SUPER_ADMIN únicamente',
   },
   {
+    code: MantenimientoPermission.LINK_CONTINGENCIA,
+    module: Module.MANTENIMIENTO,
+    section: 'Usuarios',
+    name: 'Página "Link de sesión"',
+    description: 'Acceso a /admin/link-sesion. Busca a un estudiante por su ID, muestra la próxima sesión de hoy (campaña, curso, salón, guía y link de Zoom) y envía ese link por WhatsApp al apoderado, por contingencia. Cada envío queda registrado',
+  },
+  {
     code: MantenimientoPermission.BOOKING,
     module: Module.MANTENIMIENTO,
     section: 'Usuarios',

@@ -256,6 +256,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Booking',        href: '/admin/booking',        newTab: true },
           { name: 'Clear Historic', href: '/admin/clear-historic', newTab: true },
           { name: 'Gestión de Usuarios', href: '/admin/roles/create', newTab: true },
+          { name: 'Link de sesión', href: '/admin/link-sesion', newTab: true },
         ],
       },
       {
@@ -494,6 +495,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/admin/booking': [
       MantenimientoPermission.BOOKING,
+    ],
+    '/admin/link-sesion': [
+      MantenimientoPermission.LINK_CONTINGENCIA,
     ],
     '/admin/envio-mensajes': [
       MantenimientoPermission.ENVIO_MENSAJES,

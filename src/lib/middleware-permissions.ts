@@ -346,6 +346,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/admin/contratos-prueba': [
     'MANTENIMIENTO.USUARIOS.CONTRATOS_PRUEBA' as Permission,
   ],
+  '/admin/link-sesion': [
+    'MANTENIMIENTO.USUARIOS.ENVIO_LINK_CONTINGENCIA' as Permission,
+  ],
   '/admin/booking': [
     'MANTENIMIENTO.USUARIOS.BOOKING' as Permission,
   ],
