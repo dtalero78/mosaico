@@ -184,7 +184,7 @@ export default function NivelacionesConfirmadasTab({ onCount, refreshKey = 0 }: 
                       </span>
                       <span className="block text-xs text-gray-400 mt-0.5">{fmtFechaHora(r.confirmadoEn)}</span>
                     </>) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Sin confirmar</span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Sin confirmar</span>
                     )}
                   </td>
                 </tr>
