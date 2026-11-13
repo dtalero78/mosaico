@@ -7,6 +7,7 @@ import { ServicioPermission } from '@/types/permissions'
 import { exportToExcel } from '@/lib/export-excel'
 import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
 import { usePermissions } from '@/hooks/usePermissions'
+import { estadoConfirmacion } from '@/lib/nivelacion-confirmacion'
 
 interface Row {
   academicaId: string
@@ -56,8 +57,11 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
   const [leccion, setLeccion] = useState('')
   const [guia, setGuia] = useState('')
   const [usuario, setUsuario] = useState('')
+  /** Solo las que aún no se han confirmado (sin `confirmadoEn`). Filtro local, no recarga. */
+  /** '' = todos; 'confirmada' | 'pendiente' (aún puede confirmar) | 'sin' (plazo vencido). */
+  const [estado, setEstado] = useState('')
 
-  const [rows, setRows] = useState<Row[]>([])
+  const [allRows, setRows] = useState<Row[]>([])
   const [cursos, setCursos] = useState<string[]>([])
   const [lecciones, setLecciones] = useState<string[]>([])
   const [guias, setGuias] = useState<Guia[]>([])
@@ -95,7 +99,13 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
   }, [refreshKey])
 
   const aplicar = () => fetchData({ curso, leccion, guia, usuario })
-  const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); setUsuario(''); fetchData() }
+  const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); setUsuario(''); setEstado(''); fetchData() }
+  // El contador de la pestaña (onCount) sigue siendo el total; esto solo acota la tabla.
+  const estadoDe = (r: Row) => estadoConfirmacion({ fecha: r.fechaSolicitud, confirmadoEn: r.confirmadoEn }, new Date(), r.eventoDia)
+  const rows = !estado ? allRows : allRows.filter(r => {
+    const e = estadoDe(r)
+    return estado === 'confirmada' ? e === 'confirmada' : estado === 'pendiente' ? e === 'abierta' : e === 'vencida'
+  })
   const fmt = (iso: string | null) => iso
     ? new Date(iso).toLocaleString('es-CL', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     : '—'
@@ -149,7 +159,7 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
   return (
     <div>
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label htmlFor="pe-usuario" className="block text-xs font-medium text-gray-500 mb-1">Usuario</label>
             <input id="pe-usuario" type="text" value={usuario} onChange={e => setUsuario(e.target.value)}
@@ -167,6 +177,15 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
             <label htmlFor="pe-leccion" className="block text-xs font-medium text-gray-500 mb-1">Lección</label>
             <select id="pe-leccion" value={leccion} onChange={e => setLeccion(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todas</option>{lecciones.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="pe-estado" className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
+            <select id="pe-estado" value={estado} onChange={e => setEstado(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Todos</option>
+              <option value="confirmada">Confirmadas</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="sin">Sin confirmar</option>
             </select>
           </div>
           <div>
@@ -196,7 +215,9 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">Cargando…</div>
       ) : rows.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">
-          No hay nivelaciones agendadas esperando que se dicten
+          {estado && allRows.length > 0
+            ? 'No hay nivelaciones con ese estado y estos filtros'
+            : 'No hay nivelaciones agendadas esperando que se dicten'}
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
