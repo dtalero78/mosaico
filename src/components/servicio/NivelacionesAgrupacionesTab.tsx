@@ -83,6 +83,9 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
   const [leccion, setLeccion] = useState('')
   const [guia, setGuia] = useState('')
   const [usuario, setUsuario] = useState('')
+  /** Guía que MARCÓ la nivelación (distinto del guía del curso del alumno). */
+  const [solicitante, setSolicitante] = useState('')
+  const [solicitantes, setSolicitantes] = useState<Guia[]>([])
 
   const [rows, setRows] = useState<Row[]>([])
   const [cursos, setCursos] = useState<string[]>([])
@@ -105,6 +108,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
       if (r.error) throw new Error(r.error)
       setRows(r.rows || [])
       setCursos(r.cursos || []); setLecciones(r.lecciones || []); setGuias(r.guias || [])
+      setSolicitantes(r.solicitantes || [])
       setSesionesAbiertas(r.sesionesAbiertas || [])
       setSel(new Set())
       onCount?.(r.rows?.length || 0)
@@ -122,7 +126,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
   // Se recarga CON los filtros vigentes, no en blanco.
   useEffect(() => {
     if (!refreshKey) return
-    fetchData({ curso, leccion, guia })
+    fetchData({ curso, leccion, guia, solicitante })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey])
 
@@ -179,7 +183,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
         ? `${ids.length} usuario(s) sumado(s) al grupo (${j.totalEnGrupo} en total)`
         : `Grupo armado con ${ids.length} usuario(s)`)
       setSel(new Set())
-      fetchData({ curso, leccion, guia })
+      fetchData({ curso, leccion, guia, solicitante })
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo armar el grupo')
     } finally { setGuardando(false) }
@@ -200,7 +204,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
       if (!res.ok) throw new Error(j?.error || 'No se pudo quitar del grupo')
       toast.success(`${ids.length} usuario(s) fuera del grupo`)
       setSel(new Set())
-      fetchData({ curso, leccion, guia })
+      fetchData({ curso, leccion, guia, solicitante })
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo quitar del grupo')
     } finally { setGuardando(false) }
@@ -223,7 +227,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
       if (!res.ok) throw new Error(j?.error || 'No se pudo sumar a la nivelación')
       toast.success(j?.message || 'Usuarios sumados a la nivelación')
       setSel(new Set())
-      fetchData({ curso, leccion, guia })
+      fetchData({ curso, leccion, guia, solicitante })
       onMoved?.()
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo sumar a la nivelación')
@@ -255,8 +259,8 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
     setModalGrupo({ ...g, rows: seleccionados })
   }
 
-  const aplicar = () => fetchData({ curso, leccion, guia, usuario })
-  const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); setUsuario(''); fetchData() }
+  const aplicar = () => fetchData({ curso, leccion, guia, solicitante, usuario })
+  const borrar = () => { setCurso(''); setLeccion(''); setGuia(''); setSolicitante(''); setUsuario(''); fetchData() }
 
   return (
     <div>
@@ -290,6 +294,12 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
             <label htmlFor="ag-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
             <select id="ag-guia" value={guia} onChange={e => setGuia(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
               <option value="">Todos</option>{guias.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="ag-solicitante" className="block text-xs font-medium text-gray-500 mb-1">Solicitado por</label>
+            <select id="ag-solicitante" value={solicitante} onChange={e => setSolicitante(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Todos</option>{solicitantes.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
             </select>
           </div>
         </div>
@@ -491,7 +501,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
                               confirmadoEn={r.confirmadoEn ?? null}
                               confirmadoPor={r.confirmadoPor ?? null}
                               puedeGestionar={canGestion}
-                              onConfirmed={() => fetchData({ curso, leccion, guia })}
+                              onConfirmed={() => fetchData({ curso, leccion, guia, solicitante })}
                             />
                           </td>
                         </tr>
@@ -510,7 +520,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
           grupo={modalGrupo}
           guias={guias}
           onClose={() => setModalGrupo(null)}
-          onDone={() => { setModalGrupo(null); fetchData({ curso, leccion, guia }); onMoved?.() }}
+          onDone={() => { setModalGrupo(null); fetchData({ curso, leccion, guia, solicitante }); onMoved?.() }}
         />
       )}
 
@@ -519,7 +529,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
           accion={retiro.accion}
           rows={retiro.rows}
           onClose={() => setRetiro(null)}
-          onDone={() => { setRetiro(null); fetchData({ curso, leccion, guia, usuario }); onMoved?.() }}
+          onDone={() => { setRetiro(null); fetchData({ curso, leccion, guia, solicitante, usuario }); onMoved?.() }}
         />
       )}
     </div>

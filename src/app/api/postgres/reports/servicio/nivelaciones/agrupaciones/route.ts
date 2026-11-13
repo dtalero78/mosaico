@@ -36,6 +36,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   const leccion = (searchParams.get('leccion') || '').trim()
   const guia = (searchParams.get('guia') || '').trim()
   const usuario = (searchParams.get('usuario') || '').trim()
+  const solicitante = (searchParams.get('solicitante') || '').trim()
 
   const agendadas = Array.from((await agendamientosDeNivelacionActual()).keys())
 
@@ -49,6 +50,12 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (curso)   { where.push(`p."tipoCurso" = $${i++}`); params.push(curso) }
   if (leccion) { where.push(`COALESCE(a."detalleNivelacion"->>'leccion','') = $${i++}`); params.push(leccion) }
   if (guia)    { where.push(`cc."guia" = $${i++}`); params.push(guia) }
+  // Solicitante: el guía que MARCÓ la nivelación (marcadoPor = su correo), no el
+  // que dicta el curso del alumno.
+  if (solicitante) {
+    where.push(`LOWER(TRIM(COALESCE(a."detalleNivelacion"->>'marcadoPor',''))) = (SELECT LOWER(TRIM(gs."email")) FROM "GUIAS" gs WHERE gs."_id" = $${i++})`)
+    params.push(solicitante)
+  }
   if (usuario) {
     const c = condicionUsuarioSql(exprNombreCompleto('p'), 'p."numeroId"', usuario, i)
     where.push(c.sql); params.push(...c.params); i += 2
@@ -107,6 +114,17 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
         AND a."_id" <> ALL($1::text[])`,
     [agendadas]
   )).rows
+  const solicitantes = (await query(
+    `SELECT DISTINCT gs."_id" AS id, gs."nombreCompleto" AS nombre
+       FROM "ACADEMICA" a
+       JOIN "PEOPLE" p ON p."_id" = a."peopleId"
+       JOIN "GUIAS" gs ON LOWER(TRIM(gs."email")) = LOWER(TRIM(COALESCE(a."detalleNivelacion"->>'marcadoPor','')))
+      WHERE a."aprobadoNivelacion" = true
+        AND COALESCE(p."contrato",'') NOT LIKE 'PRB-%'
+        AND a."_id" <> ALL($1::text[])
+      ORDER BY gs."nombreCompleto"`,
+    [agendadas]
+  )).rows
   const uniq = (arr: any[]) => Array.from(new Set(arr.filter(Boolean))).sort()
   const cursos = uniq(opts.map((o: any) => o.curso))
   const lecciones = uniq(opts.map((o: any) => o.leccion))
@@ -134,5 +152,5 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
       LIMIT 50`
   )).rows
 
-  return successResponse({ rows, total: rows.length, cursos, lecciones, guias, sesionesAbiertas })
+  return successResponse({ rows, total: rows.length, cursos, lecciones, guias, solicitantes, sesionesAbiertas })
 })
