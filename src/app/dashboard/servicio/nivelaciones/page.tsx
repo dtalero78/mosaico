@@ -10,6 +10,7 @@ import { exportToExcel } from '@/lib/export-excel'
 import { usePermissions } from '@/hooks/usePermissions'
 import NivelacionesAgrupacionesTab from '@/components/servicio/NivelacionesAgrupacionesTab'
 import NivelacionesPendientesTab from '@/components/servicio/NivelacionesPendientesTab'
+import NivelacionesConfirmadasTab from '@/components/servicio/NivelacionesConfirmadasTab'
 import NivelacionesHistorialTab from '@/components/servicio/NivelacionesHistorialTab'
 import AdicionarNivelacionModal from '@/components/servicio/AdicionarNivelacionModal'
 import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
@@ -40,7 +41,7 @@ interface Row {
 }
 interface Guia { id: string; nombre: string }
 
-type Tab = 'solicitudes' | 'agrupaciones' | 'pendientes' | 'historial'
+type Tab = 'solicitudes' | 'agrupaciones' | 'pendientes' | 'confirmadas' | 'historial'
 
 /**
  * Solicitudes: lo que el Guía pidió y aún nadie resolvió (ACADEMICA.nivelacion).
@@ -335,6 +336,7 @@ function NivelacionesContent() {
   const [solCount, setSolCount] = useState<number | null>(null)
   const [agrCount, setAgrCount] = useState<number | null>(null)
   const [penCount, setPenCount] = useState<number | null>(null)
+  const [confCount, setConfCount] = useState<number | null>(null)
   /** Sube cada vez que una pestaña mueve una nivelación a otra: todas recargan. */
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -348,6 +350,7 @@ function NivelacionesContent() {
     { id: 'solicitudes', label: 'Solicitudes', count: solCount },
     ...(verAgrupaciones ? [{ id: 'agrupaciones' as Tab, label: 'Agrupaciones', count: agrCount }] : []),
     ...(verPendientes ? [{ id: 'pendientes' as Tab, label: 'Pendientes', count: penCount }] : []),
+    { id: 'confirmadas', label: 'Confirmadas', count: confCount },
     { id: 'historial', label: 'Histórico', count: null },
   ]
 
@@ -393,6 +396,9 @@ function NivelacionesContent() {
           <NivelacionesPendientesTab onCount={setPenCount} refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
         </div>
       )}
+      <div className={tab === 'confirmadas' ? '' : 'hidden'}>
+        <NivelacionesConfirmadasTab onCount={setConfCount} refreshKey={refreshKey} />
+      </div>
       <div className={tab === 'historial' ? '' : 'hidden'}>
         <NivelacionesHistorialTab refreshKey={refreshKey} onMoved={() => setRefreshKey(k => k + 1)} />
       </div>

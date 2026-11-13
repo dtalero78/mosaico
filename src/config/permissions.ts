@@ -1623,6 +1623,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso a /admin/contratos-prueba. Lista los contratos creados como prueba (prefijo PRB-) y permite purgarlos en cascada (PEOPLE + ACADEMICA + ACADEMICA_BOOKINGS + FINANCIEROS + PAGOS_TITULARES + STEP_OVERRIDES + COMPLEMENTARIA_ATTEMPTS + USUARIOS_ROLES). Cada purga deja snapshot completo en PURGE_LOG (reversible si se identifica error). Acción destructiva — recomendado SUPER_ADMIN únicamente',
   },
   {
+    code: MantenimientoPermission.CONTINGENCIA_WHATSAPP,
+    module: Module.MANTENIMIENTO,
+    section: 'Contingencia',
+    name: 'Página "Canal de WhatsApp"',
+    description: 'Acceso a /admin/contingencia/whatsapp. Muestra en vivo si la línea de WhatsApp (Whapi) está conectada o caída, para actuar a tiempo cuando dejan de salir los mensajes',
+  },
+  {
     code: MantenimientoPermission.LINK_CONTINGENCIA,
     module: Module.MANTENIMIENTO,
     section: 'Usuarios',

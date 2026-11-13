@@ -63,6 +63,41 @@ export async function sendWhatsAppMessage(toNumber: string, messageBody: string)
   }
 }
 
+export interface WhatsAppHealth {
+  conectado: boolean;
+  /** AUTH = sesión activa; QR = deslogueado (hay que reescanear); otro = ver texto */
+  estado: string;
+  numero: string | null;
+  verificadoEn: string;
+  latenciaMs: number;
+}
+
+/**
+ * Estado en vivo del canal de Whapi (GET /health). `status.code === 4` (AUTH)
+ * significa conectado. No lanza: ante cualquier fallo devuelve conectado=false.
+ */
+export async function checkWhatsAppHealth(): Promise<WhatsAppHealth> {
+  const t0 = Date.now();
+  try {
+    const r = await fetch('https://gate.whapi.cloud/health?wakeup=false', {
+      headers: { authorization: `Bearer ${WHAPI_TOKEN}` },
+      signal: AbortSignal.timeout(15000),
+      cache: 'no-store',
+    });
+    const j: any = await r.json().catch(() => ({}));
+    const estado = String(j?.status?.text || (r.ok ? 'UNKNOWN' : `HTTP ${r.status}`));
+    return {
+      conectado: j?.status?.code === 4,
+      estado,
+      numero: j?.user?.id ?? null,
+      verificadoEn: new Date().toISOString(),
+      latenciaMs: Date.now() - t0,
+    };
+  } catch {
+    return { conectado: false, estado: 'ERROR', numero: null, verificadoEn: new Date().toISOString(), latenciaMs: Date.now() - t0 };
+  }
+}
+
 export type WhatsAppMediaKind = 'image' | 'video' | 'document';
 
 const WHAPI_MEDIA_ENDPOINT: Record<WhatsAppMediaKind, string> = {

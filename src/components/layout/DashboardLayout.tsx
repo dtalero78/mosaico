@@ -260,6 +260,11 @@ const getNavigation = (userEmail: string, userRole: string) => [
         ],
       },
       {
+        name: 'Contingencia', isSubmenu: true, children: [
+          { name: 'WhatsApp', href: '/admin/contingencia/whatsapp', newTab: true },
+        ],
+      },
+      {
         name: 'Scripts', isSubmenu: true, children: [
           { name: 'Consulta', href: '/admin/scripts/consulta', newTab: true },
         ],
@@ -495,6 +500,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ],
     '/admin/booking': [
       MantenimientoPermission.BOOKING,
+    ],
+    '/admin/contingencia/whatsapp': [
+      MantenimientoPermission.CONTINGENCIA_WHATSAPP,
     ],
     '/admin/link-sesion': [
       MantenimientoPermission.LINK_CONTINGENCIA,
