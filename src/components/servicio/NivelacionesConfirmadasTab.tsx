@@ -39,8 +39,8 @@ export default function NivelacionesConfirmadasTab({ onCount, refreshKey = 0 }: 
   const [curso, setCurso] = useState('')
   const [leccion, setLeccion] = useState('')
   const [guia, setGuia] = useState('')
-  /** Por defecto sólo las confirmadas; desmarcado trae todas las agendadas (= Pendientes). */
-  const [soloConf, setSoloConf] = useState(true)
+  /** '' = todas las agendadas, 'confirmadas' o 'sin' (sin confirmar). */
+  const [estado, setEstado] = useState('')
 
   const [rows, setRows] = useState<Row[]>([])
   const [cursos, setCursos] = useState<string[]>([])
@@ -74,8 +74,8 @@ export default function NivelacionesConfirmadasTab({ onCount, refreshKey = 0 }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey])
 
-  const aplicar = (conf = soloConf) => fetchData({ usuario, curso, leccion, guia, ...(conf ? {} : { todas: '1' }) })
-  const borrar = () => { setUsuario(''); setCurso(''); setLeccion(''); setGuia(''); setSoloConf(true); fetchData() }
+  const aplicar = () => fetchData({ usuario, curso, leccion, guia, estado })
+  const borrar = () => { setUsuario(''); setCurso(''); setLeccion(''); setGuia(''); setEstado(''); fetchData() }
   const exportar = () => exportToExcel(rows, [
     { header: 'Fecha solicitud', accessor: r => (r.fechaSolicitud ? new Date(r.fechaSolicitud).toLocaleDateString('es-CL') : '') },
     { header: 'Curso', accessor: r => r.curso || '' },
@@ -112,6 +112,14 @@ export default function NivelacionesConfirmadasTab({ onCount, refreshKey = 0 }: 
               <option value="">Todas</option>{lecciones.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
+          <div>
+            <label htmlFor="nc-estado" className="block text-xs font-medium text-gray-500 mb-1">Estado</label>
+            <select id="nc-estado" value={estado} onChange={e => setEstado(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="">Todas</option>
+              <option value="confirmadas">Confirmadas</option>
+              <option value="sin">Sin confirmar</option>
+            </select>
+          </div>
           {!soloPropios && (
             <div>
               <label htmlFor="nc-guia" className="block text-xs font-medium text-gray-500 mb-1">Guía</label>
@@ -122,12 +130,7 @@ export default function NivelacionesConfirmadasTab({ onCount, refreshKey = 0 }: 
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-4">
-          <label className="flex items-center gap-1.5 text-sm text-gray-600 mr-2">
-            <input type="checkbox" checked={soloConf}
-              onChange={e => { setSoloConf(e.target.checked); aplicar(e.target.checked) }} />
-            Solo confirmadas
-          </label>
-          <button type="button" onClick={() => aplicar()} disabled={loading}
+          <button type="button" onClick={aplicar} disabled={loading}
             className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 font-medium">Aplicar filtros</button>
           <button type="button" onClick={borrar}
             className="px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50">Borrar filtros</button>
@@ -136,7 +139,7 @@ export default function NivelacionesConfirmadasTab({ onCount, refreshKey = 0 }: 
               className="px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-50 font-medium">Exportar CSV</button>
           </PermissionGuard>
           <span className="ml-auto text-sm text-gray-500">
-            Confirmadas: <span className="font-semibold text-gray-700">{rows.length}</span>
+            Agendadas: <span className="font-semibold text-gray-700">{rows.length}</span>
           </span>
         </div>
       </div>
@@ -155,7 +158,7 @@ export default function NivelacionesConfirmadasTab({ onCount, refreshKey = 0 }: 
               {loading ? (
                 <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">Cargando…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones confirmadas</td></tr>
+                <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">Sin nivelaciones agendadas</td></tr>
               ) : rows.map(r => (
                 <tr key={r.academicaId} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap font-medium">{fmtFechaHora(r.eventoDia)}</td>

@@ -46,10 +46,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     `COALESCE(p."contrato",'') NOT LIKE 'PRB-%'`,
     `a."_id" = ANY($1::text[])`,
   ]
-  // Por defecto sólo las confirmadas; `todas=1` trae todas las agendadas del guía.
-  if (searchParams.get('todas') !== '1') {
-    where.push(`COALESCE(a."detalleNivelacion"->>'confirmadoEn','') <> ''`)
-  }
+  // `estado`: 'confirmadas' | 'sin' (sin confirmar) | vacío = todas las agendadas.
+  const estado = (searchParams.get('estado') || '').trim()
+  if (estado === 'confirmadas') where.push(`COALESCE(a."detalleNivelacion"->>'confirmadoEn','') <> ''`)
+  else if (estado === 'sin') where.push(`COALESCE(a."detalleNivelacion"->>'confirmadoEn','') = ''`)
   const params: any[] = [ids]
   let i = 2
   if (alcance.soloPropios) {
