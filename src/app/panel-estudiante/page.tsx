@@ -11,6 +11,7 @@ import {
   SparklesIcon,
   ChevronDownIcon,
   LinkIcon,
+  DocumentChartBarIcon,
 } from '@heroicons/react/24/outline'
 import { useQuery } from 'react-query'
 import {
@@ -37,6 +38,7 @@ import SinEvaluarCard from '@/components/panel-estudiante/SinEvaluarCard'
 import EvaluacionModal from '@/components/panel-estudiante/EvaluacionModal'
 import { useEvaluacionesPendientes } from '@/hooks/use-evaluations'
 import ProgressReport from '@/components/panel-estudiante/ProgressReport'
+import ReporteAcademicoModal from '@/components/panel-estudiante/ReporteAcademicoModal'
 import MaterialsList from '@/components/panel-estudiante/MaterialsList'
 import WhatsAppContacts from '@/components/panel-estudiante/WhatsAppContacts'
 import AdvisorComments from '@/components/panel-estudiante/AdvisorComments'
@@ -73,6 +75,8 @@ function PanelEstudianteContent() {
   const [showActividades, setShowActividades] = useState(false)
   const [showRecursos, setShowRecursos] = useState(false)
   const [showInstructivos, setShowInstructivos] = useState(false)
+  const [showReportes, setShowReportes] = useState(false)
+  const [showReporteAcademico, setShowReporteAcademico] = useState(false)
 
   // Ticker
   const tickerQuery = useQuery(
@@ -374,6 +378,33 @@ function PanelEstudianteContent() {
               </>
             )}
           </div>
+          {/* Grupo desplegable Reportes */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowReportes(v => !v)}
+              className="px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <DocumentChartBarIcon className="h-4 w-4" />
+              Reportes
+              <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${showReportes ? 'rotate-180' : ''}`} />
+            </button>
+            {showReportes && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowReportes(false)} />
+                <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
+                  <button
+                    type="button"
+                    onClick={() => { setShowReportes(false); setShowReporteAcademico(true) }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                  >
+                    <span className="inline-block w-2 h-2 rounded-full bg-fuchsia-500 flex-shrink-0" />
+                    Reporte académico
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           </>)}
 
           <button
@@ -653,6 +684,8 @@ function PanelEstudianteContent() {
         {/* 5. Let's Go assistance */}
         <WhatsAppContacts />
       </div>
+
+      {showReporteAcademico && <ReporteAcademicoModal onClose={() => setShowReporteAcademico(false)} />}
 
       {/* Instructivos Selection Modal — videos generales para todos los estudiantes */}
       {showInstructivos && (
