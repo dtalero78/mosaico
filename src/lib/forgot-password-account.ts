@@ -1,5 +1,6 @@
 import 'server-only';
-import { queryOne } from '@/lib/postgres';
+import { queryOne, queryMany } from '@/lib/postgres';
+import { ValidationError } from '@/lib/errors';
 
 /**
  * Resuelve la cuenta a recuperar desde lo que el usuario escribe: su CORREO o su
@@ -39,16 +40,27 @@ export async function resolveAccount(identificador: string): Promise<CuentaRecup
   const id = (identificador || '').trim().toLowerCase();
   if (!id) return null;
 
-  // USUARIOS_ROLES es la fuente de la CUENTA: su email es único (verificado, 0
-  // repetidos) y el userLogin también. Si aquí no está, no hay cuenta que recuperar.
-  const user = await queryOne<{ _id: string; email: string | null; userLogin: string | null; activo: boolean | null }>(
+  // USUARIOS_ROLES es la fuente de la CUENTA. El userLogin es único; el email NO
+  // (desde la Fase 2 los hermanos comparten el del apoderado: 359 correos
+  // repetidos en 731 cuentas). Si aquí no está, no hay cuenta que recuperar.
+  const candidatos = await queryMany<{ _id: string; email: string | null; userLogin: string | null; activo: boolean | null }>(
     `SELECT "_id", "email", "userLogin", "activo"
        FROM "USUARIOS_ROLES"
       WHERE LOWER(TRIM("email")) = $1 OR LOWER(TRIM("userLogin")) = $1
-      LIMIT 1`,
+      LIMIT 10`,
     [id]
   );
-  if (!user) return null;
+  if (!candidatos.length) return null;
+
+  // Un usuario exacto manda. Si lo escrito es un correo compartido, NO se elige una
+  // cuenta al azar: se le cambiaría la clave a quien no la pidió. Se pide el usuario.
+  const exacto = candidatos.find(c => (c.userLogin || '').trim().toLowerCase() === id);
+  if (!exacto && candidatos.length > 1) {
+    throw new ValidationError(
+      'Ese correo lo comparten varias cuentas. Escribe tu usuario (el que usas para entrar) en lugar del correo.'
+    );
+  }
+  const user = exacto ?? candidatos[0];
 
   // El celular vive en ACADEMICA. Se busca por userLogin (único); sólo se cae al
   // email si la cuenta no tiene userLogin, y aun así se exige que ese email

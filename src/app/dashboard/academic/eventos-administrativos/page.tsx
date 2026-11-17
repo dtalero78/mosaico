@@ -530,11 +530,15 @@ export default function EventosAdministrativosPage() {
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                   </div>
                   <div>
-                    <label htmlFor="horas" className="block text-xs font-medium text-gray-700 mb-1">Duración (h) *</label>
+                    <label htmlFor="horas" className="block text-xs font-medium text-gray-700 mb-1">Duración *</label>
                     <select id="horas" value={form.horas}
                       onChange={e => { setForm(f => ({ ...f, horas: Number(e.target.value) })); setConflictsChecked(false) }}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(h => <option key={h} value={h}>{h} hora{h > 1 ? 's' : ''}</option>)}
+                      {Array.from({ length: 16 }, (_, k) => (k + 1) / 2).map(h => {
+                        const min = h * 60, hh = Math.floor(min / 60), mm = min % 60
+                        const txt = [hh ? `${hh} hora${hh > 1 ? 's' : ''}` : '', mm ? `${mm} minutos` : ''].filter(Boolean).join(' ')
+                        return <option key={h} value={h}>{txt}</option>
+                      })}
                     </select>
                   </div>
                 </div>

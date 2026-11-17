@@ -76,8 +76,9 @@ export function getAdminEventWindow(
   autorizado: boolean = false,
 ): AdminEventWindowState {
   const isCoordinator = BYPASS_ROLES.has(String(role || '').toUpperCase());
-  const horasNum = typeof horas === 'number' && horas > 0 ? Math.floor(horas) : 1;
-  const finNominalMin = horasNum * 60;
+  // La duración puede ser fraccionaria (múltiplos de 0.5 h): se trabaja en minutos.
+  const horasNum = typeof horas === 'number' && horas > 0 ? horas : 1;
+  const finNominalMin = Math.round(horasNum * 60);
 
   if (!fechaInicio) {
     return {

@@ -28,6 +28,22 @@ import { estaAutorizado, autorizacionesDe, marcarAutorizacionUsada } from '@/ser
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_HORAS = 12;
 
+/** Duración válida: múltiplo de 0.5 h (30 min) entre 0.5 y MAX_HORAS. */
+export function duracionValida(h: unknown): h is number {
+  return typeof h === 'number' && Number.isFinite(h) && h >= 0.5 && h <= MAX_HORAS && Number.isInteger(h * 2);
+}
+const MSG_HORAS = `La duración debe ser múltiplo de 30 minutos, entre 30 min y ${MAX_HORAS} horas`;
+
+/** "30 minutos", "1 hora", "1 hora 30 minutos", "2 horas". */
+export function formatDuracion(h: number): string {
+  const min = Math.round(h * 60);
+  const hh = Math.floor(min / 60), mm = min % 60;
+  const partes: string[] = [];
+  if (hh) partes.push(`${hh} hora${hh > 1 ? 's' : ''}`);
+  if (mm) partes.push(`${mm} minutos`);
+  return partes.join(' ');
+}
+
 export interface ConflictDetail {
   source: 'CALENDARIO' | 'ADMIN_EVENTS';
   advisorId: string;
@@ -52,9 +68,7 @@ export async function checkConflicts(opts: {
     throw new ValidationError('advisorIds requerido (array no vacío)');
   }
   if (!opts.fechaInicio) throw new ValidationError('fechaInicio requerido');
-  if (!Number.isInteger(opts.horas) || opts.horas < 1 || opts.horas > MAX_HORAS) {
-    throw new ValidationError(`horas debe ser entero entre 1 y ${MAX_HORAS}`);
-  }
+  if (!duracionValida(opts.horas)) throw new ValidationError(MSG_HORAS);
 
   // 1) Conflictos con CALENDARIO (sesiones académicas)
   const cal = await AdminEventsRepository.findConflictsInCalendario(
@@ -111,9 +125,7 @@ export async function createAdminEvents(opts: {
   if (opts.titulo && opts.titulo.length > 200) {
     throw new ValidationError('titulo no puede exceder 200 caracteres');
   }
-  if (!Number.isInteger(opts.horas) || opts.horas < 1 || opts.horas > MAX_HORAS) {
-    throw new ValidationError(`horas debe ser entero entre 1 y ${MAX_HORAS}`);
-  }
+  if (!duracionValida(opts.horas)) throw new ValidationError(MSG_HORAS);
   if (opts.advisorIds.length === 0) {
     throw new ValidationError('Debes seleccionar al menos un advisor');
   }
@@ -209,7 +221,7 @@ export async function registrarAdminEvent(input: {
     if (adv._id !== ev.advisorId) throw new ForbiddenError('Este evento no te pertenece');
     if (!ws.canRegister) {
       if (ws.isExpired) throw new ValidationError(ADMIN_EVENT_EXPIRED_MESSAGE);
-      const fmtHoras = ev.horas > 1 ? `${ev.horas} horas` : '1 hora';
+      const fmtHoras = formatDuracion(ev.horas);
       throw new ValidationError(
         `El evento dura ${fmtHoras} — el registro estará disponible cuando termine (faltan ${ws.minutesUntilRegister} min).`,
       );
@@ -268,9 +280,7 @@ export async function updateAdminEvent(id: string, patch: Partial<{
     throw new ValidationError('No se puede editar — el evento ya fue registrado por el advisor');
   }
 
-  if (patch.horas !== undefined && (!Number.isInteger(patch.horas) || patch.horas < 1 || patch.horas > MAX_HORAS)) {
-    throw new ValidationError(`horas debe ser entero entre 1 y ${MAX_HORAS}`);
-  }
+  if (patch.horas !== undefined && !duracionValida(patch.horas)) throw new ValidationError(MSG_HORAS);
   if (patch.tipo !== undefined && !ADMIN_EVENT_TIPOS.includes(patch.tipo)) {
     throw new ValidationError(`tipo inválido: ${patch.tipo}`);
   }

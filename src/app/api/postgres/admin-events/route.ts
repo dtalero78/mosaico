@@ -50,7 +50,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const horas = Number(body?.horas);
 
   if (!fechaInicio) throw new ValidationError('fechaInicio requerido (ISO timestamp)');
-  if (!Number.isInteger(horas)) throw new ValidationError('horas debe ser entero');
+  if (!Number.isFinite(horas)) throw new ValidationError('La duración debe ser un número (múltiplo de 0.5 horas)');
 
   const createdBy = (session?.user as any)?.email ?? null;
 

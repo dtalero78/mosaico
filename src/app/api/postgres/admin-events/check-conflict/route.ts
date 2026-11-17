@@ -27,7 +27,7 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
   const excludeGroupId = body?.excludeGroupId ? String(body.excludeGroupId) : null;
 
   if (!fechaInicio) throw new ValidationError('fechaInicio requerido');
-  if (!Number.isInteger(horas)) throw new ValidationError('horas debe ser entero');
+  if (!Number.isFinite(horas)) throw new ValidationError('La duración debe ser un número (múltiplo de 0.5 horas)');
 
   const conflicts = await checkConflicts({ advisorIds, fechaInicio, horas, excludeGroupId });
   return successResponse({ hasConflicts: conflicts.length > 0, conflicts });
