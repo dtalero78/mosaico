@@ -40,7 +40,8 @@ const fmtFechaHora = (iso: string) => {
 export default function CuestionariosReportPage({ tipo, titulo, sustantivo, permiso }: CuestionariosReportPageProps) {
   const [curso, setCurso] = useState('')
   const [salon, setSalon] = useState('')
-  const [applied, setApplied] = useState({ curso: '', salon: '' })
+  const [campaign, setCampaign] = useState('')
+  const [applied, setApplied] = useState({ curso: '', salon: '', campaign: '' })
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   // Modal del último intento (clic sobre el estudiante).
@@ -68,12 +69,13 @@ export default function CuestionariosReportPage({ tipo, titulo, sustantivo, perm
     } finally { setCargandoDetalle(false) }
   }
 
-  const fetchData = useCallback(async (f: { curso: string; salon: string }) => {
+  const fetchData = useCallback(async (f: { curso: string; salon: string; campaign: string }) => {
     setLoading(true)
     try {
       const qs = new URLSearchParams({ tipo })
       if (f.curso) qs.set('curso', f.curso)
       if (f.salon) qs.set('salon', f.salon)
+      if (f.campaign) qs.set('campaign', f.campaign)
       const res = await fetch(`/api/postgres/reports/academico/evaluaciones?${qs}`, { cache: 'no-store' }).then(r => r.json())
       if (res.error) throw new Error(res.error)
       setData(res)
@@ -81,7 +83,7 @@ export default function CuestionariosReportPage({ tipo, titulo, sustantivo, perm
       // dejar la pantalla en blanco esperando que el usuario pulse Aplicar.
       if (!f.curso && res.cursos?.length) {
         setCurso(res.cursos[0])
-        setApplied({ curso: res.cursos[0], salon: '' })
+        setApplied({ curso: res.cursos[0], salon: '', campaign: '' })
       }
     } catch (e: any) { toast.error(e?.message || `Error al cargar ${titulo.toLowerCase()}`) } finally { setLoading(false) }
   }, [tipo, titulo])
@@ -96,6 +98,7 @@ export default function CuestionariosReportPage({ tipo, titulo, sustantivo, perm
     setCargandoPreg(true)
     const qs = new URLSearchParams({ curso: applied.curso, tipo })
     if (applied.salon) qs.set('salon', applied.salon)
+    if (applied.campaign) qs.set('campaign', applied.campaign)
     fetch(`/api/postgres/reports/academico/evaluaciones/preguntas?${qs}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(r => { if (cancelado) return; if (r.error) throw new Error(r.error); setPreg(r) })
@@ -117,9 +120,16 @@ export default function CuestionariosReportPage({ tipo, titulo, sustantivo, perm
           <div className="flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Curso</label>
-              <select value={curso} onChange={e => { setCurso(e.target.value); setSalon('') }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[140px]">
+              <select value={curso} onChange={e => { setCurso(e.target.value); setSalon(''); setCampaign('') }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[140px]">
                 {(data?.cursos || []).length === 0 && <option value="">—</option>}
                 {(data?.cursos || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-500 uppercase">Campaña</label>
+              <select value={campaign} onChange={e => setCampaign(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px]">
+                <option value="">Todas</option>
+                {(data?.campanias || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -130,7 +140,7 @@ export default function CuestionariosReportPage({ tipo, titulo, sustantivo, perm
               </select>
             </div>
             <div className="flex-1" />
-            <button onClick={() => setApplied({ curso, salon })} className="px-4 py-2 rounded-lg bg-purple-700 text-white text-sm font-medium hover:bg-purple-800">Aplicar</button>
+            <button onClick={() => setApplied({ curso, salon, campaign })} className="px-4 py-2 rounded-lg bg-purple-700 text-white text-sm font-medium hover:bg-purple-800">Aplicar</button>
           </div>
 
           {/* Pestañas */}

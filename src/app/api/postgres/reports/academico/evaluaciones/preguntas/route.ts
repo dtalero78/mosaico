@@ -29,6 +29,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (esGuia && !guiaId) return successResponse({ available: true, evaluaciones: [], curso: '', salon: '' });
   const curso = (sp.get('curso') || '').trim();
   const salon = (sp.get('salon') || '').trim();
+  const campaign = (sp.get('campaign') || '').trim();
   const code = (sp.get('code') || '').trim();
   const step = (sp.get('step') || '').trim();
   const tipo = (sp.get('tipo') || '').trim().toLowerCase();
@@ -43,9 +44,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   else if (tipo === 'entrenamiento') where.push(`er."code" ILIKE '%entren%'`);
   if (code) { where.push(`er."code" = $${params.length + 1}`); params.push(code); }
   if (step) { where.push(`er."step" = $${params.length + 1}`); params.push(step); }
-  if (salon) {
+  if (salon || campaign) {
     join = `JOIN "PEOPLE" p ON UPPER(p."numeroId") = UPPER(er."numeroId") AND p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')`;
-    where.push(`p."salon" = $${params.length + 1}`); params.push(salon);
+    if (salon) { where.push(`p."salon" = $${params.length + 1}`); params.push(salon); }
+    if (campaign) { where.push(`p."campaign" = $${params.length + 1}`); params.push(campaign); }
   }
 
   // Una fila por (cuestionario, pregunta) con sus aciertos y errores.

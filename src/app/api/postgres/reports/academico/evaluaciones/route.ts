@@ -18,10 +18,11 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   // El rol GUIA ve SÓLO los cursos que dicta (resuelto con su correo en el servidor).
   const esGuia = esRolGuia(session);
   const guiaId = esGuia ? await guiaIdDeSesion((session as any)?.user?.email) : null;
-  const vacio = (cursos: string[] = []) => successResponse({ available: true, rows: [], cuestionarios: [], cursos, salones: [], curso: '', salon: '' });
+  const vacio = (cursos: string[] = []) => successResponse({ available: true, rows: [], cuestionarios: [], cursos, campanias: [], salones: [], curso: '', salon: '', campaign: '' });
   if (esGuia && !guiaId) return vacio();
   let curso = (sp.get('curso') || '').trim();
   const salon = (sp.get('salon') || '').trim();
+  const campaign = (sp.get('campaign') || '').trim();
   const code = (sp.get('code') || '').trim();
   const step = (sp.get('step') || '').trim();
   // Categoría del módulo: "Evaluación NN" vs "Entrenamiento NN". Es lo que separa
@@ -48,7 +49,13 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   )).rows.map(r => r.curso);
 
   if (esGuia && curso && !cursos.includes(curso.toUpperCase())) curso = '';
-  if (!curso) return successResponse({ available: true, rows: [], cuestionarios: [], cursos, salones: [], curso: '', salon: '' });
+  if (!curso) return successResponse({ available: true, rows: [], cuestionarios: [], cursos, campanias: [], salones: [], curso: '', salon: '', campaign: '' });
+
+  // Campañas del curso elegido (el mismo salón se repite entre campañas).
+  const campanias = (await query<{ campaign: string }>(
+    `SELECT DISTINCT cc."campaign" FROM "CURSOS_CAMPAIGN" cc
+      WHERE UPPER(cc."tipoCurso") = UPPER($1) AND cc."campaign" IS NOT NULL AND cc."campaign" <> ''${esGuia ? ' AND cc."guia" = $2' : ''}
+      ORDER BY 1 DESC`, esGuia ? [curso, guiaId] : [curso])).rows.map(r => r.campaign);
 
   // Salones del curso elegido (del catálogo + los que tengan resultados).
   const salones = esGuia
@@ -74,9 +81,10 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   if (filtroTipo) where.push(filtroTipo.replace(/^AND /, ''));
   if (code) { where.push(`er."code"=$${params.length + 1}`); params.push(code); }
   if (step) { where.push(`er."step"=$${params.length + 1}`); params.push(step); }
-  if (salon) {
+  if (salon || campaign) {
     join = `JOIN "PEOPLE" p ON UPPER(p."numeroId")=UPPER(er."numeroId") AND p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')`;
-    where.push(`p."salon"=$${params.length + 1}`); params.push(salon);
+    if (salon) { where.push(`p."salon"=$${params.length + 1}`); params.push(salon); }
+    if (campaign) { where.push(`p."campaign"=$${params.length + 1}`); params.push(campaign); }
   }
 
   // ARRAY_AGG(... ORDER BY intento DESC)[1] = el ÚLTIMO intento del estudiante en
@@ -132,7 +140,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   const aprobadosCount = rows.filter(r => r.aprobado).length;
   return successResponse({
-    available: true, rows, cuestionarios, cursos, salones, curso, salon,
+    available: true, rows, cuestionarios, cursos, campanias, salones, curso, salon, campaign,
     resumen: {
       estudiantes: new Set(rows.map(r => r.academicaId)).size,
       cuestionariosAprobados: aprobadosCount, cuestionariosTotal: rows.length,
