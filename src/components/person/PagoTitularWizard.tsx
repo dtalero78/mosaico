@@ -280,7 +280,7 @@ export default function PagoTitularWizard({
   }
 
   // En el modo abono la cuota es siempre 0 (inscripción).
-  const autoDefaults = (): Partial<DraftState> => ({ ...autoDefaults(), ...(esAbono ? { numCuota: '0' } : {}) })
+  const autoDefaults = (): Partial<DraftState> => ({ ...computeAutoDefaults(), ...(esAbono ? { numCuota: '0' } : {}) })
 
   // Restore draft on open
   useEffect(() => {
@@ -335,7 +335,7 @@ export default function PagoTitularWizard({
   const discardDraft = () => {
     localStorage.removeItem(draftKey)
     delete (window as any).__pagoDraft
-    setForm({ ...empty(), plataforma: titular.plataforma || '', ...computeAutoDefaults() })
+    setForm({ ...empty(), plataforma: titular.plataforma || '', ...autoDefaults() })
     setShowDraftBanner(false)
     draftRestored.current = true
   }
