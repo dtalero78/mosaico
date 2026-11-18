@@ -45,6 +45,16 @@ interface PagoTitularWizardProps {
   saldoActual?: number
   /** Llamado tras crear pago exitosamente para refrescar la lista padre. */
   onCreated: () => void
+  /**
+   * 'abono-inscripcion' (Gestión Contrato › Abonos Inscripción): el mismo pago pero
+   * siempre cuota 0, SIN Último Pago / Penalidad / Cambio Contado, y a nombre del
+   * comercial que lo registra. Por defecto es el pago normal de Recaudos.
+   */
+  modo?: 'pago' | 'abono-inscripcion'
+  /** Nombre de quien registra (se muestra en el modo abono). */
+  realizadoPor?: string
+  /** Endpoint de registro (por defecto el de Recaudos). */
+  postUrl?: string
 }
 
 interface DocAdjunto {
@@ -209,8 +219,10 @@ function MoneyInput({
 
 export default function PagoTitularWizard({
   isOpen, onClose, titular, gestorLabel, existingPagos, saldoActual, onCreated,
+  modo = 'pago', realizadoPor, postUrl = '/api/postgres/pagos-titulares',
 }: PagoTitularWizardProps) {
-  const draftKey = `pago-titular-draft-${titular._id}`
+  const esAbono = modo === 'abono-inscripcion'
+  const draftKey = `pago-titular-draft-${modo === 'pago' ? '' : 'abono-'}${titular._id}`
   const [form, setForm] = useState<DraftState>(empty())
   const [submitting, setSubmitting] = useState(false)
   const [uploadingFiles, setUploadingFiles] = useState<string[]>([])
@@ -267,6 +279,9 @@ export default function PagoTitularWizard({
     }
   }
 
+  // En el modo abono la cuota es siempre 0 (inscripción).
+  const autoDefaults = (): Partial<DraftState> => ({ ...autoDefaults(), ...(esAbono ? { numCuota: '0' } : {}) })
+
   // Restore draft on open
   useEffect(() => {
     if (!isOpen) return
@@ -288,7 +303,7 @@ export default function PagoTitularWizard({
     setForm({
       ...empty(),
       plataforma: titular.plataforma || '',
-      ...computeAutoDefaults(),
+      ...autoDefaults(),
     })
     draftRestored.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -514,7 +529,7 @@ export default function PagoTitularWizard({
 
     setSubmitting(true)
     try {
-      await api.post('/api/postgres/pagos-titulares', {
+      await api.post(postUrl, {
         idPeople: titular._id,
         numeroId: titular.numeroId || null,
         gestorRecaudo: titular.gestorRecaudo || null,
@@ -526,7 +541,7 @@ export default function PagoTitularWizard({
         fechaVencimiento: form.fechaVencimiento || null,
         plan: form.plan || null,
         vlrTotalProg: form.vlrTotalProg ? toNum(form.vlrTotalProg) : null,
-        numCuota: form.numCuota === '' ? null : Number(form.numCuota),
+        numCuota: esAbono ? 0 : (form.numCuota === '' ? null : Number(form.numCuota)),
         valorCuota: form.valorCuota ? toNum(form.valorCuota) : null,
         valorPagado: form.valorPagado ? toNum(form.valorPagado) : null,
         descuento: form.descuento ? toNum(form.descuento) : 0,
@@ -546,14 +561,14 @@ export default function PagoTitularWizard({
         dosRecibos: form.dosRecibos,
         // Cambio Contado: el servidor deriva `realizadopor` de la fecha del pago
         // contra la creación del contrato — acá sólo se envía la marca y la nota.
-        cambioContado: form.cambioContado,
+        cambioContado: esAbono ? false : form.cambioContado,
         nota: form.nota.trim() || null,
       })
 
       // Cambio de tipoCartera disparado desde la casilla en el wizard.
       // Best-effort: si falla, el pago YA quedó registrado — sólo se muestra
       // un toast.error indicando que el cambio de cartera no se aplicó.
-      if (form.cambioCartera) {
+      if (!esAbono && form.cambioCartera) {
         try {
           const motivoAuto = `Marcado automáticamente al registrar pago${
             form.numCuota !== '' ? ` cuota #${form.numCuota}` : ''
@@ -567,7 +582,7 @@ export default function PagoTitularWizard({
         }
       }
 
-      toast.success('Pago registrado')
+      toast.success(esAbono ? 'Abono a la inscripción registrado' : 'Pago registrado')
       localStorage.removeItem(draftKey)
       onCreated()
       onClose()
@@ -585,7 +600,7 @@ export default function PagoTitularWizard({
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">💵 Registrar Pago</h3>
+            <h3 className="text-lg font-bold text-gray-900">{esAbono ? '💵 Abono Inscripción' : '💵 Registrar Pago'}</h3>
             <p className="text-xs text-gray-500 mt-0.5">
               Titular: {titular.primerNombre} {titular.primerApellido} · ID {titular.numeroId || '—'}
             </p>
@@ -615,8 +630,8 @@ export default function PagoTitularWizard({
           {/* Read-only context */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
             <div>
-              <div className="text-gray-500">Gestor de Recaudo</div>
-              <div className="font-medium text-gray-900">{gestorLabel || '⚠️ Sin asignar'}</div>
+              <div className="text-gray-500">{esAbono ? 'Realizado por' : 'Gestor de Recaudo'}</div>
+              <div className="font-medium text-gray-900">{esAbono ? (realizadoPor || '—') : (gestorLabel || '⚠️ Sin asignar')}</div>
             </div>
             <div>
               <div className="text-gray-500">Plataforma</div>
@@ -715,9 +730,10 @@ export default function PagoTitularWizard({
               </div>
               <input
                 id="numCuota" type="number" min={0}
-                value={form.numCuota}
+                readOnly={esAbono} tabIndex={esAbono ? -1 : 0}
+                value={esAbono ? '0' : form.numCuota}
                 onChange={e => setForm(f => ({ ...f, numCuota: e.target.value.replace(/[^0-9]/g, '') }))}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-center font-semibold"
+                className={'mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-center font-semibold' + (esAbono ? ' bg-gray-100 text-gray-600 cursor-not-allowed' : '')}
                 placeholder="0"
               />
               {cuotaElegida && numCuotaNum >= 1 && (
@@ -865,6 +881,7 @@ export default function PagoTitularWizard({
               Al guardar el pago se dispara también POST /cambio-cartera con
               motivo auto-generado. Gateado por CAMBIO_ESTADO_CARTERA — sin
               ese permiso el bloque no aparece. */}
+          {!esAbono && (<>
           <PermissionGuard permission={PersonPermission.CAMBIO_ESTADO_CARTERA}>
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
               <p className="text-xs text-orange-900 mb-3">
@@ -960,6 +977,7 @@ export default function PagoTitularWizard({
               </div>
             )}
           </div>
+          </>)}
 
           {/* Pago Tercero */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">

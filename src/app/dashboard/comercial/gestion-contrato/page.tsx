@@ -8,6 +8,7 @@ import { ComercialPermission } from '@/types/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import SinCupoModal, { type SinCupoDetalle } from '@/components/comercial/SinCupoModal'
 import EnGestionTab from '@/components/comercial/EnGestionTab'
+import AbonosInscripcionTab from '@/components/comercial/AbonosInscripcionTab'
 import DocumentosReciboModal from '@/components/common/DocumentosReciboModal'
 import { HORAS_EN_GESTION } from '@/lib/contrato-en-gestion'
 
@@ -56,12 +57,13 @@ export default function GestionContratoPage() {
   const [deshacer, setDeshacer] = useState<any>(null)
   // Pestañas. "En Gestión" queda montada aunque no esté a la vista, para que su
   // total se vea en la pestaña sin tener que abrirla.
-  const [tab, setTab] = useState<'firmados' | 'gestion'>('firmados')
+  const [tab, setTab] = useState<'firmados' | 'gestion' | 'abonos'>('firmados')
   // Fila cuyo modal "Documentación y recibo" está abierto (antes el botón abría /person).
   const [docsDe, setDocsDe] = useState<any>(null)
   const [enGestionTotal, setEnGestionTotal] = useState<number | null>(null)
   const puedeSobrecupo = hasPermission(ComercialPermission.GESTION_CONTRATO_SOBRECUPO)
   const puedeDarBaja = hasPermission(ComercialPermission.GESTION_CONTRATO_DAR_BAJA)
+  const puedeAbonos = hasPermission(ComercialPermission.GESTION_CONTRATO_ABONO_INSCRIPCION)
 
   const fetchData = useCallback(async (fl: typeof emptyF) => {
     setLoading(true)
@@ -177,7 +179,7 @@ export default function GestionContratoPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Gestión Contrato</h1>
           {tab === 'firmados' ? (
             <p className="text-gray-500 mb-4 text-sm">Contratos <strong>firmados sin aprobar</strong>. Adjunta la documentación y marca <strong>Dejar listo</strong> cuando el contrato esté completo para aprobación. Arriba van los que <strong>faltan por gestionar</strong>; los ya gestionados siguen debajo, marcados <strong>✓ Gestionado</strong>, hasta que Aprobación los apruebe.</p>
-          ) : (
+          ) : tab === 'abonos' ? null : (
             <p className="text-gray-500 mb-4 text-sm">Contratos <strong>recién creados que todavía no se han firmado</strong>. Usa <strong>Editar contrato</strong> para volver a solicitar la firma, imprimir o corregir datos. Al firmarse, el contrato pasa a <strong>Firmados sin aprobar</strong>; si no se firma, sale de esta lista a las <strong>{HORAS_EN_GESTION} horas</strong> de haberse creado.</p>
           )}
 
@@ -186,9 +188,10 @@ export default function GestionContratoPage() {
               // El número es lo que FALTA por gestionar, no el total de la bandeja.
               { id: 'firmados', label: 'Firmados sin aprobar', n: (loading ? null : pendientes) as number | null },
               { id: 'gestion', label: 'En Gestión', n: enGestionTotal },
+              ...(puedeAbonos ? [{ id: 'abonos', label: 'Abonos Inscripción', n: null as number | null }] : []),
             ] as const).map(t => (
               <button key={t.id} type="button" role="tab" aria-selected={tab === t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => setTab(t.id as typeof tab)}
                 className={`px-4 py-2 -mb-px text-sm font-medium border-b-2 transition-colors ${
                   tab === t.id
                     ? 'border-purple-700 text-purple-800'
@@ -203,6 +206,8 @@ export default function GestionContratoPage() {
               </button>
             ))}
           </div>
+
+          {puedeAbonos && tab === 'abonos' && <AbonosInscripcionTab />}
 
           <div className={tab === 'gestion' ? '' : 'hidden'}>
             <EnGestionTab activo={tab === 'gestion'} onTotal={setEnGestionTotal} />

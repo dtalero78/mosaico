@@ -1394,6 +1394,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Dar de baja (borrar contrato)',
     description: 'Permite BORRAR contratos y todos sus registros (personas, académica, clases, financiero, pagos y logins) desde Gestión Contrato. Sólo contratos que NO estén aprobados ni marcados listos. Queda el snapshot completo en PURGE_LOG.',
   },
+  {
+    code: ComercialPermission.GESTION_CONTRATO_ABONO_INSCRIPCION,
+    module: Module.COMERCIAL,
+    section: 'Gestión Contrato',
+    name: '↳ Pestaña "Abonos Inscripción"',
+    description: 'Permite registrar un abono a la inscripción de un titular (por # de contrato e ID). El abono queda a nombre del comercial que lo registra y entra a Recaudos › Verificación Inscripción. No incluye Último Pago, Penalidad ni Cambio Contado.',
+  },
 
   // ========== APROBACION MODULE (/dashboard/aprobacion) ==========
   {
