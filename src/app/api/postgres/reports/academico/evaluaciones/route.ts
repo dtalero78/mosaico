@@ -36,10 +36,22 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   // resultados — si no, mientras nadie haya rendido una evaluación el selector
   // sale vacío y la pantalla no se puede usar. Se unen con los cursos que sí
   // tengan respuestas, por si alguno quedó fuera del catálogo activo.
+  // Orden de los filtros: Campaña → Curso → Salón. Las campañas van primero y
+  // acotan los cursos; los cursos acotan los salones.
+  const campanias = (await query<{ campaign: string }>(
+    `SELECT DISTINCT cc."campaign" FROM "CURSOS_CAMPAIGN" cc
+      WHERE cc."campaign" IS NOT NULL AND cc."campaign" <> ''${esGuia ? ' AND cc."guia" = $1' : ''}
+      ORDER BY 1 DESC`, esGuia ? [guiaId] : [])).rows.map(r => r.campaign);
+
   const cursos = esGuia
     ? (await query<{ curso: string }>(
         `SELECT DISTINCT UPPER("tipoCurso") AS curso FROM "CURSOS_CAMPAIGN"
-          WHERE "guia" = $1 AND COALESCE("activa", true) = true AND "tipoCurso" IS NOT NULL ORDER BY 1`, [guiaId])).rows.map(r => r.curso)
+          WHERE "guia" = $1 AND COALESCE("activa", true) = true AND "tipoCurso" IS NOT NULL${campaign ? ' AND "campaign" = $2' : ''} ORDER BY 1`,
+        campaign ? [guiaId, campaign] : [guiaId])).rows.map(r => r.curso)
+    : campaign
+    ? (await query<{ curso: string }>(
+        `SELECT DISTINCT "tipoCurso" AS curso FROM "CURSOS_CAMPAIGN"
+          WHERE "activa" = true AND "tipoCurso" IS NOT NULL AND "tipoCurso" <> '' AND "campaign" = $1 ORDER BY 1`, [campaign])).rows.map(r => r.curso)
     : (await query<{ curso: string }>(
     `SELECT DISTINCT curso FROM (
        SELECT "tipoCurso" AS curso FROM "CURSOS_CAMPAIGN" WHERE "activa" = true AND "tipoCurso" IS NOT NULL AND "tipoCurso" <> ''
@@ -49,13 +61,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
   )).rows.map(r => r.curso);
 
   if (esGuia && curso && !cursos.includes(curso.toUpperCase())) curso = '';
-  if (!curso) return successResponse({ available: true, rows: [], cuestionarios: [], cursos, campanias: [], salones: [], curso: '', salon: '', campaign: '' });
-
-  // Campañas del curso elegido (el mismo salón se repite entre campañas).
-  const campanias = (await query<{ campaign: string }>(
-    `SELECT DISTINCT cc."campaign" FROM "CURSOS_CAMPAIGN" cc
-      WHERE UPPER(cc."tipoCurso") = UPPER($1) AND cc."campaign" IS NOT NULL AND cc."campaign" <> ''${esGuia ? ' AND cc."guia" = $2' : ''}
-      ORDER BY 1 DESC`, esGuia ? [curso, guiaId] : [curso])).rows.map(r => r.campaign);
+  if (!curso) return successResponse({ available: true, rows: [], cuestionarios: [], cursos, campanias, salones: [], curso: '', salon: '', campaign });
 
   // Salones del curso elegido (del catálogo + los que tengan resultados).
   // Los salones se acotan por la campaña elegida (el mismo salón se repite entre campañas).

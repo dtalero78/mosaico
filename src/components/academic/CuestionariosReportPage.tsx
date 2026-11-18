@@ -83,7 +83,7 @@ export default function CuestionariosReportPage({ tipo, titulo, sustantivo, perm
       // dejar la pantalla en blanco esperando que el usuario pulse Aplicar.
       if (!f.curso && res.cursos?.length) {
         setCurso(res.cursos[0])
-        setApplied({ curso: res.cursos[0], salon: '', campaign: '' })
+        setApplied({ curso: res.cursos[0], salon: '', campaign: f.campaign })
       }
     } catch (e: any) { toast.error(e?.message || `Error al cargar ${titulo.toLowerCase()}`) } finally { setLoading(false) }
   }, [tipo, titulo])
@@ -119,17 +119,17 @@ export default function CuestionariosReportPage({ tipo, titulo, sustantivo, perm
 
           <div className="flex flex-wrap items-end gap-3 bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase">Curso</label>
-              <select value={curso} onChange={e => { setCurso(e.target.value); setSalon(''); setCampaign('') }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[140px]">
-                {(data?.cursos || []).length === 0 && <option value="">—</option>}
-                {(data?.cursos || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
+              <label className="text-xs font-medium text-gray-500 uppercase">Campaña</label>
+              <select value={campaign} onChange={e => { setCampaign(e.target.value); setSalon(''); setCurso(''); setApplied({ curso: '', salon: '', campaign: e.target.value }) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px]">
+                <option value="">Todas</option>
+                {(data?.campanias || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-500 uppercase">Campaña</label>
-              <select value={campaign} onChange={e => { setCampaign(e.target.value); setSalon(''); setApplied({ curso, salon: '', campaign: e.target.value }) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px]">
-                <option value="">Todas</option>
-                {(data?.campanias || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
+              <label className="text-xs font-medium text-gray-500 uppercase">Curso</label>
+              <select value={curso} onChange={e => { setCurso(e.target.value); setSalon('') }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[140px]">
+                {(data?.cursos || []).length === 0 && <option value="">—</option>}
+                {(data?.cursos || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
