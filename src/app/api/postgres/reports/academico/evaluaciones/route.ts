@@ -58,20 +58,22 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
       ORDER BY 1 DESC`, esGuia ? [curso, guiaId] : [curso])).rows.map(r => r.campaign);
 
   // Salones del curso elegido (del catálogo + los que tengan resultados).
+  // Los salones se acotan por la campaña elegida (el mismo salón se repite entre campañas).
   const salones = esGuia
     ? (await query<{ salon: string }>(
         `SELECT DISTINCT "salon" FROM "CURSOS_CAMPAIGN"
-          WHERE "guia" = $2 AND UPPER("tipoCurso") = UPPER($1) AND "salon" IS NOT NULL AND "salon" <> '' ORDER BY 1`, [curso, guiaId])).rows.map(r => r.salon)
+          WHERE "guia" = $2 AND UPPER("tipoCurso") = UPPER($1) AND "salon" IS NOT NULL AND "salon" <> ''${campaign ? ' AND "campaign" = $3' : ''} ORDER BY 1`,
+        campaign ? [curso, guiaId, campaign] : [curso, guiaId])).rows.map(r => r.salon)
     : (await query<{ salon: string }>(
     `SELECT DISTINCT salon FROM (
        SELECT cc."salon" FROM "CURSOS_CAMPAIGN" cc
-        WHERE cc."activa" = true AND UPPER(cc."tipoCurso") = UPPER($1) AND cc."salon" IS NOT NULL AND cc."salon" <> ''
+        WHERE cc."activa" = true AND UPPER(cc."tipoCurso") = UPPER($1) AND cc."salon" IS NOT NULL AND cc."salon" <> ''${campaign ? ' AND cc."campaign" = $2' : ''}
        UNION
        SELECT p."salon" FROM "EVALUACION_RESPUESTAS" er
          JOIN "PEOPLE" p ON UPPER(p."numeroId") = UPPER(er."numeroId") AND p."tipoUsuario" IN ('BENEFICIARIO','BENEFICIARIA')
-        WHERE UPPER(er."curso") = UPPER($1) AND p."salon" IS NOT NULL AND p."salon" <> ''
+        WHERE UPPER(er."curso") = UPPER($1) AND p."salon" IS NOT NULL AND p."salon" <> ''${campaign ? ' AND p."campaign" = $2' : ''}
      ) x ORDER BY salon`,
-    [curso]
+    campaign ? [curso, campaign] : [curso]
   )).rows.map(r => r.salon);
 
   const where: string[] = [`UPPER(er."curso")=UPPER($1)`, `er."enviadaEn" IS NOT NULL`];

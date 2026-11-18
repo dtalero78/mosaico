@@ -127,7 +127,7 @@ export default function CuestionariosReportPage({ tipo, titulo, sustantivo, perm
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-gray-500 uppercase">Campaña</label>
-              <select value={campaign} onChange={e => setCampaign(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px]">
+              <select value={campaign} onChange={e => { setCampaign(e.target.value); setSalon(''); setApplied({ curso, salon: '', campaign: e.target.value }) }} className="border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-[170px]">
                 <option value="">Todas</option>
                 {(data?.campanias || []).map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
