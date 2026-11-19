@@ -221,6 +221,8 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
   const [vigencias, setVigencias] = useState<Vigencia[]>([])
   const [vigencia, setVigencia] = useState<Vigencia | null>(null)
   const [sinVigencia, setSinVigencia] = useState(0)
+  // Año elegido: acota el desplegable de vigencias. Sigue a la vigencia cargada.
+  const [anioSel, setAnioSel] = useState<number | null>(null)
   const [registros, setRegistros] = useState<Registro[]>([])
   const [loading, setLoading] = useState(true)
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set())
@@ -238,7 +240,7 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
       const qs = vigenciaId ? `?vigenciaId=${encodeURIComponent(vigenciaId)}` : ''
       const d = await api.get<{ vigencias: Vigencia[]; vigencia: Vigencia | null; registros: Registro[]; sinVigencia?: number }>(`/api/postgres/libro-produccion${qs}`)
       setSinVigencia(d.sinVigencia || 0)
-      setVigencias(d.vigencias || []); setVigencia(d.vigencia); setRegistros((d.registros || []).filter(r => (modo === 'libro') === esDelLibro(r))); setAbiertos(new Set())
+      setVigencias(d.vigencias || []); setVigencia(d.vigencia); setAnioSel(d.vigencia?.anio ?? null); setRegistros((d.registros || []).filter(r => (modo === 'libro') === esDelLibro(r))); setAbiertos(new Set())
     } catch (e) { handleApiError(e, 'No se pudo cargar el Libro de Producción') } finally { setLoading(false) }
   }, [modo])
   useEffect(() => { cargar() }, [cargar])
@@ -250,6 +252,18 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
     filiales: Array.from(new Set(registros.map(r => r.comercial.filial || '—'))).sort((a, b) => a.localeCompare(b, 'es')),
   }), [registros])
   const semanas = vigencia ? semanasDeVigencia(vigencia) : []
+  const anios = useMemo(() => Array.from(new Set(vigencias.map(v => v.anio))).sort((a, b) => b - a), [vigencias])
+  const anioActual = anioSel ?? vigencia?.anio ?? null
+  const vigenciasDelAnio = useMemo(
+    () => vigencias.filter(v => anioActual == null || v.anio === anioActual).sort((a, b) => a.mes - b.mes),
+    [vigencias, anioActual])
+  const cambiarAnio = (a: number) => {
+    setAnioSel(a)
+    // Misma vigencia (mes) del año nuevo si existe; si no, la primera de ese año.
+    const delAnio = vigencias.filter(v => v.anio === a).sort((x, y) => x.mes - y.mes)
+    const destino = delAnio.find(v => v.mes === vigencia?.mes) || delAnio[0]
+    if (destino) { setF(s => ({ ...s, semana: TODOS })); cargar(destino._id) }
+  }
 
   const visibles = useMemo(() => {
     const q = f.q.trim().toLowerCase()
@@ -341,13 +355,21 @@ function Libro({ modo }: { modo: 'libro' | 'resolver' }) {
           Genere el calendario del año siguiente en la pestaña <b>Vigencias</b>.
         </div>
       )}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-9 items-end gap-3 rounded-lg border border-gray-200 bg-white p-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-10 items-end gap-3 rounded-lg border border-gray-200 bg-white p-3">
+        <label className="text-xs text-gray-600 min-w-0">
+          <span className="block mb-0.5">Año</span>
+          <select value={anioActual ?? ''} onChange={e => cambiarAnio(Number(e.target.value))}
+            className="w-full rounded-md border border-indigo-300 bg-indigo-50 py-1.5 pl-2 pr-7 text-sm font-semibold text-indigo-900">
+            {!anios.length && <option value="">—</option>}
+            {anios.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </label>
         <label className="text-xs text-gray-600 min-w-0 col-span-2">
           <span className="block mb-0.5">Vigencia</span>
           <select value={vigencia?._id || ''} onChange={e => { setF(s => ({ ...s, semana: TODOS })); cargar(e.target.value) }}
             className="w-full rounded-md border border-indigo-300 bg-indigo-50 py-1.5 pl-2 pr-7 text-sm font-semibold text-indigo-900">
             {!vigencias.length && <option value="">Sin vigencias</option>}
-            {vigencias.map(v => <option key={v._id} value={v._id}>{etiquetaVigencia(v)}</option>)}
+            {vigenciasDelAnio.map(v => <option key={v._id} value={v._id}>{etiquetaVigencia(v)}</option>)}
           </select>
         </label>
         <Sel label="Semana" k="semana" opts={semanas.map(s => [String(s.numero), `${s.etiqueta} (${fmtF(s.inicio)})`])} />
