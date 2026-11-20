@@ -236,7 +236,7 @@ export async function createEvent(data: {
 
 const ALLOWED_EVENT_FIELDS = [
   'dia', 'hora', 'advisor', 'nivel', 'step', 'tipo', 'evento', 'titulo',
-  'nombreEvento', 'tituloONivel', 'linkZoom', 'limiteUsuarios', 'club', 'observaciones',
+  'nombreEvento', 'tituloONivel', 'linkZoom', 'limiteUsuarios', 'club', 'observaciones', 'duracionMin',
 ];
 
 /**
