@@ -118,6 +118,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
       guia: ev?.guia || r.guiaCurso || null,
       guiaId: r.guiaId,
       conteo: r.conteo,
+      bookingId: ev?.bookingId || null,
       eventoId: ev?.eventoId || null,
       eventoDia: ev?.eventoDia || null,
       yaPaso: !!(ev?.eventoDia && ev.eventoDia < ahora),

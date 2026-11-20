@@ -35,6 +35,8 @@ interface Row {
   fecha: string | null
   /** Grupo armado a mano que aún no se agenda (ver endpoint grupo-borrador). */
   grupoId: string | null
+  /** Se sacó de su nivelación (Pendientes) y espera nuevo grupo: quién, cuándo y por qué. */
+  reasignar?: { por: string | null; en: string | null; motivo: string | null } | null
 }
 interface Guia { id: string; nombre: string; zoom?: string | null }
 interface SesionAbierta {
@@ -479,6 +481,12 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
                               title="Ver perfil del beneficiario">
                               {r.nombre || '—'}
                             </button>
+                            {r.reasignar && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700 align-middle"
+                                title={[`Sacada de su nivelación`, r.reasignar.por && `por ${r.reasignar.por}`, r.reasignar.en && new Date(r.reasignar.en).toLocaleString('es-CL'), r.reasignar.motivo && `Motivo: ${r.reasignar.motivo}`].filter(Boolean).join(' · ')}>
+                                ↻ Reasignar
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.numeroId || '—'}</td>
                           <td className="px-3 py-2 text-gray-600">{r.salon || '—'}</td>

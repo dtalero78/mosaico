@@ -9,6 +9,7 @@ import { exportToExcel } from '@/lib/export-excel'
 import { fillTemplate } from '@/lib/message-template-filler'
 import { etiquetaOrigenTaller, MAX_RECORDATORIOS } from '@/lib/taller'
 import { hoyEnChile } from '@/lib/cursos-campaign'
+import GestionUsuarioTaller from '@/components/servicio/GestionUsuarioTaller'
 
 interface Row {
   bookingId: string
@@ -233,6 +234,11 @@ export default function TalleresTab({ modo, onCount }: { modo: Modo; onCount?: (
             <button type="button" onClick={exportar} disabled={!rows.length}
               className="px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-50 font-medium">Exportar CSV</button>
           </PermissionGuard>
+          {esProximos && (
+            <PermissionGuard permission={ServicioPermission.TALLERES_GESTION_USUARIO as any}>
+              <GestionUsuarioTaller onChanged={aplicar} />
+            </PermissionGuard>
+          )}
           <span className="ml-auto text-sm text-gray-500">
             Inscritos: <span className="font-semibold text-gray-700">{rows.length}</span>
           </span>

@@ -1259,6 +1259,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     name: '↳ Exportar CSV',
     description: 'Muestra el botón "Exportar CSV" de Talleres.',
   },
+  {
+    code: ServicioPermission.TALLERES_GESTION_USUARIO,
+    module: Module.SERVICIO,
+    section: 'Talleres',
+    name: '↳ Gestión usuario (sacar o trasladar de un taller)',
+    description: 'Muestra el botón "Gestión usuario": busca al alumno por su ID y permite cancelar su agendamiento a un taller o trasladarlo a otro taller con cupo. Pide motivo y queda registrado.',
+  },
 
   // ========== COMERCIAL MODULE ==========
   // -- Página: Contrato Detalle (/dashboard/comercial/contrato/[id]) --

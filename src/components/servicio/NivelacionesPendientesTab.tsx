@@ -8,6 +8,7 @@ import { exportToExcel } from '@/lib/export-excel'
 import ConfirmacionCell from '@/components/servicio/ConfirmacionCell'
 import { usePermissions } from '@/hooks/usePermissions'
 import { estadoConfirmacion } from '@/lib/nivelacion-confirmacion'
+import CruceNivelacionModal, { esCruceNivelacion, type CruceNivelacionDetalle } from '@/components/common/CruceNivelacionModal'
 
 interface Row {
   academicaId: string
@@ -25,10 +26,12 @@ interface Row {
   fechaSolicitud: string | null
   confirmadoEn: string | null
   confirmadoPor: string | null
+  bookingId: string | null
   eventoId: string | null
   eventoDia: string | null
   yaPaso: boolean
 }
+interface Destino { eventoId: string; dia: string; titulo: string; guia: string | null; inscritos: number; cupo: number; libres: number | null; cabe: boolean }
 interface Guia { id: string; nombre: string }
 
 /**
@@ -70,6 +73,14 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
   const [cerrando, setCerrando] = useState<{ row: Row; resultado: string } | null>(null)
   const [comentario, setComentario] = useState('')
   const [guardando, setGuardando] = useState(false)
+  // Selección para sacar / trasladar (por agendamiento, no por alumno).
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [gestion, setGestion] = useState<null | 'sacar' | 'trasladar'>(null)
+  const [motivoG, setMotivoG] = useState('')
+  const [destinos, setDestinos] = useState<Destino[]>([])
+  const [destinoId, setDestinoId] = useState('')
+  const [cargandoDest, setCargandoDest] = useState(false)
+  const [cruce, setCruce] = useState<CruceNivelacionDetalle | null>(null)
   const { hasPermission } = usePermissions()
   const canGestion = hasPermission(ServicioPermission.NIVELACIONES_GESTION)
 
@@ -153,6 +164,54 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
     } finally { setGuardando(false) }
   }
 
+  // ── Sacar / trasladar ───────────────────────────────────────────────────────
+  // Sólo las que aún no se dictan: una que ya pasó se gestiona con el cierre.
+  const seleccionables = rows.filter(r => r.bookingId && !r.yaPaso)
+  const alternar = (id: string) => setSel(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const todosMarcados = seleccionables.length > 0 && seleccionables.every(r => sel.has(r.bookingId as string))
+  const marcarTodos = () => setSel(todosMarcados ? new Set() : new Set(seleccionables.map(r => r.bookingId as string)))
+  const seleccionadas = allRows.filter(r => r.bookingId && sel.has(r.bookingId))
+
+  const llamar = async (body: Record<string, any>) => {
+    const r = await fetch('/api/postgres/reports/servicio/nivelaciones/reasignar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, bookingIds: seleccionadas.map(x => x.bookingId) }),
+    })
+    const j = await r.json().catch(() => ({}))
+    return { ok: r.ok && !j.error, j }
+  }
+  const abrirGestion = async (tipo: 'sacar' | 'trasladar') => {
+    setMotivoG(''); setDestinoId(''); setDestinos([]); setGestion(tipo)
+    if (tipo === 'trasladar') {
+      setCargandoDest(true)
+      const { ok, j } = await llamar({ accion: 'destinos' })
+      setCargandoDest(false)
+      if (!ok) { toast.error(j.error || 'No se pudieron cargar los destinos'); setGestion(null); return }
+      setDestinos(j.destinos || [])
+    }
+  }
+  const ejecutarGestion = async (cancelarCruces = false) => {
+    if (!gestion || !motivoG.trim()) return
+    setGuardando(true)
+    try {
+      const { ok, j } = await llamar(gestion === 'sacar'
+        ? { accion: 'sacar', motivo: motivoG.trim() }
+        : { accion: 'trasladar', motivo: motivoG.trim(), destinoEventoId: destinoId, cancelarCruces })
+      if (!ok) {
+        if (esCruceNivelacion(j.detail)) { setCruce(j.detail); return }
+        throw new Error(j.error || 'No se pudo completar')
+      }
+      toast.success(gestion === 'sacar'
+        ? `${j.sacados} alumno(s) sacado(s) · vuelven a Agrupaciones con la etiqueta Reasignar`
+        : `${j.trasladados} alumno(s) trasladado(s)`)
+      setGestion(null); setCruce(null); setSel(new Set())
+      fetchData({ curso, leccion, guia })
+      onMoved?.()   // Agrupaciones también cambia
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo completar')
+    } finally { setGuardando(false) }
+  }
+
   // Las que ya pasaron y siguen sin cerrarse son las que necesitan gestión.
   const vencidas = rows.filter(r => r.yaPaso).length
 
@@ -211,6 +270,17 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
         </div>
       </div>
 
+      {canGestion && sel.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3 px-4 py-3 bg-orange-50 border border-orange-200 rounded-xl">
+          <span className="text-sm font-semibold text-orange-800">{sel.size} seleccionado(s)</span>
+          <button type="button" onClick={() => abrirGestion('sacar')}
+            className="px-3 py-1.5 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700">Sacar de la nivelación</button>
+          <button type="button" onClick={() => abrirGestion('trasladar')}
+            className="px-3 py-1.5 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700">Trasladar a otra nivelación</button>
+          <button type="button" onClick={() => setSel(new Set())} className="ml-auto text-sm text-gray-600 hover:underline">Limpiar selección</button>
+        </div>
+      )}
+
       {loading ? (
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">Cargando…</div>
       ) : rows.length === 0 ? (
@@ -225,6 +295,12 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  {canGestion && (
+                    <th className="px-3 py-2.5 w-8">
+                      <input type="checkbox" checked={todosMarcados} onChange={marcarTodos} disabled={!seleccionables.length}
+                        aria-label="Marcar todos los que se pueden mover" title="Marcar todos los que aún no se dictan" />
+                    </th>
+                  )}
                   {['Fecha asignada', 'Curso', 'Nombre', 'Salón', 'Módulo · Lección', 'Guía', 'Conteo', 'Confirmación', 'Estado', 'Fecha solicitud'].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
@@ -233,6 +309,14 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
               <tbody>
                 {rows.map(r => (
                   <tr key={`${r.academicaId}-${r.eventoId}`} className={`border-b border-gray-100 hover:bg-gray-50 ${r.yaPaso ? 'bg-amber-50/40' : ''}`}>
+                    {canGestion && (
+                      <td className="px-3 py-2">
+                        {r.bookingId && !r.yaPaso ? (
+                          <input type="checkbox" checked={sel.has(r.bookingId)} onChange={() => alternar(r.bookingId as string)}
+                            aria-label={`Seleccionar ${r.nombre}`} />
+                        ) : null}
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{fmt(r.eventoDia)}</td>
                     <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.curso || '—'}</td>
                     <td className="px-3 py-2 font-medium whitespace-nowrap">
@@ -308,6 +392,61 @@ export default function NivelacionesPendientesTab({ onCount, refreshKey = 0, onM
             </table>
           </div>
         </div>
+      )}
+
+      {gestion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-auto p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {gestion === 'sacar' ? 'Sacar de la nivelación' : 'Trasladar a otra nivelación'}
+            </h3>
+            <ul className="text-sm text-gray-700 mb-3 list-disc pl-5">
+              {seleccionadas.map(r => <li key={r.bookingId}><strong>{r.nombre}</strong> — {fmt(r.eventoDia)}</li>)}
+            </ul>
+            {gestion === 'sacar' ? (
+              <p className="text-sm text-gray-600 mb-3">
+                Se cancelará su agendamiento a esta nivelación y volverán a <strong>Agrupaciones</strong> con la
+                etiqueta <strong>Reasignar</strong>. Su solicitud y su conteo no cambian.
+              </p>
+            ) : (
+              <div className="mb-3">
+                <label htmlFor="dest" className="block text-xs font-medium text-gray-600 mb-1">Nivelación de destino</label>
+                {cargandoDest ? <p className="text-sm text-gray-400">Cargando…</p> : destinos.length === 0 ? (
+                  <p className="text-sm text-amber-700">No hay otra nivelación futura de este curso a la que trasladarlos.</p>
+                ) : (
+                  <select id="dest" value={destinoId} onChange={e => setDestinoId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <option value="">Elige la nivelación…</option>
+                    {destinos.map(d => (
+                      <option key={d.eventoId} value={d.eventoId} disabled={!d.cabe}>
+                        {fmt(d.dia)} · {d.titulo}{d.guia ? ` · ${d.guia}` : ''} · {d.inscritos}/{d.cupo || '∞'}{d.cabe ? '' : ' (sin cupo)'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-xs text-gray-500 mt-1">Conservan su confirmación de asistencia.</p>
+              </div>
+            )}
+            <label htmlFor="motivo-g" className="block text-xs font-medium text-gray-600 mb-1">Motivo (obligatorio)</label>
+            <textarea id="motivo-g" value={motivoG} onChange={e => setMotivoG(e.target.value)} rows={3} maxLength={500}
+              placeholder="Por qué se saca o se traslada" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4" />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setGestion(null)} disabled={guardando}
+                className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancelar</button>
+              <button type="button" onClick={() => ejecutarGestion(false)}
+                disabled={guardando || !motivoG.trim() || (gestion === 'trasladar' && !destinoId)}
+                className={`px-4 py-2 text-sm font-semibold text-white rounded-lg disabled:opacity-50 ${gestion === 'sacar' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'}`}>
+                {guardando ? 'Guardando…' : gestion === 'sacar' ? 'Sacar' : 'Trasladar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cruce && (
+        <CruceNivelacionModal detalle={cruce} procesando={guardando}
+          onCancel={() => setCruce(null)}
+          onConfirm={() => { setCruce(null); ejecutarGestion(true) }} />
       )}
 
       {cerrando && (

@@ -442,6 +442,7 @@ export enum ServicioPermission {
   TALLERES_VER      = 'SERVICIO.TALLERES.VER',
   TALLERES_ENVIAR   = 'SERVICIO.TALLERES.ENVIAR',   // enviar el recordatorio
   TALLERES_EXPORTAR = 'SERVICIO.TALLERES.EXPORTAR', // descargar CSV
+  TALLERES_GESTION_USUARIO = 'SERVICIO.TALLERES.GESTION_USUARIO', // sacar o trasladar a un alumno de un taller
 }
 
 /**

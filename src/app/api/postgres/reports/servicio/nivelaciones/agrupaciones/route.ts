@@ -99,6 +99,26 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
     params
   )).rows
 
+  // "Reasignar": al alumno que se SACÓ (o se canceló) de su nivelación y espera nuevo
+  // grupo. Se deriva del agendamiento cancelado de ESTA solicitud (creado después de
+  // que se pidió); lleva quién, cuándo y por qué cuando fue Servicio.
+  const reasig = new Map<string, any>()
+  if (rows.length) {
+    const rr = (await query(
+      `SELECT DISTINCT ON (a."_id") a."_id" AS "academicaId", bk."canceladoPor", bk."canceladoEn", bk."motivoCancelacion"
+         FROM "ACADEMICA" a
+         JOIN "ACADEMICA_BOOKINGS" bk ON COALESCE(bk."idEstudiante", bk."studentId") = a."_id"
+         JOIN "CALENDARIO" c ON c."_id" = COALESCE(bk."eventoId", bk."idEvento") AND UPPER(COALESCE(c."tipo", '')) = 'NIVELACION'
+        WHERE a."_id" = ANY($1::text[]) AND bk."cancelo" = true
+          AND (a."detalleNivelacion"->>'fecha') LIKE '20%'
+          AND bk."_createdDate" >= (a."detalleNivelacion"->>'fecha')::timestamptz
+        ORDER BY a."_id", bk."_updatedDate" DESC`,
+      [rows.map((r: any) => r.academicaId)]
+    )).rows
+    for (const x of rr) reasig.set(x.academicaId, { por: x.canceladoPor || null, en: x.canceladoEn || null, motivo: x.motivoCancelacion || null })
+  }
+  for (const r of rows as any[]) r.reasignar = reasig.get(r.academicaId) || null
+
   // Opciones de los dropdowns, sobre el mismo universo (aprobadas sin evento):
   // ofrecer una opción que devolvería cero filas sólo confunde.
   const opts = (await query(
