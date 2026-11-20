@@ -116,7 +116,8 @@ class CalendarioRepositoryClass extends BaseRepository {
     // La campaña también: "KODOMO · Salón 06" existe en varias campañas, y sin
     // este filtro un taller creado para AGOSTO le aparecía a un alumno de JUNIO.
     if (filters.campaignAlumno) {
-      conditions.push(`(UPPER(TRIM(COALESCE(c."campaign", ''))) IN ('TODOS', '') OR UPPER(TRIM(c."campaign")) = UPPER(TRIM($${idx})))`);
+      // `campaign` puede ser una lista ("A, B"): el alumno cuenta si su campaña está en ella.
+      conditions.push(`(UPPER(TRIM(COALESCE(c."campaign", ''))) IN ('TODOS', '') OR EXISTS (SELECT 1 FROM unnest(string_to_array(c."campaign", ',')) AS camp WHERE UPPER(TRIM(camp)) = UPPER(TRIM($${idx}))))`);
       params.push(filters.campaignAlumno);
       idx++;
     }
@@ -148,7 +149,7 @@ class CalendarioRepositoryClass extends BaseRepository {
               COALESCE(NULLIF(c."curso", ''), cc."tipoCurso") AS "curso",
               COALESCE(NULLIF(c."salon", ''), cc."salon") AS "salon",
               c."eventoCompartidoId", c."sesionModulo", c."sesionLeccion",
-              c."sesionCerrada",
+              c."sesionCerrada", c."duracionMin",
               c."_createdDate", c."_updatedDate",
               a."primerNombre" as "advisorPrimerNombre",
               a."primerApellido" as "advisorPrimerApellido",
