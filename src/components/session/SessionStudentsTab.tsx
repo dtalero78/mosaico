@@ -563,7 +563,13 @@ export default function SessionStudentsTab({
       && !acPermanencia && !acRespeto && !acDisposicion && !acMicrofono
       && !comentarios.trim()
       && !actividadPropuesta.trim()
-    if (vacio) { setShowEmptyWarn(true); return }
+    // Si el alumno ya tenía asistencia marcada y el guía la desmarcó, guardar "vacío"
+    // ES la corrección (marcó por error): no se le avisa, se guarda como ausente.
+    const rec = selectedStudent.classRecord
+    const teniaMarcas = !!(rec?.asistencia || rec?.participacion || rec?.escusa || rec?.hePuntualidad
+      || rec?.heAsignacion || rec?.daDominio || rec?.daDesafio || rec?.acPermanencia
+      || rec?.acRespeto || rec?.acDisposicion || rec?.acMicrofono)
+    if (vacio && !teniaMarcas) { setShowEmptyWarn(true); return }
     await doSaveClassRecord()
   }
 
