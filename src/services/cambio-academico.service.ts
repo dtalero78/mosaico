@@ -207,7 +207,7 @@ export async function cambiarCursoAcademico(
           numeroId: aca.numeroId || null, celular: aca.celular || null, plataforma: aca.plataforma || null,
           nivel: e.sesionModulo || e.nivel || e.tituloONivel || null,
           step: e.sesionLeccion || e.step || e.nombreEvento || null,
-          advisor: e.advisor || null,
+          advisor: e.advisor || '',
           fecha: e.dia, fechaEvento: e.dia, hora: e.hora || null,
           tipo: e.tipo || e.evento || null, tipoEvento: e.tipo || e.evento || null,
           linkZoom: e.linkZoom || null,
