@@ -7,6 +7,13 @@ import { TZ_OPERACION } from './cursos-campaign'
 /** Slug de la plantilla que se envía como recordatorio. */
 export const SLUG_RECORDATORIO_TALLER = 'recordatorio-taller'
 
+/**
+ * Slug de la plantilla que sale SOLA cuando el alumno se inscribe a un taller
+ * desde su panel. Si la plantilla no existe o está inactiva, no se envía nada
+ * (desactivarla en Gestión de Plantillas es el interruptor).
+ */
+export const SLUG_INSCRIPCION_TALLER = 'inscripcion-taller'
+
 /** Tope de destinatarios por envío, el mismo de Envío de Mensajes. */
 export const MAX_RECORDATORIOS = 300
 

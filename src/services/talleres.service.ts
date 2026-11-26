@@ -9,7 +9,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { fillTemplate } from '@/lib/message-template-filler'
 import { TZ_OPERACION } from '@/lib/cursos-campaign'
 import {
-  SLUG_RECORDATORIO_TALLER, MAX_RECORDATORIOS, MIN_TALLER_EN_CURSO,
+  SLUG_RECORDATORIO_TALLER, SLUG_INSCRIPCION_TALLER, MAX_RECORDATORIOS, MIN_TALLER_EN_CURSO,
   fechaHoraTaller, tallerTerminado,
 } from '@/lib/taller'
 
@@ -225,4 +225,45 @@ export async function enviarRecordatorios(bookingIds: string[], actor: { email: 
 
   const enviados = resultados.filter(r => r.ok).length
   return { enviados, fallidos: resultados.length - enviados, resultados }
+}
+
+/**
+ * WhatsApp de confirmación que sale SOLO cuando el alumno se inscribe a un taller
+ * desde su panel. Mismo destino que el recordatorio (apoderado si el curso lo usa,
+ * si no el alumno) y mismos placeholders, con su propia plantilla
+ * (`inscripcion-taller`). Best-effort: NUNCA lanza — la inscripción ya quedó
+ * hecha y un fallo del WhatsApp no debe deshacerla ni mostrarse como error.
+ *
+ * No se registra en TALLER_RECORDATORIOS a propósito: esa tabla marca el
+ * recordatorio como "✓ Enviado" en Servicio › Talleres, y la confirmación no
+ * reemplaza al recordatorio del día.
+ */
+export async function enviarConfirmacionInscripcion(bookingId: string): Promise<{ ok: boolean; motivo?: string }> {
+  try {
+    const tpl = await MessageTemplatesRepository.findBySlug(SLUG_INSCRIPCION_TALLER).catch(() => null)
+    if (!tpl || !tpl.activo) return { ok: false, motivo: 'plantilla inexistente o inactiva' }
+
+    const filas = (await query<any>(
+      `${SELECT_FILAS} WHERE bk."_id" = $1 AND UPPER(c."tipo") = 'CLUB'`,
+      [bookingId]
+    )).rows
+    if (!filas.length) return { ok: false, motivo: 'no es un taller' }
+    if (String(filas[0].contrato || '').toUpperCase().startsWith('PRB-')) return { ok: false, motivo: 'contrato de prueba' }
+
+    const [r] = await conDestino(filas)
+    if (!r.telefonoValido) return { ok: false, motivo: 'sin teléfono válido' }
+
+    const { fecha, hora } = fechaHoraTaller(r.dia)
+    const mensaje = fillTemplate(tpl.contenido, {
+      nombre: r.primerNombre, primerApellido: r.primerApellido,
+      numeroId: r.numeroId, contrato: r.contrato,
+      apoderado: r.apoderado || null,
+      curso: r.tipoCurso, fechaTaller: fecha, horaTaller: hora,
+    })
+    await sendWhatsAppMessage(r.telefono!, mensaje)
+    return { ok: true }
+  } catch (e: any) {
+    console.warn('[talleres] no se pudo enviar la confirmación de inscripción:', e?.message)
+    return { ok: false, motivo: e?.message || 'error' }
+  }
 }
