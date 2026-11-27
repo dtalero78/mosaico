@@ -37,12 +37,13 @@ function veredicto(m: Metrica): { texto: string; clase: string } {
     : { texto: `${pct(d)} por encima del resto`, clase: 'text-red-600' };
 }
 
+/** Cada métrica en su tarjeta; las cuatro se ven en dos líneas (2 × 2). */
 function Fila({ label, sub, m, color }: { label: string; sub: string; m: Metrica; color: string }) {
   const v = veredicto(m);
   // Barras a la misma escala, acotadas para que una tasa alta no desborde.
   const ancho = (x: number | null) => (x === null ? 0 : Math.min(100, Math.round(x * 100)));
   return (
-    <div className="py-2.5 border-b border-gray-100 last:border-0">
+    <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate">{label}</p>
@@ -72,6 +73,52 @@ function Fila({ label, sub, m, color }: { label: string; sub: string; m: Metrica
         </div>
       </div>
       <p className={`text-[11px] font-medium mt-1 ${v.clase}`}>{v.texto}</p>
+    </div>
+  );
+}
+
+/**
+ * Cuarta tarjeta: el resumen. Cuántas cosas resolvió Coordinación en total y en
+ * cuántas de las tres métricas el guía queda por encima / por debajo del resto.
+ * No se calcula una tasa combinada: las tres tienen bases distintas (clases,
+ * sesiones, informes) y sumarlas mezclaría cosas que no se comparan.
+ */
+function Resumen({ d }: { d: Datos }) {
+  const ms = [d.canceladas, d.sesiones, d.reportes];
+  const total = ms.reduce((s, m) => s + m.valor, 0);
+  const comparables = ms.filter(m => m.tasa !== null && m.tasaPares !== null);
+  const encima = comparables.filter(m => (m.tasa as number) - (m.tasaPares as number) >= 0.005).length;
+  const debajo = comparables.filter(m => (m.tasaPares as number) - (m.tasa as number) >= 0.005).length;
+  const igual = comparables.length - encima - debajo;
+  const color = total === 0 ? 'text-emerald-600' : encima > 0 ? 'text-red-600' : 'text-gray-900';
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3 flex flex-col">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate">Total resuelto por Coordinación</p>
+          <p className="text-[11px] text-gray-500 truncate">canceladas + sesiones + informes</p>
+        </div>
+        <p className={`text-xl font-bold ${color} tabular-nums leading-none`}>{total}</p>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-1 text-center">
+        <div className="rounded bg-red-50 py-1">
+          <p className="text-base font-bold text-red-600 leading-none">{encima}</p>
+          <p className="text-[10px] text-red-700">por encima</p>
+        </div>
+        <div className="rounded bg-gray-100 py-1">
+          <p className="text-base font-bold text-gray-600 leading-none">{igual}</p>
+          <p className="text-[10px] text-gray-600">igual</p>
+        </div>
+        <div className="rounded bg-emerald-50 py-1">
+          <p className="text-base font-bold text-emerald-600 leading-none">{debajo}</p>
+          <p className="text-[10px] text-emerald-700">por debajo</p>
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-500 mt-auto pt-2">
+        {comparables.length === 0
+          ? 'Sin comparación con el resto'
+          : total === 0 ? 'Coordinación no tuvo que resolver nada este mes.' : 'Métricas comparadas con el resto de los guías.'}
+      </p>
     </div>
   );
 }
@@ -108,12 +155,15 @@ export default function GestionCoordinacionCard(
 
       {d && (
         <>
-          <Fila label="Clases canceladas" sub="canceladas por el guía, sobre su agenda del mes"
-            m={d.canceladas} color="text-red-600" />
-          <Fila label="Sesiones registradas por Coordinación" sub="el guía no las cerró en su plazo"
-            m={d.sesiones} color="text-amber-600" />
-          <Fila label="Informes cerrados por Coordinación" sub="informes semanales que el guía no cerró"
-            m={d.reportes} color="text-violet-600" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Fila label="Clases canceladas" sub="canceladas por el guía, sobre su agenda del mes"
+              m={d.canceladas} color="text-red-600" />
+            <Fila label="Sesiones registradas por Coordinación" sub="el guía no las cerró en su plazo"
+              m={d.sesiones} color="text-amber-600" />
+            <Fila label="Informes cerrados por Coordinación" sub="informes semanales que el guía no cerró"
+              m={d.reportes} color="text-violet-600" />
+            <Resumen d={d} />
+          </div>
           {!d.guia.enComparacion && (
             <p className="text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-2 py-1.5 mt-2">
               Esta es una cuenta de Coordinación: queda fuera del promedio con el que se compara al resto.
