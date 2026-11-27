@@ -4,7 +4,7 @@ import { resolveStudentFromSession } from '@/services/panel-estudiante.service';
 import { bookEvent } from '@/services/student-booking.service';
 import { isEnabledForEmail, findEvaluablesForStudent } from '@/services/evaluations.service';
 import { ValidationError } from '@/lib/errors';
-import { enviarConfirmacionInscripcion } from '@/services/talleres.service';
+import { enviarConfirmacionInscripcion, type ResultadoWhatsApp } from '@/services/talleres.service';
 
 export const POST = handlerWithAuth(async (request, context, session) => {
   const student = await resolveStudentFromSession(session);
@@ -52,7 +52,7 @@ export const POST = handlerWithAuth(async (request, context, session) => {
 
   // WhatsApp de confirmación para TALLERES y OLIMPIADAS (best-effort: no lanza,
   // y su fallo no deshace la inscripción).
-  let whatsapp: { ok: boolean; motivo?: string } | null = null;
+  let whatsapp: ResultadoWhatsApp | null = null;
   if (['CLUB', 'OLIMPIADA'].includes(String(booking?.tipo || '').toUpperCase())) {
     whatsapp = await enviarConfirmacionInscripcion(booking._id);
   }

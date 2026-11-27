@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import WhatsAppResultadoModal, { type WhatsAppResultado } from '@/components/common/WhatsAppResultadoModal'
 import toast from 'react-hot-toast'
 import CruceNivelacionModal, { esCruceNivelacion, type CruceNivelacionDetalle } from '@/components/common/CruceNivelacionModal'
 import { UserGroupIcon } from '@heroicons/react/24/outline'
@@ -99,6 +100,8 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
   /** Devolver a Solicitudes o Remover: se confirma en un modal con la lista. */
   const [retiro, setRetiro] = useState<{ accion: AccionRetiro; rows: Row[] } | null>(null)
   const [guardando, setGuardando] = useState(false)
+  // Resultado del WhatsApp "nivelación programada" tras agrupar (verde / rojo con causa).
+  const [whatsapp, setWhatsapp] = useState<WhatsAppResultado[] | null>(null)
   const [sesionesAbiertas, setSesionesAbiertas] = useState<SesionAbierta[]>([])
 
   const fetchData = useCallback(async (f?: Record<string, string>) => {
@@ -228,6 +231,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
       if (!res.ok && esCruceNivelacion(j?.detail)) { setCruceSumar({ eventoId: eventoExistenteId, detalle: j.detail }); return }
       if (!res.ok) throw new Error(j?.error || 'No se pudo sumar a la nivelación')
       toast.success(j?.message || 'Usuarios sumados a la nivelación')
+      if (j?.whatsapp?.resultados?.length) setWhatsapp(j.whatsapp.resultados)
       setSel(new Set())
       fetchData({ curso, leccion, guia, solicitante })
       onMoved?.()
@@ -528,7 +532,7 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
           grupo={modalGrupo}
           guias={guias}
           onClose={() => setModalGrupo(null)}
-          onDone={() => { setModalGrupo(null); fetchData({ curso, leccion, guia, solicitante }); onMoved?.() }}
+          onDone={(w) => { setModalGrupo(null); fetchData({ curso, leccion, guia, solicitante }); onMoved?.(); if (w?.length) setWhatsapp(w) }}
         />
       )}
 
@@ -538,6 +542,14 @@ export default function NivelacionesAgrupacionesTab({ onCount, refreshKey = 0, o
           rows={retiro.rows}
           onClose={() => setRetiro(null)}
           onDone={() => { setRetiro(null); fetchData({ curso, leccion, guia, solicitante, usuario }); onMoved?.() }}
+        />
+      )}
+
+      {whatsapp && (
+        <WhatsAppResultadoModal
+          titulo="Aviso de nivelación programada"
+          resultados={whatsapp}
+          onClose={() => setWhatsapp(null)}
         />
       )}
     </div>
@@ -680,7 +692,7 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
   grupo: Grupo
   guias: Guia[]
   onClose: () => void
-  onDone: () => void
+  onDone: (whatsapp?: WhatsAppResultado[]) => void
 }) {
   // El guía, el zoom y el alcance se proponen desde el primer alumno del grupo
   // (todos comparten curso y lección), pero quedan editables: la nivelación la
@@ -755,7 +767,7 @@ function GestionGrupoModal({ grupo, guias, onClose, onDone }: {
       // responde el motivo: el modal queda abierto para corregir (p.ej. la hora).
       if (r.error) throw new Error(r.error)
       toast.success(r.message || 'Nivelación creada')
-      onDone()
+      onDone(r?.whatsapp?.resultados)
     } catch (e: any) {
       toast.error(e?.message || 'Error al crear la nivelación')
     } finally {

@@ -13,6 +13,7 @@ import { useAvailableEvents, useBookEvent, useDiasConEventos } from '@/hooks/use
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { etiquetaTipoEvento } from '@/lib/tipos-sesion'
+import WhatsAppResultadoModal, { type WhatsAppResultado } from '@/components/common/WhatsAppResultadoModal'
 
 interface BookingFlowProps {
   onClose: () => void
@@ -26,6 +27,7 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTipo, setSelectedTipo] = useState<string | undefined>(initialTipo)
   const [selectedEvent, setSelectedEvent] = useState<any>(null)
+  const [whatsapp, setWhatsapp] = useState<WhatsAppResultado | null>(null)
 
   const { data, isLoading } = useAvailableEvents(selectedDate, selectedTipo)
   const bookMutation = useBookEvent()
@@ -89,7 +91,12 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
   const handleConfirm = () => {
     if (!selectedEvent) return
     bookMutation.mutate(selectedEvent._id, {
-      onSuccess: () => onClose(),
+      // Talleres y olimpiadas mandan un WhatsApp de confirmación: se muestra el
+      // resultado (verde enviado / rojo con la causa) antes de cerrar.
+      onSuccess: (res: any) => {
+        if (res?.whatsapp) setWhatsapp(res.whatsapp)
+        else onClose()
+      },
     })
   }
 
@@ -178,6 +185,18 @@ export default function BookingFlow({ onClose, initialTipo }: BookingFlowProps) 
     if (dow === 3) return { caja: 'bg-orange-100 border-orange-400 ring-1 ring-orange-300 hover:bg-orange-200 hover:border-orange-500', icono: 'text-orange-600', texto: 'text-orange-700', etiqueta: 'Taller apoderados' }
     if (dow === 5) return { caja: 'bg-blue-100 border-blue-400 ring-1 ring-blue-300 hover:bg-blue-200 hover:border-blue-500', icono: 'text-blue-600', texto: 'text-blue-700', etiqueta: 'Taller estudiantes' }
     return { caja: 'bg-green-50 border-green-400 ring-1 ring-green-200 hover:bg-green-100 hover:border-green-500', icono: 'text-green-600', texto: 'text-green-700', etiqueta: 'Taller programado' }
+  }
+
+  // Después de todos los hooks (reglas de React): el resultado del WhatsApp
+  // reemplaza al asistente y, al cerrarlo, se cierra todo.
+  if (whatsapp) {
+    return (
+      <WhatsAppResultadoModal
+        titulo={initialTipo === 'OLIMPIADA' ? 'Inscripción a la olimpiada' : 'Inscripción al taller'}
+        resultados={[whatsapp]}
+        onClose={onClose}
+      />
+    )
   }
 
   return (

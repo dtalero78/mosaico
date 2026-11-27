@@ -238,21 +238,46 @@ export async function enviarRecordatorios(bookingIds: string[], actor: { email: 
  * recordatorio como "✓ Enviado" en Servicio › Talleres, y la confirmación no
  * reemplaza al recordatorio del día.
  */
-export async function enviarConfirmacionInscripcion(bookingId: string): Promise<{ ok: boolean; motivo?: string }> {
+export interface ResultadoWhatsApp {
+  ok: boolean
+  /** Causa legible cuando no se envió. */
+  motivo?: string
+  /** Alumno al que se refiere el mensaje. */
+  nombre?: string
+  /** A quién se envió (o se intentó enviar). */
+  destino?: 'apoderado' | 'alumno'
+  /** Teléfono enmascarado: sólo los últimos 4 dígitos. */
+  telefono?: string
+}
+
+const enmascarar = (t?: string | null) => {
+  const d = digitos(t)
+  return d ? `••••${d.slice(-4)}` : ''
+}
+
+export async function enviarConfirmacionInscripcion(bookingId: string): Promise<ResultadoWhatsApp> {
+  let base: Partial<ResultadoWhatsApp> = {}
   try {
     const filas = (await query<any>(
       `${SELECT_FILAS} WHERE bk."_id" = $1`,
       [bookingId]
     )).rows
-    if (!filas.length) return { ok: false, motivo: 'agendamiento no encontrado' }
+    if (!filas.length) return { ok: false, motivo: 'No se encontró la inscripción.' }
+    base = { nombre: [filas[0].primerNombre, filas[0].primerApellido].filter(Boolean).join(' ') }
     const slug = SLUG_CONFIRMACION_POR_TIPO[String(filas[0].tipo || '').toUpperCase()]
-    if (!slug) return { ok: false, motivo: 'tipo de evento sin confirmación' }
+    if (!slug) return { ...base, ok: false, motivo: 'Este tipo de evento no envía confirmación.' }
     const tpl = await MessageTemplatesRepository.findBySlug(slug).catch(() => null)
-    if (!tpl || !tpl.activo) return { ok: false, motivo: 'plantilla inexistente o inactiva' }
-    if (String(filas[0].contrato || '').toUpperCase().startsWith('PRB-')) return { ok: false, motivo: 'contrato de prueba' }
+    if (!tpl) return { ...base, ok: false, motivo: `No existe la plantilla de mensaje "${slug}".` }
+    if (!tpl.activo) return { ...base, ok: false, motivo: `La plantilla "${tpl.nombre}" está desactivada.` }
+    if (String(filas[0].contrato || '').toUpperCase().startsWith('PRB-')) {
+      return { ...base, ok: false, motivo: 'Contrato de prueba: no se envían mensajes.' }
+    }
 
     const [r] = await conDestino(filas)
-    if (!r.telefonoValido) return { ok: false, motivo: 'sin teléfono válido' }
+    base = { ...base, destino: r.esApoderado ? 'apoderado' : 'alumno', telefono: enmascarar(r.telefono) }
+    if (!r.telefonoValido) {
+      return { ...base, ok: false, motivo: 'No hay un número de WhatsApp válido registrado (apoderado ni alumno).' }
+    }
 
     const { fecha, hora } = fechaHoraTaller(r.dia)
     const mensaje = fillTemplate(tpl.contenido, {
@@ -263,10 +288,10 @@ export async function enviarConfirmacionInscripcion(bookingId: string): Promise<
       fechaNivelacion: fecha, horaNivelacion: hora,
     })
     await sendWhatsAppMessage(r.telefono!, mensaje)
-    return { ok: true }
+    return { ...base, ok: true }
   } catch (e: any) {
     console.warn('[talleres] no se pudo enviar la confirmación de inscripción:', e?.message)
-    return { ok: false, motivo: e?.message || 'error' }
+    return { ...base, ok: false, motivo: `WhatsApp rechazó el envío: ${e?.message || 'error desconocido'}` }
   }
 }
 
@@ -274,10 +299,11 @@ export async function enviarConfirmacionInscripcion(bookingId: string): Promise<
  * Aviso "nivelación programada" a cada alumno recién agendado en una nivelación
  * desde Servicio › Nivelaciones › Agrupaciones (Gestión de grupo o "Sumar a una
  * sesión ya agendada"), o sea, cuando pasan a Pendientes. Secuencial (límite de
- * Whapi) y best-effort: nunca lanza.
+ * Whapi) y best-effort: nunca lanza. Devuelve el detalle por alumno para que la
+ * pantalla muestre qué se envió y por qué falló lo que no.
  */
 export async function avisarNivelacionProgramada(eventoId: string, academicaIds: string[]) {
-  const resultados: { academicaId: string; ok: boolean; motivo?: string }[] = []
+  const resultados: (ResultadoWhatsApp & { academicaId: string })[] = []
   try {
     const { rows } = await query<{ _id: string; academicaId: string }>(
       `SELECT DISTINCT ON (COALESCE(b."idEstudiante", b."studentId"))
@@ -297,5 +323,5 @@ export async function avisarNivelacionProgramada(eventoId: string, academicaIds:
     console.warn('[nivelaciones] no se pudo avisar la nivelación programada:', e?.message)
   }
   const enviados = resultados.filter(r => r.ok).length
-  return { enviados, fallidos: resultados.length - enviados }
+  return { enviados, fallidos: resultados.length - enviados, resultados }
 }
