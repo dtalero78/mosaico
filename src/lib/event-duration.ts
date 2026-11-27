@@ -54,6 +54,12 @@ export function eventDurationMin(
   return DURATION_BY_TIPO[String(tipo || '').toUpperCase()] ?? DEFAULT_EVENT_DURATION_MIN;
 }
 
+/** Horas con hasta 2 decimales, con coma: 12,5 · 0,83 · 3. */
+export function formatHoras(horas: number): string {
+  const v = Math.round((Number(horas) || 0) * 100) / 100;
+  return v.toLocaleString('es-CL', { maximumFractionDigits: 2 });
+}
+
 /** Fecha/hora de fin del evento (inicio + su duración). */
 export function eventEndDate(
   dia: Date | string,

@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { ClockIcon } from '@heroicons/react/24/outline'
 import GestionCoordinacionCard from './GestionCoordinacionCard'
+import { formatHoras } from '@/lib/event-duration'
 
 interface VigenteRow {
   source: 'CALENDARIO'
@@ -31,6 +32,8 @@ interface VigenteRow {
   nivel: string | null
   step: string | null
   sesionCerrada: boolean
+  /** Horas que vale el evento = duración real / 60 (1 · 0,5 · 2 …). */
+  horas?: number
   /** UUID del grupo compartido — null si el evento es individual. */
   eventoCompartidoId: string | null
 }
@@ -160,23 +163,26 @@ export default function AdvisorDashboard() {
     const nowMs = Date.now()
     const isPast = (iso: string | null | undefined) =>
       iso != null && new Date(iso).getTime() <= nowMs
-    type GroupState = { tipo: string | null; step: string | null; sesionCerrada: boolean }
+    // Cada grupo vale la DURACIÓN REAL (60 min = 1 h, 30 min = 0,5 h, sábado 2 h).
+    type GroupState = { tipo: string | null; step: string | null; sesionCerrada: boolean; horas: number }
     const groups = new Map<string, GroupState>()
     data.vigentes.forEach(v => {
       if (!isPast(v.fechaEvento)) return
       const key = v.eventoCompartidoId || v.eventoId
+      const horas = Number(v.horas ?? 1)
       const existing = groups.get(key)
       if (!existing) {
-        groups.set(key, { tipo: v.tipo, step: v.step, sesionCerrada: v.sesionCerrada === true })
-      } else if (v.sesionCerrada === true) {
-        existing.sesionCerrada = true
+        groups.set(key, { tipo: v.tipo, step: v.step, sesionCerrada: v.sesionCerrada === true, horas })
+      } else {
+        if (v.sesionCerrada === true) existing.sesionCerrada = true
+        existing.horas = Math.max(existing.horas, horas)
       }
     })
     for (const g of groups.values()) {
       countTipoStep(g.tipo, g.step)
       k.conducted++
-      if (g.sesionCerrada) k.effective++
-      else                 k.sinRegistrar++
+      if (g.sesionCerrada) k.effective    += g.horas
+      else                 k.sinRegistrar += g.horas
     }
     data.historicos.forEach(h => {
       if (!isPast(h.fechaEvento)) return
@@ -367,7 +373,7 @@ function KpiCard({ label, value, color, big }: { label: string; value: number; c
   // borde mas grueso para destacar — la altura final coincide visualmente.
   return (
     <div className={`${color} ${big ? 'border-2' : 'border'} rounded-lg px-3 py-2 text-center`}>
-      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-2xl font-bold">{formatHoras(value)}</div>
       <div className={big ? 'text-xs uppercase tracking-wide font-semibold' : 'text-[10px] uppercase tracking-wide font-semibold'}>{label}</div>
     </div>
   )

@@ -27,6 +27,17 @@ import { AdvisorEventLogRepository, AdvisorEventLogRow } from '@/repositories/ad
 import { AdvisorNotesAuditRepository } from '@/repositories/advisor-notes-audit.repository';
 import { getSessionWindow, REGISTER_CLOSE_MIN } from '@/lib/session-window';
 import { estaAutorizado, marcarAutorizacionUsada } from '@/services/autorizacion-gestion.service';
+import { eventDurationMin } from '@/lib/event-duration';
+
+/**
+ * Horas que vale un evento para el guía = su duración real.
+ * 60 min = 1 h, 30 min = 0,5 h, bloque de sábado de 2 h = 2 h, clase de 50 min = 0,83 h.
+ * Misma fuente que la hora de fin del calendario (`eventDurationMin`): duración propia
+ * del evento → horario del curso (`nombreEvento`) → tipo.
+ */
+export function horasDeEvento(tipo?: string | null, horario?: string | null, duracionMin?: number | null): number {
+  return Math.round((eventDurationMin(tipo, horario, duracionMin) / 60) * 100) / 100;
+}
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const EDIT_WINDOW_MIN_MINUTES = 20;
@@ -66,6 +77,8 @@ export interface VigenteRow {
   nivel: string | null;
   step: string | null;
   tituloEvento: string | null;
+  /** Horas que vale el evento = duración real / 60 (ver `horasDeEvento`). */
+  horas: number;
   observacionesEvento: string | null;   // del admin (CALENDARIO.observaciones)
   timeout: string | null;
   notasadvisor: string | null;
@@ -176,6 +189,8 @@ export async function buildMonthlyView(
        c."nivel",
        c."step",
        COALESCE(c."tituloONivel", c."titulo", c."nombreEvento") AS "tituloEvento",
+       c."nombreEvento"       AS "horarioEvento",
+       c."duracionMin",
        c."observaciones"      AS "observacionesEvento",
        c."timeout",
        c."notasadvisor",
@@ -215,6 +230,7 @@ export async function buildMonthlyView(
       nivel: r.nivel,
       step: r.step,
       tituloEvento: r.tituloEvento,
+      horas: horasDeEvento(r.tipo, r.horarioEvento, r.duracionMin),
       observacionesEvento: r.observacionesEvento,
       timeout: r.timeout,
       notasadvisor: r.notasadvisor,

@@ -9,6 +9,7 @@ import { AcademicoPermission } from '@/types/permissions'
 import { ClockIcon, ChevronLeftIcon, ChevronRightIcon, ArrowPathIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import GestionCoordinacionCard from '@/components/dashboard/GestionCoordinacionCard'
 import toast from 'react-hot-toast'
+import { formatHoras } from '@/lib/event-duration'
 
 interface VigenteRow {
   source: 'CALENDARIO'
@@ -24,6 +25,8 @@ interface VigenteRow {
   notasadvisor: string | null
   sesionCerrada: boolean
   fechaCierreSesion: string | null
+  /** Horas que vale el evento = duración real / 60 (1 · 0,5 · 2 …). */
+  horas?: number
   /** UUID del grupo compartido; null si no comparte. */
   eventoCompartidoId: string | null
   inscritos: number
@@ -327,23 +330,27 @@ export function ControlHorasContent({
     // cierra P1 pero abandona antes de P2/P3 igual suma 1 Effective (no 3
     // sin registrar). Los hermanos sin cerrar siguen visibles en el
     // calendario para que el Coordinador pueda terminarlos si quiere.
-    type GroupState = { tipo: string | null; sesionCerrada: boolean }
+    // Cada grupo vale la DURACIÓN REAL del evento (60 min = 1 h, 30 min = 0,5 h,
+    // bloque de sábado = 2 h); en un grupo compartido manda el hermano más largo.
+    type GroupState = { tipo: string | null; sesionCerrada: boolean; horas: number }
     const groups = new Map<string, GroupState>()
     data.vigentes.forEach(v => {
       if (!isPast(v.fechaEvento)) return
       const key = v.eventoCompartidoId || v.eventoId
+      const horas = Number(v.horas ?? 1)
       const existing = groups.get(key)
       if (!existing) {
-        groups.set(key, { tipo: v.tipo, sesionCerrada: v.sesionCerrada === true })
-      } else if (v.sesionCerrada === true) {
-        existing.sesionCerrada = true
+        groups.set(key, { tipo: v.tipo, sesionCerrada: v.sesionCerrada === true, horas })
+      } else {
+        if (v.sesionCerrada === true) existing.sesionCerrada = true
+        existing.horas = Math.max(existing.horas, horas)
       }
     })
     for (const g of groups.values()) {
       countByTipo(g.tipo)
       t.conducted++
-      if (g.sesionCerrada) t.effective++
-      else                 t.sinRegistrar++
+      if (g.sesionCerrada) t.effective    += g.horas
+      else                 t.sinRegistrar += g.horas
     }
     data.historicos.forEach(h => {
       if (!isPast(h.fechaEvento)) return
@@ -603,7 +610,7 @@ function AdvisorAvatar({ fotoUrl, inicial }: { fotoUrl: string | null; inicial: 
 function TotalCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className={`${color} border rounded-lg px-3 py-2 text-center`}>
-      <div className="text-xl font-bold">{value}</div>
+      <div className="text-xl font-bold">{formatHoras(value)}</div>
       <div className="text-[10px] uppercase tracking-wide font-semibold">{label}</div>
     </div>
   )
