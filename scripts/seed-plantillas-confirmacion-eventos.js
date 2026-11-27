@@ -41,9 +41,9 @@ Equipo MOSAICO 💙`,
     slug: 'nivelacion-programada',
     nombre: 'Nivelación programada',
     descripcion: 'Se envía automáticamente cuando Servicio agrupa la nivelación del alumno (pasa a Pendientes)',
-    contenido: `{{nombreApoderado}} te saludamos desde Mosaico para contarte que {{nombreAlumno}} tiene una nivelación programada para este viernes a las {{horaNivelacion}}.
+    contenido: `{{nombreApoderado}} te saludamos desde Mosaico para contarte que {{nombreAlumno}} tiene una nivelación programada para el {{fechaNivelacion}} a las {{horaNivelacion}}.
 Te pedimos que ingreses a plataforma para que confirmes la hora que te tenemos reservada. Muchas gracias!`,
-    placeholders: ['nombreApoderado', 'nombreAlumno', 'horaNivelacion'],
+    placeholders: ['nombreApoderado', 'nombreAlumno', 'fechaNivelacion', 'horaNivelacion'],
   },
 ];
 
