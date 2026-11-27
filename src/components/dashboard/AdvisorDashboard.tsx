@@ -141,6 +141,7 @@ export default function AdvisorDashboard() {
   const kpis = useMemo(() => {
     const k = {
       sessions: 0, training: 0, clubs: 0, welcome: 0,
+      nivelaciones: 0, nivelacionesHoras: 0,
       conducted: 0, canceled: 0, suspended: 0,
       effective: 0, sinRegistrar: 0,
       administrative: 0,
@@ -152,6 +153,7 @@ export default function AdvisorDashboard() {
       if (t === 'SESSION' || t === 'RECUPERACION') k.sessions++
       else if (t === 'CLUB')    isTrainingStep(step) ? k.training++ : k.clubs++
       else if (t === 'WELCOME') k.welcome++
+      else if (t === 'NIVELACION') k.nivelaciones++
     }
 
     // KPIs solo cuentan eventos que YA ocurrieron (fechaEvento <= NOW).
@@ -181,6 +183,7 @@ export default function AdvisorDashboard() {
     for (const g of groups.values()) {
       countTipoStep(g.tipo, g.step)
       k.conducted++
+      if ((g.tipo || '').toUpperCase() === 'NIVELACION') k.nivelacionesHoras += g.horas
       if (g.sesionCerrada) k.effective    += g.horas
       else                 k.sinRegistrar += g.horas
     }
@@ -296,11 +299,12 @@ export default function AdvisorDashboard() {
       </div>
 
       {/* KPIs detalle */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
         <KpiCard label="Sesiones"  value={kpis.sessions}  color="bg-blue-50    border-blue-300    text-blue-700" />
         <KpiCard label="Entrenamiento"  value={kpis.training}  color="bg-orange-50  border-orange-300  text-orange-700" />
         <KpiCard label="Talleres"     value={kpis.clubs}     color="bg-green-50   border-green-300   text-green-700" />
         <KpiCard label="Bienvenida"   value={kpis.welcome}   color="bg-purple-50  border-purple-300  text-purple-700" />
+        <KpiCard label="Nivelaciones (h)" value={kpis.nivelacionesHoras} sub={`${kpis.nivelaciones} nivelación(es)`} color="bg-amber-50 border-amber-400 text-amber-800" />
         <KpiCard label="Realizadas" value={kpis.conducted} color="bg-sky-50     border-sky-300     text-sky-700" />
         <KpiCard label="Canceladas"  value={kpis.canceled}  color="bg-red-50     border-red-300     text-red-700" />
         <KpiCard label="Suspendidas" value={kpis.suspended} color="bg-yellow-50  border-yellow-300  text-yellow-800" />
@@ -368,13 +372,14 @@ function AdvisorAvatar({ fotoUrl, inicial }: { fotoUrl: string | null; inicial: 
   )
 }
 
-function KpiCard({ label, value, color, big }: { label: string; value: number; color: string; big?: boolean }) {
+function KpiCard({ label, value, color, big, sub }: { label: string; value: number; color: string; big?: boolean; sub?: string }) {
   // Mismo padding y altura que las cards normales; solo la card 'big' tiene
   // borde mas grueso para destacar — la altura final coincide visualmente.
   return (
     <div className={`${color} ${big ? 'border-2' : 'border'} rounded-lg px-3 py-2 text-center`}>
       <div className="text-2xl font-bold">{formatHoras(value)}</div>
       <div className={big ? 'text-xs uppercase tracking-wide font-semibold' : 'text-[10px] uppercase tracking-wide font-semibold'}>{label}</div>
+      {sub && <div className="text-[10px] opacity-75">{sub}</div>}
     </div>
   )
 }

@@ -74,6 +74,7 @@ const getNavigation = (userEmail: string, userRole: string) => [
           { name: 'Suspende Sesión', href: '/dashboard/academic/suspender-sesiones', newTab: true },
           { name: 'Festivos', href: '/dashboard/academic/festivos', newTab: true },
           { name: 'Eventos Administrativos', href: '/dashboard/academic/eventos-administrativos', newTab: true },
+          { name: 'Asignación Horas Administrativas', href: '/dashboard/academic/asignacion-horas-administrativas', newTab: true },
           { name: 'Refuerzo Sesiones', href: '/dashboard/academic/solicitud-sesiones', newTab: true },
         ],
       },
@@ -358,6 +359,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     '/dashboard/academic/eventos-administrativos': [
       AcademicoPermission.ADMIN_EVENTS_GESTIONAR,
     ],
+    '/dashboard/academic/asignacion-horas-administrativas': [
+      AcademicoPermission.HORAS_ADMIN_ASIGNAR,
+    ],
     '/dashboard/academic/suspender-sesiones': [
       AcademicoPermission.SUSPENDER_SESIONES_VER,
     ],
@@ -573,6 +577,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Mapeo de secciones del menú a los permisos requeridos (si el usuario tiene CUALQUIERA de estos permisos, ve la sección)
   const sectionPermissions: Record<string, Permission[]> = {
     'Académico': [
+      AcademicoPermission.HORAS_ADMIN_ASIGNAR,
       // Todos los permisos de ACADEMICO.AGENDA.*
       AcademicoPermission.VER_CALENDARIO,
       AcademicoPermission.VER_AGENDA,

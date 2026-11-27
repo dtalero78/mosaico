@@ -192,12 +192,21 @@ export function minutosDelDia(hhmm: string): number {
 export const ADMIN_EVENT_EXPIRED_MESSAGE =
   'Período de registro vencido. Contacta al Coordinador Académico para registrar este evento administrativo.';
 
-/** Tipos válidos — mismo set que el CHECK constraint de BD. */
+/** Tipos que se CREAN desde Eventos Administrativos (el guía los registra). */
 export const ADMIN_EVENT_TIPOS = ['TRAINING', 'SUPPORT', 'OBSERVATION', 'MEETING', 'DEVELOPMENT'] as const;
-export type AdminEventTipo = typeof ADMIN_EVENT_TIPOS[number];
+/**
+ * `ASIGNACION` = horas administrativas asignadas directamente por Académico
+ * (Asignación Horas Administrativas): nacen REGISTRADAS y cuentan sin que el guía
+ * haga nada. No se ofrece en Eventos Administrativos. El CHECK de la BD incluye
+ * los seis.
+ */
+export const ADMIN_EVENT_TIPO_ASIGNACION = 'ASIGNACION' as const;
+export const ADMIN_EVENT_TIPOS_TODOS = [...ADMIN_EVENT_TIPOS, ADMIN_EVENT_TIPO_ASIGNACION] as const;
+export type AdminEventTipo = typeof ADMIN_EVENT_TIPOS_TODOS[number];
 
 /** Label visual + color para cada tipo (compartido entre páginas). */
 export const ADMIN_EVENT_TIPO_META: Record<AdminEventTipo, { label: string; color: string; textColor: string }> = {
+  ASIGNACION:  { label: 'Horas asignadas', color: 'bg-emerald-100 border-emerald-300', textColor: 'text-emerald-800' },
   TRAINING:    { label: 'Training',    color: 'bg-violet-100 border-violet-300', textColor: 'text-violet-800' },
   SUPPORT:     { label: 'Support',     color: 'bg-sky-100    border-sky-300',    textColor: 'text-sky-800' },
   OBSERVATION: { label: 'Observation', color: 'bg-teal-100   border-teal-300',   textColor: 'text-teal-800' },

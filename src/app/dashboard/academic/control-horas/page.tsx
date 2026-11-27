@@ -304,6 +304,7 @@ export function ControlHorasContent({
   const totales = useMemo(() => {
     const t = {
       sessions: 0, clubs: 0, welcome: 0,
+      nivelaciones: 0, nivelacionesHoras: 0,
       conducted: 0, canceled: 0, suspended: 0,
       effective: 0, sinRegistrar: 0,
       administrative: 0,
@@ -321,6 +322,7 @@ export function ControlHorasContent({
         case 'RECUPERACION': t.sessions++; break
         case 'CLUB':    t.clubs++; break
         case 'WELCOME': t.welcome++; break
+        case 'NIVELACION': t.nivelaciones++; break
       }
     }
     // Eventos compartidos: el advisor da 1 sola hora real aunque haya 2-3
@@ -349,6 +351,8 @@ export function ControlHorasContent({
     for (const g of groups.values()) {
       countByTipo(g.tipo)
       t.conducted++
+      // Nivelación: 30 min = 0,5 h, ampliada a 1 hora = 1 h (sale de su duracionMin).
+      if ((g.tipo || '').toUpperCase() === 'NIVELACION') t.nivelacionesHoras += g.horas
       if (g.sesionCerrada) t.effective    += g.horas
       else                 t.sinRegistrar += g.horas
     }
@@ -463,6 +467,7 @@ export function ControlHorasContent({
           <LegendDot color="bg-blue-500"   label="SESSION" />
           <LegendDot color="bg-green-500"  label="CLUB" />
           <LegendDot color="bg-purple-500" label="WELCOME" />
+          <LegendDot color="bg-amber-600"  label="NIVELACION" />
           <LegendDot color="bg-yellow-500" label="Suspendidas" />
           <LegendDot color="bg-red-500"    label="Canceladas" />
         </div>
@@ -479,10 +484,11 @@ export function ControlHorasContent({
 
       {/* Tarjetas de totales del mes */}
       {data && !loading && !error && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 mb-4">
           <TotalCard label="Sessions"  value={totales.sessions}  color="bg-blue-50  border-blue-300  text-blue-700" />
           <TotalCard label="Talleres"     value={totales.clubs}     color="bg-green-50 border-green-300 text-green-700" />
           <TotalCard label="Welcome"   value={totales.welcome}   color="bg-purple-50 border-purple-300 text-purple-700" />
+          <TotalCard label="Nivelaciones (h)" value={totales.nivelacionesHoras} sub={`${totales.nivelaciones} nivelación(es)`} color="bg-amber-50 border-amber-400 text-amber-800" />
           <TotalCard label="Conducted" value={totales.conducted} color="bg-sky-50   border-sky-300   text-sky-700" />
           <TotalCard label="Canceladas"  value={totales.canceled}  color="bg-red-50   border-red-300   text-red-700" />
           <TotalCard label="Suspendidas" value={totales.suspended} color="bg-yellow-50 border-yellow-300 text-yellow-800" />
@@ -607,11 +613,12 @@ function AdvisorAvatar({ fotoUrl, inicial }: { fotoUrl: string | null; inicial: 
   )
 }
 
-function TotalCard({ label, value, color }: { label: string; value: number; color: string }) {
+function TotalCard({ label, value, color, sub }: { label: string; value: number; color: string; sub?: string }) {
   return (
     <div className={`${color} border rounded-lg px-3 py-2 text-center`}>
       <div className="text-xl font-bold">{formatHoras(value)}</div>
       <div className="text-[10px] uppercase tracking-wide font-semibold">{label}</div>
+      {sub && <div className="text-[10px] opacity-75">{sub}</div>}
     </div>
   )
 }
@@ -639,6 +646,7 @@ function colorClass(c: EventCard): string {
     case 'SESSION': return 'bg-blue-500 text-white'
     case 'CLUB':    return 'bg-green-500 text-white'
     case 'WELCOME': return 'bg-purple-500 text-white'
+    case 'NIVELACION': return 'bg-amber-600 text-white'
     default:        return 'bg-gray-400 text-white'
   }
 }
@@ -706,6 +714,7 @@ function EventDetailModal({
       case 'SESSION': return 'bg-blue-500 text-white'
       case 'CLUB':    return 'bg-green-500 text-white'
       case 'WELCOME': return 'bg-purple-500 text-white'
+      case 'NIVELACION': return 'bg-amber-600 text-white'
       default:        return 'bg-gray-500 text-white'
     }
   })()

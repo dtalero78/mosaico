@@ -58,18 +58,26 @@ export const AdminEventsRepository = {
     createdBy: string | null;
     /** Guía que pone la sala del evento (su `GUIAS.zoom`). */
     anfitrionId?: string | null;
+    /** Horas asignadas por Académico: nacen ya registradas (cuentan solas). */
+    registrado?: boolean;
+    timeout?: string | null;
+    notas?: string | null;
+    motivoCierre?: string | null;
   }>): Promise<number> {
     if (rows.length === 0) return 0;
     const values: string[] = [];
     const params: any[] = [];
     let p = 1;
     for (const r of rows) {
-      values.push(`($${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++})`);
-      params.push(r._id, r.eventGroupId, r.advisorId, r.tipo, r.titulo, r.descripcion, r.fechaInicio, r.horas, r.createdBy, r.anfitrionId ?? null);
+      const reg = r.registrado === true;
+      values.push(`($${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},$${p++},${reg ? 'NOW()' : 'NULL'},$${p++},$${p++},$${p++})`);
+      params.push(r._id, r.eventGroupId, r.advisorId, r.tipo, r.titulo, r.descripcion, r.fechaInicio, r.horas, r.createdBy, r.anfitrionId ?? null,
+        reg, r.timeout ?? null, r.notas ?? null, r.motivoCierre ?? null);
     }
     const res = await query(
       `INSERT INTO "ADMIN_EVENTS"
-         ("_id","eventGroupId","advisorId","tipo","titulo","descripcion","fechaInicio","horas","createdBy","anfitrionId")
+         ("_id","eventGroupId","advisorId","tipo","titulo","descripcion","fechaInicio","horas","createdBy","anfitrionId",
+          "registrado","fechaRegistro","timeout","notas","motivoCierre")
        VALUES ${values.join(', ')}`,
       params,
     );

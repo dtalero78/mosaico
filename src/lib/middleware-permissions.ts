@@ -205,6 +205,9 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   '/dashboard/academic/eventos-administrativos': [
     'ACADEMICO.ADMIN_EVENTS.GESTIONAR' as Permission,
   ],
+  '/dashboard/academic/asignacion-horas-administrativas': [
+    'ACADEMICO.HORAS_ADMIN.ASIGNAR' as Permission,
+  ],
   '/dashboard/academic/suspender-sesiones': [
     'ACADEMICO.SUSPENDER_SESIONES.VER' as Permission,
   ],

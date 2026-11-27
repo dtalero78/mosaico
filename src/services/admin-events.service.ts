@@ -18,6 +18,7 @@ import { AdminEventsRepository, AdminEventRow, AdminEventWithAdvisor } from '@/r
 import {
   AdminEventTipo,
   ADMIN_EVENT_TIPOS,
+  ADMIN_EVENT_TIPO_ASIGNACION,
   getAdminEventWindow,
   ADMIN_EVENT_EXPIRED_MESSAGE,
   horaLocal,
@@ -119,7 +120,7 @@ export async function createAdminEvents(opts: {
   /** Guía que aloja: su sala de Zoom es el enlace del evento. Opcional. */
   anfitrionId?: string | null;
 }): Promise<{ eventGroupId: string; count: number }> {
-  if (!ADMIN_EVENT_TIPOS.includes(opts.tipo)) {
+  if (!(ADMIN_EVENT_TIPOS as readonly string[]).includes(opts.tipo)) {
     throw new ValidationError(`tipo inválido: ${opts.tipo}`);
   }
   if (opts.titulo && opts.titulo.length > 200) {
@@ -158,6 +159,63 @@ export async function createAdminEvents(opts: {
     anfitrionId: opts.anfitrionId || null,
   }));
   const count = await AdminEventsRepository.bulkInsert(rows);
+  return { eventGroupId, count };
+}
+
+/**
+ * Asignación Horas Administrativas: Académico le asigna horas a uno o varios guías
+ * en una fecha y horario. A diferencia de un evento administrativo, NACEN
+ * REGISTRADAS (`registrado=true`, `motivoCierre='ASIGNACION'`): cuentan en Effective
+ * y en Administrative Hours sin que el guía haga nada. Como todo evento del mes,
+ * se suman una vez que llega su fecha.
+ *
+ * Mismo bloqueo de choques que un evento administrativo: si el guía ya tiene una
+ * clase u otro evento en ese horario, esas horas se estarían contando dos veces.
+ */
+export async function asignarHorasAdministrativas(opts: {
+  advisorIds: string[];
+  fechaInicio: string;
+  horas: number;
+  motivo: string;
+  createdBy: string | null;
+  tz?: string | null;
+}): Promise<{ eventGroupId: string; count: number }> {
+  const advisorIds = Array.from(new Set(opts.advisorIds.filter(Boolean)));
+  if (advisorIds.length === 0) throw new ValidationError('Selecciona al menos un guía');
+  if (!opts.fechaInicio || isNaN(new Date(opts.fechaInicio).getTime())) {
+    throw new ValidationError('Fecha y hora de inicio requeridas');
+  }
+  if (!duracionValida(opts.horas)) throw new ValidationError(MSG_HORAS);
+  const motivo = String(opts.motivo || '').trim();
+  if (!motivo) throw new ValidationError('Escribe el motivo de las horas asignadas');
+  if (motivo.length > 500) throw new ValidationError('El motivo no puede pasar de 500 caracteres');
+
+  const conflicts = await checkConflicts({ advisorIds, fechaInicio: opts.fechaInicio, horas: opts.horas });
+  if (conflicts.length > 0) {
+    const err = new ConflictError(
+      `Hay ${conflicts.length} choque(s) de horario — esas horas ya están ocupadas por otra clase o evento.`,
+    ) as any;
+    err.detail = conflicts;
+    throw err;
+  }
+
+  const fin = new Date(new Date(opts.fechaInicio).getTime() + opts.horas * 3_600_000).toISOString();
+  const eventGroupId = `aeg_${crypto.randomUUID()}`;
+  const count = await AdminEventsRepository.bulkInsert(advisorIds.map(advisorId => ({
+    _id: `ae_${crypto.randomUUID()}`,
+    eventGroupId,
+    advisorId,
+    tipo: ADMIN_EVENT_TIPO_ASIGNACION,
+    titulo: 'Horas administrativas asignadas',
+    descripcion: motivo,
+    fechaInicio: opts.fechaInicio,
+    horas: opts.horas,
+    createdBy: opts.createdBy,
+    registrado: true,
+    timeout: horaLocal(fin, opts.tz),
+    notas: motivo,
+    motivoCierre: 'ASIGNACION',
+  })));
   return { eventGroupId, count };
 }
 
@@ -281,7 +339,7 @@ export async function updateAdminEvent(id: string, patch: Partial<{
   }
 
   if (patch.horas !== undefined && !duracionValida(patch.horas)) throw new ValidationError(MSG_HORAS);
-  if (patch.tipo !== undefined && !ADMIN_EVENT_TIPOS.includes(patch.tipo)) {
+  if (patch.tipo !== undefined && !(ADMIN_EVENT_TIPOS as readonly string[]).includes(patch.tipo)) {
     throw new ValidationError(`tipo inválido: ${patch.tipo}`);
   }
   if (patch.titulo !== undefined && patch.titulo && patch.titulo.length > 200) {

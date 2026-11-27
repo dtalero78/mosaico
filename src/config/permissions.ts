@@ -931,6 +931,13 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
     description: 'Acceso al listado completo de eventos administrativos sin restricción de advisor. Cada advisor siempre ve los suyos sin necesidad de este permiso.',
   },
   {
+    code: AcademicoPermission.HORAS_ADMIN_ASIGNAR,
+    module: Module.ACADEMICO,
+    section: 'Eventos Administrativos',
+    name: 'Página "Asignación Horas Administrativas"',
+    description: 'Acceso a /dashboard/academic/asignacion-horas-administrativas. Asigna horas administrativas a uno o varios guías (fecha, horario, número de horas y motivo). Nacen REGISTRADAS: cuentan en Effective y Administrative Hours sin que el guía haga nada. Permite también eliminar una asignación.',
+  },
+  {
     code: AcademicoPermission.CAMPANA_CREAR,
     module: Module.ACADEMICO,
     section: 'Mantenimiento',

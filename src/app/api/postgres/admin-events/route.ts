@@ -10,7 +10,7 @@ import { AcademicoPermission } from '@/types/permissions';
 import { ValidationError } from '@/lib/errors';
 import { listAdminEvents, createAdminEvents } from '@/services/admin-events.service';
 import type { AdminEventTipo } from '@/lib/admin-event-window';
-import { ADMIN_EVENT_TIPOS } from '@/lib/admin-event-window';
+import { ADMIN_EVENT_TIPOS_TODOS } from '@/lib/admin-event-window';
 
 export const GET = handlerWithAuth(async (request, _ctx, session) => {
   // VER_TODOS permite listar; si no lo tiene pero sí GESTIONAR, también puede.
@@ -23,7 +23,7 @@ export const GET = handlerWithAuth(async (request, _ctx, session) => {
 
   const { searchParams } = new URL(request.url);
   const tipoRaw = searchParams.get('tipo');
-  const tipo: AdminEventTipo | null = tipoRaw && ADMIN_EVENT_TIPOS.includes(tipoRaw as AdminEventTipo)
+  const tipo: AdminEventTipo | null = tipoRaw && (ADMIN_EVENT_TIPOS_TODOS as readonly string[]).includes(tipoRaw)
     ? (tipoRaw as AdminEventTipo) : null;
   const regRaw = searchParams.get('registrado');
   const registrado: boolean | null = regRaw === 'true' ? true : regRaw === 'false' ? false : null;
