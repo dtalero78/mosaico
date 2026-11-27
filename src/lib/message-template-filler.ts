@@ -20,6 +20,8 @@
  *   - horaTaller      → hora del taller en hora de Chile ("18:00")
  *                       Los de taller sólo se llenan al enviar desde Servicio ›
  *                       Talleres; en Envío de Mensajes salen vacíos.
+ *   - fechaNivelacion / horaNivelacion → fecha y hora de la nivelación agendada
+ *                       (hora de Chile). Sólo en el aviso al agrupar nivelaciones.
  *
  * Cualquier placeholder no soportado se reemplaza por cadena vacía (no
  * rompe el envío). El regex coincide con `{{ key }}` con espacios opcionales.
@@ -46,6 +48,9 @@ export interface RecipientContext {
   /** Fecha y hora del taller ya formateadas (Servicio › Talleres). */
   fechaTaller?: string | null;
   horaTaller?: string | null;
+  /** Fecha y hora de la nivelación agendada (hora de Chile). */
+  fechaNivelacion?: string | null;
+  horaNivelacion?: string | null;
 }
 
 export const BASE_URL_PLATAFORMA = 'https://mosaicosorobanplataforma.com';
@@ -81,6 +86,8 @@ export const AVAILABLE_PLACEHOLDERS = [
   'curso',
   'fechaTaller',
   'horaTaller',
+  'fechaNivelacion',
+  'horaNivelacion',
 ] as const;
 
 export type PlaceholderKey = typeof AVAILABLE_PLACEHOLDERS[number];
@@ -100,6 +107,8 @@ function valueFor(ctx: RecipientContext, key: string): string {
     case 'curso':          return (ctx.curso ?? '').trim();
     case 'fechaTaller':    return (ctx.fechaTaller ?? '').trim();
     case 'horaTaller':     return (ctx.horaTaller ?? '').trim();
+    case 'fechaNivelacion': return (ctx.fechaNivelacion ?? '').trim();
+    case 'horaNivelacion': return (ctx.horaNivelacion ?? '').trim();
     default:               return ''; // placeholder desconocido → vacío
   }
 }

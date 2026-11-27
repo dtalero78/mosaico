@@ -6,6 +6,7 @@ import { createEvent } from '@/services/calendar.service'
 import { enrollStudents } from '@/services/enrollment.service'
 import { ServicioPermission } from '@/types/permissions'
 import { query, queryOne } from '@/lib/postgres'
+import { avisarNivelacionProgramada } from '@/services/talleres.service'
 
 /**
  * POST /api/postgres/reports/servicio/nivelaciones/gestion-grupo
@@ -95,11 +96,13 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
       throw new ValidationError(`No se pudo sumar a la nivelación: ${e?.message || 'error al agendar a los estudiantes'}`)
     }
     await limpiarGrupoBorrador(academicaIds)
+    const whatsapp = await avisarNivelacionProgramada(ev._id, academicaIds)
 
     return successResponse({
       event: ev,
       enrolled: sumados,
-      message: `${sumados} usuario(s) sumado(s) a la nivelación ya agendada`,
+      whatsapp,
+      message: `${sumados} usuario(s) sumado(s) a la nivelación ya agendada · WhatsApp enviados: ${whatsapp.enviados}`,
     })
   }
 
@@ -186,10 +189,12 @@ export const POST = handlerWithAuth(async (request, _ctx, session) => {
     )
   }
   await limpiarGrupoBorrador(academicaIds)
+  const whatsapp = await avisarNivelacionProgramada(event._id, academicaIds)
 
   return successResponse({
     event,
     enrolled,
-    message: `Nivelación creada y ${enrolled} estudiante(s) agendado(s)`,
+    whatsapp,
+    message: `Nivelación creada y ${enrolled} estudiante(s) agendado(s) · WhatsApp enviados: ${whatsapp.enviados}`,
   })
 })

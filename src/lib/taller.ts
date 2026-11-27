@@ -13,6 +13,16 @@ export const SLUG_RECORDATORIO_TALLER = 'recordatorio-taller'
  * (desactivarla en Gestión de Plantillas es el interruptor).
  */
 export const SLUG_INSCRIPCION_TALLER = 'inscripcion-taller'
+export const SLUG_INSCRIPCION_OLIMPIADA = 'inscripcion-olimpiada'
+/** Aviso al apoderado cuando su nivelación se agrupa (pasa a Pendientes). */
+export const SLUG_NIVELACION_PROGRAMADA = 'nivelacion-programada'
+
+/** Plantilla de confirmación automática por tipo de evento (CALENDARIO.tipo). */
+export const SLUG_CONFIRMACION_POR_TIPO: Record<string, string> = {
+  CLUB: SLUG_INSCRIPCION_TALLER,
+  OLIMPIADA: SLUG_INSCRIPCION_OLIMPIADA,
+  NIVELACION: SLUG_NIVELACION_PROGRAMADA,
+}
 
 /** Tope de destinatarios por envío, el mismo de Envío de Mensajes. */
 export const MAX_RECORDATORIOS = 300

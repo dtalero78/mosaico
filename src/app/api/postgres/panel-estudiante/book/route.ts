@@ -50,10 +50,10 @@ export const POST = handlerWithAuth(async (request, context, session) => {
     }
   );
 
-  // WhatsApp de confirmación sólo para TALLERES (best-effort: no lanza, y su
-  // fallo no deshace la inscripción).
+  // WhatsApp de confirmación para TALLERES y OLIMPIADAS (best-effort: no lanza,
+  // y su fallo no deshace la inscripción).
   let whatsapp: { ok: boolean; motivo?: string } | null = null;
-  if (String(booking?.tipo || '').toUpperCase() === 'CLUB') {
+  if (['CLUB', 'OLIMPIADA'].includes(String(booking?.tipo || '').toUpperCase())) {
     whatsapp = await enviarConfirmacionInscripcion(booking._id);
   }
 

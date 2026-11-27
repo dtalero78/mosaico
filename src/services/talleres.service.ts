@@ -9,7 +9,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { fillTemplate } from '@/lib/message-template-filler'
 import { TZ_OPERACION } from '@/lib/cursos-campaign'
 import {
-  SLUG_RECORDATORIO_TALLER, SLUG_INSCRIPCION_TALLER, MAX_RECORDATORIOS, MIN_TALLER_EN_CURSO,
+  SLUG_RECORDATORIO_TALLER, SLUG_CONFIRMACION_POR_TIPO, MAX_RECORDATORIOS, MIN_TALLER_EN_CURSO,
   fechaHoraTaller, tallerTerminado,
 } from '@/lib/taller'
 
@@ -77,7 +77,7 @@ function whereBase(f: FiltrosTalleres, params: any[]): string[] {
 }
 
 const SELECT_FILAS = `
-  SELECT bk."_id" AS "bookingId", bk."origen",
+  SELECT bk."_id" AS "bookingId", bk."origen", c."tipo",
          c."_id" AS "eventoId", c."dia", c."nombreEvento", c."tituloONivel",
          c."curso" AS "eventoCurso", c."salon" AS "eventoSalon", c."limiteUsuarios",
          g."nombreCompleto" AS guia,
@@ -240,14 +240,15 @@ export async function enviarRecordatorios(bookingIds: string[], actor: { email: 
  */
 export async function enviarConfirmacionInscripcion(bookingId: string): Promise<{ ok: boolean; motivo?: string }> {
   try {
-    const tpl = await MessageTemplatesRepository.findBySlug(SLUG_INSCRIPCION_TALLER).catch(() => null)
-    if (!tpl || !tpl.activo) return { ok: false, motivo: 'plantilla inexistente o inactiva' }
-
     const filas = (await query<any>(
-      `${SELECT_FILAS} WHERE bk."_id" = $1 AND UPPER(c."tipo") = 'CLUB'`,
+      `${SELECT_FILAS} WHERE bk."_id" = $1`,
       [bookingId]
     )).rows
-    if (!filas.length) return { ok: false, motivo: 'no es un taller' }
+    if (!filas.length) return { ok: false, motivo: 'agendamiento no encontrado' }
+    const slug = SLUG_CONFIRMACION_POR_TIPO[String(filas[0].tipo || '').toUpperCase()]
+    if (!slug) return { ok: false, motivo: 'tipo de evento sin confirmación' }
+    const tpl = await MessageTemplatesRepository.findBySlug(slug).catch(() => null)
+    if (!tpl || !tpl.activo) return { ok: false, motivo: 'plantilla inexistente o inactiva' }
     if (String(filas[0].contrato || '').toUpperCase().startsWith('PRB-')) return { ok: false, motivo: 'contrato de prueba' }
 
     const [r] = await conDestino(filas)
@@ -259,6 +260,7 @@ export async function enviarConfirmacionInscripcion(bookingId: string): Promise<
       numeroId: r.numeroId, contrato: r.contrato,
       apoderado: r.apoderado || null,
       curso: r.tipoCurso, fechaTaller: fecha, horaTaller: hora,
+      fechaNivelacion: fecha, horaNivelacion: hora,
     })
     await sendWhatsAppMessage(r.telefono!, mensaje)
     return { ok: true }
@@ -266,4 +268,34 @@ export async function enviarConfirmacionInscripcion(bookingId: string): Promise<
     console.warn('[talleres] no se pudo enviar la confirmación de inscripción:', e?.message)
     return { ok: false, motivo: e?.message || 'error' }
   }
+}
+
+/**
+ * Aviso "nivelación programada" a cada alumno recién agendado en una nivelación
+ * desde Servicio › Nivelaciones › Agrupaciones (Gestión de grupo o "Sumar a una
+ * sesión ya agendada"), o sea, cuando pasan a Pendientes. Secuencial (límite de
+ * Whapi) y best-effort: nunca lanza.
+ */
+export async function avisarNivelacionProgramada(eventoId: string, academicaIds: string[]) {
+  const resultados: { academicaId: string; ok: boolean; motivo?: string }[] = []
+  try {
+    const { rows } = await query<{ _id: string; academicaId: string }>(
+      `SELECT DISTINCT ON (COALESCE(b."idEstudiante", b."studentId"))
+              b."_id", COALESCE(b."idEstudiante", b."studentId") AS "academicaId"
+         FROM "ACADEMICA_BOOKINGS" b
+        WHERE (b."eventoId" = $1 OR b."idEvento" = $1)
+          AND COALESCE(b."cancelo", false) = false
+          AND (b."idEstudiante" = ANY($2::text[]) OR b."studentId" = ANY($2::text[]))
+        ORDER BY COALESCE(b."idEstudiante", b."studentId"), b."_createdDate" DESC`,
+      [eventoId, academicaIds]
+    )
+    for (const b of rows) {
+      const r = await enviarConfirmacionInscripcion(b._id)
+      resultados.push({ academicaId: b.academicaId, ...r })
+    }
+  } catch (e: any) {
+    console.warn('[nivelaciones] no se pudo avisar la nivelación programada:', e?.message)
+  }
+  const enviados = resultados.filter(r => r.ok).length
+  return { enviados, fallidos: resultados.length - enviados }
 }
