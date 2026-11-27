@@ -30,13 +30,14 @@ import { estaAutorizado, marcarAutorizacionUsada } from '@/services/autorizacion
 import { eventDurationMin } from '@/lib/event-duration';
 
 /**
- * Horas que vale un evento para el guía = su duración real.
- * 60 min = 1 h, 30 min = 0,5 h, bloque de sábado de 2 h = 2 h, clase de 50 min = 0,83 h.
+ * Horas que vale un evento para el guía = su duración, redondeada HACIA ARRIBA a la
+ * media hora: 60 min = 1 h, 30 min = 0,5 h, bloque de sábado de 2 h = 2 h,
+ * **clase de 50 min (DANSHI/SENPAI) = 1 h** (decisión del usuario), 2 h 30 = 2,5 h.
  * Misma fuente que la hora de fin del calendario (`eventDurationMin`): duración propia
  * del evento → horario del curso (`nombreEvento`) → tipo.
  */
 export function horasDeEvento(tipo?: string | null, horario?: string | null, duracionMin?: number | null): number {
-  return Math.round((eventDurationMin(tipo, horario, duracionMin) / 60) * 100) / 100;
+  return Math.ceil(eventDurationMin(tipo, horario, duracionMin) / 30) / 2;
 }
 
 const TIMEOUT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
