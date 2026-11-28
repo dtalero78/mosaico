@@ -251,10 +251,10 @@ export function ControlHorasContent({
 
   // Admin Events del mes — query paralela. Solo trae el agregado para los KPIs
   // y la lista para pintarlos en el calendario (Fase 3b).
-  const [adminEventsAgg, setAdminEventsAgg] = useState<{ registradas: number; sinRegistrar: number }>({ registradas: 0, sinRegistrar: 0 })
+  const [adminEventsAgg, setAdminEventsAgg] = useState<{ registradas: number; sinRegistrar: number; asignadas?: number }>({ registradas: 0, sinRegistrar: 0, asignadas: 0 })
   const [adminEventsList, setAdminEventsList] = useState<any[]>([])
   useEffect(() => {
-    if (!advisorId) { setAdminEventsAgg({ registradas: 0, sinRegistrar: 0 }); setAdminEventsList([]); return }
+    if (!advisorId) { setAdminEventsAgg({ registradas: 0, sinRegistrar: 0, asignadas: 0 }); setAdminEventsList([]); return }
     fetch(`/api/postgres/guias/${advisorId}/admin-events?year=${year}&month=${month}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(j => {
@@ -308,6 +308,7 @@ export function ControlHorasContent({
       conducted: 0, canceled: 0, suspended: 0,
       effective: 0, sinRegistrar: 0,
       administrative: 0,
+      asignadas: 0,
     }
     if (!data) return t
     // KPIs solo cuentan eventos que YA ocurrieron (fechaEvento <= NOW).
@@ -371,6 +372,10 @@ export function ControlHorasContent({
     t.effective      += adminEventsAgg.registradas
     t.sinRegistrar   += adminEventsAgg.sinRegistrar
     t.administrative  = adminEventsAgg.registradas + adminEventsAgg.sinRegistrar
+    // Horas ASIGNADAS por Académico: su propia caja (no son administrativas),
+    // pero cuentan en Effective sin que el guía haga nada.
+    t.asignadas       = Number(adminEventsAgg.asignadas || 0)
+    t.effective      += t.asignadas
     return t
   }, [data, adminEventsAgg])
 
@@ -475,10 +480,11 @@ export function ControlHorasContent({
 
       {/* Tarjetas destacadas: Effective | Sin registrar | Administrative (incluida en Effective) */}
       {data && !loading && !error && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
           <TotalCard label="Effective Hours"        value={totales.effective}      color="bg-emerald-50 border-emerald-400 text-emerald-700" />
           <TotalCard label="Hours without recording" value={totales.sinRegistrar}   color="bg-amber-50   border-amber-400   text-amber-700" />
           <TotalCard label="Administrative Hours"   value={totales.administrative} color="bg-violet-50  border-violet-400  text-violet-700" />
+          <TotalCard label="Horas asignadas"        value={totales.asignadas}      color="bg-cyan-50    border-cyan-400    text-cyan-700" />
         </div>
       )}
 
@@ -498,7 +504,7 @@ export function ControlHorasContent({
       {/* Cuánto tuvo que rescatar la Coordinación por este guía, y cómo se
           compara con el resto. Mismo panel que ve el guía en su dashboard. */}
       {data && !loading && !error && advisorId && (
-        <div className="mb-4 max-w-2xl">
+        <div className="mb-4">
           <GestionCoordinacionCard advisorId={advisorId} year={year} month={month} />
         </div>
       )}

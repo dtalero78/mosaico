@@ -102,7 +102,7 @@ export default function AdvisorDashboard() {
   }, [email])
 
   // Paso 2 — cargar vista mensual del mes corriente (CALENDARIO + admin events)
-  const [adminAgg, setAdminAgg] = useState<{ registradas: number; sinRegistrar: number }>({ registradas: 0, sinRegistrar: 0 })
+  const [adminAgg, setAdminAgg] = useState<{ registradas: number; sinRegistrar: number; asignadas?: number }>({ registradas: 0, sinRegistrar: 0, asignadas: 0 })
   useEffect(() => {
     if (!advisor?._id) return
     setLoading(true); setError(null)
@@ -145,6 +145,7 @@ export default function AdvisorDashboard() {
       conducted: 0, canceled: 0, suspended: 0,
       effective: 0, sinRegistrar: 0,
       administrative: 0,
+      asignadas: 0,
     }
     if (!data) return k
 
@@ -202,6 +203,9 @@ export default function AdvisorDashboard() {
     k.effective      += adminAgg.registradas
     k.sinRegistrar   += adminAgg.sinRegistrar
     k.administrative  = adminAgg.registradas + adminAgg.sinRegistrar
+    // Horas asignadas por Académico: caja propia, suman en Effective.
+    k.asignadas       = Number(adminAgg.asignadas || 0)
+    k.effective      += k.asignadas
     return k
   }, [data, adminAgg])
 
@@ -277,7 +281,7 @@ export default function AdvisorDashboard() {
           Administrative ya está sumado en Effective; se muestra como tercer KPI
           para que el advisor sepa cuántas de sus horas efectivas vienen de
           eventos administrativos (Training/Support/...). */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label="Horas Efectivas"
           value={kpis.effective}
@@ -296,6 +300,12 @@ export default function AdvisorDashboard() {
           color="bg-violet-50   border-violet-400   text-violet-700"
           big
         />
+        <KpiCard
+          label="Horas Asignadas"
+          value={kpis.asignadas}
+          color="bg-cyan-50     border-cyan-400     text-cyan-700"
+          big
+        />
       </div>
 
       {/* KPIs detalle */}
@@ -311,26 +321,25 @@ export default function AdvisorDashboard() {
       </div>
 
       {/* Heatmaps Día × Hora del mes — Conducted (azul) | Canceladas (rojo o mensaje) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <DayHourHeatmap
-          title="Realizadas — Día vs Hora"
-          subtitle={mesLabel}
-          matrix={monthly.conducted}
-          max={monthlyConductedMax}
-          darkColor="#1d4ed8"
-          lightColor="#dbeafe"
+      {/* Cuánto tuvo que rescatar la Coordinación, y cómo se compara con el resto:
+          ancho completo, sus cuatro tarjetas en dos líneas. */}
+      {advisor?._id && (
+        <GestionCoordinacionCard
+          advisorId={advisor._id}
+          year={year}
+          month={month}
+          mesLabel={mesLabel}
         />
-        {/* En el sitio del mapa de canceladas va algo que se lee mejor: cuánto
-            tuvo que rescatar la Coordinación, y cómo se compara con el resto. */}
-        {advisor?._id && (
-          <GestionCoordinacionCard
-            advisorId={advisor._id}
-            year={year}
-            month={month}
-            mesLabel={mesLabel}
-          />
-        )}
-      </div>
+      )}
+
+      <DayHourHeatmap
+        title="Realizadas — Día vs Hora"
+        subtitle={mesLabel}
+        matrix={monthly.conducted}
+        max={monthlyConductedMax}
+        darkColor="#1d4ed8"
+        lightColor="#dbeafe"
+      />
 
       {/* Donuts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

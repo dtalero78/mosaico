@@ -399,6 +399,6 @@ export async function listAdminEventsForAdvisorMonth(
 
 export async function getAdminEventHoursAggregate(
   advisorId: string, year: number, month: number,
-): Promise<{ registradas: number; sinRegistrar: number }> {
+): Promise<{ registradas: number; sinRegistrar: number; asignadas: number }> {
   return AdminEventsRepository.aggregateHoursByAdvisorMonth(advisorId, year, month);
 }

@@ -286,13 +286,17 @@ export const AdminEventsRepository = {
   async aggregateHoursByAdvisorMonth(advisorId: string, year: number, month: number): Promise<{
     registradas: number;
     sinRegistrar: number;
+    /** Horas ASIGNADAS por Académico (tipo ASIGNACION): no son administrativas,
+     *  van en su propia caja, pero sí suman en Effective. */
+    asignadas: number;
   }> {
     const from = new Date(Date.UTC(year, month - 1, 1)).toISOString();
     const to   = new Date(Date.UTC(year, month, 1)).toISOString();
-    const row = await queryOne<{ registradas: string | number | null; sin_registrar: string | number | null }>(
+    const row = await queryOne<{ registradas: string | number | null; sin_registrar: string | number | null; asignadas: string | number | null }>(
       `SELECT
-         COALESCE(SUM("horas") FILTER (WHERE "registrado" = true),  0) AS "registradas",
-         COALESCE(SUM("horas") FILTER (WHERE "registrado" = false), 0) AS "sin_registrar"
+         COALESCE(SUM("horas") FILTER (WHERE "registrado" = true  AND "tipo" <> 'ASIGNACION'), 0) AS "registradas",
+         COALESCE(SUM("horas") FILTER (WHERE "registrado" = false AND "tipo" <> 'ASIGNACION'), 0) AS "sin_registrar",
+         COALESCE(SUM("horas") FILTER (WHERE "tipo" = 'ASIGNACION'), 0) AS "asignadas"
        FROM "ADMIN_EVENTS"
        WHERE "advisorId" = $1
          AND "fechaInicio" >= $2::timestamptz
@@ -303,6 +307,7 @@ export const AdminEventsRepository = {
     return {
       registradas:   Number(row?.registradas ?? 0),
       sinRegistrar:  Number(row?.sin_registrar ?? 0),
+      asignadas:     Number(row?.asignadas ?? 0),
     };
   },
 };
